@@ -46,6 +46,7 @@
 #include "distributed/multi_router_planner.h"
 #include "distributed/multi_server_executor.h"
 #include "distributed/shard_utils.h"
+#include "distributed/sorted_merge.h"
 #include "distributed/stats/query_stats.h"
 #include "distributed/stats/stat_counters.h"
 #include "distributed/subplan_execution.h"
@@ -835,6 +836,12 @@ CitusEndScan(CustomScanState *node)
 		CitusQueryStatsExecutorsEntry(queryId, executorType, partitionKeyString);
 	}
 
+	if (scanState->mergeAdapter)
+	{
+		FreeSortedMergeAdapter(scanState->mergeAdapter);
+		scanState->mergeAdapter = NULL;
+	}
+
 	if (scanState->tuplestorestate)
 	{
 		tuplestore_end(scanState->tuplestorestate);
@@ -857,7 +864,12 @@ CitusReScan(CustomScanState *node)
 	ExecScanReScan(&node->ss);
 
 	CitusScanState *scanState = (CitusScanState *) node;
-	if (scanState->tuplestorestate)
+
+	if (scanState->mergeAdapter)
+	{
+		SortedMergeAdapterRescan(scanState->mergeAdapter);
+	}
+	else if (scanState->tuplestorestate)
 	{
 		tuplestore_rescan(scanState->tuplestorestate);
 	}

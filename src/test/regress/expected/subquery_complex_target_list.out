@@ -553,15 +553,12 @@ GROUP BY a.key, a.value ||'_append'
 HAVING length(a.key) + length(a.value) < length(a.value || '_append')
 ORDER BY 1
 $$);
-                                                                                   coordinator_plan
+                                                                                coordinator_plan
 ---------------------------------------------------------------------
- Sort
+ Custom Scan (Citus Adaptive)
    Output: remote_scan.k1, remote_scan.k2, remote_scan.k3, remote_scan.v1, remote_scan.v2, remote_scan.v3, remote_scan.va1, remote_scan.va2, remote_scan.va3, remote_scan.count
-   Sort Key: remote_scan.k1
-   ->  Custom Scan (Citus Adaptive)
-         Output: remote_scan.k1, remote_scan.k2, remote_scan.k3, remote_scan.v1, remote_scan.v2, remote_scan.v3, remote_scan.va1, remote_scan.va2, remote_scan.va3, remote_scan.count
-         Task Count: 4
-(6 rows)
+   Task Count: 4
+(3 rows)
 
 SELECT a FROM items a ORDER BY key;
                      a

@@ -2020,7 +2020,7 @@ DEBUG:  <Deparsed MERGE query: MERGE INTO merge_schema.target_table_xxxxxxx t US
 DEBUG:  Execute MERGE task list
 -- let's verify if data inserted to second shard of target.
 EXPLAIN (analyze on, costs off, timing off, summary off, BUFFERS OFF) SELECT * FROM target_table;
-                                    QUERY PLAN
+                                      QUERY PLAN
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
    Task Count: 4
@@ -2541,7 +2541,7 @@ ON sda.id = sdn.id
 WHEN NOT matched THEN
 	INSERT (id, z) VALUES (sdn.id, 5);
 $Q$);
-                                    coordinator_plan
+                                     coordinator_plan
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0) (actual rows=0 loops=1)
    Task Count: 1
@@ -2570,7 +2570,7 @@ ON sda.id = s1.id AND s1.id = s2.id
 WHEN NOT matched THEN
 	INSERT (id, z) VALUES (s2.id, 5);
 $Q$);
-                                    coordinator_plan
+                                     coordinator_plan
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0) (actual rows=0 loops=1)
    Task Count: 4
@@ -2595,7 +2595,7 @@ ON sda.id = sdn.id
 WHEN matched THEN
 	UPDATE SET d = '{"a" : 5}';
 $Q$);
-                                    coordinator_plan
+                                     coordinator_plan
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0) (actual rows=0 loops=1)
    Task Count: 4
@@ -3168,24 +3168,23 @@ WHEN MATCHED THEN
 	UPDATE SET val1 = s3
 WHEN NOT MATCHED THEN
 	INSERT VALUES(id2, s3);
-                                                  QUERY PLAN
+                                               QUERY PLAN
 ---------------------------------------------------------------------
  Custom Scan (Citus MERGE INTO ...)
    MERGE INTO demo_distributed method: pull to coordinator
    ->  Custom Scan (Citus Adaptive)
          ->  Distributed Subplan XXX_1
                ->  Limit
-                     ->  Sort
-                           Sort Key: remote_scan.id2
-                           ->  Custom Scan (Citus Adaptive)
-                                 Task Count: 4
-                                 Tasks Shown: One of 4
-                                 ->  Task
-                                       Node: host=localhost port=xxxxx dbname=regression
-                                       ->  Limit
-                                             ->  Sort
-                                                   Sort Key: id2
-                                                   ->  Seq Scan on demo_source_table_4000151 demo_source_table
+                     ->  Custom Scan (Citus Adaptive)
+                           Task Count: 4
+                           Merge Method: sorted merge
+                           Tasks Shown: One of 4
+                           ->  Task
+                                 Node: host=localhost port=xxxxx dbname=regression
+                                 ->  Limit
+                                       ->  Sort
+                                             Sort Key: id2
+                                             ->  Seq Scan on demo_source_table_4000151 demo_source_table
          ->  Distributed Subplan XXX_2
                ->  Custom Scan (Citus Adaptive)
                      Task Count: 4
@@ -3205,7 +3204,7 @@ WHEN NOT MATCHED THEN
                      ->  Sort
                            Sort Key: intermediate_result_1.id2
                            ->  Function Scan on read_intermediate_result intermediate_result_1
-(35 rows)
+(34 rows)
 
 -- Test multiple join conditions on distribution column
 MERGE INTO demo_distributed t

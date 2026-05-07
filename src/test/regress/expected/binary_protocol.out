@@ -50,41 +50,46 @@ SELECT id, id, id, id, id,
 (10 rows)
 
 EXPLAIN (ANALYZE TRUE, TIMING FALSE, COSTS FALSE, SUMMARY FALSE, BUFFERS OFF) SELECT id FROM t ORDER BY 1;
-                            QUERY PLAN
+                              QUERY PLAN
 ---------------------------------------------------------------------
- Sort (actual rows=10 loops=1)
-   Sort Key: remote_scan.id
-   Sort Method: quicksort  Memory: 25kB
-   ->  Custom Scan (Citus Adaptive) (actual rows=10 loops=1)
-         Task Count: 2
-         Tuple data received from nodes: 40 bytes
-         Tasks Shown: One of 2
-         ->  Task
-               Tuple data received from node: 28 bytes
-               Node: host=localhost port=xxxxx dbname=regression
+ Custom Scan (Citus Adaptive) (actual rows=10 loops=1)
+   Task Count: 2
+   Merge Method: sorted merge
+   Tuple data received from nodes: 40 bytes
+   Tasks Shown: One of 2
+   ->  Task
+         Tuple data received from node: 28 bytes
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Sort (actual rows=7 loops=1)
+               Sort Key: id
+               Sort Method: quicksort  Memory: 25kB
                ->  Seq Scan on t_4754000 t (actual rows=7 loops=1)
-(11 rows)
+(12 rows)
 
 SET citus.explain_all_tasks TO ON;
 EXPLAIN (ANALYZE TRUE, TIMING FALSE, COSTS FALSE, SUMMARY FALSE, BUFFERS OFF) SELECT id FROM t ORDER BY 1;
-                            QUERY PLAN
+                              QUERY PLAN
 ---------------------------------------------------------------------
- Sort (actual rows=10 loops=1)
-   Sort Key: remote_scan.id
-   Sort Method: quicksort  Memory: 25kB
-   ->  Custom Scan (Citus Adaptive) (actual rows=10 loops=1)
-         Task Count: 2
-         Tuple data received from nodes: 40 bytes
-         Tasks Shown: All
-         ->  Task
-               Tuple data received from node: 28 bytes
-               Node: host=localhost port=xxxxx dbname=regression
+ Custom Scan (Citus Adaptive) (actual rows=10 loops=1)
+   Task Count: 2
+   Merge Method: sorted merge
+   Tuple data received from nodes: 40 bytes
+   Tasks Shown: All
+   ->  Task
+         Tuple data received from node: 28 bytes
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Sort (actual rows=7 loops=1)
+               Sort Key: id
+               Sort Method: quicksort  Memory: 25kB
                ->  Seq Scan on t_4754000 t (actual rows=7 loops=1)
-         ->  Task
-               Tuple data received from node: 12 bytes
-               Node: host=localhost port=xxxxx dbname=regression
+   ->  Task
+         Tuple data received from node: 12 bytes
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Sort (actual rows=3 loops=1)
+               Sort Key: id
+               Sort Method: quicksort  Memory: 25kB
                ->  Seq Scan on t_4754001 t (actual rows=3 loops=1)
-(15 rows)
+(19 rows)
 
 INSERT INTO t SELECT count(*) from t;
 INSERT INTO t (SELECT id+1 from t);

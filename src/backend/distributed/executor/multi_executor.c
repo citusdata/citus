@@ -50,6 +50,7 @@
 #include "distributed/multi_server_executor.h"
 #include "distributed/relation_access_tracking.h"
 #include "distributed/resource_lock.h"
+#include "distributed/sorted_merge.h"
 #include "distributed/transaction_management.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_protocol.h"
@@ -84,6 +85,9 @@ ParamListInfo executorBoundParams = NULL;
 
 /* sort the returning to get consistent outputs, used only for testing */
 bool SortReturning = false;
+
+/* when true at planning time, enables coordinator sorted merge for ORDER BY */
+bool EnableSortedMerge = true;
 
 /*
  * How many nested executors have we started? This can happen for SQL
@@ -340,20 +344,69 @@ CitusCustomScanStateWalker(PlanState *planState, List **citusCustomScanStates)
 
 
 /*
- * ReturnTupleFromTuplestore reads the next tuple from the tuple store of the
- * given Citus scan node and returns it. It returns null if all tuples are read
- * from the tuple store.
+ * FetchNextScanTuple returns the next tuple from the scan source.
+ *
+ * When a merge adapter is active, the returned slot is owned by the adapter.
+ * Otherwise, tuples are read into and returned from the provided scan slot.
+ */
+static inline TupleTableSlot *
+FetchNextScanTuple(CitusScanState *scanState, bool forward, TupleTableSlot *slot)
+{
+	if (scanState->mergeAdapter != NULL)
+	{
+		/*
+		 * The streaming merge adapter is forward-only.
+		 *
+		 * Citus replaces the entire plan tree after standard_planner()
+		 * returns, so PostgreSQL's cursor-time materialize_finished_plan()
+		 * check does not see the Citus CustomScan. That means SCROLL
+		 * cursors can reach here with a backward scan request even though
+		 * the adapter cannot satisfy it. Report a user-facing error
+		 * rather than crashing.
+		 */
+		if (!forward)
+		{
+			ereport(ERROR,
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					 errmsg("streaming sorted merge does not support "
+							"backward scan"),
+					 errhint("Declare the cursor with SCROLL to enable "
+							 "backward scan.")));
+		}
+
+		TupleTableSlot *adapterSlot =
+			SortedMergeAdapterNext(scanState->mergeAdapter);
+		if (adapterSlot == NULL)
+		{
+			return ExecClearTuple(slot);
+		}
+		return adapterSlot;
+	}
+
+	Tuplestorestate *tupleStore = scanState->tuplestorestate;
+	if (tupleStore == NULL)
+	{
+		return ExecClearTuple(slot);
+	}
+
+	if (!tuplestore_gettupleslot(tupleStore, forward, false, slot))
+	{
+		return ExecClearTuple(slot);
+	}
+
+	return slot;
+}
+
+
+/*
+ * ReturnTupleFromTuplestore reads the next tuple from the tuple store (or
+ * streaming merge adapter) of the given Citus scan node and returns it.
+ * It returns null if all tuples are read.
  */
 TupleTableSlot *
 ReturnTupleFromTuplestore(CitusScanState *scanState)
 {
-	Tuplestorestate *tupleStore = scanState->tuplestorestate;
 	bool forwardScanDirection = true;
-
-	if (tupleStore == NULL)
-	{
-		return NULL;
-	}
 
 	EState *executorState = ScanStateGetExecutorState(scanState);
 	ScanDirection scanDirection = executorState->es_direction;
@@ -370,10 +423,9 @@ ReturnTupleFromTuplestore(CitusScanState *scanState)
 
 	if (!qual && !projInfo)
 	{
-		/* no quals, nor projections return directly from the tuple store. */
+		/* no quals, nor projections return directly from the tuple source. */
 		TupleTableSlot *slot = scanState->customScanState.ss.ss_ScanTupleSlot;
-		tuplestore_gettupleslot(tupleStore, forwardScanDirection, false, slot);
-		return slot;
+		return FetchNextScanTuple(scanState, forwardScanDirection, slot);
 	}
 
 	for (;;)
@@ -391,12 +443,11 @@ ReturnTupleFromTuplestore(CitusScanState *scanState)
 		ResetExprContext(econtext);
 
 		TupleTableSlot *slot = scanState->customScanState.ss.ss_ScanTupleSlot;
-		tuplestore_gettupleslot(tupleStore, forwardScanDirection, false, slot);
-
+		slot = FetchNextScanTuple(scanState, forwardScanDirection, slot);
 		if (TupIsNull(slot))
 		{
 			/*
-			 * When the tuple is null we have reached the end of the tuplestore. We will
+			 * When the tuple is null we have reached the end of the source. We will
 			 * return a null tuple, however, depending on the existence of a projection we
 			 * need to either return the scan tuple or the projected tuple.
 			 */

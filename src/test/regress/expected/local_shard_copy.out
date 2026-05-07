@@ -181,8 +181,8 @@ NOTICE:  executing the copy locally for shard xxxxx
 CONTEXT:  COPY distributed_table, line 1: "1, 100"
     -- verify the put ages.
     SELECT * FROM distributed_table ORDER BY 1,2 DESC;
-NOTICE:  executing the command locally: SELECT key, age FROM local_shard_copy.distributed_table_1570001 distributed_table WHERE true
-NOTICE:  executing the command locally: SELECT key, age FROM local_shard_copy.distributed_table_1570003 distributed_table WHERE true
+NOTICE:  executing the command locally: SELECT key, age FROM local_shard_copy.distributed_table_1570001 distributed_table WHERE true ORDER BY key, age DESC
+NOTICE:  executing the command locally: SELECT key, age FROM local_shard_copy.distributed_table_1570003 distributed_table WHERE true ORDER BY key, age DESC
  key | age
 ---------------------------------------------------------------------
    1 | 100
