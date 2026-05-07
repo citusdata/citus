@@ -375,7 +375,7 @@ FetchNextScanTuple(CitusScanState *scanState, bool forward, TupleTableSlot *slot
 		}
 
 		TupleTableSlot *adapterSlot =
-			SortedMergeAdapterNextSlot(scanState->mergeAdapter);
+			SortedMergeAdapterNext(scanState->mergeAdapter);
 		if (adapterSlot == NULL)
 		{
 			return ExecClearTuple(slot);

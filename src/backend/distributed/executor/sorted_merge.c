@@ -76,9 +76,6 @@ struct SortedMergeAdapter
 
 /* forward declarations */
 static int MergeHeapComparator(Datum a, Datum b, void *arg);
-static bool SortedMergeAdapterInitialize(SortedMergeAdapter *adapter);
-static bool SortedMergeAdapterAdvancePreviousWinner(SortedMergeAdapter *adapter);
-static TupleTableSlot * SortedMergeAdapterCurrentWinnerSlot(SortedMergeAdapter *adapter);
 
 
 /*
@@ -295,70 +292,7 @@ CreateSortedMergeAdapter(Tuplestorestate **perTaskStores,
 
 
 /*
- * SortedMergeAdapterInitialize seeds the heap with the first tuple from each
- * per-task store. Returns true if at least one store had a tuple.
- */
-static bool
-SortedMergeAdapterInitialize(SortedMergeAdapter *adapter)
-{
-	/* first call: seed the heap with the first tuple from each store */
-	for (int i = 0; i < adapter->nstores; i++)
-	{
-		tuplestore_rescan(adapter->perTaskStores[i]);
-		if (tuplestore_gettupleslot(adapter->perTaskStores[i], true, false,
-									adapter->mergeCtx.slots[i]))
-		{
-			binaryheap_add_unordered(adapter->heap, Int32GetDatum(i));
-		}
-	}
-	binaryheap_build(adapter->heap);
-	adapter->initialized = true;
-
-	return !binaryheap_empty(adapter->heap);
-}
-
-
-/*
- * SortedMergeAdapterAdvancePreviousWinner advances the store whose tuple won
- * the previous call, then updates the heap. Returns true if tuples remain.
- */
-static bool
-SortedMergeAdapterAdvancePreviousWinner(SortedMergeAdapter *adapter)
-{
-	Assert(!binaryheap_empty(adapter->heap));
-
-	int prevWinner = DatumGetInt32(binaryheap_first(adapter->heap));
-	if (tuplestore_gettupleslot(adapter->perTaskStores[prevWinner], true,
-								false, adapter->mergeCtx.slots[prevWinner]))
-	{
-		binaryheap_replace_first(adapter->heap, Int32GetDatum(prevWinner));
-	}
-	else
-	{
-		(void) binaryheap_remove_first(adapter->heap);
-	}
-
-	return !binaryheap_empty(adapter->heap);
-}
-
-
-/*
- * SortedMergeAdapterCurrentWinnerSlot returns the current heap winner. The
- * returned slot is owned by the adapter and remains valid until the next
- * adapter call, rescan, or free.
- */
-static TupleTableSlot *
-SortedMergeAdapterCurrentWinnerSlot(SortedMergeAdapter *adapter)
-{
-	Assert(!binaryheap_empty(adapter->heap));
-
-	int winner = DatumGetInt32(binaryheap_first(adapter->heap));
-	return adapter->mergeCtx.slots[winner];
-}
-
-
-/*
- * SortedMergeAdapterNextSlot returns the next globally-sorted tuple from the
+ * SortedMergeAdapterNext returns the next globally-sorted tuple from the
  * adapter. The returned slot is adapter-owned and must be treated as read-only
  * by callers. Returns NULL if all stores are exhausted.
  *
@@ -366,35 +300,60 @@ SortedMergeAdapterCurrentWinnerSlot(SortedMergeAdapter *adapter)
  * identifying the winner, the slot is returned directly to avoid a per-tuple
  * MinimalTuple copy in the streaming path.
  *
- * On each call after the first, we advance the previous winner's store
- * and update the heap before selecting the new winner. This matches the
- * MergeAppend pattern in nodeMergeAppend.c.
+ * On the first call we seed the heap with the first tuple from each store.
+ * On subsequent calls we advance the previous winner's store and update the
+ * heap before selecting the new winner. This matches the MergeAppend pattern
+ * in nodeMergeAppend.c.
  */
 TupleTableSlot *
-SortedMergeAdapterNextSlot(SortedMergeAdapter *adapter)
+SortedMergeAdapterNext(SortedMergeAdapter *adapter)
 {
 	if (adapter->exhausted)
 	{
 		return NULL;
 	}
 
-	bool tuplesRemain = false;
 	if (!adapter->initialized)
 	{
-		tuplesRemain = SortedMergeAdapterInitialize(adapter);
+		/* first call: seed the heap with the first tuple from each store */
+		for (int i = 0; i < adapter->nstores; i++)
+		{
+			tuplestore_rescan(adapter->perTaskStores[i]);
+			if (tuplestore_gettupleslot(adapter->perTaskStores[i], true, false,
+										adapter->mergeCtx.slots[i]))
+			{
+				binaryheap_add_unordered(adapter->heap, Int32GetDatum(i));
+			}
+		}
+		binaryheap_build(adapter->heap);
+		adapter->initialized = true;
 	}
 	else
 	{
-		tuplesRemain = SortedMergeAdapterAdvancePreviousWinner(adapter);
+		/* advance the store whose tuple won the previous call */
+		Assert(!binaryheap_empty(adapter->heap));
+
+		int prevWinner = DatumGetInt32(binaryheap_first(adapter->heap));
+		if (tuplestore_gettupleslot(adapter->perTaskStores[prevWinner], true,
+									false, adapter->mergeCtx.slots[prevWinner]))
+		{
+			binaryheap_replace_first(adapter->heap, Int32GetDatum(prevWinner));
+		}
+		else
+		{
+			(void) binaryheap_remove_first(adapter->heap);
+		}
 	}
 
-	if (!tuplesRemain)
+	if (binaryheap_empty(adapter->heap))
 	{
 		adapter->exhausted = true;
 		return NULL;
 	}
 
-	return SortedMergeAdapterCurrentWinnerSlot(adapter);
+	/* return the current heap winner's slot (adapter-owned, read-only) */
+	int winner = DatumGetInt32(binaryheap_first(adapter->heap));
+	return adapter->mergeCtx.slots[winner];
 }
 
 
