@@ -9,3 +9,8 @@ DROP FUNCTION IF EXISTS pg_catalog.worker_apply_sequence_command(text, regtype, 
 DROP FUNCTION IF EXISTS citus_internal.lock_colocation_id(int, int);
 
 DROP FUNCTION IF EXISTS citus_internal.acquire_placement_colocation_lock(bigint, int);
+
+-- cluster changes block UDFs
+DROP FUNCTION IF EXISTS pg_catalog.citus_cluster_changes_block(int);
+DROP FUNCTION IF EXISTS pg_catalog.citus_cluster_changes_unblock();
+DROP FUNCTION IF EXISTS pg_catalog.citus_cluster_changes_block_status();

@@ -83,7 +83,7 @@ int PlannerLevel = 0;
 
 static bool ListContainsDistributedTableRTE(List *rangeTableList,
 											bool *maybeHasForeignDistributedTable);
-static bool PlanContainsDistributedSubPlanRTE(List *subPlanList);
+static bool PlanContainsDistributedSubPlanRTE(DistributedPlanningContext *planContext);
 static PlannedStmt * CreateDistributedPlannedStmt(DistributedPlanningContext *
 												  planContext);
 static PlannedStmt * InlineCtesAndCreateDistributedPlannedStmt(uint64 planId,
@@ -437,8 +437,9 @@ ListContainsDistributedTableRTE(List *rangeTableList,
 
 
 /*
- * PlanContainsDistributedSubPlanRTE checks whether any of the subplans in the given
- * subPlanList is a Read Intermediate Result function scan.
+ * PlanContainsDistributedSubPlanRTE checks whether any of the subplans in the
+ * plan context's PlannedStmt->subplans list is a Read Intermediate Result
+ * function scan.
  *
  * It is used by the check after standard_planner() to determine whether the plan
  * still requires distributed planning; in addition to checking the range table for
@@ -447,13 +448,25 @@ ListContainsDistributedTableRTE(List *rangeTableList,
  * that distributed planning is required.
  */
 static bool
-PlanContainsDistributedSubPlanRTE(List *subPlanList)
+PlanContainsDistributedSubPlanRTE(DistributedPlanningContext *planContext)
 {
+	/*
+	 * We iterate over planContext->plan->subplans, which is PostgreSQL's
+	 * PlannedStmt->subplans list. PostgreSQL's setrefs.c (set_plan_references)
+	 * resolves AlternativeSubPlan nodes by picking one alternative and setting
+	 * the discarded subplan entries to NULL. We must therefore skip NULL entries.
+	 */
+	List *subPlanList = planContext->plan->subplans;
 	ListCell *subPlanCell = NULL;
 
 	foreach(subPlanCell, subPlanList)
 	{
 		Node *planRoot = (Node *) lfirst(subPlanCell);
+
+		if (planRoot == NULL)
+		{
+			continue;
+		}
 
 		if (!IsA(planRoot, FunctionScan))
 		{
@@ -2996,7 +3009,7 @@ CheckPostPlanDistribution(DistributedPlanningContext *planContext, bool
 			/* ..or a distributed subplan */
 			planHasDistribution = planHasDistribution ||
 								  PlanContainsDistributedSubPlanRTE(
-				planContext->plan->subplans);
+				planContext);
 
 			/*
 			 * The plan has a distributed relation, so we know for sure that
