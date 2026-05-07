@@ -3986,8 +3986,51 @@ ReceiveResults(WorkerSession *session, bool storeRows)
 													 ALLOCSET_DEFAULT_INITSIZE,
 													 ALLOCSET_DEFAULT_MAXSIZE);
 
-	while (!PQisBusy(connection->pgConn))
+	while (1)
 	{
+		if (PQisBusy(connection->pgConn))
+		{
+#ifndef LIBPQ_HAS_CHUNK_MODE
+
+			/*
+			 * On builds without libpq chunked-rows support (PG <= 16) the
+			 * adaptive executor uses PQsetSingleRowMode, which surfaces
+			 * roughly one row per PQgetResult call.  Wide-row distributed
+			 * SELECTs (e.g. PostGIS geometries) hit PQisBusy() = true many
+			 * thousands of times per query, each time forcing a yield to the
+			 * wait-event loop in RunDistributedExecution().  Before yielding,
+			 * try one extra non-blocking PQconsumeInput(); if the worker has
+			 * pushed more bytes into the kernel buffer while we were
+			 * processing the previous batch of rows we keep draining instead
+			 * of paying for an epoll wake + ConnectionStateMachine pass.
+			 *
+			 * On PG17+ libpq exposes PQsetChunkedRowsMode (LIBPQ_HAS_CHUNK_MODE
+			 * is defined) and the adaptive executor batches on the libpq side
+			 * (see #5195), so this extra drain is unnecessary -- a
+			 * PQisBusy=true after a chunk really does mean "yield".
+			 */
+			if (PQconsumeInput(connection->pgConn) == 0)
+			{
+				connection->connectionState = MULTI_CONNECTION_LOST;
+				break;
+			}
+			if (PQisBusy(connection->pgConn))
+			{
+				/* really nothing to drain; yield to the wait-event loop */
+				break;
+			}
+			/* fall through: more rows are available, keep draining */
+#else
+
+			/*
+			 * Chunked-rows mode amortises libpq overhead over many rows per
+			 * PQgetResult, so an extra non-blocking drain is not worth the
+			 * complexity here -- yield to the wait-event loop as before.
+			 */
+			break;
+#endif
+		}
+
 		uint32 columnIndex = 0;
 		uint32 rowsProcessed = 0;
 
