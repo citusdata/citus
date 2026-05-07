@@ -1433,11 +1433,14 @@ CreateReplicationSlots(MultiConnection *sourceConnection,
 		}
 		else
 		{
+			/* Use quote_literal_cstr to safely quote slot names and prevent SQL injection */
+			char *quotedSourceSlot = quote_literal_cstr(firstReplicationSlot->name);
+			char *quotedTargetSlot = quote_literal_cstr(replicationSlot->name);
 			ExecuteCriticalRemoteCommand(
 				sourceConnection,
 				psprintf("SELECT pg_catalog.pg_copy_logical_replication_slot(%s, %s)",
-						 quote_literal_cstr(firstReplicationSlot->name),
-						 quote_literal_cstr(replicationSlot->name)));
+						 quotedSourceSlot,
+						 quotedTargetSlot));
 		}
 	}
 	return snapshot;
