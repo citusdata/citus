@@ -45,6 +45,27 @@ SELECT ALL MIN((lower(CAST(test_collate_pushed_down_aggregate.a AS VARCHAR)) COL
     FROM ONLY test_collate_pushed_down_aggregate;
 RESET citus.log_remote_commands;
 
+-- Test COLLATE with type cast does not cause type mismatch (issue #8469)
+-- When a GROUP BY expression uses both ::VARCHAR and COLLATE, the type cast
+-- must be preserved in the query sent to workers.
+SET citus.next_shard_id TO 20070000;
+CREATE TABLE test_collate_cast (c0 inet, c1 inet);
+SELECT create_distributed_table('test_collate_cast', 'c0');
+INSERT INTO test_collate_cast(c1, c0) VALUES
+    ('144.150.228.243', '230.194.119.117'),
+    ('22.171.214.19', '138.53.199.60'),
+    ('14.25.58.22', '103.167.89.59');
+
+-- This used to fail with: "attribute 2 of type record has wrong type"
+-- "Table has type text, but query expects character varying"
+SELECT SUM(agg0)
+FROM (
+    SELECT ALL SUM(0.5) as agg0
+    FROM ONLY test_collate_cast
+    GROUP BY
+        (((('fooText')||(test_collate_cast.c1)))::VARCHAR COLLATE "C")
+) as asdf;
+
 -- Test range table with collated distribution column
 CREATE TABLE test_range(key text COLLATE german_phonebook, val int);
 SELECT create_distributed_table('test_range', 'key', 'range');
