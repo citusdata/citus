@@ -83,7 +83,7 @@ int PlannerLevel = 0;
 
 static bool ListContainsDistributedTableRTE(List *rangeTableList,
 											bool *maybeHasForeignDistributedTable);
-static bool PlanContainsDistributedSubPlanRTE(List *subPlanList);
+static bool PlanContainsDistributedSubPlanRTE(DistributedPlanningContext *planContext);
 static PlannedStmt * CreateDistributedPlannedStmt(DistributedPlanningContext *
 												  planContext);
 static PlannedStmt * InlineCtesAndCreateDistributedPlannedStmt(uint64 planId,
@@ -109,6 +109,7 @@ static PlannedStmt * FinalizeNonRouterPlan(PlannedStmt *localPlan,
 static PlannedStmt * FinalizeRouterPlan(PlannedStmt *localPlan, CustomScan *customScan);
 static AppendRelInfo * FindTargetAppendRelInfo(PlannerInfo *root, int relationRteIndex);
 static List * makeTargetListFromCustomScanList(List *custom_scan_tlist);
+static void DisableTrackingQueryCountersForPlanTree(struct Plan *planTree);
 static List * makeCustomScanTargetlistFromExistingTargetList(List *existingTargetlist);
 static int32 BlessRecordExpressionList(List *exprs);
 static void CheckNodeIsDumpable(Node *node);
@@ -435,8 +436,9 @@ ListContainsDistributedTableRTE(List *rangeTableList,
 
 
 /*
- * PlanContainsDistributedSubPlanRTE checks whether any of the subplans in the given
- * subPlanList is a Read Intermediate Result function scan.
+ * PlanContainsDistributedSubPlanRTE checks whether any of the subplans in the
+ * plan context's PlannedStmt->subplans list is a Read Intermediate Result
+ * function scan.
  *
  * It is used by the check after standard_planner() to determine whether the plan
  * still requires distributed planning; in addition to checking the range table for
@@ -445,13 +447,25 @@ ListContainsDistributedTableRTE(List *rangeTableList,
  * that distributed planning is required.
  */
 static bool
-PlanContainsDistributedSubPlanRTE(List *subPlanList)
+PlanContainsDistributedSubPlanRTE(DistributedPlanningContext *planContext)
 {
+	/*
+	 * We iterate over planContext->plan->subplans, which is PostgreSQL's
+	 * PlannedStmt->subplans list. PostgreSQL's setrefs.c (set_plan_references)
+	 * resolves AlternativeSubPlan nodes by picking one alternative and setting
+	 * the discarded subplan entries to NULL. We must therefore skip NULL entries.
+	 */
+	List *subPlanList = planContext->plan->subplans;
 	ListCell *subPlanCell = NULL;
 
 	foreach(subPlanCell, subPlanList)
 	{
 		Node *planRoot = (Node *) lfirst(subPlanCell);
+
+		if (planRoot == NULL)
+		{
+			continue;
+		}
 
 		if (!IsA(planRoot, FunctionScan))
 		{
@@ -1703,6 +1717,64 @@ makeTargetListFromCustomScanList(List *custom_scan_tlist)
 
 
 /*
+ * DisableTrackingQueryCountersForPlannedStmt takes a PlannedStmt and
+ * disables tracking query counters for the distributed parts of the plan.
+ */
+void
+DisableTrackingQueryCountersForPlannedStmt(PlannedStmt *plannedStmt)
+{
+	DisableTrackingQueryCountersForPlanTree(plannedStmt->planTree);
+}
+
+
+/*
+ * DisableTrackingQueryCountersForPlanTree takes a plan tree and
+ * disables tracking query counters for it if it's a distributed plan
+ * and its distributed children recursively.
+ *
+ * Note that today none of the callers provide a plan tree with subplans
+ * at any level, so we throw an error if we find any subplans to avoid
+ * unnecessary implementation.
+ */
+static void
+DisableTrackingQueryCountersForPlanTree(struct Plan *planTree)
+{
+	/* we don't expect very deep plan trees but let's be on the safe side */
+	CHECK_FOR_INTERRUPTS();
+	check_stack_depth();
+
+	if (planTree == NULL)
+	{
+		return;
+	}
+
+	DisableTrackingQueryCountersForPlanTree(planTree->lefttree);
+	DisableTrackingQueryCountersForPlanTree(planTree->righttree);
+
+	if (!IsCitusCustomScan(planTree))
+	{
+		return;
+	}
+
+	DistributedPlan *distPlan = GetDistributedPlan((CustomScan *) planTree);
+	distPlan->disableTrackingQueryCounters = true;
+
+	if (distPlan->selectPlanForModifyViaCoordinatorOrRepartition)
+	{
+		DisableTrackingQueryCountersForPlanTree(distPlan->
+												selectPlanForModifyViaCoordinatorOrRepartition
+												->planTree);
+	}
+
+	if (list_length(distPlan->subPlanList) > 0 ||
+		list_length(distPlan->usedSubPlanNodeList) > 0)
+	{
+		ereport(ERROR, (errmsg("unexpected subplans in distributed plan")));
+	}
+}
+
+
+/*
  * BlessRecordExpression ensures we can parse an anonymous composite type on the
  * target list of a query that is sent to the worker.
  *
@@ -2916,7 +2988,7 @@ CheckPostPlanDistribution(DistributedPlanningContext *planContext, bool
 			/* ..or a distributed subplan */
 			planHasDistribution = planHasDistribution ||
 								  PlanContainsDistributedSubPlanRTE(
-				planContext->plan->subplans);
+				planContext);
 
 			/*
 			 * The plan has a distributed relation, so we know for sure that

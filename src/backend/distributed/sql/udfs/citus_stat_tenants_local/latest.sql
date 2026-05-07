@@ -26,6 +26,7 @@ CREATE OR REPLACE FUNCTION pg_catalog.citus_stat_tenants_local(
     OUT score BIGINT)
 RETURNS SETOF RECORD
 LANGUAGE plpgsql
+SET search_path = pg_catalog, pg_temp
 AS $function$
 BEGIN
     RETURN QUERY
