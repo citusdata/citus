@@ -245,10 +245,10 @@ SELECT count(*) FROM pg_tables WHERE tablename LIKE 'objects_for_xacts2_%' and s
      0
 (1 row)
 
--- make sure that citus_drop_all_shards does not work from the worker nodes
+-- make sure that citus_drop_all_shards does not work from the worker nodes when the coordinator is not in the metadata
 SELECT citus_drop_all_shards('citus_mx_schema_for_xacts.objects_for_xacts'::regclass, 'citus_mx_schema_for_xacts', 'objects_for_xacts');
-ERROR:  operation is not allowed on this node
-HINT:  Connect to the coordinator and run it again.
+ERROR:  coordinator is not added to the metadata
+HINT:  Use SELECT citus_set_coordinator_host('<hostname>') on coordinator to configure the coordinator hostname
 -- Ensure pg_dist_transaction is empty for test
 SELECT recover_prepared_transactions();
  recover_prepared_transactions
@@ -354,11 +354,11 @@ $$);
 (1 row)
 
 SELECT citus_drop_all_shards('distributed_mx_table'::regclass, 'public', 'distributed_mx_table');
-ERROR:  operation is not allowed on this node
-HINT:  Connect to the coordinator and run it again.
+ERROR:  coordinator is not added to the metadata
+HINT:  Use SELECT citus_set_coordinator_host('<hostname>') on coordinator to configure the coordinator hostname
 SELECT master_remove_partition_metadata('distributed_mx_table'::regclass, 'public', 'distributed_mx_table');
-ERROR:  operation is not allowed on this node
-HINT:  Connect to the coordinator and run it again.
+ERROR:  coordinator is not added to the metadata
+HINT:  Use SELECT citus_set_coordinator_host('<hostname>') on coordinator to configure the coordinator hostname
 -- make sure that we can drop unrelated tables/sequences
 CREATE TABLE unrelated_table(key serial);
 DROP TABLE unrelated_table;
@@ -381,3 +381,9 @@ SELECT pg_reload_conf();
  t
 (1 row)
 
+SET client_min_messages TO WARNING;
+DROP SCHEMA citus_mx_schema_for_xacts CASCADE;
+DROP TABLE distributed_mx_table CASCADE;
+DROP USER no_access_mx;
+\c - postgres - :worker_1_port
+DROP TABLE should_commit CASCADE;

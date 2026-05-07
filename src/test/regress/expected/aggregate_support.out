@@ -1366,5 +1366,322 @@ select min((id,val)::coord) from aggdata;
  (1,2)
 (1 row)
 
+-- Non-Var GROUP BY mixed with aggregate in the SAME target entry
+-- GROUP BY expression combined with aggregate via concatenation
+SELECT abs(val) + sum(id) AS combined
+FROM aggdata
+GROUP BY abs(val)
+ORDER BY combined;
+ combined
+---------------------------------------------------------------------
+        6
+        7
+       10
+       10
+       11
+       18
+
+(7 rows)
+
+-- GROUP BY expression used as argument alongside aggregate in a function
+SELECT coalesce(abs(val)::text, 'null') || ':' || sum(id)::text AS label
+FROM aggdata
+GROUP BY abs(val)
+ORDER BY label;
+  label
+---------------------------------------------------------------------
+ 0:11
+ 2:4
+ 3:4
+ 4:6
+ 5:5
+ 8:10
+ null:26
+(7 rows)
+
+-- GROUP BY expression in arithmetic with multiple aggregates
+SELECT abs(val) * count(*) + sum(id) AS calc
+FROM aggdata
+GROUP BY abs(val)
+ORDER BY calc;
+ calc
+---------------------------------------------------------------------
+    7
+    8
+   10
+   10
+   11
+   18
+
+(7 rows)
+
+-- Nested function GROUP BY mixed with aggregate
+SELECT floor(abs(val)) + min(id) AS nested_mix
+FROM aggdata
+GROUP BY floor(abs(val))
+ORDER BY nested_mix;
+ nested_mix
+---------------------------------------------------------------------
+          3
+          7
+         10
+         10
+         11
+         18
+
+(7 rows)
+
+-- CASE expression in GROUP BY mixed with aggregate in same target
+SELECT case when val > 3 then 'high' else 'low' end || ':' || sum(id)::text AS bucket_total
+FROM aggdata
+GROUP BY case when val > 3 then 'high' else 'low' end
+ORDER BY bucket_total;
+ bucket_total
+---------------------------------------------------------------------
+ high:21
+ low:45
+(2 rows)
+
+-- DISTINCT on mixed GROUP BY expression + aggregate
+SELECT DISTINCT abs(val) + sum(id) AS combined
+FROM aggdata
+GROUP BY abs(val)
+ORDER BY combined;
+ combined
+---------------------------------------------------------------------
+        6
+        7
+       10
+       11
+       18
+
+(6 rows)
+
+-- Subquery wrapping a mixed GROUP BY expression + aggregate
+SELECT combined, combined * 2 AS doubled
+FROM (
+    SELECT abs(val) + sum(id) AS combined
+    FROM aggdata
+    GROUP BY abs(val)
+) sub
+ORDER BY combined;
+ combined | doubled
+---------------------------------------------------------------------
+        6 |      12
+        7 |      14
+       10 |      20
+       10 |      20
+       11 |      22
+       18 |      36
+          |
+(7 rows)
+
+-- GROUP BY expr appears both standalone AND mixed with aggregate in same query
+SELECT abs(val) AS av, abs(val) + sum(id) AS mixed
+FROM aggdata
+GROUP BY abs(val)
+ORDER BY av;
+ av | mixed
+---------------------------------------------------------------------
+  0 |    11
+  2 |     6
+  3 |     7
+  4 |    10
+  5 |    10
+  8 |    18
+    |
+(7 rows)
+
+-- Multiple non-Var GROUP BY expressions mixed with aggregate in same target
+SELECT abs(val) + key * 2 + sum(id) AS multi_group
+FROM aggdata
+GROUP BY abs(val), key * 2
+ORDER BY multi_group;
+ multi_group
+---------------------------------------------------------------------
+           5
+           9
+          11
+          14
+          16
+          29
+          32
+
+
+
+(10 rows)
+
+-- HAVING that references a mixed GROUP BY expression + aggregate
+SELECT abs(val) + sum(id) AS combined
+FROM aggdata
+GROUP BY abs(val)
+HAVING abs(val) + sum(id) > 10
+ORDER BY combined;
+ combined
+---------------------------------------------------------------------
+       11
+       18
+(2 rows)
+
+-- Constant in expression
+SELECT abs(val) + 1 + sum(id) - floor(valf) FROM aggdata
+GROUP BY abs(val), floor(valf)
+ORDER BY 1;
+ ?column?
+---------------------------------------------------------------------
+    -1059
+      -52
+       -7
+        3
+        4
+        6
+       11
+
+
+
+
+(11 rows)
+
+-- Count(DISTINCT) (decomposed differently from the basic aggregates)
+SELECT abs(val) + count(DISTINCT id) AS combined
+FROM aggdata
+GROUP BY abs(val)
+ORDER BY combined;
+ combined
+---------------------------------------------------------------------
+        1
+        4
+        4
+        5
+        6
+        9
+
+(7 rows)
+
+-- Type-casts
+SELECT val::text || ':' || sum(id)::text AS combined
+FROM aggdata
+GROUP BY val::text
+ORDER BY combined;
+ combined
+---------------------------------------------------------------------
+ 0:11
+ 2:4
+ 3:4
+ 4:6
+ 5:5
+ 8:10
+
+(7 rows)
+
+-- ORDER BY with LIMIT
+SELECT abs(val) + sum(id) AS combined
+FROM aggdata
+GROUP BY abs(val)
+ORDER BY abs(val) DESC, sum(id) ASC
+LIMIT 5;
+ combined
+---------------------------------------------------------------------
+
+       18
+       10
+       10
+        7
+(5 rows)
+
+-- EXPLAIN output showing worker queries preserve GROUP BY expressions intact
+EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF)
+SELECT abs(val) + sum(id) AS combined
+FROM aggdata
+GROUP BY abs(val)
+ORDER BY combined;
+                                                                                       QUERY PLAN
+---------------------------------------------------------------------
+ Sort (actual rows=7 loops=1)
+   Output: ((remote_scan.combined + (pg_catalog.sum(remote_scan.combined_1))::bigint)), remote_scan.worker_column_3
+   Sort Key: ((remote_scan.combined + (pg_catalog.sum(remote_scan.combined_1))::bigint))
+   Sort Method: quicksort  Memory: 25kB
+   ->  HashAggregate (actual rows=7 loops=1)
+         Output: (remote_scan.combined + (pg_catalog.sum(remote_scan.combined_1))::bigint), remote_scan.worker_column_3
+         Group Key: remote_scan.worker_column_3
+         ->  Custom Scan (Citus Adaptive) (actual rows=10 loops=1)
+               Output: remote_scan.combined, remote_scan.combined_1, remote_scan.worker_column_3
+               Task Count: 4
+               Tuple data received from nodes: 136 bytes
+               Tasks Shown: One of 4
+               ->  Task
+                     Query: SELECT abs(val) AS combined, sum(id) AS combined, abs(val) AS worker_column_3 FROM aggregate_support.aggdata_83674000 aggdata WHERE true GROUP BY (abs(val))
+                     Tuple data received from node: 56 bytes
+                     Node: host=localhost port=xxxxx dbname=regression
+                     ->  HashAggregate (actual rows=4 loops=1)
+                           Output: (abs(val)), sum(id), (abs(val))
+                           Group Key: abs(aggdata.val)
+                           ->  Seq Scan on aggregate_support.aggdata_83674000 aggdata (actual rows=4 loops=1)
+                                 Output: abs(val), id, val
+(23 rows)
+
+EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF)
+SELECT abs(val) + sum(id) AS combined
+FROM aggdata
+GROUP BY abs(val)
+HAVING abs(val) + sum(id) > 10
+ORDER BY combined;
+                                                                                                                    QUERY PLAN
+---------------------------------------------------------------------
+ Sort (actual rows=2 loops=1)
+   Output: ((remote_scan.combined + (pg_catalog.sum(remote_scan.combined_1))::bigint)), remote_scan.worker_column_3
+   Sort Key: ((remote_scan.combined + (pg_catalog.sum(remote_scan.combined_1))::bigint))
+   Sort Method: quicksort  Memory: 25kB
+   ->  HashAggregate (actual rows=2 loops=1)
+         Output: (remote_scan.combined + (pg_catalog.sum(remote_scan.combined_1))::bigint), remote_scan.worker_column_3
+         Group Key: remote_scan.worker_column_3
+         Filter: ((remote_scan.worker_column_4 + (pg_catalog.sum(remote_scan.worker_column_5))::bigint) > 10)
+         Rows Removed by Filter: 5
+         ->  Custom Scan (Citus Adaptive) (actual rows=10 loops=1)
+               Output: remote_scan.combined, remote_scan.combined_1, remote_scan.worker_column_3, remote_scan.worker_column_4, remote_scan.worker_column_5
+               Task Count: 4
+               Tuple data received from nodes: 244 bytes
+               Tasks Shown: One of 4
+               ->  Task
+                     Query: SELECT abs(val) AS combined, sum(id) AS combined, abs(val) AS worker_column_3, abs(val) AS worker_column_4, sum(id) AS worker_column_5 FROM aggregate_support.aggdata_83674000 aggdata WHERE true GROUP BY (abs(val))
+                     Tuple data received from node: 100 bytes
+                     Node: host=localhost port=xxxxx dbname=regression
+                     ->  HashAggregate (actual rows=4 loops=1)
+                           Output: (abs(val)), sum(id), (abs(val)), (abs(val)), sum(id)
+                           Group Key: abs(aggdata.val)
+                           ->  Seq Scan on aggregate_support.aggdata_83674000 aggdata (actual rows=4 loops=1)
+                                 Output: abs(val), id, val
+(25 rows)
+
+EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF)
+SELECT abs(val) + key * 2 + sum(id) AS multi_group
+FROM aggdata
+GROUP BY abs(val), key * 2
+ORDER BY multi_group;
+                                                                                                                                                           QUERY PLAN
+---------------------------------------------------------------------
+ Sort (actual rows=10 loops=1)
+   Output: (((remote_scan.multi_group + remote_scan.multi_group_1) + (pg_catalog.sum(remote_scan.multi_group_2))::bigint)), remote_scan.worker_column_4, remote_scan.worker_column_5
+   Sort Key: (((remote_scan.multi_group + remote_scan.multi_group_1) + (pg_catalog.sum(remote_scan.multi_group_2))::bigint))
+   Sort Method: quicksort  Memory: 25kB
+   ->  HashAggregate (actual rows=10 loops=1)
+         Output: ((remote_scan.multi_group + remote_scan.multi_group_1) + (pg_catalog.sum(remote_scan.multi_group_2))::bigint), remote_scan.worker_column_4, remote_scan.worker_column_5
+         Group Key: remote_scan.worker_column_4, remote_scan.worker_column_5
+         ->  Custom Scan (Citus Adaptive) (actual rows=11 loops=1)
+               Output: remote_scan.multi_group, remote_scan.multi_group_1, remote_scan.multi_group_2, remote_scan.worker_column_4, remote_scan.worker_column_5
+               Task Count: 4
+               Tuple data received from nodes: 232 bytes
+               Tasks Shown: One of 4
+               ->  Task
+                     Query: SELECT abs(val) AS multi_group, (key OPERATOR(pg_catalog.*) 2) AS multi_group, sum(id) AS multi_group, abs(val) AS worker_column_4, (key OPERATOR(pg_catalog.*) 2) AS worker_column_5 FROM aggregate_support.aggdata_83674000 aggdata WHERE true GROUP BY (abs(val)), (key OPERATOR(pg_catalog.*) 2)
+                     Tuple data received from node: 88 bytes
+                     Node: host=localhost port=xxxxx dbname=regression
+                     ->  HashAggregate (actual rows=4 loops=1)
+                           Output: (abs(val)), ((key * 2)), sum(id), (abs(val)), ((key * 2))
+                           Group Key: abs(aggdata.val), (aggdata.key * 2)
+                           ->  Seq Scan on aggregate_support.aggdata_83674000 aggdata (actual rows=4 loops=1)
+                                 Output: abs(val), (key * 2), id, val, key
+(23 rows)
+
 set client_min_messages to error;
 drop schema aggregate_support cascade;

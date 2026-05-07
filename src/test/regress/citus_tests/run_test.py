@@ -127,6 +127,7 @@ DEPS = {
     ),
     "multi_extension": TestDeps(None, repeatable=False),
     "multi_test_helpers": TestDeps(None),
+    "multi_test_catalog_views": TestDeps(None),
     "multi_insert_select": TestDeps("base_schedule"),
     "multi_partitioning": TestDeps("base_schedule"),
     "multi_mx_create_table": TestDeps(
@@ -164,6 +165,9 @@ DEPS = {
     "multi_mx_schema_support": TestDeps(None, ["multi_mx_copy_data"]),
     "multi_simple_queries": TestDeps("base_schedule"),
     "create_single_shard_table": TestDeps("minimal_schedule"),
+    "isolation_schema_based_sharding_from_any_node": TestDeps(
+        None, ["isolation_setup"]
+    ),
     "isolation_extension_commands": TestDeps(
         None, ["isolation_setup", "isolation_add_remove_node"]
     ),
@@ -185,6 +189,14 @@ DEPS = {
         ["multi_cluster_management", "remove_coordinator_from_metadata"],
         # because it queries node group id and it changes as we add / remove nodes
         repeatable=False,
+    ),
+    "multi_mx_metadata": TestDeps(
+        None,
+        [
+            "multi_cluster_management",
+            "remove_coordinator_from_metadata",
+            "multi_test_catalog_views",
+        ],
     ),
     "multi_mx_add_coordinator": TestDeps(
         None,

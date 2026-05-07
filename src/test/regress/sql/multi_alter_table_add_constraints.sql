@@ -582,6 +582,136 @@ DROP SCHEMA sc1 CASCADE;
 DROP SCHEMA sc2 CASCADE;
 DROP SCHEMA sc3 CASCADE;
 
+-- Test that named constraints on partitioned tables with long partition names
+-- switch to sequential execution to prevent self-deadlocks (issue #7799)
+CREATE SCHEMA test_named_constraint_long_partition;
+SET search_path TO 'test_named_constraint_long_partition';
+
+CREATE TABLE dist_partitioned_table (dist_col int, another_col int, partition_col timestamp)
+    PARTITION BY RANGE (partition_col);
+CREATE TABLE p1 PARTITION OF dist_partitioned_table
+    FOR VALUES FROM ('2021-01-01') TO ('2022-01-01');
+CREATE TABLE longlonglonglonglonglonglonglonglonglonglonglonglonglonglongabc
+    PARTITION OF dist_partitioned_table
+    FOR VALUES FROM ('2020-01-01') TO ('2021-01-01');
+SELECT create_distributed_table('dist_partitioned_table', 'partition_col');
+
+-- Check "ADD CONSTRAINT ... PRIMARY KEY" with explicit name switches to sequential
+SET client_min_messages TO DEBUG1;
+ALTER TABLE dist_partitioned_table ADD CONSTRAINT my_pk PRIMARY KEY(partition_col);
+RESET client_min_messages;
+
+-- Verify constraint is created on the coordinator
+SELECT con.conname
+    FROM pg_catalog.pg_constraint con
+    INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+    INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+   WHERE rel.relname = 'dist_partitioned_table'
+     AND con.contype = 'p';
+
+ALTER TABLE dist_partitioned_table DROP CONSTRAINT my_pk;
+
+-- Check "ADD CONSTRAINT ... UNIQUE" with explicit name switches to sequential
+SET client_min_messages TO DEBUG1;
+ALTER TABLE dist_partitioned_table ADD CONSTRAINT my_uq UNIQUE(partition_col);
+RESET client_min_messages;
+
+SELECT con.conname
+    FROM pg_catalog.pg_constraint con
+    INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+    INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+   WHERE rel.relname = 'dist_partitioned_table'
+     AND con.contype = 'u';
+
+ALTER TABLE dist_partitioned_table DROP CONSTRAINT my_uq;
+
+-- Check "ADD CONSTRAINT ... CHECK" with explicit name does NOT switch to sequential
+-- because PG propagates the user-provided name to partitions as-is (no auto-generation)
+SET client_min_messages TO DEBUG1;
+ALTER TABLE dist_partitioned_table ADD CONSTRAINT my_chk CHECK(dist_col > another_col);
+RESET client_min_messages;
+
+SELECT con.conname
+    FROM pg_catalog.pg_constraint con
+    INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+    INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+   WHERE rel.relname = 'dist_partitioned_table'
+     AND con.contype = 'c';
+
+ALTER TABLE dist_partitioned_table DROP CONSTRAINT my_chk;
+
+-- Check "ADD CONSTRAINT ... EXCLUDE" with explicit name switches to sequential
+-- because PG auto-generates new index names on partitions (same as PK/UNIQUE)
+-- EXCLUDE on partitioned tables is only supported in PG17+
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+')::int >= 17 AS server_version_ge_17
+\gset
+
+\if :server_version_ge_17
+SET client_min_messages TO DEBUG1;
+ALTER TABLE dist_partitioned_table ADD CONSTRAINT my_excl EXCLUDE USING btree (partition_col WITH =);
+RESET client_min_messages;
+
+SELECT con.conname
+    FROM pg_catalog.pg_constraint con
+    INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+    INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+   WHERE rel.relname = 'dist_partitioned_table'
+     AND con.contype = 'x';
+
+ALTER TABLE dist_partitioned_table DROP CONSTRAINT my_excl;
+\endif
+
+-- Check "ADD CONSTRAINT ... FOREIGN KEY" with explicit name does NOT switch to
+-- sequential because PG propagates the user-provided name to partitions as-is
+-- FK requires shard_replication_factor = 1, so create a separate table for this test
+SET citus.shard_replication_factor TO 1;
+
+CREATE TABLE fk_dist_partitioned_table (dist_col int, another_col int, partition_col timestamp)
+    PARTITION BY RANGE (partition_col);
+CREATE TABLE fk_p1 PARTITION OF fk_dist_partitioned_table
+    FOR VALUES FROM ('2021-01-01') TO ('2022-01-01');
+CREATE TABLE fk_longlonglonglonglonglonglonglonglonglonglonglonglonglongabc
+    PARTITION OF fk_dist_partitioned_table
+    FOR VALUES FROM ('2020-01-01') TO ('2021-01-01');
+SELECT create_distributed_table('fk_dist_partitioned_table', 'partition_col');
+
+CREATE TABLE ref_table (ref_col timestamp PRIMARY KEY);
+SELECT create_reference_table('ref_table');
+
+SET client_min_messages TO DEBUG1;
+ALTER TABLE fk_dist_partitioned_table ADD CONSTRAINT my_fk FOREIGN KEY (partition_col) REFERENCES ref_table(ref_col);
+RESET client_min_messages;
+
+SELECT con.conname
+    FROM pg_catalog.pg_constraint con
+    INNER JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+    INNER JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+   WHERE rel.relname = 'fk_dist_partitioned_table'
+     AND con.contype = 'f';
+
+ALTER TABLE fk_dist_partitioned_table DROP CONSTRAINT my_fk;
+
+RESET citus.shard_replication_factor;
+
+-- Check that we error out when adding a named constraint in a transaction block
+-- after a parallel query has already been executed
+BEGIN;
+    SELECT count(*) FROM dist_partitioned_table;
+    ALTER TABLE dist_partitioned_table ADD CONSTRAINT my_pk PRIMARY KEY(partition_col);
+ROLLBACK;
+
+-- try inside a sequential block -- should succeed
+BEGIN;
+    SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
+    SELECT count(*) FROM dist_partitioned_table;
+    ALTER TABLE dist_partitioned_table ADD CONSTRAINT my_pk PRIMARY KEY(partition_col);
+ROLLBACK;
+
+SET client_min_messages TO ERROR;
+DROP SCHEMA test_named_constraint_long_partition CASCADE;
+SET search_path TO 'public';
+
 CREATE SCHEMA test_auto_explain;
 SET search_path TO 'test_auto_explain';
 

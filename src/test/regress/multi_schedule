@@ -1,5 +1,6 @@
 test: multi_test_helpers multi_test_helpers_superuser
 test: multi_cluster_management
+test: citus_cluster_changes_block
 test: create_role_propagation
 test: pg16
 test: multi_create_fdw
@@ -82,6 +83,7 @@ test: multi_basic_queries cross_join multi_complex_expressions multi_subquery mu
 test: issue_8468_num_nulls
 test: multi_subquery_complex_reference_clause multi_subquery_window_functions multi_view multi_sql_function multi_prepare_sql
 test: sql_procedure multi_function_in_join row_types materialized_view
+test: sql_procedure_no_transaction_block
 test: multi_subquery_in_where_reference_clause adaptive_executor propagate_set_commands geqo
 test: forcedelegation_functions system_queries
 # this should be run alone as it gets too many clients
