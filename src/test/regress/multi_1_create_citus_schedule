@@ -16,6 +16,7 @@
 test: multi_extension
 test: multi_test_helpers multi_test_helpers_superuser
 test: multi_cluster_management
+test: multi_create_fdw
 
 # ---
 # Prerequisites for multi_metadata_sync (from citus_tests/run_test.py)
@@ -79,4 +80,33 @@ test: mx_regular_user
 # ----------
 test: multi_multiuser
 
+# Don't parallelize stat_counters with others because we don't want statistics
+# to be updated by other tests concurrently except Citus Maintenance Daemon.
+#
+# Also, this needs to be the first test that calls citus_stat_counters()
+# because it checks the value of stats_reset column before calling the function.
+test: stat_counters
+
 test: function_propagation
+test: drop_database
+test: pg16
+test: multi_transaction_recovery_multiple_databases
+
+# Have this placeholder section at the end for the tests that need to be moved back
+# to their original schedules with the next major version of Citus are listed below.
+#
+# These tests are kept here to prevent N-1 test failures for the features that are
+# not present in the minor version.
+# ---------------------------------------------------------------------------------
+
+# ----------
+# ----------
+# multi_unsupported_worker_operations tests that unsupported operations error out on metadata workers
+# ----------
+test: multi_unsupported_worker_operations
+
+# Don't parallelize the following two tests as they directly alter pg_dist_shardid_seq
+# on the coordinator and restore it at the end.
+# Will be moved back to multi_1_schedule at Citus 15.
+test: schema_based_sharding_from_workers_a
+test: schema_based_sharding_from_workers_b

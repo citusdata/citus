@@ -236,6 +236,7 @@ SELECT stxname FROM pg_statistic_ext ORDER BY stxname;
 (4 rows)
 
 \c - - - :master_port
+SET citus.next_shard_id TO 1530000;
 SET search_path TO citus_local_tables_mx;
 -- undistribute old tables to prevent unnecessary undistribute logs later
 SELECT undistribute_table('citus_local_table', cascade_via_foreign_keys=>true);
@@ -363,6 +364,7 @@ ORDER BY child;
 (3 rows)
 
 \c - - - :master_port
+SET citus.next_shard_id TO 1531000;
 SET search_path TO citus_local_tables_mx;
 SET client_min_messages TO ERROR;
 DROP TABLE partitioned_mx;
@@ -372,11 +374,11 @@ CREATE TABLE cas_1 (a INT UNIQUE);
 CREATE TABLE cas_par (a INT UNIQUE) PARTITION BY RANGE(a);
 CREATE TABLE cas_par_1 PARTITION OF cas_par FOR VALUES FROM (1) TO (4);
 CREATE TABLE cas_par_2 PARTITION OF cas_par FOR VALUES FROM (5) TO (8);
-ALTER TABLE cas_par_1 ADD CONSTRAINT fkey_cas_test_1 FOREIGN KEY (a) REFERENCES cas_1(a);
+ALTER TABLE cas_par_1 ADD CONSTRAINT fkey_cas_test_first FOREIGN KEY (a) REFERENCES cas_1(a);
 CREATE TABLE cas_par2 (a INT UNIQUE) PARTITION BY RANGE(a);
 CREATE TABLE cas_par2_1 PARTITION OF cas_par2 FOR VALUES FROM (1) TO (4);
 CREATE TABLE cas_par2_2 PARTITION OF cas_par2 FOR VALUES FROM (5) TO (8);
-ALTER TABLE cas_par2_1 ADD CONSTRAINT fkey_cas_test_2 FOREIGN KEY (a) REFERENCES cas_1(a);
+ALTER TABLE cas_par2_1 ADD CONSTRAINT fkey_cas_test_second FOREIGN KEY (a) REFERENCES cas_1(a);
 CREATE TABLE cas_par3 (a INT UNIQUE) PARTITION BY RANGE(a);
 CREATE TABLE cas_par3_1 PARTITION OF cas_par3 FOR VALUES FROM (1) TO (4);
 CREATE TABLE cas_par3_2 PARTITION OF cas_par3 FOR VALUES FROM (5) TO (8);
@@ -391,11 +393,11 @@ ERROR:  cannot cascade operation via foreign keys as partition table citus_local
 SELECT citus_add_local_table_to_metadata('cas_par2', cascade_via_foreign_keys=>true);
 ERROR:  cannot cascade operation via foreign keys as partition table citus_local_tables_mx.cas_par2_1 involved in a foreign key relationship that is not inherited from its parent table
 -- drop the foreign keys and establish them again using the parent table
-ALTER TABLE cas_par_1 DROP CONSTRAINT fkey_cas_test_1;
-ALTER TABLE cas_par2_1 DROP CONSTRAINT fkey_cas_test_2;
-ALTER TABLE cas_par ADD CONSTRAINT fkey_cas_test_1 FOREIGN KEY (a) REFERENCES cas_1(a);
-ALTER TABLE cas_par2 ADD CONSTRAINT fkey_cas_test_2 FOREIGN KEY (a) REFERENCES cas_1(a);
-ALTER TABLE cas_par3 ADD CONSTRAINT fkey_cas_test_3 FOREIGN KEY (a) REFERENCES cas_par(a);
+ALTER TABLE cas_par_1 DROP CONSTRAINT fkey_cas_test_first;
+ALTER TABLE cas_par2_1 DROP CONSTRAINT fkey_cas_test_second;
+ALTER TABLE cas_par ADD CONSTRAINT fkey_cas_test_first FOREIGN KEY (a) REFERENCES cas_1(a);
+ALTER TABLE cas_par2 ADD CONSTRAINT fkey_cas_test_second FOREIGN KEY (a) REFERENCES cas_1(a);
+ALTER TABLE cas_par3 ADD CONSTRAINT fkey_cas_test_third FOREIGN KEY (a) REFERENCES cas_par(a);
 -- this should error out as cascade_via_foreign_keys is not set to true
 SELECT citus_add_local_table_to_metadata('cas_par2');
 ERROR:  relation citus_local_tables_mx.cas_par2 is involved in a foreign key relationship with another table
@@ -415,28 +417,27 @@ select inhrelid::regclass from pg_inherits where inhparent='cas_par'::regclass o
 (2 rows)
 
 -- verify the fkeys + fkeys with shard ids are created
-select conname from pg_constraint where conname like 'fkey_cas_test%' order by conname;
-         conname
+select conname from pg_constraint
+where conname like 'fkey_cas_test%' and conname not like '%_1' and conname not like '%_2'
+order by conname;
+           conname
 ---------------------------------------------------------------------
- fkey_cas_test_1
- fkey_cas_test_1
- fkey_cas_test_1
- fkey_cas_test_1_1330008
- fkey_cas_test_1_1330008
- fkey_cas_test_1_1330008
- fkey_cas_test_2
- fkey_cas_test_2
- fkey_cas_test_2
- fkey_cas_test_2_1330006
- fkey_cas_test_2_1330006
- fkey_cas_test_2_1330006
- fkey_cas_test_3
- fkey_cas_test_3
- fkey_cas_test_3
- fkey_cas_test_3_1330013
- fkey_cas_test_3_1330013
- fkey_cas_test_3_1330013
-(18 rows)
+ fkey_cas_test_first
+ fkey_cas_test_first
+ fkey_cas_test_first
+ fkey_cas_test_second
+ fkey_cas_test_second
+ fkey_cas_test_second
+ fkey_cas_test_second_1531000
+ fkey_cas_test_second_1531000
+ fkey_cas_test_second_1531000
+ fkey_cas_test_third
+ fkey_cas_test_third
+ fkey_cas_test_third
+ fkey_cas_test_third_1531007
+ fkey_cas_test_third_1531007
+ fkey_cas_test_third_1531007
+(15 rows)
 
 -- when all partitions are converted, there should be 40 tables and indexes
 -- the individual names are not much relevant, so we only print the count
@@ -458,21 +459,24 @@ SELECT count(*) FROM pg_class WHERE relname LIKE 'cas\_%' AND relnamespace IN
 (1 row)
 
 -- verify that the shell foreign keys are created on the worker as well
-select conname from pg_constraint where conname like 'fkey_cas_test%' order by conname;
-     conname
+select conname from pg_constraint
+where conname like 'fkey_cas_test%' and conname not like '%_1' and conname not like '%_2'
+order by conname;
+       conname
 ---------------------------------------------------------------------
- fkey_cas_test_1
- fkey_cas_test_1
- fkey_cas_test_1
- fkey_cas_test_2
- fkey_cas_test_2
- fkey_cas_test_2
- fkey_cas_test_3
- fkey_cas_test_3
- fkey_cas_test_3
+ fkey_cas_test_first
+ fkey_cas_test_first
+ fkey_cas_test_first
+ fkey_cas_test_second
+ fkey_cas_test_second
+ fkey_cas_test_second
+ fkey_cas_test_third
+ fkey_cas_test_third
+ fkey_cas_test_third
 (9 rows)
 
 \c - - - :master_port
+SET citus.next_shard_id TO 1532000;
 SET search_path TO citus_local_tables_mx;
 -- undistribute table
 -- this one should error out since we don't set the cascade option as true
@@ -495,18 +499,20 @@ select inhrelid::regclass from pg_inherits where inhparent='cas_par'::regclass o
 (2 rows)
 
 -- verify that the foreign keys with shard ids are gone, due to undistribution
-select conname from pg_constraint where conname like 'fkey_cas_test%' order by conname;
-     conname
+select conname from pg_constraint
+where conname like 'fkey_cas_test%' and conname not like '%_1' and conname not like '%_2'
+order by conname;
+       conname
 ---------------------------------------------------------------------
- fkey_cas_test_1
- fkey_cas_test_1
- fkey_cas_test_1
- fkey_cas_test_2
- fkey_cas_test_2
- fkey_cas_test_2
- fkey_cas_test_3
- fkey_cas_test_3
- fkey_cas_test_3
+ fkey_cas_test_first
+ fkey_cas_test_first
+ fkey_cas_test_first
+ fkey_cas_test_second
+ fkey_cas_test_second
+ fkey_cas_test_second
+ fkey_cas_test_third
+ fkey_cas_test_third
+ fkey_cas_test_third
 (9 rows)
 
 -- add a non-inherited fkey and verify it fails when trying to convert
@@ -521,6 +527,7 @@ SELECT relname FROM pg_class WHERE relname LIKE 'cas\_%' ORDER BY relname;
 (0 rows)
 
 \c - - - :master_port
+SET citus.next_shard_id TO 1533000;
 SET search_path TO citus_local_tables_mx;
 CREATE TABLE date_partitioned_citus_local_table_seq( measureid bigserial, eventdate date, measure_data jsonb, PRIMARY KEY (measureid, eventdate)) PARTITION BY RANGE(eventdate);
 SELECT create_time_partitions('date_partitioned_citus_local_table_seq', INTERVAL '1 month', '2022-01-01', '2021-01-01');
@@ -566,6 +573,7 @@ INSERT INTO citus_local_tables_mx.par_citus_local_seq (val) VALUES (1) RETURNING
 (1 row)
 
 \c - - - :master_port
+SET citus.next_shard_id TO 1534000;
 SET search_path TO citus_local_tables_mx;
 INSERT INTO par_citus_local_seq (val) VALUES (2) RETURNING *;
  measureid | val
@@ -920,7 +928,7 @@ ALTER TABLE loc_tb_2 ADD CONSTRAINT fkey_2 FOREIGN KEY (a) references ref_tb(a);
 DEBUG:  executing "CREATE OR REPLACE VIEW citus_local_tables_mx.v104 (a) AS  SELECT a
    FROM citus_local_tables_mx.loc_tb_2 table_name_for_view; ALTER VIEW citus_local_tables_mx.v104 OWNER TO postgres"
 DEBUG:  "view v104" has dependency to "table loc_tb_2" that is not in Citus' metadata
-DEBUG:  validating foreign key constraint "fkey_2_1330083"
+DEBUG:  validating foreign key constraint "fkey_2_1534052"
 SET client_min_messages TO WARNING;
 -- works fine
 select run_command_on_workers($$SELECT count(*) from citus_local_tables_mx.v100, citus_local_tables_mx.v101, citus_local_tables_mx.v102$$);
@@ -1125,5 +1133,5 @@ select citus_add_local_table_to_metadata('root_tbl');
 -- todo: add more matview tests once 5968 and 6028 are fixed
 -- cleanup at exit
 set client_min_messages to error;
-DROP SCHEMA citus_local_tables_mx CASCADE;
+DROP SCHEMA citus_local_tables_mx, viewsc CASCADE;
 DROP EXTENSION citus_columnar CASCADE;

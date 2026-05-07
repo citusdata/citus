@@ -187,10 +187,17 @@ extern List * PreprocessClusterStmt(Node *node, const char *clusterCommand,
 /* common.c - forward declarations*/
 extern List * PostprocessCreateDistributedObjectFromCatalogStmt(Node *stmt,
 																const char *queryString);
-extern List * PreprocessAlterDistributedObjectStmt(Node *stmt, const char *queryString,
-												   ProcessUtilityContext
-												   processUtilityContext);
-extern List * PostprocessAlterDistributedObjectStmt(Node *stmt, const char *queryString);
+extern List * PreprocessAlterDistributedObjectStmtFromCoordinator(Node *stmt,
+																  const char *queryString,
+																  ProcessUtilityContext
+																  processUtilityContext);
+extern List * PreprocessAlterDistributedObjectStmtFromAnyNode(Node *stmt,
+															  const char *queryString,
+															  ProcessUtilityContext
+															  processUtilityContext);
+extern List * PostprocessAlterDistributedObjectStmtFromCoordinator(Node *stmt,
+																   const char *queryString
+																   );
 extern List * PreprocessDropDistributedObjectStmt(Node *node, const char *queryString,
 												  ProcessUtilityContext
 												  processUtilityContext);
@@ -662,7 +669,8 @@ extern Oid GetSequenceOid(Oid relationId, AttrNumber attnum);
 extern bool ConstrTypeUsesIndex(ConstrType constrType);
 extern bool ConstrTypeCitusCanDefaultName(ConstrType constrType);
 extern char * GetAlterColumnWithNextvalDefaultCmd(Oid sequenceOid, Oid relationId,
-												  char *colname, bool missingTableOk);
+												  char *colname, bool missingTableOk,
+												  bool forceUseNextVal);
 
 extern void ErrorIfTableHasIdentityColumn(Oid relationId);
 extern void ConvertNewTableIfNecessary(Node *createStmt);

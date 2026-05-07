@@ -487,6 +487,11 @@ typedef struct DistributedPlan
 	 * of source rows to be repartitioned for colocation with the target.
 	 */
 	int sourceResultRepartitionColumnIndex;
+
+	/*
+	 * Disables tracking query stat counters if true.
+	 */
+	bool disableTrackingQueryCounters;
 } DistributedPlan;
 
 
