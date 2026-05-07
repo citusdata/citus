@@ -87,7 +87,7 @@ ParamListInfo executorBoundParams = NULL;
 bool SortReturning = false;
 
 /* when true at planning time, enables coordinator sorted merge for ORDER BY */
-bool EnableSortedMerge = false;
+bool EnableSortedMerge = true;
 
 /*
  * How many nested executors have we started? This can happen for SQL

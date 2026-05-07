@@ -1612,7 +1612,7 @@ RegisterCitusConfigVariables(void)
 					 "binary heap, eliminating the Sort node in the combine query. "
 					 "This is an experimental feature."),
 		&EnableSortedMerge,
-		false,
+		true,
 		PGC_SUSET,
 		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);

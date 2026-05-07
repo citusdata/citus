@@ -326,22 +326,21 @@ EXPLAIN (COSTS FALSE)
 	JOIN orders_mx ON l_orderkey = o_orderkey AND l_quantity < 5.0
 	ORDER BY l_quantity LIMIT 10;
 Limit
-  ->  Sort
-        Sort Key: remote_scan.l_quantity
-        ->  Custom Scan (Citus Adaptive)
-              Task Count: 16
-              Tasks Shown: One of 16
-              ->  Task
-                    Node: host=localhost port=xxxxx dbname=regression
-                    ->  Limit
-                          ->  Sort
-                                Sort Key: lineitem_mx.l_quantity
-                                ->  Hash Join
-                                      Hash Cond: (lineitem_mx.l_orderkey = orders_mx.o_orderkey)
-                                      ->  Seq Scan on lineitem_mx_1220052 lineitem_mx
-                                            Filter: (l_quantity < 5.0)
-                                      ->  Hash
-                                            ->  Seq Scan on orders_mx_1220068 orders_mx
+  ->  Custom Scan (Citus Adaptive)
+        Task Count: 16
+        Merge Method: sorted merge
+        Tasks Shown: One of 16
+        ->  Task
+              Node: host=localhost port=xxxxx dbname=regression
+              ->  Limit
+                    ->  Sort
+                          Sort Key: lineitem_mx.l_quantity
+                          ->  Hash Join
+                                Hash Cond: (lineitem_mx.l_orderkey = orders_mx.o_orderkey)
+                                ->  Seq Scan on lineitem_mx_1220052 lineitem_mx
+                                      Filter: (l_quantity < 5.0)
+                                ->  Hash
+                                      ->  Seq Scan on orders_mx_1220068 orders_mx
 -- Test insert
 EXPLAIN (COSTS FALSE)
 	INSERT INTO lineitem_mx VALUES(1,0);

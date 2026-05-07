@@ -711,49 +711,48 @@ EXPLAIN (COSTS FALSE)
     ORDER BY 2 DESC, 1 DESC
     LIMIT 5
 ', true);
-                                                         explain_filter
+                                                      explain_filter
 ---------------------------------------------------------------------
  Limit
-   ->  Sort
-         Sort Key: remote_scan.sum DESC, remote_scan.user_id DESC
-         ->  Custom Scan (Citus Adaptive)
-               Task Count: 4
-               Tasks Shown: One of 4
-               ->  Task
-                     Node: host=localhost port=xxxxx dbname=regression
-                     ->  Limit
-                           ->  Sort
-                                 Sort Key: (sum((sum(users_table.value_2) OVER (?)))) DESC, users_table.user_id DESC
-                                 ->  HashAggregate
-                                       Group Key: users_table.user_id, (sum((sum(users_table.value_2) OVER (?))))
-                                       ->  Append
+   ->  Custom Scan (Citus Adaptive)
+         Task Count: 4
+         Merge Method: sorted merge
+         Tasks Shown: One of 4
+         ->  Task
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  Limit
+                     ->  Sort
+                           Sort Key: (sum((sum(users_table.value_2) OVER (?)))) DESC, users_table.user_id DESC
+                           ->  HashAggregate
+                                 Group Key: users_table.user_id, (sum((sum(users_table.value_2) OVER (?))))
+                                 ->  Append
+                                       ->  HashAggregate
+                                             Group Key: users_table.user_id
                                              ->  HashAggregate
-                                                   Group Key: users_table.user_id
-                                                   ->  HashAggregate
-                                                         Group Key: users_table.user_id, (sum(users_table.value_2) OVER (?))
-                                                         ->  Append
-                                                               ->  WindowAgg
-                                                                     ->  Sort
-                                                                           Sort Key: users_table.user_id
-                                                                           ->  Seq Scan on users_table_1400256 users_table
-                                                               ->  WindowAgg
-                                                                     ->  Sort
-                                                                           Sort Key: events_table.user_id
-                                                                           ->  Seq Scan on events_table_1400260 events_table
+                                                   Group Key: users_table.user_id, (sum(users_table.value_2) OVER (?))
+                                                   ->  Append
+                                                         ->  WindowAgg
+                                                               ->  Sort
+                                                                     Sort Key: users_table.user_id
+                                                                     ->  Seq Scan on users_table_1400256 users_table
+                                                         ->  WindowAgg
+                                                               ->  Sort
+                                                                     Sort Key: events_table.user_id
+                                                                     ->  Seq Scan on events_table_1400260 events_table
+                                       ->  HashAggregate
+                                             Group Key: users_table_1.user_id
                                              ->  HashAggregate
-                                                   Group Key: users_table_1.user_id
-                                                   ->  HashAggregate
-                                                         Group Key: users_table_1.user_id, (sum(users_table_1.value_2) OVER (?))
-                                                         ->  Append
-                                                               ->  WindowAgg
-                                                                     ->  Sort
-                                                                           Sort Key: users_table_1.user_id
-                                                                           ->  Seq Scan on users_table_1400256 users_table_1
-                                                               ->  WindowAgg
-                                                                     ->  Sort
-                                                                           Sort Key: events_table_1.user_id
-                                                                           ->  Seq Scan on events_table_1400260 events_table_1
-(40 rows)
+                                                   Group Key: users_table_1.user_id, (sum(users_table_1.value_2) OVER (?))
+                                                   ->  Append
+                                                         ->  WindowAgg
+                                                               ->  Sort
+                                                                     Sort Key: users_table_1.user_id
+                                                                     ->  Seq Scan on users_table_1400256 users_table_1
+                                                         ->  WindowAgg
+                                                               ->  Sort
+                                                                     Sort Key: events_table_1.user_id
+                                                                     ->  Seq Scan on events_table_1400260 events_table_1
+(39 rows)
 
 -- test with window functions which aren't pushed down
 SELECT

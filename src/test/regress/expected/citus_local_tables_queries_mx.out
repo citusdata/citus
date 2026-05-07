@@ -796,23 +796,22 @@ INSERT INTO citus_local_table
 SELECT * FROM distributed_table
 ORDER BY distributed_table.*
 LIMIT 10;
-                                            QUERY PLAN
+                                         QUERY PLAN
 ---------------------------------------------------------------------
  Custom Scan (Citus INSERT ... SELECT)
    INSERT/SELECT method: pull to coordinator
    ->  Limit
-         ->  Sort
-               Sort Key: remote_scan.worker_column_3
-               ->  Custom Scan (Citus Adaptive)
-                     Task Count: 4
-                     Tasks Shown: One of 4
-                     ->  Task
-                           Node: host=localhost port=xxxxx dbname=regression
-                           ->  Limit
-                                 ->  Sort
-                                       Sort Key: distributed_table.*
-                                       ->  Seq Scan on distributed_table_1510004 distributed_table
-(14 rows)
+         ->  Custom Scan (Citus Adaptive)
+               Task Count: 4
+               Merge Method: sorted merge
+               Tasks Shown: One of 4
+               ->  Task
+                     Node: host=localhost port=xxxxx dbname=regression
+                     ->  Limit
+                           ->  Sort
+                                 Sort Key: distributed_table.*
+                                 ->  Seq Scan on distributed_table_1510004 distributed_table
+(13 rows)
 
 -- show that we do not pull to coordinator
 EXPLAIN (COSTS FALSE)

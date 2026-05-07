@@ -481,22 +481,21 @@ EXPLAIN (COSTS FALSE)
 	JOIN orders ON l_orderkey = o_orderkey AND l_quantity < 5.0
 	ORDER BY l_quantity LIMIT 10;
 Limit
-  ->  Sort
-        Sort Key: remote_scan.l_quantity
-        ->  Custom Scan (Citus Adaptive)
-              Task Count: 2
-              Tasks Shown: One of 2
-              ->  Task
-                    Node: host=localhost port=xxxxx dbname=regression
-                    ->  Limit
-                          ->  Sort
-                                Sort Key: lineitem.l_quantity
-                                ->  Hash Join
-                                      Hash Cond: (lineitem.l_orderkey = orders.o_orderkey)
-                                      ->  Seq Scan on lineitem_360000 lineitem
-                                            Filter: (l_quantity < 5.0)
-                                      ->  Hash
-                                            ->  Seq Scan on orders_360002 orders
+  ->  Custom Scan (Citus Adaptive)
+        Task Count: 2
+        Merge Method: sorted merge
+        Tasks Shown: One of 2
+        ->  Task
+              Node: host=localhost port=xxxxx dbname=regression
+              ->  Limit
+                    ->  Sort
+                          Sort Key: lineitem.l_quantity
+                          ->  Hash Join
+                                Hash Cond: (lineitem.l_orderkey = orders.o_orderkey)
+                                ->  Seq Scan on lineitem_360000 lineitem
+                                      Filter: (l_quantity < 5.0)
+                                ->  Hash
+                                      ->  Seq Scan on orders_360002 orders
 -- Test insert
 EXPLAIN (COSTS FALSE)
 	INSERT INTO lineitem VALUES (1,0), (2, 0), (3, 0), (4, 0);
@@ -966,31 +965,30 @@ ORDER BY
 LIMIT
 	10;
 Limit
-  ->  Sort
-        Sort Key: remote_scan.user_lastseen DESC
-        ->  Custom Scan (Citus Adaptive)
-              Task Count: 4
-              Tasks Shown: One of 4
-              ->  Task
-                    Node: host=localhost port=xxxxx dbname=regression
-                    ->  Limit
-                          ->  Sort
-                                Sort Key: (max(users.lastseen)) DESC
-                                ->  GroupAggregate
-                                      Group Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id)
-                                      ->  Sort
-                                            Sort Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id), events.event_time
-                                            ->  Nested Loop Left Join
-                                                  ->  Limit
-                                                        ->  Sort
-                                                              Sort Key: users.lastseen DESC
-                                                              ->  Seq Scan on users_1400289 users
-                                                                    Filter: ((composite_id >= '(1,-9223372036854775808)'::user_composite_type) AND (composite_id <= '(1,9223372036854775807)'::user_composite_type))
-                                                  ->  Limit
-                                                        ->  Sort
-                                                              Sort Key: events.event_time DESC
-                                                              ->  Seq Scan on events_1400285 events
-                                                                    Filter: (composite_id = users.composite_id)
+  ->  Custom Scan (Citus Adaptive)
+        Task Count: 4
+        Merge Method: sorted merge
+        Tasks Shown: One of 4
+        ->  Task
+              Node: host=localhost port=xxxxx dbname=regression
+              ->  Limit
+                    ->  Sort
+                          Sort Key: (max(users.lastseen)) DESC
+                          ->  GroupAggregate
+                                Group Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id)
+                                ->  Sort
+                                      Sort Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id), events.event_time
+                                      ->  Nested Loop Left Join
+                                            ->  Limit
+                                                  ->  Sort
+                                                        Sort Key: users.lastseen DESC
+                                                        ->  Seq Scan on users_1400289 users
+                                                              Filter: ((composite_id >= '(1,-9223372036854775808)'::user_composite_type) AND (composite_id <= '(1,9223372036854775807)'::user_composite_type))
+                                            ->  Limit
+                                                  ->  Sort
+                                                        Sort Key: events.event_time DESC
+                                                        ->  Seq Scan on events_1400285 events
+                                                              Filter: (composite_id = users.composite_id)
 RESET citus.subquery_pushdown;
 -- Test all tasks output
 SET citus.explain_all_tasks TO on;
@@ -1599,7 +1597,7 @@ SELECT * FROM worker_save_query_explain_analyze('SELECT 1', :default_opts) as (a
 (1 row)
 
 SELECT explain_analyze_output FROM worker_last_saved_explain_analyze();
-     explain_analyze_output
+      explain_analyze_output
 ---------------------------------------------------------------------
  Result (actual rows=1 loops=1)+
 
@@ -1616,7 +1614,7 @@ SELECT * FROM worker_save_query_explain_analyze($Q$
 (0 rows)
 
 SELECT explain_analyze_output FROM worker_last_saved_explain_analyze();
-                      explain_analyze_output
+                       explain_analyze_output
 ---------------------------------------------------------------------
  Insert on explain_analyze_test (actual rows=0 loops=1)          +
    ->  Function Scan on generate_series i (actual rows=5 loops=1)+
@@ -1637,7 +1635,7 @@ SELECT * FROM worker_save_query_explain_analyze($Q$SELECT * FROM explain_analyze
 (4 rows)
 
 SELECT explain_analyze_output FROM worker_last_saved_explain_analyze();
-                  explain_analyze_output
+                   explain_analyze_output
 ---------------------------------------------------------------------
  Seq Scan on explain_analyze_test (actual rows=4 loops=1)+
 
@@ -1660,7 +1658,7 @@ SELECT * FROM worker_save_query_explain_analyze($Q$
 (5 rows)
 
 SELECT explain_analyze_output FROM worker_last_saved_explain_analyze();
-                      explain_analyze_output
+                       explain_analyze_output
 ---------------------------------------------------------------------
  Insert on explain_analyze_test (actual rows=5 loops=1)          +
    ->  Function Scan on generate_series i (actual rows=5 loops=1)+
@@ -1681,12 +1679,12 @@ SELECT * FROM worker_save_query_explain_analyze($Q$
 (2 rows)
 
 SELECT explain_analyze_output FROM worker_last_saved_explain_analyze();
-                     explain_analyze_output
+                      explain_analyze_output
 ---------------------------------------------------------------------
  Delete on explain_analyze_test (actual rows=2 loops=1)        +
    ->  Seq Scan on explain_analyze_test (actual rows=2 loops=1)+
-         Filter: ((a % 2) = 0)                                 +
-         Rows Removed by Filter: 2                             +
+         Filter: ((a % 2) = 0)                                    +
+         Rows Removed by Filter: 2                                +
 
 (1 row)
 
@@ -1701,12 +1699,12 @@ SELECT * FROM worker_save_query_explain_analyze($Q$
 (0 rows)
 
 SELECT explain_analyze_output FROM worker_last_saved_explain_analyze();
-                     explain_analyze_output
+                      explain_analyze_output
 ---------------------------------------------------------------------
  Delete on explain_analyze_test (actual rows=0 loops=1)        +
    ->  Seq Scan on explain_analyze_test (actual rows=2 loops=1)+
-         Filter: ((a % 2) = 0)                                 +
-         Rows Removed by Filter: 2                             +
+         Filter: ((a % 2) = 0)                                    +
+         Rows Removed by Filter: 2                                +
 
 (1 row)
 
@@ -1729,7 +1727,7 @@ SELECT * FROM worker_save_query_explain_analyze('SELECT 1', '{"format": "text", 
 (1 row)
 
 SELECT explain_analyze_output FROM worker_last_saved_explain_analyze();
-     explain_analyze_output
+      explain_analyze_output
 ---------------------------------------------------------------------
  Result (actual rows=1 loops=1)+
 
@@ -1775,7 +1773,7 @@ SELECT explain_analyze_output FROM worker_last_saved_explain_analyze();
        <Node-Type>Result</Node-Type>                     +
        <Parallel-Aware>false</Parallel-Aware>            +
        <Async-Capable>false</Async-Capable>              +
-       <Actual-Rows>1</Actual-Rows>                      +
+       <Actual-Rows>1</Actual-Rows>                   +
        <Actual-Loops>1</Actual-Loops>                    +
      </Plan>                                             +
      <Triggers>                                          +
@@ -1797,7 +1795,7 @@ SELECT explain_analyze_output FROM worker_last_saved_explain_analyze();
      Node Type: "Result"  +
      Parallel Aware: false+
      Async Capable: false +
-     Actual Rows: 1       +
+     Actual Rows: 1    +
      Actual Loops: 1      +
    Triggers:
 (1 row)

@@ -770,13 +770,14 @@ VACUUM ANALYZE users_table;
 EXPLAIN (COSTS FALSE) SELECT user_id FROM recent_selected_users GROUP BY 1 ORDER BY 1;
                                                               QUERY PLAN
 ---------------------------------------------------------------------
- Sort
-   Sort Key: remote_scan.user_id
-   ->  Custom Scan (Citus Adaptive)
-         Task Count: 4
-         Tasks Shown: One of 4
-         ->  Task
-               Node: host=localhost port=xxxxx dbname=regression
+ Custom Scan (Citus Adaptive)
+   Task Count: 4
+   Merge Method: sorted merge
+   Tasks Shown: One of 4
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Sort
+               Sort Key: users_table.user_id
                ->  HashAggregate
                      Group Key: users_table.user_id
                      ->  Nested Loop
@@ -789,7 +790,7 @@ EXPLAIN (COSTS FALSE) SELECT user_id FROM recent_selected_users GROUP BY 1 ORDER
                                        ->  Seq Scan on users_table_1400256 users_table_1
                            ->  Seq Scan on users_table_1400256 users_table
                                  Filter: ((value_1 >= 1) AND (value_1 < 3))
-(19 rows)
+(20 rows)
 
 SELECT public.coordinator_plan($Q$
 EXPLAIN (COSTS FALSE) SELECT *
@@ -800,79 +801,75 @@ EXPLAIN (COSTS FALSE) SELECT *
 	WHERE user_id < 4 AND user_id > 1
 	ORDER BY user_id;
 $Q$);
-          coordinator_plan
+       coordinator_plan
 ---------------------------------------------------------------------
- Sort
-   Sort Key: remote_scan.user_id
-   ->  Custom Scan (Citus Adaptive)
-         Task Count: 4
-(4 rows)
+ Custom Scan (Citus Adaptive)
+   Task Count: 4
+(2 rows)
 
 EXPLAIN (COSTS FALSE) SELECT et.* FROM recent_10_users JOIN events_table et USING(user_id) ORDER BY et.time DESC LIMIT 10;
-                                                  QUERY PLAN
+                                               QUERY PLAN
 ---------------------------------------------------------------------
  Limit
-   ->  Sort
-         Sort Key: remote_scan."time" DESC
-         ->  Custom Scan (Citus Adaptive)
-               ->  Distributed Subplan XXX_1
-                     ->  Limit
-                           ->  Sort
-                                 Sort Key: remote_scan.lastseen DESC
-                                 ->  Custom Scan (Citus Adaptive)
-                                       Task Count: 4
-                                       Tasks Shown: One of 4
-                                       ->  Task
-                                             Node: host=localhost port=xxxxx dbname=regression
-                                             ->  Limit
-                                                   ->  Sort
-                                                         Sort Key: (max("time")) DESC
-                                                         ->  HashAggregate
-                                                               Group Key: user_id
-                                                               ->  Seq Scan on users_table_1400256 users_table
-               Task Count: 4
-               Tasks Shown: One of 4
-               ->  Task
-                     Node: host=localhost port=xxxxx dbname=regression
-                     ->  Limit
-                           ->  Sort
-                                 Sort Key: et."time" DESC
-                                 ->  Hash Join
-                                       Hash Cond: (intermediate_result.user_id = et.user_id)
-                                       ->  Function Scan on read_intermediate_result intermediate_result
-                                       ->  Hash
-                                             ->  Seq Scan on events_table_1400260 et
-(31 rows)
+   ->  Custom Scan (Citus Adaptive)
+         ->  Distributed Subplan XXX_1
+               ->  Limit
+                     ->  Sort
+                           Sort Key: remote_scan.lastseen DESC
+                           ->  Custom Scan (Citus Adaptive)
+                                 Task Count: 4
+                                 Tasks Shown: One of 4
+                                 ->  Task
+                                       Node: host=localhost port=xxxxx dbname=regression
+                                       ->  Limit
+                                             ->  Sort
+                                                   Sort Key: (max("time")) DESC
+                                                   ->  HashAggregate
+                                                         Group Key: user_id
+                                                         ->  Seq Scan on users_table_1400256 users_table
+         Task Count: 4
+         Merge Method: sorted merge
+         Tasks Shown: One of 4
+         ->  Task
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  Limit
+                     ->  Sort
+                           Sort Key: et."time" DESC
+                           ->  Hash Join
+                                 Hash Cond: (intermediate_result.user_id = et.user_id)
+                                 ->  Function Scan on read_intermediate_result intermediate_result
+                                 ->  Hash
+                                       ->  Seq Scan on events_table_1400260 et
+(30 rows)
 
 SET citus.subquery_pushdown to ON;
 NOTICE:  Setting citus.subquery_pushdown flag is discouraged becuase it forces the planner to pushdown certain queries, skipping relevant correctness checks.
 DETAIL:  When enabled, the planner skips many correctness checks for subqueries and pushes down the queries to shards as-is. It means that the queries are likely to return wrong results unless the user is absolutely sure that pushing down the subquery is safe. This GUC is maintained only for backward compatibility, no new users are supposed to use it. The planner is capable of pushing down as much computation as possible to the shards depending on the query.
 EXPLAIN (COSTS FALSE) SELECT et.* FROM recent_10_users JOIN events_table et USING(user_id) ORDER BY et.time DESC LIMIT 10;
-                                                     QUERY PLAN
+                                                  QUERY PLAN
 ---------------------------------------------------------------------
  Limit
-   ->  Sort
-         Sort Key: remote_scan."time" DESC
-         ->  Custom Scan (Citus Adaptive)
-               Task Count: 4
-               Tasks Shown: One of 4
-               ->  Task
-                     Node: host=localhost port=xxxxx dbname=regression
-                     ->  Limit
-                           ->  Sort
-                                 Sort Key: et."time" DESC
-                                 ->  Hash Join
-                                       Hash Cond: (et.user_id = recent_10_users.user_id)
-                                       ->  Seq Scan on events_table_1400260 et
-                                       ->  Hash
-                                             ->  Subquery Scan on recent_10_users
-                                                   ->  Limit
-                                                         ->  Sort
-                                                               Sort Key: (max(users_table."time")) DESC
-                                                               ->  HashAggregate
-                                                                     Group Key: users_table.user_id
-                                                                     ->  Seq Scan on users_table_1400256 users_table
-(22 rows)
+   ->  Custom Scan (Citus Adaptive)
+         Task Count: 4
+         Merge Method: sorted merge
+         Tasks Shown: One of 4
+         ->  Task
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  Limit
+                     ->  Sort
+                           Sort Key: et."time" DESC
+                           ->  Hash Join
+                                 Hash Cond: (et.user_id = recent_10_users.user_id)
+                                 ->  Seq Scan on events_table_1400260 et
+                                 ->  Hash
+                                       ->  Subquery Scan on recent_10_users
+                                             ->  Limit
+                                                   ->  Sort
+                                                         Sort Key: (max(users_table."time")) DESC
+                                                         ->  HashAggregate
+                                                               Group Key: users_table.user_id
+                                                               ->  Seq Scan on users_table_1400256 users_table
+(21 rows)
 
 RESET citus.subquery_pushdown;
 DROP VIEW recent_10_users;

@@ -40,13 +40,14 @@ WHERE x IN (SELECT x FROM test b UNION SELECT y FROM test c WHERE a.x = c.x)
 ORDER BY 1,2;
                               QUERY PLAN
 ---------------------------------------------------------------------
- Sort
-   Sort Key: remote_scan.x, remote_scan.y
-   ->  Custom Scan (Citus Adaptive)
-         Task Count: 2
-         Tasks Shown: One of 2
-         ->  Task
-               Node: host=localhost port=xxxxx dbname=regression
+ Custom Scan (Citus Adaptive)
+   Task Count: 2
+   Merge Method: sorted merge
+   Tasks Shown: One of 2
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Sort
+               Sort Key: a.x, a.y
                ->  Nested Loop
                      ->  Seq Scan on test_20240017 a
                      ->  Subquery Scan on "ANY_subquery"
@@ -57,7 +58,7 @@ ORDER BY 1,2;
                                        ->  Seq Scan on test_20240017 b
                                        ->  Seq Scan on test_20240017 c
                                              Filter: (a.x = x)
-(17 rows)
+(18 rows)
 
 SET client_min_messages TO DEBUG2;
 SELECT *
@@ -80,13 +81,14 @@ FROM test a JOIN LATERAL (SELECT x FROM test b UNION SELECT y FROM test c WHERE 
 ORDER BY 1,2;
                               QUERY PLAN
 ---------------------------------------------------------------------
- Sort
-   Sort Key: remote_scan.x, remote_scan.y
-   ->  Custom Scan (Citus Adaptive)
-         Task Count: 2
-         Tasks Shown: One of 2
-         ->  Task
-               Node: host=localhost port=xxxxx dbname=regression
+ Custom Scan (Citus Adaptive)
+   Task Count: 2
+   Merge Method: sorted merge
+   Tasks Shown: One of 2
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Sort
+               Sort Key: a.x, a.y
                ->  Nested Loop
                      ->  Seq Scan on test_20240017 a
                      ->  Subquery Scan on dt1
@@ -97,7 +99,7 @@ ORDER BY 1,2;
                                        ->  Seq Scan on test_20240017 b
                                        ->  Seq Scan on test_20240017 c
                                              Filter: (a.x = x)
-(17 rows)
+(18 rows)
 
 SET client_min_messages TO DEBUG2;
 SELECT a.*
@@ -539,22 +541,22 @@ FROM (
   SELECT user_id, array_agg(event ORDER BY time) AS events_table
   FROM (
     SELECT
-    	u.user_id, e.event_type::text AS event, e.time
+      u.user_id, e.event_type::text AS event, e.time
     FROM
-    	users_table AS u,
+        users_table AS u,
         events_table AS e
     WHERE u.user_id = e.user_id AND
-    		u.user_id IN
-    		(
-    			SELECT
-    				user_id
-    			FROM
-    				users_table
-    			WHERE value_2 >= 5
+        u.user_id IN
+        (
+          SELECT
+            user_id
+          FROM
+            users_table
+          WHERE value_2 >= 5
 			    AND  EXISTS (SELECT user_id FROM events_table_local WHERE event_type > 1 AND event_type <= 3 AND value_3 > 1)
 				AND  NOT EXISTS (SELECT user_id FROM events_table WHERE event_type > 3 AND event_type <= 4  AND value_3 > 1 AND user_id = users_table.user_id)
 				LIMIT 5
-    		)
+      )
   ) t
   GROUP BY user_id
 ) q
@@ -2157,7 +2159,7 @@ select public.explain_filter('explain (memory, analyze, buffers false, format ya
 NOTICE:  issuing SELECT * FROM worker_save_query_explain_analyze('SELECT q1, q2 FROM pg17.int8_tbl_12242024 i8 WHERE true', '{"verbose": false, "costs": true, "buffers": false, "wal": false, "memory": true, "serialize": "none", "timing": true, "summary": true, "format": "YAML"}') AS (field_0 bigint, field_1 bigint)
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 CONTEXT:  PL/pgSQL function public.explain_filter(text,boolean) line XX at FOR over EXECUTE statement
-                          explain_filter
+                       explain_filter
 ---------------------------------------------------------------------
  - Plan:                                                    +
      Node Type: "Custom Scan"                               +
@@ -2246,7 +2248,7 @@ CONTEXT:  PL/pgSQL function public.explain_filter(text,boolean) line XX at FOR o
      Plan Width: N                                          +
      Actual Startup Time: N.N                               +
      Actual Total Time: N.N                                 +
-     Actual Rows: N                                         +
+     Actual Rows: N                                       +
      Actual Loops: N                                        +
      Distributed Query:                                     +
        Job:                                                 +
@@ -2269,7 +2271,7 @@ CONTEXT:  PL/pgSQL function public.explain_filter(text,boolean) line XX at FOR o
                    Plan Width: N                            +
                    Actual Startup Time: N.N                 +
                    Actual Total Time: N.N                   +
-                   Actual Rows: N                           +
+                   Actual Rows: N                         +
                    Actual Loops: N                          +
                    Shared Hit Blocks: N                     +
                    Shared Read Blocks: N                    +
