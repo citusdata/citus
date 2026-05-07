@@ -3990,20 +3990,24 @@ ReceiveResults(WorkerSession *session, bool storeRows)
 	{
 		if (PQisBusy(connection->pgConn))
 		{
+#ifndef LIBPQ_HAS_CHUNK_MODE
+
 			/*
-			 * libpq has no complete row to surface right now.  Before yielding
-			 * back to the wait-event loop in RunDistributedExecution(), make
-			 * one extra non-blocking PQconsumeInput() call.  While we were
-			 * processing the previous batch of rows, the worker may have
-			 * pushed more bytes into the kernel receive buffer; if so, this
-			 * lets us keep draining instead of paying a full event-loop cycle
-			 * (epoll wake + ConnectionStateMachine + CheckConnectionReady) to
-			 * pick up rows that were already on the socket.
+			 * On builds without libpq chunked-rows support (PG <= 16) the
+			 * adaptive executor uses PQsetSingleRowMode, which surfaces
+			 * roughly one row per PQgetResult call.  Wide-row distributed
+			 * SELECTs (e.g. PostGIS geometries) hit PQisBusy() = true many
+			 * thousands of times per query, each time forcing a yield to the
+			 * wait-event loop in RunDistributedExecution().  Before yielding,
+			 * try one extra non-blocking PQconsumeInput(); if the worker has
+			 * pushed more bytes into the kernel buffer while we were
+			 * processing the previous batch of rows we keep draining instead
+			 * of paying for an epoll wake + ConnectionStateMachine pass.
 			 *
-			 * For wide-row distributed SELECTs (e.g. PostGIS geometries) this
-			 * collapses what would otherwise be O(rows / batch_size) wait-event
-			 * cycles into a small constant, with the biggest impact on
-			 * deployments where coordinator/worker RTT is non-trivial.
+			 * On PG17+ libpq exposes PQsetChunkedRowsMode (LIBPQ_HAS_CHUNK_MODE
+			 * is defined) and the adaptive executor batches on the libpq side
+			 * (see #5195), so this extra drain is unnecessary -- a
+			 * PQisBusy=true after a chunk really does mean "yield".
 			 */
 			if (PQconsumeInput(connection->pgConn) == 0)
 			{
@@ -4016,6 +4020,15 @@ ReceiveResults(WorkerSession *session, bool storeRows)
 				break;
 			}
 			/* fall through: more rows are available, keep draining */
+#else
+
+			/*
+			 * Chunked-rows mode amortises libpq overhead over many rows per
+			 * PQgetResult, so an extra non-blocking drain is not worth the
+			 * complexity here -- yield to the wait-event loop as before.
+			 */
+			break;
+#endif
 		}
 
 		uint32 columnIndex = 0;
