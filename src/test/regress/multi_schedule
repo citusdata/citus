@@ -1,5 +1,6 @@
 test: multi_test_helpers multi_test_helpers_superuser
 test: multi_cluster_management
+test: citus_cluster_changes_block
 test: create_role_propagation
 test: pg16
 test: multi_create_fdw

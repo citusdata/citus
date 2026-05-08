@@ -37,6 +37,51 @@ SELECT citus_add_local_table_to_metadata('citus_local_table');
 (1 row)
 
 CREATE TABLE local (a int, b int);
+-- Force a distributed-table shard onto the coordinator (group 0) so we can
+-- exercise the same recovery-mode local-execution guard via a regular
+-- distributed table -- which is the scenario originally reported in #8426.
+-- We temporarily disable shouldhaveshards on the workers, create a single-
+-- shard distributed table (so the only placement lands on the coordinator),
+-- then restore shouldhaveshards on the workers.
+SELECT 1 FROM master_set_node_property('localhost', :worker_1_port, 'shouldhaveshards', false);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+SELECT 1 FROM master_set_node_property('localhost', :worker_2_port, 'shouldhaveshards', false);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+SELECT 1 FROM master_set_node_property('localhost', :master_port, 'shouldhaveshards', true);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+SET citus.shard_count TO 1;
+SET citus.shard_replication_factor TO 1;
+CREATE TABLE dist_on_coord (a int, b int);
+SELECT create_distributed_table('dist_on_coord', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT 1 FROM master_set_node_property('localhost', :worker_1_port, 'shouldhaveshards', true);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+SELECT 1 FROM master_set_node_property('localhost', :worker_2_port, 'shouldhaveshards', true);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
 \c - - - :follower_master_port
 -- inserts normally do not work on a standby coordinator
 INSERT INTO the_table (a, b, z) VALUES (1, 2, 2);
@@ -84,7 +129,9 @@ SELECT * FROM reference_table;
 (0 rows)
 
 INSERT INTO citus_local_table (a, b, z) VALUES (1, 2, 2);
-ERROR:  cannot execute INSERT in a read-only transaction
+ERROR:  cannot execute modification on a hot standby for a shard placement that resides on this node
+DETAIL:  citus.writable_standby_coordinator forwards writes to primary nodes, but the targeted shard has a placement on the local node, whose storage is read-only during recovery.
+HINT:  Place the affected shards on primary worker nodes only, or fail over this node to perform writes.
 SELECT * FROM citus_local_table;
  a | b | z
 ---------------------------------------------------------------------
@@ -100,7 +147,9 @@ ERROR:  writing to worker nodes is not currently allowed for replicated tables s
 DETAIL:  the database is read-only
 HINT:  All modifications to replicated tables happen via 2PC, and 2PC requires the database to be in a writable state.
 UPDATE citus_local_table SET z = 3 WHERE a = 1;
-ERROR:  cannot execute UPDATE in a read-only transaction
+ERROR:  cannot execute modification on a hot standby for a shard placement that resides on this node
+DETAIL:  citus.writable_standby_coordinator forwards writes to primary nodes, but the targeted shard has a placement on the local node, whose storage is read-only during recovery.
+HINT:  Place the affected shards on primary worker nodes only, or fail over this node to perform writes.
 SELECT * FROM the_table;
  a | b | z
 ---------------------------------------------------------------------
@@ -127,7 +176,9 @@ ERROR:  writing to worker nodes is not currently allowed for replicated tables s
 DETAIL:  the database is read-only
 HINT:  All modifications to replicated tables happen via 2PC, and 2PC requires the database to be in a writable state.
 DELETE FROM citus_local_table WHERE a = 1;
-ERROR:  cannot execute DELETE in a read-only transaction
+ERROR:  cannot execute modification on a hot standby for a shard placement that resides on this node
+DETAIL:  citus.writable_standby_coordinator forwards writes to primary nodes, but the targeted shard has a placement on the local node, whose storage is read-only during recovery.
+HINT:  Place the affected shards on primary worker nodes only, or fail over this node to perform writes.
 SELECT * FROM the_table;
  a | b | z
 ---------------------------------------------------------------------
@@ -168,7 +219,9 @@ ERROR:  writing to worker nodes is not currently allowed for replicated tables s
 DETAIL:  the database is read-only
 HINT:  All modifications to replicated tables happen via 2PC, and 2PC requires the database to be in a writable state.
 INSERT INTO citus_local_table (a, b, z) VALUES (2, 3, 4), (5, 6, 7);
-ERROR:  cannot execute INSERT in a read-only transaction
+ERROR:  cannot execute modification on a hot standby for a shard placement that resides on this node
+DETAIL:  citus.writable_standby_coordinator forwards writes to primary nodes, but the targeted shard has a placement on the local node, whose storage is read-only during recovery.
+HINT:  Place the affected shards on primary worker nodes only, or fail over this node to perform writes.
 -- COPY is not possible because Citus user 2PC
 COPY the_table (a, b, z) FROM STDIN WITH CSV;
 ERROR:  COPY command to Citus tables is not allowed in read-only mode
@@ -214,7 +267,9 @@ SELECT * FROM reference_table ORDER BY a;
 
 -- citus local tables are on the coordinator, and coordinator is read-only
 INSERT INTO citus_local_table (a, b, z) VALUES (2, 3, 4), (5, 6, 7);
-ERROR:  cannot execute INSERT in a read-only transaction
+ERROR:  cannot execute modification on a hot standby for a shard placement that resides on this node
+DETAIL:  citus.writable_standby_coordinator forwards writes to primary nodes, but the targeted shard has a placement on the local node, whose storage is read-only during recovery.
+HINT:  Place the affected shards on primary worker nodes only, or fail over this node to perform writes.
 SELECT * FROM citus_local_table ORDER BY a;
  a | b | z
 ---------------------------------------------------------------------
@@ -236,7 +291,9 @@ DETAIL:  the database is read-only
 HINT:  All modifications to replicated tables happen via 2PC, and 2PC requires the database to be in a writable state.
 WITH del AS (DELETE FROM citus_local_table RETURNING *)
 SELECT * FROM del ORDER BY a;
-ERROR:  cannot execute DELETE in a read-only transaction
+ERROR:  cannot execute modification on a hot standby for a shard placement that resides on this node
+DETAIL:  citus.writable_standby_coordinator forwards writes to primary nodes, but the targeted shard has a placement on the local node, whose storage is read-only during recovery.
+HINT:  Place the affected shards on primary worker nodes only, or fail over this node to perform writes.
 -- multi-shard COPY is not possible due to 2PC
 COPY the_table (a, b, z) FROM STDIN WITH CSV;
 ERROR:  COPY command to Citus tables is not allowed in read-only mode
@@ -276,7 +333,9 @@ ERROR:  writing to worker nodes is not currently allowed for replicated tables s
 DETAIL:  the database is read-only
 HINT:  All modifications to replicated tables happen via 2PC, and 2PC requires the database to be in a writable state.
 DELETE FROM citus_local_table;
-ERROR:  cannot execute DELETE in a read-only transaction
+ERROR:  cannot execute modification on a hot standby for a shard placement that resides on this node
+DETAIL:  citus.writable_standby_coordinator forwards writes to primary nodes, but the targeted shard has a placement on the local node, whose storage is read-only during recovery.
+HINT:  Place the affected shards on primary worker nodes only, or fail over this node to perform writes.
 -- multi-shard modification always uses 2PC, so not supported
 DELETE FROM the_table;
 ERROR:  cannot assign TransactionIds during recovery
@@ -308,7 +367,9 @@ HINT:  All modifications to replicated tables happen via 2PC, and 2PC requires t
 ROLLBACK;
 BEGIN;
 INSERT INTO citus_local_table (a, b, z) VALUES (1, 2, 2);
-ERROR:  cannot execute INSERT in a read-only transaction
+ERROR:  cannot execute modification on a hot standby for a shard placement that resides on this node
+DETAIL:  citus.writable_standby_coordinator forwards writes to primary nodes, but the targeted shard has a placement on the local node, whose storage is read-only during recovery.
+HINT:  Place the affected shards on primary worker nodes only, or fail over this node to perform writes.
 ROLLBACK;
 SELECT * FROM the_table ORDER BY a;
  a | b | z
@@ -333,6 +394,63 @@ ERROR:  cannot execute INSERT in a read-only transaction
 -- we shouldn't be able to create local tables
 CREATE TEMP TABLE local_copy_of_the_table AS SELECT * FROM the_table;
 ERROR:  cannot execute CREATE TABLE AS in a read-only transaction
+-- Regression test for GitHub issue #8426.
+-- A modification routed to a placement on the local (coordinator) group
+-- on a hot standby with citus.writable_standby_coordinator=on used to
+-- crash inside the local executor when the plan was finalized. Verify
+-- the path now raises a graceful, actionable error instead of crashing,
+-- and that subsequent statements in the session still work.
+SHOW citus.writable_standby_coordinator;
+ citus.writable_standby_coordinator
+---------------------------------------------------------------------
+ on
+(1 row)
+
+INSERT INTO citus_local_table (a, b, z) VALUES (8426, 8426, 8426);
+ERROR:  cannot execute modification on a hot standby for a shard placement that resides on this node
+DETAIL:  citus.writable_standby_coordinator forwards writes to primary nodes, but the targeted shard has a placement on the local node, whose storage is read-only during recovery.
+HINT:  Place the affected shards on primary worker nodes only, or fail over this node to perform writes.
+UPDATE citus_local_table SET z = 0 WHERE a = 8426;
+ERROR:  cannot execute modification on a hot standby for a shard placement that resides on this node
+DETAIL:  citus.writable_standby_coordinator forwards writes to primary nodes, but the targeted shard has a placement on the local node, whose storage is read-only during recovery.
+HINT:  Place the affected shards on primary worker nodes only, or fail over this node to perform writes.
+DELETE FROM citus_local_table WHERE a = 8426;
+ERROR:  cannot execute modification on a hot standby for a shard placement that resides on this node
+DETAIL:  citus.writable_standby_coordinator forwards writes to primary nodes, but the targeted shard has a placement on the local node, whose storage is read-only during recovery.
+HINT:  Place the affected shards on primary worker nodes only, or fail over this node to perform writes.
+WITH d AS (DELETE FROM citus_local_table WHERE a = 8426 RETURNING *)
+SELECT count(*) FROM d;
+ERROR:  cannot execute modification on a hot standby for a shard placement that resides on this node
+DETAIL:  citus.writable_standby_coordinator forwards writes to primary nodes, but the targeted shard has a placement on the local node, whose storage is read-only during recovery.
+HINT:  Place the affected shards on primary worker nodes only, or fail over this node to perform writes.
+-- Same crash path was originally reported on a regular distributed table
+-- whose shard happened to live on the local node. Verify dist_on_coord
+-- (single shard pinned to the coordinator) errors out gracefully too.
+INSERT INTO dist_on_coord VALUES (8426, 8426);
+ERROR:  cannot execute modification on a hot standby for a shard placement that resides on this node
+DETAIL:  citus.writable_standby_coordinator forwards writes to primary nodes, but the targeted shard has a placement on the local node, whose storage is read-only during recovery.
+HINT:  Place the affected shards on primary worker nodes only, or fail over this node to perform writes.
+UPDATE dist_on_coord SET b = 0 WHERE a = 8426;
+ERROR:  cannot execute modification on a hot standby for a shard placement that resides on this node
+DETAIL:  citus.writable_standby_coordinator forwards writes to primary nodes, but the targeted shard has a placement on the local node, whose storage is read-only during recovery.
+HINT:  Place the affected shards on primary worker nodes only, or fail over this node to perform writes.
+DELETE FROM dist_on_coord WHERE a = 8426;
+ERROR:  cannot execute modification on a hot standby for a shard placement that resides on this node
+DETAIL:  citus.writable_standby_coordinator forwards writes to primary nodes, but the targeted shard has a placement on the local node, whose storage is read-only during recovery.
+HINT:  Place the affected shards on primary worker nodes only, or fail over this node to perform writes.
+-- session is still usable after the error: a read still works
+SELECT count(*) FROM citus_local_table;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+SELECT count(*) FROM dist_on_coord;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
 \c "port=9070 dbname=regression options='-c\ citus.use_secondary_nodes=always\ -c\ citus.cluster_name=second-cluster'"
 -- separate follower formations currently cannot do writes
 SET citus.writable_standby_coordinator TO on;
@@ -385,6 +503,7 @@ COMMIT;
 DROP TABLE the_table;
 DROP TABLE reference_table;
 DROP TABLE citus_local_table;
+DROP TABLE dist_on_coord;
 SELECT master_remove_node('localhost', :master_port);
  master_remove_node
 ---------------------------------------------------------------------

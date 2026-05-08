@@ -57,6 +57,7 @@
 #include "distributed/citus_depended_object.h"
 #include "distributed/citus_nodefuncs.h"
 #include "distributed/citus_safe_lib.h"
+#include "distributed/cluster_changes_block.h"
 #include "distributed/combine_query_planner.h"
 #include "distributed/commands.h"
 #include "distributed/commands/multi_copy.h"
@@ -511,6 +512,7 @@ _PG_init(void)
 
 	InitializeMaintenanceDaemon();
 	InitializeMaintenanceDaemonForMainDb();
+	InitializeClusterChangesBlock();
 
 	/* initialize coordinated transaction management */
 	InitializeTransactionManagement();
@@ -653,6 +655,7 @@ citus_shmem_request(void)
 	RequestAddinShmemSpace(MaintenanceDaemonShmemSize());
 	RequestAddinShmemSpace(CitusQueryStatsSharedMemSize());
 	RequestAddinShmemSpace(LogicalClockShmemSize());
+	RequestAddinShmemSpace(ClusterChangesBlockShmemSize());
 	RequestNamedLWLockTranche(STATS_SHARED_MEM_NAME, 1);
 	RequestAddinShmemSpace(StatCountersShmemSize());
 	RequestNamedLWLockTranche(SAVED_BACKEND_STATS_HASH_LOCK_TRANCHE_NAME, 1);
