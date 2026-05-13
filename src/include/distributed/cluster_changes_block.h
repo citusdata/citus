@@ -81,8 +81,8 @@ typedef struct ClusterChangesBlockControlData
 
 /*
  * BLOCK_DISTRIBUTED_WRITES_COMMAND acquires ExclusiveLock on:
- *   1. pg_dist_transaction — blocks 2PC commit decisions
- *   2. pg_dist_partition   — blocks DDL on distributed tables
+ *   1. pg_dist_transaction -- blocks 2PC commit decisions
+ *   2. pg_dist_partition   -- blocks DDL on distributed tables
  *
  * Used by both citus_cluster_changes_block and citus_create_restore_point
  * to quiesce distributed writes on remote metadata nodes.
