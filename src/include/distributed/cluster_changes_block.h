@@ -92,8 +92,8 @@ typedef struct ClusterChangesBlockControlData
  * absent from this remote command.
  */
 #define BLOCK_DISTRIBUTED_WRITES_COMMAND \
-		"LOCK TABLE pg_catalog.pg_dist_transaction IN EXCLUSIVE MODE; " \
-		"LOCK TABLE pg_catalog.pg_dist_partition IN EXCLUSIVE MODE"
+	"LOCK TABLE pg_catalog.pg_dist_transaction IN EXCLUSIVE MODE; " \
+	"LOCK TABLE pg_catalog.pg_dist_partition IN EXCLUSIVE MODE"
 
 
 /* Shared memory sizing and initialization */
