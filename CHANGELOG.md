@@ -1,3 +1,23 @@
+### citus v14.1.0 (May 14, 2026) ###
+
+* Adds support for running several DDLs for schema-based sharding from any
+  node, including `CREATE SCHEMA`, `DROP SCHEMA`, `ALTER SCHEMA RENAME`,
+  and table-level DDLs on distributed schemas (#8541)
+
+* Adds `citus_cluster_changes_block()`, `citus_cluster_changes_unblock()`,
+  and `citus_cluster_changes_block_status()` UDFs that temporarily block
+  distributed 2PC commit decisions and schema/topology changes across the
+  cluster to allow consistent disk-snapshot backups (#8543, #8571)
+
+* Fixes role propagation error during node activation when one role is used
+  as a grantor for another via `GRANT ... GRANTED BY`, by tracking grantor
+  roles as dependencies so they are propagated before the dependent grants
+  (#8466)
+
+* Fixes a self-deadlock when adding a named constraint on a partitioned
+  table whose auto-generated constraint name on partition shards would
+  exceed `NAMEDATALEN` (#8540, #8560)
+
 ### citus v14.0.1 (April 21, 2026) ###
 
 * Hardens extension SQL against `search_path` attacks by schema-qualifying
