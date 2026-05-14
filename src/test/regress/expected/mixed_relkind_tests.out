@@ -514,11 +514,9 @@ $Q$);
  Custom Scan (Citus INSERT ... SELECT)
    INSERT/SELECT method: pull to coordinator
    ->  Limit
-         ->  Sort
-               Sort Key: remote_scan.a, remote_scan.b
-               ->  Custom Scan (Citus Adaptive)
-                     Task Count: 4
-(7 rows)
+         ->  Custom Scan (Citus Sorted Merge Adaptive)
+               Task Count: 4
+(5 rows)
 
 SELECT public.coordinator_plan($Q$
 EXPLAIN (COSTS OFF)
@@ -529,26 +527,22 @@ $Q$);
  Custom Scan (Citus INSERT ... SELECT)
    INSERT/SELECT method: pull to coordinator
    ->  Limit
-         ->  Sort
-               Sort Key: remote_scan.a, remote_scan.b
-               ->  Custom Scan (Citus Adaptive)
-                     Task Count: 4
-(7 rows)
+         ->  Custom Scan (Citus Sorted Merge Adaptive)
+               Task Count: 4
+(5 rows)
 
 SELECT public.coordinator_plan($Q$
 EXPLAIN (COSTS OFF)
 INSERT INTO partitioned_distributed_table SELECT * FROM distributed_table ORDER BY 1 LIMIT 5;
 $Q$);
-                coordinator_plan
+                   coordinator_plan
 ---------------------------------------------------------------------
  Custom Scan (Citus INSERT ... SELECT)
    INSERT/SELECT method: pull to coordinator
    ->  Limit
-         ->  Sort
-               Sort Key: remote_scan.a
-               ->  Custom Scan (Citus Adaptive)
-                     Task Count: 4
-(7 rows)
+         ->  Custom Scan (Citus Sorted Merge Adaptive)
+               Task Count: 4
+(5 rows)
 
 -- INSERT .. SELECT via repartition
 SELECT public.coordinator_plan($Q$
@@ -624,13 +618,11 @@ SELECT public.coordinator_plan($Q$
 EXPLAIN (COSTS OFF)
 SELECT a, COUNT(*) OVER (PARTITION BY a) FROM partitioned_distributed_table ORDER BY 1,2;
 $Q$);
-               coordinator_plan
+             coordinator_plan
 ---------------------------------------------------------------------
- Sort
-   Sort Key: remote_scan.a, remote_scan.count
-   ->  Custom Scan (Citus Adaptive)
-         Task Count: 4
-(4 rows)
+ Custom Scan (Citus Sorted Merge Adaptive)
+   Task Count: 4
+(2 rows)
 
 -- pull to coordinator WINDOW
 select public.explain_filter('

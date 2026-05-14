@@ -162,6 +162,7 @@ static MapMergeJob * BuildMapMergeJob(Query *jobQuery, List *dependentJobList,
 									  Var *partitionKey, PartitionType partitionType,
 									  Oid baseRelationId,
 									  BoundaryNodeJobType boundaryNodeJobType);
+static bool UseSortedMerge(MultiTreeRoot *multiTree, Job *workerJob);
 static uint32 HashPartitionCount(void);
 
 /* Local functions forward declarations for task list creation and helper functions */
@@ -269,6 +270,9 @@ CreatePhysicalDistributedPlan(MultiTreeRoot *multiTree,
 	distributedPlan->combineQuery = combineQuery;
 	distributedPlan->modLevel = ROW_MODIFY_READONLY;
 	distributedPlan->expectResults = true;
+
+	/* check sorted merge eligibility and populate merge-key metadata */
+	distributedPlan->useSortedMerge = UseSortedMerge(multiTree, workerJob);
 
 	return distributedPlan;
 }
@@ -2032,6 +2036,58 @@ BuildMapMergeJob(Query *jobQuery, List *dependentJobList, Var *partitionKey,
 	}
 
 	return mapMergeJob;
+}
+
+
+/*
+ * UseSortedMerge checks whether the logical optimizer tagged the
+ * worker extended op node as eligible for a coordinator-side sorted merge.
+ *
+ * This is a plan-time decision: the executor reads only the plan flag,
+ * never the GUC.
+ *
+ * We directly walk the tree structure rather than using FindNodesOfType,
+ * which would traverse into subquery subtrees and could find unrelated
+ * MultiExtendedOp nodes. After MultiLogicalPlanOptimize the tree is:
+ *   MultiTreeRoot -> MasterExtendedOp -> MultiCollect -> WorkerExtendedOp
+ */
+static bool
+UseSortedMerge(MultiTreeRoot *multiTree, Job *workerJob)
+{
+	MultiNode *masterChild = ChildNode((MultiUnaryNode *) multiTree);
+	if (!CitusIsA(masterChild, MultiExtendedOp))
+	{
+		return false;
+	}
+
+	MultiNode *collectNode = ChildNode((MultiUnaryNode *) masterChild);
+	if (!CitusIsA(collectNode, MultiCollect))
+	{
+		return false;
+	}
+
+	MultiNode *workerNode = ChildNode((MultiUnaryNode *) collectNode);
+	if (!CitusIsA(workerNode, MultiExtendedOp))
+	{
+		return false;
+	}
+
+	MultiExtendedOp *workerExtOp = (MultiExtendedOp *) workerNode;
+	if (!workerExtOp->sortedMergeEligible)
+	{
+		return false;
+	}
+
+	/*
+	 * Sanity gate: if the job query has no sort clause, fall back to the
+	 * regular (non-merging) execution path.
+	 */
+	if (workerJob->jobQuery->sortClause == NIL)
+	{
+		return false;
+	}
+
+	return true;
 }
 
 

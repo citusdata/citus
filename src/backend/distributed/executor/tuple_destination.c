@@ -49,8 +49,6 @@ typedef struct TupleDestDestReceiver
 static void TupleStoreTupleDestPutTuple(TupleDestination *self, Task *task,
 										int placementIndex, int queryNumber,
 										HeapTuple heapTuple, uint64 tupleLibpqSize);
-static void EnsureIntermediateSizeLimitNotExceeded(TupleDestinationStats *
-												   tupleDestinationStats);
 static TupleDesc TupleStoreTupleDestTupleDescForQuery(TupleDestination *self, int
 													  queryNumber);
 static void TupleDestNonePutTuple(TupleDestination *self, Task *task,
@@ -66,11 +64,18 @@ static void TupleDestDestReceiverDestroy(DestReceiver *destReceiver);
 
 
 /*
- * CreateTupleStoreTupleDest creates a TupleDestination which forwards tuples to
- * a tupleStore.
+ * CreateTupleStoreTupleDestWithStats creates a TupleDestination which forwards
+ * tuples to a tupleStore, sharing an externally-provided TupleDestinationStats.
+ *
+ * Sharing stats lets multiple destinations contribute to a single
+ * citus.max_intermediate_result_size budget — the sorted-merge per-task
+ * dispatch uses this so the global limit is enforced across all per-task
+ * stores combined, not per task. Pass NULL if no stats tracking is needed.
  */
 TupleDestination *
-CreateTupleStoreTupleDest(Tuplestorestate *tupleStore, TupleDesc tupleDescriptor)
+CreateTupleStoreTupleDestWithStats(Tuplestorestate *tupleStore,
+								   TupleDesc tupleDescriptor,
+								   TupleDestinationStats *sharedStats)
 {
 	TupleStoreTupleDestination *tupleStoreTupleDest = palloc0(
 		sizeof(TupleStoreTupleDestination));
@@ -80,12 +85,22 @@ CreateTupleStoreTupleDest(Tuplestorestate *tupleStore, TupleDesc tupleDescriptor
 	tupleStoreTupleDest->pub.putTuple = TupleStoreTupleDestPutTuple;
 	tupleStoreTupleDest->pub.tupleDescForQuery =
 		TupleStoreTupleDestTupleDescForQuery;
-
-	TupleDestination *tupleDestination = &tupleStoreTupleDest->pub;
-	tupleDestination->tupleDestinationStats =
-		(TupleDestinationStats *) palloc0(sizeof(TupleDestinationStats));
+	tupleStoreTupleDest->pub.tupleDestinationStats = sharedStats;
 
 	return (TupleDestination *) tupleStoreTupleDest;
+}
+
+
+/*
+ * CreateTupleStoreTupleDest creates a TupleDestination which forwards tuples to
+ * a tupleStore.
+ */
+TupleDestination *
+CreateTupleStoreTupleDest(Tuplestorestate *tupleStore, TupleDesc tupleDescriptor)
+{
+	TupleDestinationStats *stats =
+		(TupleDestinationStats *) palloc0(sizeof(TupleDestinationStats));
+	return CreateTupleStoreTupleDestWithStats(tupleStore, tupleDescriptor, stats);
 }
 
 
@@ -135,7 +150,7 @@ TupleStoreTupleDestPutTuple(TupleDestination *self, Task *task,
  * EnsureIntermediateSizeLimitNotExceeded is a helper function for checking the current
  * state of the tupleDestinationStats and throws error if necessary.
  */
-static void
+void
 EnsureIntermediateSizeLimitNotExceeded(TupleDestinationStats *tupleDestinationStats)
 {
 	if (!tupleDestinationStats)
