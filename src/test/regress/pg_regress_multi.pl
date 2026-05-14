@@ -441,6 +441,15 @@ sub should_use_specific_version
     return node_matches_n1_mode($nodeType, $workerIndex);
 }
 
+# Returns true when we should defer the library swap until after extension creation.
+# This is for the "lib-only N-1" case: we have an alternative libdir but no specific
+# SQL version. We create the extension with the new .so first, then swap to old .so
+# to mimic async replica upgrade where the replica has old lib but new SQL catalog.
+sub should_defer_libdir_swap
+{
+    return ($citusLibdir ne "" && $citusversion eq "");
+}
+
 # always want to call initdb under normal postgres, so revert from a
 # partial run, even if we're now not using valgrind.
 revert_replace_postgres();
@@ -1043,7 +1052,8 @@ if (!$conninfo)
     write_settings_to_postgres_conf(\@pgOptions, catfile($TMP_CHECKDIR, $MASTERDIR, "data/postgresql.conf"));
 
     # Setup citus.so symlink for coordinator if needed
-    if (should_use_alternative_libdir("coordinator"))
+    # Skip if we're deferring the swap (lib-only N-1 mode creates extension with new .so first)
+    if (should_use_alternative_libdir("coordinator") && !should_defer_libdir_swap())
     {
         print "Setting up citus.so symlink for coordinator from alternative directory: $citusLibdir\n";
         setup_symlink(catfile($psqlLibdir, "citus.so"), catfile($citusLibdir, "citus.so"));
@@ -1058,7 +1068,7 @@ if (!$conninfo)
     }
 
     # Restore original library for coordinator if we set up symlink
-    if (should_use_alternative_libdir("coordinator"))
+    if (should_use_alternative_libdir("coordinator") && !should_defer_libdir_swap())
     {
         restore_original(catfile($psqlLibdir, "citus.so"));
     }
@@ -1070,7 +1080,8 @@ if (!$conninfo)
         write_settings_to_postgres_conf(\@pgOptions, catfile($TMP_CHECKDIR, "worker.$port", "data/postgresql.conf"));
 
         # Setup citus.so symlink for this worker if needed
-        if (should_use_alternative_libdir("worker", $workeroff))
+        # Skip if we're deferring the swap (lib-only N-1 mode)
+        if (should_use_alternative_libdir("worker", $workeroff) && !should_defer_libdir_swap())
         {
             print "Setting up citus.so symlink for worker $port from alternative directory: $citusLibdir\n";
             setup_symlink(catfile($psqlLibdir, "citus.so"), catfile($citusLibdir, "citus.so"));
@@ -1086,7 +1097,7 @@ if (!$conninfo)
         }
 
         # Restore original library for this worker if we set up symlink
-        if (should_use_alternative_libdir("worker", $workeroff))
+        if (should_use_alternative_libdir("worker", $workeroff) && !should_defer_libdir_swap())
         {
             restore_original(catfile($psqlLibdir, "citus.so"));
         }
@@ -1244,10 +1255,60 @@ push(@arguments, @ARGV);
 # If a Citus version is specified and coordinator should use it, make sure the coordinator uses it too.
 # Otherwise pg_regress will create the database and install the extension without an
 # explicit VERSION.
-if (!$conninfo && should_use_specific_version("coordinator"))
+# For deferred libdir swap (lib-only N-1), we also need to create the extension
+# explicitly here so we can stop/swap/restart before pg_regress runs.
+if (!$conninfo && (should_use_specific_version("coordinator") || should_defer_libdir_swap()))
 {
     create_coordinator_database_and_extensions();
     push(@arguments, "--use-existing");
+}
+
+# Deferred library swap for lib-only N-1 mode:
+# Extensions have been created with the new .so. Now swap to old .so and restart.
+# This mimics async replica upgrade where the replica has old lib but new SQL
+# catalog (as if ALTER EXTENSION UPDATE was replayed via WAL).
+# The running processes already have citus.so loaded in memory, so swapping the
+# symlink on disk is safe — only the restarted process picks up the old .so.
+if (!$conninfo && should_defer_libdir_swap())
+{
+    print "Performing deferred library swap for lib-only N-1 mode...\n";
+    print "Extensions were created with the new .so, now swapping to old .so\n";
+
+    # Swap and restart coordinator if it should use old lib
+    if (node_matches_n1_mode("coordinator"))
+    {
+        setup_symlink(catfile($psqlLibdir, "citus.so"), catfile($citusLibdir, "citus.so"));
+        if(system(catfile("$bindir", "pg_ctl"),
+            (@pg_ctl_args, 'restart', '-w',
+                '-D', catfile($TMP_CHECKDIR, $MASTERDIR, 'data'),
+                '-l', catfile($TMP_CHECKDIR, $MASTERDIR, 'log', 'postmaster.log'))) != 0)
+        {
+            system("tail", ("-n20", catfile($TMP_CHECKDIR, $MASTERDIR, "log", "postmaster.log")));
+            die "Could not restart coordinator with old library";
+        }
+        restore_original(catfile($psqlLibdir, "citus.so"));
+    }
+
+    # Swap and restart workers that should use old lib
+    for my $workeroff (0 .. $#workerPorts)
+    {
+        my $port = $workerPorts[$workeroff];
+        if (node_matches_n1_mode("worker", $workeroff))
+        {
+            setup_symlink(catfile($psqlLibdir, "citus.so"), catfile($citusLibdir, "citus.so"));
+            if(system(catfile("$bindir", "pg_ctl"),
+                (@pg_ctl_args, 'restart', '-w',
+                    '-D', catfile($TMP_CHECKDIR, "worker.$port", "data"),
+                    '-l', catfile($TMP_CHECKDIR, "worker.$port", "log", "postmaster.log"))) != 0)
+            {
+                system("tail", ("-n20", catfile($TMP_CHECKDIR, "worker.$port", "log", "postmaster.log")));
+                die "Could not restart worker on port $port with old library";
+            }
+            restore_original(catfile($psqlLibdir, "citus.so"));
+        }
+    }
+
+    print "Deferred library swap complete. Servers restarted with old .so\n";
 }
 
 my $startTime = time();
