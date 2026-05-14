@@ -999,6 +999,85 @@ SELECT public.explain_filter('EXPLAIN (COSTS OFF, VERBOSE OFF)
     DECLARE rescan_cur SCROLL CURSOR WITH HOLD FOR
         SELECT id FROM sorted_merge_test ORDER BY id LIMIT 10');
 
+-- N2: SCROLL CURSOR WITH HOLD without LIMIT.  Same shape as N1 but
+-- the holdStore must persist the entire post-rescan stream, so any
+-- off-by-one in SortedMergeAdapterRescan() would manifest as a
+-- missing row at the rescan boundary (the global minimum of the
+-- rewound merge).  In production Material absorbs the rescan, so we
+-- expect a full, in-order result.  See the same-day fix in
+-- sorted_merge.c that leaves initialized=false so the next Next()
+-- call reseeds rather than advancing the unread winner.
+BEGIN;
+DECLARE rescan_cur_full SCROLL CURSOR WITH HOLD FOR
+    SELECT id FROM sorted_merge_test WHERE id <= 20 ORDER BY id;
+FETCH 3 FROM rescan_cur_full;
+COMMIT;
+FETCH ALL FROM rescan_cur_full;
+CLOSE rescan_cur_full;
+
+-- N3: SCROLL CURSOR WITH HOLD where the cursor is COMMIT-persisted
+-- before any FETCH ever ran.  AdaptiveExecutor() and therefore
+-- CreatePerTaskDispatchDests() have not been called yet, so
+-- scanState->mergeAdapter is NULL at the moment PersistHoldablePortal
+-- triggers ExecutorRewind.  SortedMergeReScan() must tolerate a NULL
+-- adapter (the same way CitusReScan tolerates a NULL tuplestore) or
+-- a segfault would occur once the Material absorber is removed.
+BEGIN;
+DECLARE rescan_cur_zero SCROLL CURSOR WITH HOLD FOR
+    SELECT id FROM sorted_merge_test WHERE id <= 20 ORDER BY id;
+FETCH 0 FROM rescan_cur_zero;
+COMMIT;
+FETCH ALL FROM rescan_cur_zero;
+CLOSE rescan_cur_zero;
+
+-- N4: Multi-column ORDER BY rescan.  Verifies that rescan resets all
+-- per-task stores consistently and that the heap is reseeded in the
+-- right order, including across the multi-key comparator.
+BEGIN;
+DECLARE rescan_cur_multi SCROLL CURSOR WITH HOLD FOR
+    SELECT id, id % 3 AS m FROM sorted_merge_test
+    WHERE id <= 20 ORDER BY id % 3, id;
+FETCH 3 FROM rescan_cur_multi;
+COMMIT;
+FETCH ALL FROM rescan_cur_multi;
+CLOSE rescan_cur_multi;
+
+-- N5: SCROLL CURSOR WITH HOLD + DESC ordering.  Exercises rescan
+-- with a reversed sort comparator to confirm the same correctness
+-- under inverted SortSupport semantics.
+BEGIN;
+DECLARE rescan_cur_desc SCROLL CURSOR WITH HOLD FOR
+    SELECT id FROM sorted_merge_test WHERE id <= 20 ORDER BY id DESC;
+FETCH 3 FROM rescan_cur_desc;
+COMMIT;
+FETCH ALL FROM rescan_cur_desc;
+CLOSE rescan_cur_desc;
+
+-- N6: Repeated single-row fetches after rescan.  Verifies that the
+-- holdStore (populated from the post-rescan stream) returns the
+-- correct sequence one row at a time, then drains the remainder.
+BEGIN;
+DECLARE rescan_cur_single SCROLL CURSOR WITH HOLD FOR
+    SELECT id FROM sorted_merge_test WHERE id <= 20 ORDER BY id;
+FETCH 5 FROM rescan_cur_single;
+COMMIT;
+FETCH 1 FROM rescan_cur_single;
+FETCH 1 FROM rescan_cur_single;
+FETCH 1 FROM rescan_cur_single;
+FETCH ALL FROM rescan_cur_single;
+CLOSE rescan_cur_single;
+
+-- N7: SCROLL CURSOR WITH HOLD over an empty result.  Rescan must
+-- not produce phantom rows when every per-task store is empty, and
+-- no NULL deref / heap underflow should occur.
+BEGIN;
+DECLARE rescan_cur_empty SCROLL CURSOR WITH HOLD FOR
+    SELECT id FROM sorted_merge_test WHERE id > 100000 ORDER BY id;
+FETCH 1 FROM rescan_cur_empty;
+COMMIT;
+FETCH ALL FROM rescan_cur_empty;
+CLOSE rescan_cur_empty;
+
 -- =================================================================
 -- Category O: work_mem stress (Phase B / T18)
 --
