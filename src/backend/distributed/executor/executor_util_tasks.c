@@ -15,6 +15,7 @@
 #include "distributed/executor_util.h"
 #include "distributed/listutils.h"
 #include "distributed/shardinterval_utils.h"
+#include "distributed/transaction_management.h"
 
 
 /*
@@ -42,6 +43,130 @@ TaskListModifiesDatabase(RowModifyLevel modLevel, List *taskList)
 	Task *firstTask = (Task *) linitial(taskList);
 
 	return !ReadOnlyTask(firstTask->taskType);
+}
+
+
+/*
+ * SkipProcedureTransactionBlock determines whether we can safely skip
+ * coordinated (2PC) transactions for the current procedure execution.
+ *
+ * This is safe only when ALL of the following are true:
+ *   1. The GUC citus.enable_procedure_transaction_skip is enabled
+ *   2. We are inside a stored procedure (StoredProcedureLevel == 1, not nested)
+ *   3. We are NOT inside an explicit BEGIN block or DO $$ block
+ *   4. There is exactly 1 task in the task list
+ *   5. That task has exactly 1 placement (no replication)
+ *   6. No coordinated transaction has been started yet (no prior distributed
+ *      work in this procedure call)
+ *   7. No prior non-coordinated execution has occurred in this procedure call
+ *
+ * When any check fails, we return false and the caller falls through to the
+ * normal coordinated transaction path.
+ *
+ * IMPORTANT: because the first statement executes without a coordinated
+ * transaction, it auto-commits on the worker (or locally).  If the procedure
+ * contains a second distributed statement, we raise an ERROR to prevent
+ * silent data inconsistency — but the first statement's effects have already
+ * been committed and cannot be rolled back.  This is acceptable because the
+ * GUC is explicitly documented for single-statement procedures only.
+ *
+ * NOTE: we are being conservative in the case of local execution.  When the
+ * first statement is executed locally (not on a remote worker), it still
+ * auto-commits and we still raise an ERROR on a second statement.  This is a
+ * deliberate limitation to keep the logic simple and consistent.
+ */
+static bool
+SkipProcedureTransactionBlock(List *taskList)
+{
+	/* GUC gate - must be explicitly opted in */
+	if (!EnableProcedureTransactionSkip)
+	{
+		return false;
+	}
+
+	/*
+	 * Only allow for non-nested stored procedure calls. StoredProcedureLevel > 1
+	 * means nested CALL where inner procedure may have multi-shard statements.
+	 */
+	if (StoredProcedureLevel != 1)
+	{
+		return false;
+	}
+
+	/* Do not allow inside explicit BEGIN block - user may add more statements */
+	if (IsTransactionBlock())
+	{
+		return false;
+	}
+
+	/* Do not allow inside DO $$ block - may contain multiple statements */
+	if (DoBlockLevel > 0)
+	{
+		return false;
+	}
+
+	/* Exactly one task */
+	if (list_length(taskList) != 1)
+	{
+		return false;
+	}
+
+	Task *task = (Task *) linitial(taskList);
+
+	/* Exactly one placement (no replication) */
+	if (list_length(task->taskPlacementList) != 1)
+	{
+		return false;
+	}
+
+	/* Additionally check for multi-query tasks */
+	if (task->queryCount > 1)
+	{
+		return false;
+	}
+
+	/*
+	 * If we already started a coordinated transaction (e.g., a prior statement
+	 * in the procedure touched a different shard), we cannot downgrade to
+	 * non-coordinated execution.
+	 */
+	if (InCoordinatedTransaction())
+	{
+		return false;
+	}
+
+	/*
+	 * Only single-statement procedures may skip coordination. If we already
+	 * executed one non-coordinated statement, a second would cause a partial
+	 * commit scenario: the first auto-committed on the worker (or locally)
+	 * and cannot be rolled back if the second fails.
+	 *
+	 * We raise an ERROR here to prevent silently continuing with an
+	 * inconsistent state.  Note that the first statement's effects are
+	 * already committed at this point (whether executed remotely or locally).
+	 *
+	 * NOTE: we are being conservative in the case of local execution — even
+	 * though a local statement does not go to a remote worker, we still
+	 * disallow a second statement.  This is a deliberate limitation to keep
+	 * the logic simple and consistent.
+	 */
+	if (ProcedureNonCoordinatedExecutionCount > 0)
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("multi-statement procedures are not supported with "
+						"citus.enable_procedure_transaction_skip"),
+				 errdetail("The first statement has already been committed "
+						   "and cannot be rolled back. This applies to both "
+						   "remote and local execution."),
+				 errhint("Use this optimization only for single-statement "
+						 "procedures, or disable the GUC.")));
+	}
+
+	/* Track that we are about to execute without coordination */
+	ProcedureNonCoordinatedExecutionCount++;
+
+	return true;
 }
 
 
@@ -86,7 +211,23 @@ TaskListRequiresRollback(List *taskList)
 
 	if (IsMultiStatementTransaction())
 	{
-		return true;
+		/*
+		 * When the single-shard procedure optimization is enabled, we can
+		 * skip coordinated transactions for procedure calls that meet all
+		 * of the following conditions:
+		 *   - We are in a stored procedure (not nested)
+		 *   - Not inside an explicit BEGIN block or DO block
+		 *   - Exactly one task with one placement
+		 *   - No prior coordinated transaction started in this call
+		 *
+		 * This avoids the overhead of BEGIN + PREPARE TRANSACTION +
+		 * COMMIT PREPARED for single-shard single-placement writes
+		 * inside stored procedures.
+		 */
+		if (!SkipProcedureTransactionBlock(taskList))
+		{
+			return true;
+		}
 	}
 
 	if (list_length(taskList) > 1)

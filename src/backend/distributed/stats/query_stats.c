@@ -987,6 +987,11 @@ CitusExecutorName(MultiExecutorType executorType)
 			return "adaptive";
 		}
 
+		case MULTI_EXECUTOR_SORTED_MERGE:
+		{
+			return "sorted-merge";
+		}
+
 		case MULTI_EXECUTOR_NON_PUSHABLE_INSERT_SELECT:
 		{
 			return "insert-select";

@@ -623,7 +623,8 @@ GetAggregateTransitionType(StypeBox *box)
 							"worker_partial_agg_ffunc expects an aggregate with COMBINEFUNC")));
 	}
 
-	if (aggform->aggtranstype == INTERNALOID)
+	if (aggform->aggtranstype == INTERNALOID &&
+		aggform->aggserialfn == InvalidOid)
 	{
 		ereport(ERROR,
 				(errmsg(
@@ -660,6 +661,40 @@ WorkerPartialAggregateApplyFFunc(PG_FUNCTION_ARGS)
 }
 
 
+/* If the transtype is internal, we need to use the SERIALFUNC of the aggregate
+ * to serialize the value in the worker. The COMBINEFUNC on the coordinator will
+ * then use the DESERIALFUNC to deserialize the value.
+ */
+static Datum
+CheckAndCallSerialFunc(PG_FUNCTION_ARGS, StypeBox *box, bool *outputIsNull)
+{
+	LOCAL_FCINFO(serialFcInfo, 1);
+	FmgrInfo serialInfo;
+	Form_pg_aggregate aggform;
+	HeapTuple aggtuple = GetAggregateForm(box->agg, &aggform);
+
+	if (aggform->aggserialfn == InvalidOid)
+	{
+		ereport(ERROR,
+				(errmsg(
+					 "worker_partial_agg_ffunc expects aggregates with internal transition state to have a SERIALFUNC")));
+	}
+
+	/* Otherwise, first invoke the serialfunc to ensure that we produce a serialiable value from the boxValue */
+	Assert(get_func_rettype(aggform->aggserialfn) == BYTEAOID);
+	fmgr_info(aggform->aggserialfn, &serialInfo);
+
+	InitFunctionCallInfoData(*serialFcInfo, &serialInfo, 1, fcinfo->fncollation,
+							 fcinfo->context, fcinfo->resultinfo);
+	fcSetArgExt(serialFcInfo, 0, box->value, box->valueNull);
+
+	Datum result = FunctionCallInvoke(serialFcInfo);
+	*outputIsNull = serialFcInfo->isnull;
+	ReleaseSysCache(aggtuple);
+	return result;
+}
+
+
 /*
  * worker_partial_agg_ffunc serializes transition state,
  * essentially implementing the following pseudocode:
@@ -682,12 +717,21 @@ worker_partial_agg_ffunc(PG_FUNCTION_ARGS)
 	}
 
 	Oid transtype = GetAggregateTransitionType(box);
+
+	Datum boxValue = box->value;
+	bool boxValueNull = box->valueNull;
+	if (transtype == INTERNALOID)
+	{
+		ereport(ERROR, (errmsg("worker_partial_agg_ffunc does not support output"
+							   " of aggregates with INTERNAL transition state")));
+	}
+
 	getTypeOutputInfo(transtype, &typoutput, &typIsVarlena);
 	fmgr_info(typoutput, &info);
 
 	InitFunctionCallInfoData(*innerFcinfo, &info, 1, fcinfo->fncollation,
 							 fcinfo->context, fcinfo->resultinfo);
-	fcSetArgExt(innerFcinfo, 0, box->value, box->valueNull);
+	fcSetArgExt(innerFcinfo, 0, boxValue, boxValueNull);
 
 	Datum result = FunctionCallInvoke(innerFcinfo);
 
@@ -721,12 +765,24 @@ worker_binary_partial_agg_ffunc(PG_FUNCTION_ARGS)
 	}
 
 	Oid transtype = GetAggregateTransitionType(box);
+
+
+	Datum boxValue = box->value;
+	bool boxValueNull = box->valueNull;
+	if (transtype == INTERNALOID)
+	{
+		/* Call and store the output of the SERIALFUNC - the output type
+		 * then is always BYTEAOID. */
+		boxValue = CheckAndCallSerialFunc(fcinfo, box, &boxValueNull);
+		transtype = BYTEAOID;
+	}
+
 	getTypeBinaryOutputInfo(transtype, &typoutput, &typIsVarlena);
 	fmgr_info(typoutput, &info);
 
 	InitFunctionCallInfoData(*innerFcinfo, &info, 1, fcinfo->fncollation,
 							 fcinfo->context, fcinfo->resultinfo);
-	fcSetArgExt(innerFcinfo, 0, box->value, box->valueNull);
+	fcSetArgExt(innerFcinfo, 0, boxValue, boxValueNull);
 
 	Datum result = FunctionCallInvoke(innerFcinfo);
 
@@ -739,12 +795,36 @@ worker_binary_partial_agg_ffunc(PG_FUNCTION_ARGS)
 
 
 static Datum
+DeserializeBoxValue(Oid deserialFunc, Datum value, bool valueNull,
+					FunctionCallInfo fcinfo,
+					bool *outputIsNull)
+{
+	LOCAL_FCINFO(deserialFcInfo, 3);
+	FmgrInfo deserialInfo;
+
+	fmgr_info(deserialFunc, &deserialInfo);
+
+	InitFunctionCallInfoData(*deserialFcInfo, &deserialInfo, 2, fcinfo->fncollation,
+							 fcinfo->context, fcinfo->resultinfo);
+	fcSetArgExt(deserialFcInfo, 0, value, valueNull);
+
+	/* Arg1 is not used and is internal */
+	fcSetArgExt(deserialFcInfo, 1, (Datum) 0, false);
+
+	Datum result = FunctionCallInvoke(deserialFcInfo);
+	*outputIsNull = deserialFcInfo->isnull;
+	return result;
+}
+
+
+static Datum
 CoordinatorCombineAggSfuncCore(PG_FUNCTION_ARGS, bool isBinaryInput)
 {
 	LOCAL_FCINFO(innerFcinfo, 3);
 	FmgrInfo info;
 	Form_pg_aggregate aggform;
 	Form_pg_type transtypeform;
+	Oid deserialFunc = InvalidOid;
 	Datum value;
 	StypeBox *box = NULL;
 
@@ -769,9 +849,16 @@ CoordinatorCombineAggSfuncCore(PG_FUNCTION_ARGS, bool isBinaryInput)
 
 	if (aggform->aggtranstype == INTERNALOID)
 	{
-		ereport(ERROR,
-				(errmsg(
-					 "coord_combine_agg_sfunc does not support aggregates with INTERNAL transition state")));
+		if (aggform->aggdeserialfn == InvalidOid)
+		{
+			ereport(ERROR,
+					(errmsg(
+						 "coord_combine_agg_sfunc does not support aggregates with INTERNAL transition state")));
+		}
+		else
+		{
+			deserialFunc = aggform->aggdeserialfn;
+		}
 	}
 
 	Oid combine = aggform->aggcombinefn;
@@ -791,10 +878,21 @@ CoordinatorCombineAggSfuncCore(PG_FUNCTION_ARGS, bool isBinaryInput)
 	}
 
 	bool valueNull = PG_ARGISNULL(2);
-	HeapTuple transtypetuple = GetTypeForm(box->transtype, &transtypeform);
-	Oid ioparam = getTypeIOParam(transtypetuple);
+
+	/* If the stype is internal, this needs to through first
+	 * deserializing the wire output to the intermediate state.
+	 */
+	Oid deserializationType = box->transtype;
+	if (box->transtype == INTERNALOID)
+	{
+		/* For a deserialfunc, the input is a BYTEAOID */
+		deserializationType = BYTEAOID;
+	}
+
+	HeapTuple deserializationTypeTuple = GetTypeForm(deserializationType, &transtypeform);
+	Oid ioparam = getTypeIOParam(deserializationTypeTuple);
 	Oid deserial = isBinaryInput ? transtypeform->typreceive : transtypeform->typinput;
-	ReleaseSysCache(transtypetuple);
+	ReleaseSysCache(deserializationTypeTuple);
 
 	fmgr_info(deserial, &info);
 	if (valueNull && info.fn_strict)
@@ -862,6 +960,15 @@ CoordinatorCombineAggSfuncCore(PG_FUNCTION_ARGS, bool isBinaryInput)
 
 		value = FunctionCallInvoke(innerFcinfo);
 		valueNull = innerFcinfo->isnull;
+	}
+
+	/* If the stype is internal, we need to go through one additional step
+	 * of now calling the deserialfunc to go from the serialized type to
+	 * internal before we call the combine function.
+	 */
+	if (box->transtype == INTERNALOID && !valueNull)
+	{
+		value = DeserializeBoxValue(deserialFunc, value, valueNull, fcinfo, &valueNull);
 	}
 
 	fmgr_info(combine, &info);

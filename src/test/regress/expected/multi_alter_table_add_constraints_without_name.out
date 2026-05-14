@@ -788,7 +788,6 @@ ALTER TABLE AT_AddConstNoName.dist_partitioned_table DROP CONSTRAINT dist_partit
 -- Check "ADD CHECK"
 SET client_min_messages TO DEBUG1;
 ALTER TABLE AT_AddConstNoName.dist_partitioned_table ADD CHECK(dist_col >= another_col);
-DEBUG:  the constraint name on the shards of the partition is too long, switching to sequential and local execution mode to prevent self deadlocks: longlonglonglonglonglonglonglonglonglonglonglo_537570f5_5_check
 DEBUG:  verifying table "p1"
 DEBUG:  verifying table "longlonglonglonglonglonglonglonglonglonglonglonglonglonglongabc"
 RESET client_min_messages;
@@ -894,8 +893,6 @@ BEGIN;
 (1 row)
 
 	ALTER TABLE AT_AddConstNoName.dist_partitioned_table ADD CHECK(dist_col > another_col);
-ERROR:  The constraint name (longlonglonglonglonglonglonglonglonglonglonglo_537570f5_5_check) on a shard is too long and could lead to deadlocks when executed in a transaction block after a parallel query
-HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
 	ROLLBACK;
 -- try inside a sequential block
 BEGIN;
@@ -1200,7 +1197,6 @@ ALTER TABLE AT_AddConstNoName.citus_local_partitioned_table DROP CONSTRAINT citu
 -- Check "ADD CHECK"
 SET client_min_messages TO DEBUG1;
 ALTER TABLE AT_AddConstNoName.citus_local_partitioned_table ADD CHECK (dist_col > 0);
-DEBUG:  the constraint name on the shards of the partition is too long, switching to sequential and local execution mode to prevent self deadlocks: longlonglonglonglonglonglonglonglonglonglonglo_537570f5_5_check
 DEBUG:  verifying table "longlonglonglonglonglonglonglonglonglonglonglonglonglonglongabc"
 DEBUG:  verifying table "p1"
 RESET client_min_messages;

@@ -12,7 +12,8 @@ AS $$
     UPDATE pg_dist_rebalance_strategy SET default_strategy = false WHERE default_strategy = true;
     UPDATE pg_dist_rebalance_strategy t SET default_strategy = true WHERE t.name = $1;
   END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql
+SET search_path = pg_catalog, pg_temp;
 
 COMMENT ON FUNCTION pg_catalog.citus_set_default_rebalance_strategy(text)
   IS 'changes the default rebalance strategy to the one with the specified name';

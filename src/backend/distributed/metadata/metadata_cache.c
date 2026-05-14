@@ -2407,7 +2407,7 @@ CheckAvailableVersion(int elevel)
 
 	char *availableVersion = AvailableExtensionVersion();
 
-	if (!MajorVersionsCompatible(availableVersion, CITUS_EXTENSIONVERSION))
+	if (!MinorVersionsCompatibleRelaxed(availableVersion, CITUS_EXTENSIONVERSION))
 	{
 		ereport(elevel, (errmsg("loaded Citus library version differs from latest "
 								"available extension version"),
@@ -2469,49 +2469,6 @@ InstalledAndAvailableVersionsSame()
 	}
 
 	return false;
-}
-
-
-/*
- * MajorVersionsCompatible checks whether both versions are compatible. They
- * are if major and minor version numbers match, the schema version is
- * ignored.  Returns true if compatible, false otherwise.
- */
-bool
-MajorVersionsCompatible(char *leftVersion, char *rightVersion)
-{
-	const char schemaVersionSeparator = '-';
-
-	char *leftSeperatorPosition = strchr(leftVersion, schemaVersionSeparator);
-	char *rightSeperatorPosition = strchr(rightVersion, schemaVersionSeparator);
-	int leftComparisionLimit = 0;
-	int rightComparisionLimit = 0;
-
-	if (leftSeperatorPosition != NULL)
-	{
-		leftComparisionLimit = leftSeperatorPosition - leftVersion;
-	}
-	else
-	{
-		leftComparisionLimit = strlen(leftVersion);
-	}
-
-	if (rightSeperatorPosition != NULL)
-	{
-		rightComparisionLimit = rightSeperatorPosition - rightVersion;
-	}
-	else
-	{
-		rightComparisionLimit = strlen(leftVersion);
-	}
-
-	/* we can error out early if hypens are not in the same position */
-	if (leftComparisionLimit != rightComparisionLimit)
-	{
-		return false;
-	}
-
-	return strncmp(leftVersion, rightVersion, leftComparisionLimit) == 0;
 }
 
 

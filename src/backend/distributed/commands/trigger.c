@@ -35,6 +35,7 @@
 #include "distributed/metadata_sync.h"
 #include "distributed/namespace_utils.h"
 #include "distributed/shard_utils.h"
+#include "distributed/tenant_schema_metadata.h"
 #include "distributed/worker_protocol.h"
 
 
@@ -312,7 +313,8 @@ PostprocessCreateTriggerStmt(Node *node, const char *queryString)
 		return NIL;
 	}
 
-	EnsureCoordinator();
+	EnsureCoordinatorUnlessTenantSchema(relationId);
+
 	ErrorOutForTriggerIfNotSupported(relationId);
 
 	List *objectAddresses = GetObjectAddressListFromParseTree(node, missingOk, true);
@@ -423,7 +425,8 @@ PostprocessAlterTriggerRenameStmt(Node *node, const char *queryString)
 		return NIL;
 	}
 
-	EnsureCoordinator();
+	EnsureCoordinatorUnlessTenantSchema(relationId);
+
 	ErrorOutForTriggerIfNotSupported(relationId);
 
 	/* use newname as standard process utility already renamed it */
@@ -550,7 +553,8 @@ PostprocessAlterTriggerDependsStmt(Node *node, const char *queryString)
 		return NIL;
 	}
 
-	EnsureCoordinator();
+	EnsureCoordinatorUnlessTenantSchema(relationId);
+
 	ErrorOutForTriggerIfNotSupported(relationId);
 
 	String *triggerNameValue =
@@ -665,7 +669,8 @@ ErrorIfUnsupportedDropTriggerCommand(DropStmt *dropTriggerStmt)
 		return;
 	}
 
-	EnsureCoordinator();
+	EnsureCoordinatorUnlessTenantSchema(relationId);
+
 	ErrorOutForTriggerIfNotSupported(relationId);
 }
 
@@ -686,12 +691,13 @@ ErrorOutForTriggerIfNotSupported(Oid relationId)
 	{
 		ereport(ERROR, (errmsg("triggers are not supported on reference tables")));
 	}
-	else if (IsCitusTableType(relationId, DISTRIBUTED_TABLE))
+	else if (IsCitusTableType(relationId, DISTRIBUTED_TABLE) &&
+			 !IsTenantSchema(get_rel_namespace(relationId)))
 	{
 		ereport(ERROR, (errmsg("triggers are not supported on distributed tables")));
 	}
 
-	/* we always support triggers on citus local tables */
+	/* we always support triggers on citus local tables and distributed-schema tables */
 }
 
 

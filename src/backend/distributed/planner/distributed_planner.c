@@ -83,7 +83,7 @@ int PlannerLevel = 0;
 
 static bool ListContainsDistributedTableRTE(List *rangeTableList,
 											bool *maybeHasForeignDistributedTable);
-static bool PlanContainsDistributedSubPlanRTE(List *subPlanList);
+static bool PlanContainsDistributedSubPlanRTE(DistributedPlanningContext *planContext);
 static PlannedStmt * CreateDistributedPlannedStmt(DistributedPlanningContext *
 												  planContext);
 static PlannedStmt * InlineCtesAndCreateDistributedPlannedStmt(uint64 planId,
@@ -109,6 +109,7 @@ static PlannedStmt * FinalizeNonRouterPlan(PlannedStmt *localPlan,
 static PlannedStmt * FinalizeRouterPlan(PlannedStmt *localPlan, CustomScan *customScan);
 static AppendRelInfo * FindTargetAppendRelInfo(PlannerInfo *root, int relationRteIndex);
 static List * makeTargetListFromCustomScanList(List *custom_scan_tlist);
+static void DisableTrackingQueryCountersForPlanTree(struct Plan *planTree);
 static List * makeCustomScanTargetlistFromExistingTargetList(List *existingTargetlist);
 static int32 BlessRecordExpressionList(List *exprs);
 static void CheckNodeIsDumpable(Node *node);
@@ -435,8 +436,9 @@ ListContainsDistributedTableRTE(List *rangeTableList,
 
 
 /*
- * PlanContainsDistributedSubPlanRTE checks whether any of the subplans in the given
- * subPlanList is a Read Intermediate Result function scan.
+ * PlanContainsDistributedSubPlanRTE checks whether any of the subplans in the
+ * plan context's PlannedStmt->subplans list is a Read Intermediate Result
+ * function scan.
  *
  * It is used by the check after standard_planner() to determine whether the plan
  * still requires distributed planning; in addition to checking the range table for
@@ -445,13 +447,25 @@ ListContainsDistributedTableRTE(List *rangeTableList,
  * that distributed planning is required.
  */
 static bool
-PlanContainsDistributedSubPlanRTE(List *subPlanList)
+PlanContainsDistributedSubPlanRTE(DistributedPlanningContext *planContext)
 {
+	/*
+	 * We iterate over planContext->plan->subplans, which is PostgreSQL's
+	 * PlannedStmt->subplans list. PostgreSQL's setrefs.c (set_plan_references)
+	 * resolves AlternativeSubPlan nodes by picking one alternative and setting
+	 * the discarded subplan entries to NULL. We must therefore skip NULL entries.
+	 */
+	List *subPlanList = planContext->plan->subplans;
 	ListCell *subPlanCell = NULL;
 
 	foreach(subPlanCell, subPlanList)
 	{
 		Node *planRoot = (Node *) lfirst(subPlanCell);
+
+		if (planRoot == NULL)
+		{
+			continue;
+		}
 
 		if (!IsA(planRoot, FunctionScan))
 		{
@@ -853,6 +867,22 @@ CreateDistributedPlannedStmt(DistributedPlanningContext *planContext)
 
 	/* create final plan by combining local plan with distributed plan */
 	resultPlan = FinalizePlan(planContext->plan, distributedPlan);
+
+	/*
+	 * The streaming sorted merge adapter does not support backward scan.
+	 * If the query is a SCROLL cursor, insert a Material node above the
+	 * plan tree so backward fetches work.
+	 *
+	 * Normally standard_planner() handles this (planner.c:447-451), but
+	 * Citus replaces the plan tree after standard_planner returns via
+	 * FinalizePlan(), losing any Material node it inserted.
+	 */
+	if ((planContext->cursorOptions & CURSOR_OPT_SCROLL) &&
+		distributedPlan->useSortedMerge &&
+		!ExecSupportsBackwardScan(resultPlan->planTree))
+	{
+		resultPlan->planTree = materialize_finished_plan(resultPlan->planTree);
+	}
 
 	/*
 	 * As explained above, force planning costs to be unrealistically high if
@@ -1458,6 +1488,12 @@ FinalizePlan(PlannedStmt *localPlan, DistributedPlan *distributedPlan)
 			break;
 		}
 
+		case MULTI_EXECUTOR_SORTED_MERGE:
+		{
+			customScan->methods = &SortedMergeCustomScanMethods;
+			break;
+		}
+
 		case MULTI_EXECUTOR_NON_PUSHABLE_INSERT_SELECT:
 		{
 			customScan->methods = &NonPushableInsertSelectCustomScanMethods;
@@ -1498,7 +1534,17 @@ FinalizePlan(PlannedStmt *localPlan, DistributedPlan *distributedPlan)
 	customScan->custom_private = list_make1(distributedPlanData);
 
 	/* necessary to avoid extra Result node in PG15 */
-	customScan->flags = CUSTOMPATH_SUPPORT_BACKWARD_SCAN | CUSTOMPATH_SUPPORT_PROJECTION;
+	int customFlags = CUSTOMPATH_SUPPORT_PROJECTION;
+	if (!distributedPlan->useSortedMerge)
+	{
+		/*
+		 * Sorted-merge plans use the forward-only streaming adapter, so we
+		 * cannot advertise backward-scan support. PostgreSQL's planner will
+		 * insert a Material node above us for scrollable cursors.
+		 */
+		customFlags |= CUSTOMPATH_SUPPORT_BACKWARD_SCAN;
+	}
+	customScan->flags = customFlags;
 
 	/*
 	 * Fast path queries cannot have any subplans by definition, so skip
@@ -1699,6 +1745,64 @@ makeTargetListFromCustomScanList(List *custom_scan_tlist)
 		resno++;
 	}
 	return targetList;
+}
+
+
+/*
+ * DisableTrackingQueryCountersForPlannedStmt takes a PlannedStmt and
+ * disables tracking query counters for the distributed parts of the plan.
+ */
+void
+DisableTrackingQueryCountersForPlannedStmt(PlannedStmt *plannedStmt)
+{
+	DisableTrackingQueryCountersForPlanTree(plannedStmt->planTree);
+}
+
+
+/*
+ * DisableTrackingQueryCountersForPlanTree takes a plan tree and
+ * disables tracking query counters for it if it's a distributed plan
+ * and its distributed children recursively.
+ *
+ * Note that today none of the callers provide a plan tree with subplans
+ * at any level, so we throw an error if we find any subplans to avoid
+ * unnecessary implementation.
+ */
+static void
+DisableTrackingQueryCountersForPlanTree(struct Plan *planTree)
+{
+	/* we don't expect very deep plan trees but let's be on the safe side */
+	CHECK_FOR_INTERRUPTS();
+	check_stack_depth();
+
+	if (planTree == NULL)
+	{
+		return;
+	}
+
+	DisableTrackingQueryCountersForPlanTree(planTree->lefttree);
+	DisableTrackingQueryCountersForPlanTree(planTree->righttree);
+
+	if (!IsCitusCustomScan(planTree))
+	{
+		return;
+	}
+
+	DistributedPlan *distPlan = GetDistributedPlan((CustomScan *) planTree);
+	distPlan->disableTrackingQueryCounters = true;
+
+	if (distPlan->selectPlanForModifyViaCoordinatorOrRepartition)
+	{
+		DisableTrackingQueryCountersForPlanTree(distPlan->
+												selectPlanForModifyViaCoordinatorOrRepartition
+												->planTree);
+	}
+
+	if (list_length(distPlan->subPlanList) > 0 ||
+		list_length(distPlan->usedSubPlanNodeList) > 0)
+	{
+		ereport(ERROR, (errmsg("unexpected subplans in distributed plan")));
+	}
 }
 
 
@@ -2916,7 +3020,7 @@ CheckPostPlanDistribution(DistributedPlanningContext *planContext, bool
 			/* ..or a distributed subplan */
 			planHasDistribution = planHasDistribution ||
 								  PlanContainsDistributedSubPlanRTE(
-				planContext->plan->subplans);
+				planContext);
 
 			/*
 			 * The plan has a distributed relation, so we know for sure that

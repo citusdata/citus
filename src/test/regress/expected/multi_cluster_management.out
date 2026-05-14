@@ -1269,12 +1269,16 @@ BEGIN;
 
 	DROP TABLE test_dist, test_ref, test_dist_colocated, test_dist_non_colocated;
 	SELECT 1 FROM citus_remove_node('localhost', :worker_1_port);
+NOTICE:  issuing UPDATE pg_dist_local_group SET groupid = 0
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
  ?column?
 ---------------------------------------------------------------------
         1
 (1 row)
 
 	SELECT 1 FROM citus_remove_node('localhost', :worker_2_port);
+NOTICE:  issuing UPDATE pg_dist_local_group SET groupid = 0
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
  ?column?
 ---------------------------------------------------------------------
         1

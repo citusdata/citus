@@ -67,14 +67,8 @@ SELECT create_distributed_table('sc2.test_stats_expr', 'a');
 
 (1 row)
 
--- fails
-CREATE STATISTICS s_expr_post ON (a - (b * 2)),round(c) FROM sc2.test_stats_expr;
-ERROR:  only simple column references are allowed in CREATE STATISTICS
--- succeeds.
-set citus.enable_unsafe_statistics_expressions TO on;
--- add another expression stats on the distributed table should work.
+-- add expression stats on the distributed table should work.
 CREATE STATISTICS s_expr_post ON (a - (b * 2)), round(c) FROM sc2.test_stats_expr;
-reset citus.enable_unsafe_statistics_expressions;
 -- test dropping statistics
 CREATE TABLE test_stats4 (
     a int,

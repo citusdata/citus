@@ -357,8 +357,8 @@ BuildPublicationRelationObjSpec(Oid relationId, Oid publicationId,
 
 
 /*
- * PreprocessAlterPublicationStmt handles ALTER PUBLICATION statements
- * in a way that is mostly similar to PreprocessAlterDistributedObjectStmt,
+ * PreprocessAlterPublicationStmt handles ALTER PUBLICATION statements in a way
+ * that is mostly similar to PreprocessAlterDistributedObjectStmtFromCoordinator,
  * except we do not ensure sequential mode (publications do not interact with
  * shards) and can handle NULL deparse commands for ALTER PUBLICATION commands
  * that only involve local tables.

@@ -161,7 +161,6 @@ static char * InstalledExtensionVersionColumnar(void);
 static bool CitusColumnarHasBeenLoadedInternal(void);
 static bool CitusColumnarHasBeenLoaded(void);
 static bool CheckCitusColumnarVersion(int elevel);
-static bool MajorVersionsCompatibleColumnar(char *leftVersion, char *rightVersion);
 static bool MinorVersionsCompatibleRelaxedColumnar(char *leftVersion, char *rightVersion);
 static int ParseVersionComponent(const char *version, char **endPtr);
 
@@ -2840,7 +2839,7 @@ CheckAvailableVersionColumnar(int elevel)
 
 	char *availableVersion = AvailableExtensionVersionColumnar();
 
-	if (!MajorVersionsCompatibleColumnar(availableVersion, CITUS_EXTENSIONVERSION))
+	if (!MinorVersionsCompatibleRelaxedColumnar(availableVersion, CITUS_EXTENSIONVERSION))
 	{
 		ereport(elevel, (errmsg("loaded Citus library version differs from latest "
 								"available extension version"),
@@ -2884,49 +2883,6 @@ CheckInstalledVersionColumnar(int elevel)
 	}
 	pfree(installedVersion);
 	return true;
-}
-
-
-/*
- * MajorVersionsCompatible checks whether both versions are compatible. They
- * are if major and minor version numbers match, the schema version is
- * ignored.  Returns true if compatible, false otherwise.
- */
-bool
-MajorVersionsCompatibleColumnar(char *leftVersion, char *rightVersion)
-{
-	const char schemaVersionSeparator = '-';
-
-	char *leftSeperatorPosition = strchr(leftVersion, schemaVersionSeparator);
-	char *rightSeperatorPosition = strchr(rightVersion, schemaVersionSeparator);
-	int leftComparisionLimit = 0;
-	int rightComparisionLimit = 0;
-
-	if (leftSeperatorPosition != NULL)
-	{
-		leftComparisionLimit = leftSeperatorPosition - leftVersion;
-	}
-	else
-	{
-		leftComparisionLimit = strlen(leftVersion);
-	}
-
-	if (rightSeperatorPosition != NULL)
-	{
-		rightComparisionLimit = rightSeperatorPosition - rightVersion;
-	}
-	else
-	{
-		rightComparisionLimit = strlen(rightVersion);
-	}
-
-	/* we can error out early if hypens are not in the same position */
-	if (leftComparisionLimit != rightComparisionLimit)
-	{
-		return false;
-	}
-
-	return strncmp(leftVersion, rightVersion, leftComparisionLimit) == 0;
 }
 
 
