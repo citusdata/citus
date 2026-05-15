@@ -3317,13 +3317,20 @@ FETCH ALL FROM rescan_cur_full;
 (17 rows)
 
 CLOSE rescan_cur_full;
--- N3: SCROLL CURSOR WITH HOLD where the cursor is COMMIT-persisted
--- before any FETCH ever ran.  AdaptiveExecutor() and therefore
--- CreatePerTaskDispatchDests() have not been called yet, so
--- scanState->mergeAdapter is NULL at the moment PersistHoldablePortal
--- triggers ExecutorRewind.  SortedMergeReScan() must tolerate a NULL
--- adapter (the same way CitusReScan tolerates a NULL tuplestore) or
--- a segfault would occur once the Material absorber is removed.
+-- N3: Absent-Material scenario -- NULL adapter at rescan time.
+-- In production the Material absorber (inserted by
+-- materialize_finished_plan() in distributed_planner.c) intercepts
+-- PersistHoldablePortal's ExecutorRewind call before it reaches the
+-- Citus custom scan, so this code path is not exercised in normal
+-- operation.  This test is specifically for the *absent-Material*
+-- case: when Material is removed or bypassed, PG calls
+-- SortedMergeReScan() before any FETCH has run.  At that point
+-- AdaptiveExecutor() and CreatePerTaskDispatchDests() have not been
+-- called yet, so scanState->mergeAdapter is NULL.
+-- SortedMergeReScan() must tolerate a NULL adapter (the same way
+-- CitusReScan tolerates a NULL tuplestore) or a segfault occurs.
+-- The FETCH 0 / COMMIT-before-first-row pattern is the minimal
+-- SQL trigger for this NULL state.
 BEGIN;
 DECLARE rescan_cur_zero SCROLL CURSOR WITH HOLD FOR
     SELECT id FROM sorted_merge_test WHERE id <= 20 ORDER BY id;
@@ -3507,6 +3514,105 @@ FETCH ALL FROM rescan_cur_empty;
 (0 rows)
 
 CLOSE rescan_cur_empty;
+-- N8: SCROLL CURSOR WITH HOLD with FETCH BACKWARD navigation.
+-- Sentinel test for the PG-side Material + holdStore tier.  In
+-- production this scenario never reaches SortedMergeReScan or
+-- SortedMergeAdapterRescan:
+--   * Backward fetches issued before COMMIT are served from
+--     Material's internal tuplestore (ExecInitMaterial strips
+--     EXEC_FLAG_BACKWARD before initialising its child, so the
+--     sorted-merge custom scan never receives a backward direction).
+--   * Backward fetches issued after COMMIT are served by
+--     RunFromStore() over the holdStore without invoking the
+--     executor at all.
+-- The sorted-merge custom scan intentionally withholds
+-- CUSTOMPATH_SUPPORT_BACKWARD_SCAN (see FinalizePlan in
+-- distributed_planner.c) because the streaming adapter is
+-- forward-only, so the Material absorber is required to handle
+-- backward navigation.  This test guards against any future change
+-- that would weaken that absorber and start routing backward
+-- fetches into the Citus custom scan.
+BEGIN;
+DECLARE rescan_cur_back SCROLL CURSOR WITH HOLD FOR
+    SELECT id FROM sorted_merge_test WHERE id <= 20 ORDER BY id;
+-- Forward fetch establishes a position in the cursor.
+FETCH 5 FROM rescan_cur_back;
+ id
+---------------------------------------------------------------------
+  1
+  2
+  3
+  4
+  5
+(5 rows)
+
+-- Backward fetch before COMMIT: served by Material's tuplestore.
+FETCH BACKWARD 2 FROM rescan_cur_back;
+ id
+---------------------------------------------------------------------
+  4
+  3
+(2 rows)
+
+COMMIT;
+-- Backward fetch after COMMIT: served by holdStore via RunFromStore.
+FETCH BACKWARD 1 FROM rescan_cur_back;
+ id
+---------------------------------------------------------------------
+  2
+(1 row)
+
+-- Forward fetch after COMMIT: also served by holdStore.
+FETCH ALL FROM rescan_cur_back;
+ id
+---------------------------------------------------------------------
+  3
+  4
+  5
+  6
+  7
+  8
+  9
+ 10
+ 11
+ 12
+ 13
+ 14
+ 15
+ 16
+ 17
+ 18
+ 19
+ 20
+(18 rows)
+
+-- Final backward drain over the holdStore.
+FETCH BACKWARD ALL FROM rescan_cur_back;
+ id
+---------------------------------------------------------------------
+ 20
+ 19
+ 18
+ 17
+ 16
+ 15
+ 14
+ 13
+ 12
+ 11
+ 10
+  9
+  8
+  7
+  6
+  5
+  4
+  3
+  2
+  1
+(20 rows)
+
+CLOSE rescan_cur_back;
 -- =================================================================
 -- Category O: work_mem stress (Phase B / T18)
 --
