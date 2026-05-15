@@ -999,7 +999,16 @@ SortedMergeReScan(CustomScanState *node)
 	CitusReScanCommon(node);
 
 	CitusScanState *scanState = (CitusScanState *) node;
-	SortedMergeAdapterRescan(scanState->mergeAdapter);
+
+	/*
+	 * The adapter is created lazily by AdaptiveExecutor on the first scan
+	 * fetch. If rescan fires before any tuple was fetched (e.g. DECLARE
+	 * followed by COMMIT without any FETCH), there is nothing to rewind.
+	 */
+	if (scanState->mergeAdapter != NULL)
+	{
+		SortedMergeAdapterRescan(scanState->mergeAdapter);
+	}
 }
 
 
