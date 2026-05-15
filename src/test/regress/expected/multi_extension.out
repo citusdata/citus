@@ -1653,9 +1653,30 @@ SELECT * FROM multi_extension.print_extension_changes();
                                                                                                                       | view citus_stats
 (12 rows)
 
--- Test downgrade to 13.2-1 from 14.0-1
-ALTER EXTENSION citus UPDATE TO '14.0-1';
+-- Test downgrade to 13.2-1 from 13.3-1
+ALTER EXTENSION citus UPDATE TO '13.3-1';
 ALTER EXTENSION citus UPDATE TO '13.2-1';
+-- Should be empty result since upgrade+downgrade should be a no-op
+SELECT * FROM multi_extension.print_extension_changes();
+ previous_object | current_object
+---------------------------------------------------------------------
+(0 rows)
+
+-- Snapshot of state at 13.3-1
+ALTER EXTENSION citus UPDATE TO '13.3-1';
+SELECT * FROM multi_extension.print_extension_changes();
+ previous_object |                                      current_object
+---------------------------------------------------------------------
+                 | function citus_internal.acquire_placement_colocation_lock(bigint,integer) integer
+                 | function citus_internal.adjust_identity_column_seq_settings(regclass,bigint,boolean) void
+                 | function citus_internal.get_next_colocation_id() bigint
+                 | function citus_internal.lock_colocation_id(integer,integer) void
+                 | function worker_apply_sequence_command(text,regtype,bigint,boolean) void
+(5 rows)
+
+-- Test downgrade to 13.3-1 from 14.0-1
+ALTER EXTENSION citus UPDATE TO '14.0-1';
+ALTER EXTENSION citus UPDATE TO '13.3-1';
 -- Should be empty result since upgrade+downgrade should be a no-op
 SELECT * FROM multi_extension.print_extension_changes();
  previous_object | current_object
@@ -1665,19 +1686,45 @@ SELECT * FROM multi_extension.print_extension_changes();
 -- Snapshot of state at 14.0-1
 ALTER EXTENSION citus UPDATE TO '14.0-1';
 SELECT * FROM multi_extension.print_extension_changes();
- previous_object |                                  current_object
+                                      previous_object                                      |                                  current_object
 ---------------------------------------------------------------------
-                 | function coord_binary_combine_agg(oid,bytea,anyelement) anyelement
-                 | function coord_binary_combine_agg_ffunc(internal,oid,bytea,anyelement) anyelement
-                 | function coord_binary_combine_agg_sfunc(internal,oid,bytea,anyelement) internal
-                 | function fix_pre_citus14_colocation_group_collation_mismatches() void
-                 | function worker_binary_partial_agg(oid,anyelement) bytea
-                 | function worker_binary_partial_agg_ffunc(internal) bytea
-(6 rows)
+ function citus_internal.acquire_placement_colocation_lock(bigint,integer) integer         |
+ function citus_internal.adjust_identity_column_seq_settings(regclass,bigint,boolean) void |
+ function citus_internal.get_next_colocation_id() bigint                                   |
+ function citus_internal.lock_colocation_id(integer,integer) void                          |
+ function worker_apply_sequence_command(text,regtype,bigint,boolean) void                  |
+                                                                                           | function coord_binary_combine_agg(oid,bytea,anyelement) anyelement
+                                                                                           | function coord_binary_combine_agg_ffunc(internal,oid,bytea,anyelement) anyelement
+                                                                                           | function coord_binary_combine_agg_sfunc(internal,oid,bytea,anyelement) internal
+                                                                                           | function fix_pre_citus14_colocation_group_collation_mismatches() void
+                                                                                           | function worker_binary_partial_agg(oid,anyelement) bytea
+                                                                                           | function worker_binary_partial_agg_ffunc(internal) bytea
+(11 rows)
 
--- Test downgrade to 14.0-1 from 15.0-1
-ALTER EXTENSION citus UPDATE TO '15.0-1';
+-- Test downgrade to 14.0-1 from 14.1-1
+ALTER EXTENSION citus UPDATE TO '14.1-1';
 ALTER EXTENSION citus UPDATE TO '14.0-1';
+-- Should be empty result since upgrade+downgrade should be a no-op
+SELECT * FROM multi_extension.print_extension_changes();
+ previous_object | current_object
+---------------------------------------------------------------------
+(0 rows)
+
+-- Snapshot of state at 14.1-1
+ALTER EXTENSION citus UPDATE TO '14.1-1';
+SELECT * FROM multi_extension.print_extension_changes();
+ previous_object |                                      current_object
+---------------------------------------------------------------------
+                 | function citus_internal.acquire_placement_colocation_lock(bigint,integer) integer
+                 | function citus_internal.adjust_identity_column_seq_settings(regclass,bigint,boolean) void
+                 | function citus_internal.get_next_colocation_id() bigint
+                 | function citus_internal.lock_colocation_id(integer,integer) void
+                 | function worker_apply_sequence_command(text,regtype,bigint,boolean) void
+(5 rows)
+
+-- Test downgrade to 14.1-1 from 15.0-1
+ALTER EXTENSION citus UPDATE TO '15.0-1';
+ALTER EXTENSION citus UPDATE TO '14.1-1';
 -- Should be empty result since upgrade+downgrade should be a no-op
 SELECT * FROM multi_extension.print_extension_changes();
  previous_object | current_object
@@ -1687,17 +1734,14 @@ SELECT * FROM multi_extension.print_extension_changes();
 -- Snapshot of state at 15.0-1
 ALTER EXTENSION citus UPDATE TO '15.0-1';
 SELECT * FROM multi_extension.print_extension_changes();
- previous_object |                                      current_object
+                         previous_object                          |                    current_object
 ---------------------------------------------------------------------
-                 | function citus_cluster_changes_block(integer) boolean
-                 | function citus_cluster_changes_block_status() record
-                 | function citus_cluster_changes_unblock() boolean
-                 | function citus_internal.acquire_placement_colocation_lock(bigint,integer) integer
-                 | function citus_internal.adjust_identity_column_seq_settings(regclass,bigint,boolean) void
-                 | function citus_internal.get_next_colocation_id() bigint
-                 | function citus_internal.lock_colocation_id(integer,integer) void
-                 | function worker_apply_sequence_command(text,regtype,bigint,boolean) void
-(8 rows)
+ function worker_adjust_identity_column_seq_ranges(regclass) void |
+ function worker_apply_sequence_command(text,regtype) void        |
+                                                                  | function citus_cluster_changes_block(integer) boolean
+                                                                  | function citus_cluster_changes_block_status() record
+                                                                  | function citus_cluster_changes_unblock() boolean
+(5 rows)
 
 DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;
 -- show running version
