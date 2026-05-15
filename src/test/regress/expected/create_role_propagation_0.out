@@ -337,10 +337,10 @@ SELECT rolname FROM pg_authid WHERE rolname LIKE '%dist\_%' ORDER BY 1;
 
 \c - - - :worker_2_port
 SELECT roleid::regrole::text AS role, member::regrole::text, grantor::regrole::text, admin_option FROM pg_auth_members WHERE roleid::regrole::text LIKE '%dist\_%' ORDER BY 1, 2;
-      role       |     member      | grantor  | admin_option
+      role       |     member      |   grantor   | admin_option
 ---------------------------------------------------------------------
- dist_role_1     | non_dist_role_1 | postgres | t
- non_dist_role_4 | dist_role_4     | postgres | f
+ dist_role_1     | non_dist_role_1 | dist_role_1 | t
+ non_dist_role_4 | dist_role_4     | postgres    | f
 (2 rows)
 
 SELECT rolname FROM pg_authid WHERE rolname LIKE '%dist\_%' ORDER BY 1;
