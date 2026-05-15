@@ -3798,6 +3798,19 @@ citus_internal_delete_placement_metadata(PG_FUNCTION_ARGS)
 	{
 		/* this UDF is not allowed allowed for executing as a separate command */
 		EnsureCitusInitiatedOperation();
+
+		bool missingOk = false;
+		GroupShardPlacement *placement = LookupGroupPlacementByPlacementId(placementId,
+																		   missingOk);
+		if (!placement)
+		{
+			ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+							errmsg("Shard placement with id %ld does not exist",
+								   placementId)));
+		}
+
+		Oid relationId = LookupShardRelationFromCatalog(placement->shardId, missingOk);
+		EnsureTableOwner(relationId);
 	}
 
 	DeleteShardPlacementRow(placementId);
