@@ -3802,15 +3802,8 @@ citus_internal_delete_placement_metadata(PG_FUNCTION_ARGS)
 		bool missingOk = false;
 		GroupShardPlacement *placement = LookupGroupPlacementByPlacementId(placementId,
 																		   missingOk);
-		if (!placement)
-		{
-			ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-							errmsg("Shard placement with id %ld does not exist",
-								   placementId)));
-		}
 
-		Oid relationId = LookupShardRelationFromCatalog(placement->shardId, missingOk);
-		EnsureTableOwner(relationId);
+		EnsureShardOwner(placement->shardId, missingOk);
 	}
 
 	DeleteShardPlacementRow(placementId);
@@ -4152,6 +4145,37 @@ citus_internal_delete_colocation_metadata(PG_FUNCTION_ARGS)
 	{
 		/* this UDF is not allowed allowed for executing as a separate command */
 		EnsureCitusInitiatedOperation();
+
+		if (IsTenantSchemaColocationGroup(colocationId))
+		{
+			/*
+			 * If this colocation group belongs to a distributed schema, then this UDF
+			 * is being executed when undistributing the schema. In that case, here we
+			 * enforce being the owner of the schema as we do in citus_schema_undistribute().
+			 */
+			EnsureSchemaOwner(ColocationIdGetTenantSchemaId(colocationId));
+		}
+		else
+		{
+			/*
+			 * There is no reasonable way to associate a colocation group with an owner
+			 * as the tables belonging to the colocation group can have different owners.
+			 * However, we know that we delete a colocation group only after all the tables
+			 * belonging to the colocation group are dropped / undistributed. For this
+			 * reason, instead here we ensure that there is no table belonging to this
+			 * colocation group, which is a strong signal that the colocation group is not
+			 * in use and it's safe to delete.
+			 */
+			List *colocatedTableList = ColocationGroupTableList(colocationId, 1);
+			if (list_length(colocatedTableList) > 0)
+			{
+				ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+								errmsg("Colocation group with id %d cannot be "
+									   "deleted because there are still tables "
+									   "belonging to this colocation group.",
+									   colocationId)));
+			}
+		}
 	}
 
 	DeleteColocationGroupLocally(colocationId);
@@ -4200,6 +4224,14 @@ citus_internal_delete_tenant_schema(PG_FUNCTION_ARGS)
 	PG_ENSURE_ARGNOTNULL(0, "schema_id");
 	Oid schemaId = PG_GETARG_OID(0);
 
+	if (!ShouldSkipMetadataChecks())
+	{
+		/* this UDF is not allowed allowed for executing as a separate command */
+		EnsureCitusInitiatedOperation();
+
+		EnsureSchemaOwner(schemaId);
+	}
+
 	DeleteTenantSchemaLocally(schemaId);
 
 	PG_RETURN_VOID();
@@ -4231,6 +4263,8 @@ citus_internal_update_none_dist_table_metadata(PG_FUNCTION_ARGS)
 	if (!ShouldSkipMetadataChecks())
 	{
 		EnsureCitusInitiatedOperation();
+
+		EnsureTableOwner(relationId);
 	}
 
 	UpdateNoneDistTableMetadata(relationId, replicationModel,
