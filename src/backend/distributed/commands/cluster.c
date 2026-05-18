@@ -51,8 +51,13 @@ PreprocessClusterStmt(Node *node, const char *clusterCommand,
 	}
 
 	/* PostgreSQL uses access exclusive lock for CLUSTER command */
+#if PG_VERSION_NUM >= PG_VERSION_19
+	Oid relationId = RangeVarGetRelid(clusterStmt->relation->relation,
+									  AccessExclusiveLock, missingOK);
+#else
 	Oid relationId = RangeVarGetRelid(clusterStmt->relation, AccessExclusiveLock,
 									  missingOK);
+#endif
 
 	/*
 	 * If the table does not exist, don't do anything here to allow PostgreSQL

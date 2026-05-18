@@ -486,7 +486,9 @@ _PG_init(void)
 
 	/* register for planner hook */
 	set_rel_pathlist_hook = multi_relation_restriction_hook;
+#if PG_VERSION_NUM < PG_VERSION_19
 	get_relation_info_hook = multi_get_relation_info_hook;
+#endif
 	set_join_pathlist_hook = multi_join_restriction_hook;
 	ExecutorStart_hook = CitusExecutorStart;
 	ExecutorRun_hook = citus_executor_run_adapter;
@@ -646,15 +648,33 @@ citus_shmem_request(void)
 		prev_shmem_request_hook();
 	}
 
-	RequestAddinShmemSpace(BackendManagementShmemSize());
-	RequestAddinShmemSpace(SharedConnectionStatsShmemSize());
-	RequestAddinShmemSpace(MaintenanceDaemonShmemSize());
-	RequestAddinShmemSpace(CitusQueryStatsSharedMemSize());
-	RequestAddinShmemSpace(LogicalClockShmemSize());
-	RequestAddinShmemSpace(ClusterChangesBlockShmemSize());
+	Size sz_bm = BackendManagementShmemSize();
+	Size sz_scs = SharedConnectionStatsShmemSize();
+	Size sz_md = MaintenanceDaemonShmemSize();
+	Size sz_qs = CitusQueryStatsSharedMemSize();
+	Size sz_lc = LogicalClockShmemSize();
+	Size sz_ccb = ClusterChangesBlockShmemSize();
+	Size sz_sc = StatCountersShmemSize();
+	RequestAddinShmemSpace(sz_bm);
+	RequestAddinShmemSpace(sz_scs);
+	RequestAddinShmemSpace(sz_md);
+	RequestAddinShmemSpace(sz_qs);
+	RequestAddinShmemSpace(sz_lc);
+	RequestAddinShmemSpace(sz_ccb);
 	RequestNamedLWLockTranche(STATS_SHARED_MEM_NAME, 1);
-	RequestAddinShmemSpace(StatCountersShmemSize());
+	RequestAddinShmemSpace(sz_sc);
 	RequestNamedLWLockTranche(SAVED_BACKEND_STATS_HASH_LOCK_TRANCHE_NAME, 1);
+#if PG_VERSION_NUM >= PG_VERSION_19
+
+	/*
+	 * PG19's ShmemInitHash now allocates all hash elements upfront in shared
+	 * memory.  Each ShmemInitStruct/ShmemInitHash allocation is aligned to a
+	 * cache line, which can waste up to PG_CACHE_LINE_SIZE-1 bytes per call.
+	 * Reserve a small amount of slack to absorb this alignment overhead so
+	 * the final allocation does not fail when the addin space is exhausted.
+	 */
+	RequestAddinShmemSpace(128 * 1024);
+#endif
 }
 
 

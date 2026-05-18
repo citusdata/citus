@@ -46,6 +46,9 @@
 #include "utils/rel.h"
 #include "utils/relcache.h"
 #include "utils/syscache.h"
+#include "utils/timestamp.h"
+#include "utils/tuplesort.h"
+#include "utils/tuplestore.h"
 
 #include "citus_version.h"
 #include "pg_version_compat.h"
@@ -1136,7 +1139,18 @@ columnar_vacuum_rel(Relation rel, VacuumParams *params,
 						false);
 #endif
 
-#if PG_VERSION_NUM >= PG_VERSION_18
+#if PG_VERSION_NUM >= PG_VERSION_19
+
+	/*
+	 * PG19 changed pgstat_report_vacuum signature to take the Relation
+	 * directly and dropped the shared-table flag, plus reordered args.
+	 * See upstream commit removing the (Oid, bool, ...) form.
+	 */
+	pgstat_report_vacuum(rel,
+						 Max(new_live_tuples, 0),  /* live tuples */
+						 0,                        /* dead tuples */
+						 GetCurrentTimestamp());   /* start time */
+#elif PG_VERSION_NUM >= PG_VERSION_18
 	pgstat_report_vacuum(RelationGetRelid(rel),
 						 rel->rd_rel->relisshared,
 						 Max(new_live_tuples, 0), /* live tuples */

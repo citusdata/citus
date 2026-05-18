@@ -461,8 +461,14 @@ ExtractAnalyzeStats(DistributedSubPlan *subPlan, PlanState *planState)
 	Instrumentation *instr = planState->instrument;
 	if (!IsA(planState, CustomScanState))
 	{
+#if PG_VERSION_NUM >= PG_VERSION_19
+		NodeInstrumentation *nodeInstr = planState->instrument;
+		nodeInstr->ntuples = subPlan->ntuples;
+		nodeInstr->nloops = 1; /* subplan nodes are executed only once */
+#else
 		instr->ntuples = subPlan->ntuples;
 		instr->nloops = 1; /* subplan nodes are executed only once */
+#endif
 		return;
 	}
 
@@ -519,8 +525,16 @@ ExtractAnalyzeStats(DistributedSubPlan *subPlan, PlanState *planState)
 		tasksOutput++;
 	}
 
+#if PG_VERSION_NUM >= PG_VERSION_19
+	{
+		NodeInstrumentation *nodeInstr = planState->instrument;
+		nodeInstr->ntuples = tasksNtuples;
+		nodeInstr->nloops = tasksNloops;
+	}
+#else
 	instr->ntuples = tasksNtuples;
 	instr->nloops = tasksNloops;
+#endif
 }
 
 
@@ -2483,7 +2497,11 @@ ExplainWorkerPlan(PlannedStmt *plannedstmt, DistributedSubPlan *subPlan, DestRec
 
 	if (executeQuery)
 	{
+#if PG_VERSION_NUM >= PG_VERSION_19
+		NodeInstrumentation *instr = queryDesc->planstate->instrument;
+#else
 		Instrumentation *instr = queryDesc->planstate->instrument;
+#endif
 		*executionTuples = instr->ntuples;
 		*executionLoops = instr->nloops;
 	}

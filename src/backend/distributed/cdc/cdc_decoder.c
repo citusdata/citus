@@ -22,6 +22,7 @@
 #include "utils/rel.h"
 #include "utils/typcache.h"
 
+#include "pg_version_compat.h"
 #include "pg_version_constants.h"
 
 PG_MODULE_MAGIC;

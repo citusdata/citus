@@ -16,6 +16,8 @@
 #include "funcapi.h"
 #include "miscadmin.h"
 
+#include "storage/fd.h"
+
 #include "distributed/utils/directory.h"
 
 
