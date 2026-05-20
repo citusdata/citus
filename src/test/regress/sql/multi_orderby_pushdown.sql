@@ -999,6 +999,126 @@ SELECT public.explain_filter('EXPLAIN (COSTS OFF, VERBOSE OFF)
     DECLARE rescan_cur SCROLL CURSOR WITH HOLD FOR
         SELECT id FROM sorted_merge_test ORDER BY id LIMIT 10');
 
+-- N2: SCROLL CURSOR WITH HOLD without LIMIT.  Same shape as N1 but
+-- the holdStore must persist the entire post-rescan stream, so any
+-- off-by-one in SortedMergeAdapterRescan() would manifest as a
+-- missing row at the rescan boundary (the global minimum of the
+-- rewound merge).  In production Material absorbs the rescan, so we
+-- expect a full, in-order result.  See the same-day fix in
+-- sorted_merge.c that leaves initialized=false so the next Next()
+-- call reseeds rather than advancing the unread winner.
+BEGIN;
+DECLARE rescan_cur_full SCROLL CURSOR WITH HOLD FOR
+    SELECT id FROM sorted_merge_test WHERE id <= 20 ORDER BY id;
+FETCH 3 FROM rescan_cur_full;
+COMMIT;
+FETCH ALL FROM rescan_cur_full;
+CLOSE rescan_cur_full;
+
+-- N3: Absent-Material scenario -- NULL adapter at rescan time.
+-- In production the Material absorber (inserted by
+-- materialize_finished_plan() in distributed_planner.c) intercepts
+-- PersistHoldablePortal's ExecutorRewind call before it reaches the
+-- Citus custom scan, so this code path is not exercised in normal
+-- operation.  This test is specifically for the *absent-Material*
+-- case: when Material is removed or bypassed, PG calls
+-- SortedMergeReScan() before any FETCH has run.  At that point
+-- AdaptiveExecutor() and CreatePerTaskDispatchDests() have not been
+-- called yet, so scanState->mergeAdapter is NULL.
+-- SortedMergeReScan() must tolerate a NULL adapter (the same way
+-- CitusReScan tolerates a NULL tuplestore) or a segfault occurs.
+-- The FETCH 0 / COMMIT-before-first-row pattern is the minimal
+-- SQL trigger for this NULL state.
+BEGIN;
+DECLARE rescan_cur_zero SCROLL CURSOR WITH HOLD FOR
+    SELECT id FROM sorted_merge_test WHERE id <= 20 ORDER BY id;
+FETCH 0 FROM rescan_cur_zero;
+COMMIT;
+FETCH ALL FROM rescan_cur_zero;
+CLOSE rescan_cur_zero;
+
+-- N4: Multi-column ORDER BY rescan.  Verifies that rescan resets all
+-- per-task stores consistently and that the heap is reseeded in the
+-- right order, including across the multi-key comparator.
+BEGIN;
+DECLARE rescan_cur_multi SCROLL CURSOR WITH HOLD FOR
+    SELECT id, id % 3 AS m FROM sorted_merge_test
+    WHERE id <= 20 ORDER BY id % 3, id;
+FETCH 3 FROM rescan_cur_multi;
+COMMIT;
+FETCH ALL FROM rescan_cur_multi;
+CLOSE rescan_cur_multi;
+
+-- N5: SCROLL CURSOR WITH HOLD + DESC ordering.  Exercises rescan
+-- with a reversed sort comparator to confirm the same correctness
+-- under inverted SortSupport semantics.
+BEGIN;
+DECLARE rescan_cur_desc SCROLL CURSOR WITH HOLD FOR
+    SELECT id FROM sorted_merge_test WHERE id <= 20 ORDER BY id DESC;
+FETCH 3 FROM rescan_cur_desc;
+COMMIT;
+FETCH ALL FROM rescan_cur_desc;
+CLOSE rescan_cur_desc;
+
+-- N6: Repeated single-row fetches after rescan.  Verifies that the
+-- holdStore (populated from the post-rescan stream) returns the
+-- correct sequence one row at a time, then drains the remainder.
+BEGIN;
+DECLARE rescan_cur_single SCROLL CURSOR WITH HOLD FOR
+    SELECT id FROM sorted_merge_test WHERE id <= 20 ORDER BY id;
+FETCH 5 FROM rescan_cur_single;
+COMMIT;
+FETCH 1 FROM rescan_cur_single;
+FETCH 1 FROM rescan_cur_single;
+FETCH 1 FROM rescan_cur_single;
+FETCH ALL FROM rescan_cur_single;
+CLOSE rescan_cur_single;
+
+-- N7: SCROLL CURSOR WITH HOLD over an empty result.  Rescan must
+-- not produce phantom rows when every per-task store is empty, and
+-- no NULL deref / heap underflow should occur.
+BEGIN;
+DECLARE rescan_cur_empty SCROLL CURSOR WITH HOLD FOR
+    SELECT id FROM sorted_merge_test WHERE id > 100000 ORDER BY id;
+FETCH 1 FROM rescan_cur_empty;
+COMMIT;
+FETCH ALL FROM rescan_cur_empty;
+CLOSE rescan_cur_empty;
+
+-- N8: SCROLL CURSOR WITH HOLD with FETCH BACKWARD navigation.
+-- Sentinel test for the PG-side Material + holdStore tier.  In
+-- production this scenario never reaches SortedMergeReScan or
+-- SortedMergeAdapterRescan:
+--   * Backward fetches issued before COMMIT are served from
+--     Material's internal tuplestore (ExecInitMaterial strips
+--     EXEC_FLAG_BACKWARD before initialising its child, so the
+--     sorted-merge custom scan never receives a backward direction).
+--   * Backward fetches issued after COMMIT are served by
+--     RunFromStore() over the holdStore without invoking the
+--     executor at all.
+-- The sorted-merge custom scan intentionally withholds
+-- CUSTOMPATH_SUPPORT_BACKWARD_SCAN (see FinalizePlan in
+-- distributed_planner.c) because the streaming adapter is
+-- forward-only, so the Material absorber is required to handle
+-- backward navigation.  This test guards against any future change
+-- that would weaken that absorber and start routing backward
+-- fetches into the Citus custom scan.
+BEGIN;
+DECLARE rescan_cur_back SCROLL CURSOR WITH HOLD FOR
+    SELECT id FROM sorted_merge_test WHERE id <= 20 ORDER BY id;
+-- Forward fetch establishes a position in the cursor.
+FETCH 5 FROM rescan_cur_back;
+-- Backward fetch before COMMIT: served by Material's tuplestore.
+FETCH BACKWARD 2 FROM rescan_cur_back;
+COMMIT;
+-- Backward fetch after COMMIT: served by holdStore via RunFromStore.
+FETCH BACKWARD 1 FROM rescan_cur_back;
+-- Forward fetch after COMMIT: also served by holdStore.
+FETCH ALL FROM rescan_cur_back;
+-- Final backward drain over the holdStore.
+FETCH BACKWARD ALL FROM rescan_cur_back;
+CLOSE rescan_cur_back;
+
 -- =================================================================
 -- Category O: work_mem stress (Phase B / T18)
 --
