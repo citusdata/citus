@@ -971,7 +971,8 @@ RecursivelyPlanDistributedJoinNode(Node *node, Query *query,
 		PlannerRestrictionContext *restrictionContext =
 			GetPlannerRestrictionContext(recursivePlanningContext);
 		List *requiredAttributes =
-			RequiredAttrNumbersForRelation(distributedRte, restrictionContext);
+			RequiredAttrNumbersForRelation(distributedRte, restrictionContext,
+										   rangeTableRef->rtindex);
 
 		RTEPermissionInfo *perminfo = NULL;
 		if (distributedRte->perminfoindex)

@@ -341,3 +341,24 @@ WHERE
 	distributed.id = local.id;
 SELECT COUNT(DISTINCT name) FROM distributed;
 ROLLBACK;
+
+-- Test for inheritance parent column in WHERE with LEFT JOIN ON FALSE
+-- Regression test for https://github.com/citusdata/citus/issues/8553
+-- When a local inheritance parent table is cross-joined with a distributed
+-- table through LEFT JOIN ... ON FALSE, a WHERE clause on the parent column
+-- should not incorrectly drop all rows.
+SET citus.use_citus_managed_tables TO off;
+CREATE TABLE inh_parent(c0 REAL);
+CREATE TABLE inh_child(c1 INT) INHERITS (inh_parent);
+RESET citus.use_citus_managed_tables;
+INSERT INTO inh_child VALUES (1.0, 1);
+
+-- This query should return 101 rows (1 child row x 101 distributed rows)
+SELECT count(*) FROM distributed, inh_child LEFT JOIN inh_parent ON FALSE WHERE inh_child.c0 IS NOT NULL;
+
+-- Additional variations to test the same pattern
+SELECT count(*) FROM distributed, inh_child LEFT JOIN inh_parent ON FALSE WHERE inh_child.c0 = 1;
+SELECT count(*) FROM distributed, inh_child LEFT JOIN inh_parent ON FALSE;
+
+DROP TABLE inh_child;
+DROP TABLE inh_parent;

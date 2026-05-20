@@ -476,7 +476,8 @@ AppendUniqueIndexColumnsToList(Form_pg_index indexForm, List **uniqueIndexGroups
  */
 List *
 RequiredAttrNumbersForRelation(RangeTblEntry *rangeTableEntry,
-							   PlannerRestrictionContext *plannerRestrictionContext)
+							   PlannerRestrictionContext *plannerRestrictionContext,
+							   int originalRteIndex)
 {
 	RelationRestriction *relationRestriction =
 		RelationRestrictionForRelation(rangeTableEntry, plannerRestrictionContext);
@@ -498,7 +499,35 @@ RequiredAttrNumbersForRelation(RangeTblEntry *rangeTableEntry,
 	 */
 	Query *queryToProcess = plannerInfo->parse;
 
-	return RequiredAttrNumbersForRelationInternal(queryToProcess, rteIndex);
+	List *result = RequiredAttrNumbersForRelationInternal(queryToProcess, rteIndex);
+
+	/*
+	 * When PostgreSQL expands inheritance tables, expand_single_inheritance_child()
+	 * copies the parent RTE via memcpy, which duplicates Citus's identity marker
+	 * (values_lists). This can cause RelationRestrictionForRelation() to return a
+	 * restriction for a child RTE whose index differs from the original parent
+	 * position. Since Vars in plannerInfo->parse still reference the parent's
+	 * original position, we must also search at originalRteIndex to find them.
+	 */
+	if (originalRteIndex > 0 && originalRteIndex != rteIndex)
+	{
+		List *additional = RequiredAttrNumbersForRelationInternal(queryToProcess,
+																  originalRteIndex);
+#if PG_VERSION_NUM >= 170000
+		foreach_int(attrNo, additional)
+		{
+			result = list_append_unique_int(result, attrNo);
+		}
+#else
+		ListCell *lc;
+		foreach(lc, additional)
+		{
+			result = list_append_unique_int(result, lfirst_int(lc));
+		}
+#endif
+	}
+
+	return result;
 }
 
 
@@ -541,9 +570,12 @@ CreateConversionCandidates(PlannerRestrictionContext *plannerRestrictionContext,
 		palloc0(sizeof(ConversionCandidates));
 
 
+	int rangeTableIndex = 0;
 	RangeTblEntry *rangeTableEntry = NULL;
 	foreach_declared_ptr(rangeTableEntry, rangeTableList)
 	{
+		rangeTableIndex++;
+
 		/* we're only interested in tables */
 		if (!IsRecursivelyPlannableRelation(rangeTableEntry))
 		{
@@ -566,7 +598,8 @@ CreateConversionCandidates(PlannerRestrictionContext *plannerRestrictionContext,
 
 		rangeTableEntryDetails->rangeTableEntry = rangeTableEntry;
 		rangeTableEntryDetails->requiredAttributeNumbers =
-			RequiredAttrNumbersForRelation(rangeTableEntry, plannerRestrictionContext);
+			RequiredAttrNumbersForRelation(rangeTableEntry, plannerRestrictionContext,
+										   rangeTableIndex);
 		rangeTableEntryDetails->hasConstantFilterOnUniqueColumn =
 			HasConstantFilterOnUniqueColumn(rangeTableEntry, relationRestriction);
 		rangeTableEntryDetails->perminfo = NULL;
