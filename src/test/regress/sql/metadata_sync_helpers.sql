@@ -862,6 +862,145 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	SELECT citus_internal.add_partition_metadata ('test_8'::regclass, 'h', 'text_col', 500, 's');
 ROLLBACK;
 
+-- add a placement for super_user_table (shard 1420007) as superuser so that
+-- we can test delete_placement_metadata for a placement we do not own below
+BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
+	SELECT assign_distributed_transaction_id(0, 8, '2021-07-09 15:41:55.542377+02');
+	SET application_name to 'citus_internal gpid=10000000001';
+	WITH placement_data(shardid, shardlength, groupid, placementid) AS
+		(VALUES (1420007, 0::bigint, get_node_id(), 1500100))
+	SELECT citus_internal.add_placement_metadata(shardid, shardlength, groupid, placementid) FROM placement_data;
+COMMIT;
+
+\c - postgres - :master_port
+GRANT CREATE ON DATABASE regression TO metadata_sync_helper_role;
+
+\c - metadata_sync_helper_role - :worker_1_port
+
+-- create a schema owned by metadata_sync_helper_role so that the preliminary
+-- tests below can pass the owner check and fail on EnsureCitusInitiatedOperation()
+SET search_path TO metadata_sync_helpers;
+SET citus.enable_schema_based_sharding TO ON;
+CREATE SCHEMA tenant_schema_helper_owned;
+RESET citus.enable_schema_based_sharding;
+
+-- The following tests call the metadata helpers outside of a distributed
+-- transaction (i.e. without setting application_name to citus_internal),
+-- so they all should fail on EnsureCitusInitiatedOperation().
+
+SELECT citus_internal.delete_placement_metadata(1500000);
+SELECT citus_internal.add_tenant_schema('tenant_schema_helper_owned'::regnamespace, 10);
+SELECT citus_internal.delete_tenant_schema('tenant_schema_helper_owned'::regnamespace);
+SELECT citus_internal.update_none_dist_table_metadata('test_2'::regclass, 's', 10, false);
+
+-- citus_internal.delete_placement_metadata fails for non-existing placement
+BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
+	SELECT assign_distributed_transaction_id(0, 8, '2021-07-09 15:41:55.542377+02');
+	SET application_name to 'citus_internal gpid=10000000001';
+	\set VERBOSITY terse
+	SELECT citus_internal.delete_placement_metadata(123123123);
+ROLLBACK;
+
+-- citus_internal.delete_placement_metadata fails for non-owner user
+-- (placement 1500100 is for super_user_table's shard which we do not own)
+BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
+	SELECT assign_distributed_transaction_id(0, 8, '2021-07-09 15:41:55.542377+02');
+	SET application_name to 'citus_internal gpid=10000000001';
+	\set VERBOSITY terse
+	SELECT citus_internal.delete_placement_metadata(1500100);
+ROLLBACK;
+
+-- citus_internal.add_tenant_schema fails for non-existing schema
+BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
+	SELECT assign_distributed_transaction_id(0, 8, '2021-07-09 15:41:55.542377+02');
+	SET application_name to 'citus_internal gpid=10000000001';
+	\set VERBOSITY terse
+	SELECT citus_internal.add_tenant_schema(123123123, 10);
+ROLLBACK;
+
+-- citus_internal.add_tenant_schema fails for non-owner user
+-- (public schema is not owned by metadata_sync_helper_role)
+BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
+	SELECT assign_distributed_transaction_id(0, 8, '2021-07-09 15:41:55.542377+02');
+	SET application_name to 'citus_internal gpid=10000000001';
+	\set VERBOSITY terse
+	SELECT citus_internal.add_tenant_schema('public'::regnamespace, 10);
+ROLLBACK;
+
+-- citus_internal.delete_tenant_schema fails for non-existing schema
+BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
+	SELECT assign_distributed_transaction_id(0, 8, '2021-07-09 15:41:55.542377+02');
+	SET application_name to 'citus_internal gpid=10000000001';
+	\set VERBOSITY terse
+	SELECT citus_internal.delete_tenant_schema(123123123);
+ROLLBACK;
+
+-- citus_internal.delete_tenant_schema fails for non-owner user
+-- (public schema is not owned by metadata_sync_helper_role)
+BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
+	SELECT assign_distributed_transaction_id(0, 8, '2021-07-09 15:41:55.542377+02');
+	SET application_name to 'citus_internal gpid=10000000001';
+	\set VERBOSITY terse
+	SELECT citus_internal.delete_tenant_schema('public'::regnamespace);
+ROLLBACK;
+
+-- citus_internal.delete_tenant_schema fails for a schema that is not a tenant schema
+-- (metadata_sync_helpers schema is owned by metadata_sync_helper_role here but not
+-- registered in pg_dist_schema)
+CREATE SCHEMA regular_helper_schema;
+BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
+	SELECT assign_distributed_transaction_id(0, 8, '2021-07-09 15:41:55.542377+02');
+	SET application_name to 'citus_internal gpid=10000000001';
+	\set VERBOSITY terse
+	-- normalize the schema oid in the error message so the test is stable
+	DO $$
+	BEGIN
+		PERFORM citus_internal.delete_tenant_schema('regular_helper_schema'::regnamespace);
+	EXCEPTION WHEN OTHERS THEN
+		RAISE EXCEPTION '%', regexp_replace(SQLERRM, '[0-9]+', 'XXX', 'g');
+	END;
+	$$;
+ROLLBACK;
+DROP SCHEMA regular_helper_schema;
+
+-- citus_internal.update_none_dist_table_metadata fails for non-existing table
+BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
+	SELECT assign_distributed_transaction_id(0, 8, '2021-07-09 15:41:55.542377+02');
+	SET application_name to 'citus_internal gpid=10000000001';
+	\set VERBOSITY terse
+	SELECT citus_internal.update_none_dist_table_metadata(123123123, 's', 10, false);
+ROLLBACK;
+
+-- citus_internal.update_none_dist_table_metadata fails for non-owner user
+-- (super_user_table is owned by postgres, not metadata_sync_helper_role)
+BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
+	SELECT assign_distributed_transaction_id(0, 8, '2021-07-09 15:41:55.542377+02');
+	SET application_name to 'citus_internal gpid=10000000001';
+	\set VERBOSITY terse
+	SELECT citus_internal.update_none_dist_table_metadata('super_user_table'::regclass, 's', 10, false);
+ROLLBACK;
+
+-- citus_internal.update_none_dist_table_metadata fails for a table that is not
+-- a Citus table (not_a_citus_table is owned by metadata_sync_helper_role but
+-- does not have a pg_dist_partition entry)
+CREATE TABLE not_a_citus_table(col_1 int);
+BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
+	SELECT assign_distributed_transaction_id(0, 8, '2021-07-09 15:41:55.542377+02');
+	SET application_name to 'citus_internal gpid=10000000001';
+	\set VERBOSITY terse
+	-- normalize the relation oid in the error message so the test is stable
+	DO $$
+	BEGIN
+		PERFORM citus_internal.update_none_dist_table_metadata('not_a_citus_table'::regclass, 's', 10, false);
+	EXCEPTION WHEN OTHERS THEN
+		RAISE EXCEPTION '%', regexp_replace(SQLERRM, '[0-9]+', 'XXX', 'g');
+	END;
+	$$;
+ROLLBACK;
+DROP TABLE not_a_citus_table;
+
+DROP SCHEMA tenant_schema_helper_owned;
+
 -- we don't need the table/schema anymore
 -- connect back as super user to drop everything
 \c - postgres - :worker_1_port
