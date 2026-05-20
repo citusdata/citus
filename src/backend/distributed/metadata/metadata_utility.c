@@ -1716,6 +1716,52 @@ AllShardPlacementsOnNodeGroup(int32 groupId)
 
 
 /*
+ * LookupGroupPlacementByPlacementId finds the shard placement for
+ * given placementId from the catalog and returns GroupShardPlacement
+ * for it.
+ */
+GroupShardPlacement *
+LookupGroupPlacementByPlacementId(int64 placementId, bool missingOk)
+{
+	ScanKeyData scanKey[1];
+	int scanKeyCount = 1;
+	bool indexOK = true;
+
+	Relation pgPlacement = table_open(DistPlacementRelationId(), AccessShareLock);
+
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_placement_placementid,
+				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(placementId));
+
+	SysScanDesc scanDescriptor = systable_beginscan(pgPlacement,
+													DistPlacementPlacementidIndexId(),
+													indexOK,
+													NULL, scanKeyCount, scanKey);
+
+	HeapTuple heapTuple = systable_getnext(scanDescriptor);
+	if (!HeapTupleIsValid(heapTuple))
+	{
+		if (!missingOk)
+		{
+			ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+							errmsg("could not find any shard placement "
+								   "with id " INT64_FORMAT,
+								   placementId)));
+		}
+
+		return NULL;
+	}
+
+	GroupShardPlacement *placement =
+		TupleToGroupShardPlacement(RelationGetDescr(pgPlacement), heapTuple);
+
+	systable_endscan(scanDescriptor);
+	table_close(pgPlacement, NoLock);
+
+	return placement;
+}
+
+
+/*
  * TupleToGroupShardPlacement takes in a heap tuple from pg_dist_placement,
  * and converts this tuple to in-memory struct. The function assumes the
  * caller already has locks on the tuple, and doesn't perform any locking.
