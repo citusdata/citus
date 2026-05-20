@@ -875,14 +875,20 @@ COMMIT;
 \c - postgres - :master_port
 GRANT CREATE ON DATABASE regression TO metadata_sync_helper_role;
 
-\c - metadata_sync_helper_role - :worker_1_port
+\c - metadata_sync_helper_role - :master_port
 
 -- create a schema owned by metadata_sync_helper_role so that the preliminary
 -- tests below can pass the owner check and fail on EnsureCitusInitiatedOperation()
-SET search_path TO metadata_sync_helpers;
 SET citus.enable_schema_based_sharding TO ON;
 CREATE SCHEMA tenant_schema_helper_owned;
 RESET citus.enable_schema_based_sharding;
+
+-- create a regular schema owned by metadata_sync_helper_role
+CREATE SCHEMA regular_helper_schema;
+
+\c - metadata_sync_helper_role - :worker_1_port
+
+SET search_path TO metadata_sync_helpers;
 
 -- The following tests call the metadata helpers outside of a distributed
 -- transaction (i.e. without setting application_name to citus_internal),
@@ -915,7 +921,14 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	SELECT assign_distributed_transaction_id(0, 8, '2021-07-09 15:41:55.542377+02');
 	SET application_name to 'citus_internal gpid=10000000001';
 	\set VERBOSITY terse
-	SELECT citus_internal.add_tenant_schema(123123123, 10);
+	-- normalize "cache lookup failed for schema N" to "schema with OID N does not exist"
+	DO $$
+	BEGIN
+		PERFORM citus_internal.add_tenant_schema(123123123, 10);
+	EXCEPTION WHEN OTHERS THEN
+		RAISE EXCEPTION '%', regexp_replace(SQLERRM, 'cache lookup failed for schema ([0-9]+)', 'schema with OID \1 does not exist');
+	END;
+	$$;
 ROLLBACK;
 
 -- citus_internal.add_tenant_schema fails for non-owner user
@@ -932,7 +945,14 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	SELECT assign_distributed_transaction_id(0, 8, '2021-07-09 15:41:55.542377+02');
 	SET application_name to 'citus_internal gpid=10000000001';
 	\set VERBOSITY terse
-	SELECT citus_internal.delete_tenant_schema(123123123);
+	-- normalize "cache lookup failed for schema N" to "schema with OID N does not exist"
+	DO $$
+	BEGIN
+		PERFORM citus_internal.delete_tenant_schema(123123123);
+	EXCEPTION WHEN OTHERS THEN
+		RAISE EXCEPTION '%', regexp_replace(SQLERRM, 'cache lookup failed for schema ([0-9]+)', 'schema with OID \1 does not exist');
+	END;
+	$$;
 ROLLBACK;
 
 -- citus_internal.delete_tenant_schema fails for non-owner user
@@ -947,7 +967,6 @@ ROLLBACK;
 -- citus_internal.delete_tenant_schema fails for a schema that is not a tenant schema
 -- (metadata_sync_helpers schema is owned by metadata_sync_helper_role here but not
 -- registered in pg_dist_schema)
-CREATE SCHEMA regular_helper_schema;
 BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	SELECT assign_distributed_transaction_id(0, 8, '2021-07-09 15:41:55.542377+02');
 	SET application_name to 'citus_internal gpid=10000000001';
@@ -961,14 +980,20 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	END;
 	$$;
 ROLLBACK;
-DROP SCHEMA regular_helper_schema;
 
 -- citus_internal.update_none_dist_table_metadata fails for non-existing table
 BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	SELECT assign_distributed_transaction_id(0, 8, '2021-07-09 15:41:55.542377+02');
 	SET application_name to 'citus_internal gpid=10000000001';
 	\set VERBOSITY terse
-	SELECT citus_internal.update_none_dist_table_metadata(123123123, 's', 10, false);
+	-- normalize "cache lookup failed for relation N" to "relation with OID N does not exist"
+	DO $$
+	BEGIN
+		PERFORM citus_internal.update_none_dist_table_metadata(123123123, 's', 10, false);
+	EXCEPTION WHEN OTHERS THEN
+		RAISE EXCEPTION '%', regexp_replace(SQLERRM, 'cache lookup failed for relation ([0-9]+)', 'relation with OID \1 does not exist');
+	END;
+	$$;
 ROLLBACK;
 
 -- citus_internal.update_none_dist_table_metadata fails for non-owner user
@@ -999,8 +1024,6 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 ROLLBACK;
 DROP TABLE not_a_citus_table;
 
-DROP SCHEMA tenant_schema_helper_owned;
-
 -- we don't need the table/schema anymore
 -- connect back as super user to drop everything
 \c - postgres - :worker_1_port
@@ -1013,6 +1036,7 @@ DELETE FROM pg_dist_partition WHERE logicalrelid IN ('test_ref'::regclass, 'test
 \c - - - :master_port
 -- cleanup
 SET client_min_messages TO ERROR;
+DROP SCHEMA regular_helper_schema, tenant_schema_helper_owned CASCADE;
 DROP OWNED BY metadata_sync_helper_role;
 DROP ROLE metadata_sync_helper_role;
 DROP SCHEMA metadata_sync_helpers CASCADE;
