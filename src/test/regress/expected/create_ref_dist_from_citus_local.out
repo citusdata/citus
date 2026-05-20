@@ -372,7 +372,7 @@ ROLLBACK;
 SELECT citus_internal.update_none_dist_table_metadata(1, 't', 1, true);
 ERROR:  This is an internal Citus function can only be used in a distributed transaction
 SELECT citus_internal.delete_placement_metadata(1);
-ERROR:  This is an internal Citus function can only be used in a distributed transaction
+ERROR:  could not find any shard placement with id 1
 CREATE ROLE test_user_create_ref_dist WITH LOGIN;
 GRANT ALL ON SCHEMA create_ref_dist_from_citus_local TO test_user_create_ref_dist;
 ALTER SYSTEM SET citus.enable_manual_metadata_changes_for_user TO 'test_user_create_ref_dist';
