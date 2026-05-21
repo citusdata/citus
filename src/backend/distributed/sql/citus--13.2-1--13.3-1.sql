@@ -9,3 +9,8 @@
 #include "udfs/citus_internal_lock_colocation_id/13.3-1.sql"
 
 #include "udfs/citus_internal_acquire_placement_colocation_lock/13.3-1.sql"
+
+-- cluster changes block UDFs
+#include "udfs/citus_cluster_changes_block/13.3-1.sql"
+#include "udfs/citus_cluster_changes_unblock/13.3-1.sql"
+#include "udfs/citus_cluster_changes_block_status/13.3-1.sql"

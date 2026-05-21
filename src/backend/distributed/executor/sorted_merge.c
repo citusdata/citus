@@ -389,9 +389,13 @@ SortedMergeAdapterNext(SortedMergeAdapter *adapter)
  * SortedMergeAdapterRescan resets the adapter to re-read from the beginning.
  * Called from CitusReScan() for cursor WITH HOLD patterns.
  *
- * Cost is O(K log K) to rebuild the heap, which is negligible for typical
- * shard counts (4-64). Both binaryheap_reset() and tuplestore_rescan()
- * are proven APIs used by PostgreSQL's ExecReScanMergeAppend.
+ * We clear the heap and mark the adapter as uninitialized. On the next
+ * SortedMergeAdapterNext() call, the if-branch will rewind each per-task
+ * store, seed the heap with the first tuple from each, and return the
+ * global winner. This avoids the off-by-one bug that would occur if we
+ * seeded here and set initialized=true: the next Next() call would enter
+ * the else-branch and advance the seeded winner before returning it,
+ * silently dropping the first globally-minimal tuple after every rescan.
  */
 void
 SortedMergeAdapterRescan(SortedMergeAdapter *adapter)
@@ -402,19 +406,13 @@ SortedMergeAdapterRescan(SortedMergeAdapter *adapter)
 
 	binaryheap_reset(adapter->heap);
 
-	for (int i = 0; i < adapter->nstores; i++)
-	{
-		tuplestore_rescan(adapter->perTaskStores[i]);
-		if (tuplestore_gettupleslot(adapter->perTaskStores[i], true, false,
-									adapter->mergeCtx.slots[i]))
-		{
-			binaryheap_add_unordered(adapter->heap, Int32GetDatum(i));
-		}
-	}
-	binaryheap_build(adapter->heap);
-
-	adapter->exhausted = binaryheap_empty(adapter->heap);
-	adapter->initialized = true;
+	/*
+	 * Let the next SortedMergeAdapterNext() reseed the heap. For the
+	 * degenerate zero-store case there is nothing to seed and the adapter
+	 * stays exhausted.
+	 */
+	adapter->initialized = (adapter->nstores == 0);
+	adapter->exhausted = (adapter->nstores == 0);
 }
 
 
