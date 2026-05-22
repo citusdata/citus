@@ -1843,14 +1843,30 @@ ReplaceRTERelationWithRteSubquery(RangeTblEntry *rangeTableEntry,
 								  RecursivePlanningContext *context,
 								  RTEPermissionInfo *perminfo)
 {
+	List *restrictionList =
+		GetRestrictInfoListForRelation(rangeTableEntry,
+									   context->plannerRestrictionContext);
+
+	/*
+	 * The parent query's WHERE clause still references these columns through
+	 * the outer subquery's positional target list.  If they are not in
+	 * requiredAttrNumbers the subquery projects them as NULL, causing the
+	 * outer WHERE to evaluate incorrectly (e.g. NOT (col IS DISTINCT FROM 0)
+	 * becomes NOT (NULL IS DISTINCT FROM 0) which is always FALSE).
+	 */
+	List *restrictionVars = pull_var_clause_default((Node *) restrictionList);
+	Var *restrictionVar = NULL;
+	foreach_declared_ptr(restrictionVar, restrictionVars)
+	{
+		requiredAttrNumbers = list_append_unique_int(requiredAttrNumbers,
+													 restrictionVar->varattno);
+	}
+
 	Query *subquery = WrapRteRelationIntoSubquery(rangeTableEntry, requiredAttrNumbers,
 												  perminfo);
 	List *outerQueryTargetList = CreateAllTargetListForRelation(rangeTableEntry->relid,
 																requiredAttrNumbers);
 
-	List *restrictionList =
-		GetRestrictInfoListForRelation(rangeTableEntry,
-									   context->plannerRestrictionContext);
 	List *copyRestrictionList = copyObject(restrictionList);
 	Expr *andedBoundExpressions = make_ands_explicit(copyRestrictionList);
 	subquery->jointree->quals = (Node *) andedBoundExpressions;
