@@ -1192,10 +1192,14 @@ CleanupRecordExists(uint64 recordId)
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_cleanup_record_id,
 				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(recordId));
 
+	/* make sure we can always see deletion after acquiring the operation ID lock */
+	Snapshot snapshot = GetLatestSnapshot();
+
 	SysScanDesc scanDescriptor = systable_beginscan(pgDistCleanup,
 													DistCleanupPrimaryKeyIndexId(),
 													indexOK,
-													NULL, scanKeyCount, scanKey);
+													snapshot,
+													scanKeyCount, scanKey);
 
 	HeapTuple heapTuple = systable_getnext(scanDescriptor);
 	bool recordExists = HeapTupleIsValid(heapTuple);
