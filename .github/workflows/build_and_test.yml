@@ -41,7 +41,7 @@ jobs:
       pg17_version: '{ "major": "17", "full": "17.10" }'
       pg18_version: '{ "major": "18", "full": "18.4" }'
       pg19_version: '{ "major": "19", "full": "19devel" }'
-      upgrade_pg_versions: "16.14-17.10-18.4"
+      upgrade_pg_versions: "16.14-17.10-18.4-19devel"
     steps:
       # Since GHA jobs need at least one step we use a noop step here.
       - name: Set up parameters
@@ -260,6 +260,10 @@ jobs:
             new_pg_major: 18
           - old_pg_major: 16
             new_pg_major: 18
+          - old_pg_major: 18
+            new_pg_major: 19
+          - old_pg_major: 16
+            new_pg_major: 19
     env:
       old_pg_major: ${{ matrix.old_pg_major }}
       new_pg_major: ${{ matrix.new_pg_major }}
