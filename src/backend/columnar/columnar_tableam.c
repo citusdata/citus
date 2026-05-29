@@ -434,7 +434,11 @@ columnar_parallelscan_reinitialize(Relation rel, ParallelTableScanDesc pscan)
 
 
 static IndexFetchTableData *
+#if PG_VERSION_NUM >= PG_VERSION_19
+columnar_index_fetch_begin(Relation rel, uint32 flags)
+#else
 columnar_index_fetch_begin(Relation rel)
+#endif
 {
 	CheckCitusColumnarVersion(ERROR);
 
@@ -719,7 +723,11 @@ columnar_index_delete_tuples(Relation rel,
 
 static void
 columnar_tuple_insert(Relation relation, TupleTableSlot *slot, CommandId cid,
+#if PG_VERSION_NUM >= PG_VERSION_19
+					  uint32 options, BulkInsertState bistate)
+#else
 					  int options, BulkInsertState bistate)
+#endif
 {
 	CheckCitusColumnarVersion(ERROR);
 
@@ -752,7 +760,11 @@ columnar_tuple_insert(Relation relation, TupleTableSlot *slot, CommandId cid,
 
 static void
 columnar_tuple_insert_speculative(Relation relation, TupleTableSlot *slot,
+#if PG_VERSION_NUM >= PG_VERSION_19
+								  CommandId cid, uint32 options,
+#else
 								  CommandId cid, int options,
+#endif
 								  BulkInsertState bistate, uint32 specToken)
 {
 	elog(ERROR, "columnar_tuple_insert_speculative not implemented");
@@ -769,7 +781,11 @@ columnar_tuple_complete_speculative(Relation relation, TupleTableSlot *slot,
 
 static void
 columnar_multi_insert(Relation relation, TupleTableSlot **slots, int ntuples,
+#if PG_VERSION_NUM >= PG_VERSION_19
+					  CommandId cid, uint32 options, BulkInsertState bistate)
+#else
 					  CommandId cid, int options, BulkInsertState bistate)
+#endif
 {
 	CheckCitusColumnarVersion(ERROR);
 
@@ -809,19 +825,32 @@ columnar_multi_insert(Relation relation, TupleTableSlot **slots, int ntuples,
 
 
 static TM_Result
+#if PG_VERSION_NUM >= PG_VERSION_19
+columnar_tuple_delete(Relation relation, ItemPointer tid, CommandId cid,
+					  uint32 options, Snapshot snapshot, Snapshot crosscheck,
+					  bool wait, TM_FailureData *tmfd)
+#else
 columnar_tuple_delete(Relation relation, ItemPointer tid, CommandId cid,
 					  Snapshot snapshot, Snapshot crosscheck, bool wait,
-					  TM_FailureData *tmfd, bool changingPart)
+					  TM_FailureData * tmfd, bool changingPart)
+#endif
 {
 	elog(ERROR, "columnar_tuple_delete not implemented");
 }
 
 
 static TM_Result
+#if PG_VERSION_NUM >= PG_VERSION_19
 columnar_tuple_update(Relation relation, ItemPointer otid, TupleTableSlot *slot,
-					  CommandId cid, Snapshot snapshot, Snapshot crosscheck,
-					  bool wait, TM_FailureData *tmfd,
+					  CommandId cid, uint32 options, Snapshot snapshot,
+					  Snapshot crosscheck, bool wait, TM_FailureData *tmfd,
 					  LockTupleMode *lockmode, TU_UpdateIndexes *update_indexes)
+#else
+columnar_tuple_update(Relation relation, ItemPointer otid, TupleTableSlot * slot,
+					  CommandId cid, Snapshot snapshot, Snapshot crosscheck,
+					  bool wait, TM_FailureData * tmfd,
+					  LockTupleMode * lockmode, TU_UpdateIndexes * update_indexes)
+#endif
 {
 	elog(ERROR, "columnar_tuple_update not implemented");
 }
@@ -838,7 +867,11 @@ columnar_tuple_lock(Relation relation, ItemPointer tid, Snapshot snapshot,
 
 
 static void
+#if PG_VERSION_NUM >= PG_VERSION_19
+columnar_finish_bulk_insert(Relation relation, uint32 options)
+#else
 columnar_finish_bulk_insert(Relation relation, int options)
+#endif
 {
 	/*
 	 * Nothing to do here. We keep write states live until transaction end.
@@ -931,6 +964,9 @@ static void
 columnar_relation_copy_for_cluster(Relation OldHeap, Relation NewHeap,
 								   Relation OldIndex, bool use_sort,
 								   TransactionId OldestXmin,
+#if PG_VERSION_NUM >= PG_VERSION_19
+								   Snapshot clusterSnapshot,
+#endif
 								   TransactionId *xid_cutoff,
 								   MultiXactId *multi_cutoff,
 								   double *num_tuples,
@@ -1053,8 +1089,13 @@ ColumnarTableTupleCount(Relation relation)
  * columnar_vacuum_rel implements VACUUM without FULL option.
  */
 static void
-columnar_vacuum_rel(Relation rel, VacuumParams *params,
+#if PG_VERSION_NUM >= PG_VERSION_19
+columnar_vacuum_rel(Relation rel, const VacuumParams *params,
 					BufferAccessStrategy bstrategy)
+#else
+columnar_vacuum_rel(Relation rel, VacuumParams * params,
+					BufferAccessStrategy bstrategy)
+#endif
 {
 	if (!CheckCitusColumnarVersion(WARNING))
 	{
@@ -1429,9 +1470,15 @@ columnar_scan_analyze_next_block(TableScanDesc scan,
 
 
 static bool
-columnar_scan_analyze_next_tuple(TableScanDesc scan, TransactionId OldestXmin,
+#if PG_VERSION_NUM >= PG_VERSION_19
+columnar_scan_analyze_next_tuple(TableScanDesc scan,
 								 double *liverows, double *deadrows,
 								 TupleTableSlot *slot)
+#else
+columnar_scan_analyze_next_tuple(TableScanDesc scan, TransactionId OldestXmin,
+								 double * liverows, double * deadrows,
+								 TupleTableSlot * slot)
+#endif
 {
 	/*
 	 * Currently we don't do anything smart to reduce number of rows returned
@@ -2005,7 +2052,7 @@ ColumnarSubXactCallback(SubXactEvent event, SubTransactionId mySubid,
 
 
 void
-columnar_tableam_init()
+columnar_tableam_init(void)
 {
 	RegisterXactCallback(ColumnarXactCallback, NULL);
 	RegisterSubXactCallback(ColumnarSubXactCallback, NULL);
@@ -2580,7 +2627,7 @@ detoast_values(TupleDesc tupleDesc, Datum *orig_values, bool *isnull)
 	for (int i = 0; i < tupleDesc->natts; i++)
 	{
 		if (!isnull[i] && TupleDescAttr(tupleDesc, i)->attlen == -1 &&
-			VARATT_IS_EXTENDED(values[i]))
+			VARATT_IS_EXTENDED(DatumGetPointer(values[i])))
 		{
 			/* make a copy */
 			if (values == orig_values)

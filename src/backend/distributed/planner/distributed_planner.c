@@ -156,7 +156,12 @@ PlannedStmt *
 distributed_planner(Query *parse,
 					const char *query_string,
 					int cursorOptions,
+#if PG_VERSION_NUM >= PG_VERSION_19
+					ParamListInfo boundParams,
+					struct ExplainState *es)
+#else
 					ParamListInfo boundParams)
+#endif
 {
 	bool needsDistributedPlanning = false;
 	bool fastPathRouterQuery = false;

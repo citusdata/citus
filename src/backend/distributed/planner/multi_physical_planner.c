@@ -3506,7 +3506,7 @@ BinaryOpExpression(Expr *clause, Node **leftOperand, Node **rightOperand)
  * attribute number.
  */
 Var *
-MakeInt4Column()
+MakeInt4Column(void)
 {
 	Index tableId = 0;
 	AttrNumber columnAttributeNumber = RESERVED_HASHED_COLUMN_ID;

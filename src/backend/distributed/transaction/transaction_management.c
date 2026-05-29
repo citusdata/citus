@@ -645,7 +645,7 @@ ForceAllInProgressConnectionsToClose(void)
  * If it swallows any error, returns true. Otherwise, returns false.
  */
 static bool
-SwallowErrors(void (*func)())
+SwallowErrors(void (*func)(void))
 {
 	MemoryContext savedContext = CurrentMemoryContext;
 	volatile bool anyErrorSwallowed = false;
@@ -677,7 +677,7 @@ SwallowErrors(void (*func)())
  * might be changed during the execution of queries.
  */
 static void
-ResetGlobalVariables()
+ResetGlobalVariables(void)
 {
 	CurrentCoordinatedTransactionState = COORD_TRANS_NONE;
 	XactModificationLevel = XACT_MODIFICATION_NONE;

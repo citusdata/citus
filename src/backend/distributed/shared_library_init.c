@@ -860,10 +860,17 @@ StartupCitusBackend(void)
 const char *
 GetClientMinMessageLevelNameForValue(int minMessageLevel)
 {
+#if PG_VERSION_NUM >= PG_VERSION_19
+	struct config_generic record = { 0 };
+	record._enum.options = log_level_options;
+	const char *clientMinMessageLevelName =
+		config_enum_lookup_by_value(&record, minMessageLevel);
+#else
 	struct config_enum record = { 0 };
 	record.options = log_level_options;
-	const char *clientMinMessageLevelName = config_enum_lookup_by_value(&record,
-																		minMessageLevel);
+	const char *clientMinMessageLevelName =
+		config_enum_lookup_by_value(&record, minMessageLevel);
+#endif
 	return clientMinMessageLevelName;
 }
 

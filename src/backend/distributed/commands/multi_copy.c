@@ -1233,7 +1233,7 @@ ConversionPathForTypes(Oid inputType, Oid destType, CopyCoercionData *result)
 			}
 		}
 
-		/* fallthrough */
+			pg_fallthrough;
 
 		case COERCION_PATH_COERCEVIAIO:
 		{

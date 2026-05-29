@@ -458,7 +458,11 @@ ExtractAnalyzeStats(DistributedSubPlan *subPlan, PlanState *planState)
 		return;
 	}
 
+#if PG_VERSION_NUM >= PG_VERSION_19
+	NodeInstrumentation *instr = planState->instrument;
+#else
 	Instrumentation *instr = planState->instrument;
+#endif
 	if (!IsA(planState, CustomScanState))
 	{
 #if PG_VERSION_NUM >= PG_VERSION_19
@@ -483,7 +487,7 @@ ExtractAnalyzeStats(DistributedSubPlan *subPlan, PlanState *planState)
 	int tasksOutput = 0;
 	double tasksNtuples = 0;
 	double tasksNloops = 0;
-	memset(instr, 0, sizeof(Instrumentation));
+	memset(instr, 0, sizeof(*instr));
 	DistributedPlan *newdistributedPlan =
 		((CitusScanState *) planState)->distributedPlan;
 
