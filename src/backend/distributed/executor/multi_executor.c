@@ -187,7 +187,11 @@ CitusExecutorRun(QueryDesc *queryDesc,
 
 		if (totalTime)
 		{
+#if PG_VERSION_NUM >= PG_VERSION_19
+			InstrStart(totalTime);
+#else
 			InstrStartNode(totalTime);
+#endif
 		}
 
 		/*
@@ -257,7 +261,11 @@ CitusExecutorRun(QueryDesc *queryDesc,
 
 		if (totalTime)
 		{
+#if PG_VERSION_NUM >= PG_VERSION_19
+			InstrStop(totalTime);
+#else
 			InstrStopNode(totalTime, queryDesc->estate->es_processed);
+#endif
 			queryDesc->totaltime = totalTime;
 		}
 
@@ -840,7 +848,7 @@ ExecutePlanIntoDestReceiver(PlannedStmt *queryPlan, ParamListInfo params,
  *      SET LOCAL citus.multi_shard_modify_mode = 'sequential';
  */
 void
-SetLocalMultiShardModifyModeToSequential()
+SetLocalMultiShardModifyModeToSequential(void)
 {
 	set_config_option("citus.multi_shard_modify_mode", "sequential",
 					  (superuser() ? PGC_SUSET : PGC_USERSET), PGC_S_SESSION,

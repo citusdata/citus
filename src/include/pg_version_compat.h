@@ -66,7 +66,9 @@ typedef StringInfo fmStringInfo;
  * PG19 renamed RepOriginId to ReplOriginId (replication/origin.h).
  */
 #define RepOriginId ReplOriginId
+#ifndef InvalidRepOriginId
 #define InvalidRepOriginId InvalidReplOriginId
+#endif
 
 /*
  * PG19 removed the global `replorigin_session_origin` in favour of a
@@ -176,6 +178,24 @@ typedef struct RepackStmt ClusterStmt;
 #define T_ClusterStmt T_RepackStmt
 
 #endif /* PG_VERSION_NUM >= PG_VERSION_19 */
+
+#if PG_VERSION_NUM < PG_VERSION_19
+
+/*
+ * PG19 added the pg_fallthrough macro (c.h) for annotating intentional
+ * switch fall-throughs, which is required by -Wimplicit-fallthrough=5.
+ * Provide the same macro on older PG majors so Citus can annotate
+ * fall-throughs uniformly across all supported versions.
+ */
+#ifndef pg_fallthrough
+#if defined(__has_attribute) && __has_attribute(fallthrough)
+#define pg_fallthrough __attribute__((fallthrough))
+#else
+#define pg_fallthrough
+#endif
+#endif
+
+#endif /* PG_VERSION_NUM < PG_VERSION_19 */
 
 #if PG_VERSION_NUM >= PG_VERSION_18
 #define create_foreignscan_path_compat(a, b, c, d, e, f, g, h, i, j, k) \

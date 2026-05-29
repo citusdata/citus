@@ -198,7 +198,7 @@ static const struct config_enum_entry debug_level_options[] = {
  * provide extra paths for columnar tables
  */
 void
-columnar_customscan_init()
+columnar_customscan_init(void)
 {
 	PreviousSetRelPathlistHook = set_rel_pathlist_hook;
 	set_rel_pathlist_hook = ColumnarSetRelPathlistHook;

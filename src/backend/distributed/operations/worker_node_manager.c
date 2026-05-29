@@ -232,7 +232,7 @@ NodeIsRemotePrimaryWorker(WorkerNode *node)
  * pg_dist_node.
  */
 bool
-CoordinatorAddedAsWorkerNode()
+CoordinatorAddedAsWorkerNode(void)
 {
 	bool groupContainsNodes = false;
 
@@ -264,7 +264,7 @@ ReferenceTablePlacementNodeList(LOCKMODE lockMode)
  * returns coordinator node.
  */
 WorkerNode *
-CoordinatorNodeIfAddedAsWorkerOrError()
+CoordinatorNodeIfAddedAsWorkerOrError(void)
 {
 	ErrorIfCoordinatorNotAddedAsWorkerNode();
 
@@ -282,7 +282,7 @@ CoordinatorNodeIfAddedAsWorkerOrError()
  * to metadata.
  */
 void
-ErrorIfCoordinatorNotAddedAsWorkerNode()
+ErrorIfCoordinatorNotAddedAsWorkerNode(void)
 {
 	if (CoordinatorAddedAsWorkerNode())
 	{

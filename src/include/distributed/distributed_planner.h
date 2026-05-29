@@ -243,8 +243,12 @@ typedef struct CitusCustomScanPath
 extern PlannedStmt * distributed_planner(Query *parse,
 										 const char *query_string,
 										 int cursorOptions,
+#if PG_VERSION_NUM >= PG_VERSION_19
+										 ParamListInfo boundParams,
+										 struct ExplainState *es);
+#else
 										 ParamListInfo boundParams);
-
+#endif
 
 /*
  * Common hint message to workaround using postgres local and citus local tables

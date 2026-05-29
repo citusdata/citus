@@ -184,7 +184,7 @@ cdc_change_cb(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
  * translate the changes in the shard table to the changes in the distributed table.
  */
 static void
-InitShardToDistributedTableMap()
+InitShardToDistributedTableMap(void)
 {
 	HASHCTL info;
 	memset(&info, 0, sizeof(info));
