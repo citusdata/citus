@@ -927,7 +927,9 @@ MaintenanceDaemonShmemInit(void)
 
 	MaintenanceDaemonControl =
 		(MaintenanceDaemonControlData *) ShmemInitStruct("Citus Maintenance Daemon",
-														 MaintenanceDaemonShmemSize(),
+														 sizeof(
+															 MaintenanceDaemonControlData)
+																						  ,
 														 &alreadyInitialized);
 
 	/*

@@ -789,7 +789,11 @@ AddEdgesForWaitQueue(WaitGraph *waitGraph, PGPROC *waitingProc, PROCStack *remai
 	dlist_iter iter;
 	dclist_foreach(iter, waitQueue)
 	{
+#if PG_VERSION_NUM >= PG_VERSION_19
+		PGPROC *currentProc = dlist_container(PGPROC, waitLink, iter.cur);
+#else
 		PGPROC *currentProc = dlist_container(PGPROC, links, iter.cur);
+#endif
 
 		if (currentProc == waitingProc)
 		{
@@ -813,7 +817,11 @@ AddEdgesForWaitQueue(WaitGraph *waitGraph, PGPROC *waitingProc, PROCStack *remai
 			AddWaitEdge(waitGraph, waitingProc, currentProc, remaining);
 		}
 
+#if PG_VERSION_NUM >= PG_VERSION_19
+		currentProc = (PGPROC *) currentProc->waitLink.next;
+#else
 		currentProc = (PGPROC *) currentProc->links.next;
+#endif
 	}
 }
 

@@ -245,8 +245,14 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 				ereport(ERROR, (errmsg("cannot extend name for multi-relation cluster")));
 			}
 
+#if PG_VERSION_NUM >= PG_VERSION_19
+			char **relationName = &(clusterStmt->relation->relation->relname);
+			char **relationSchemaName =
+				&(clusterStmt->relation->relation->schemaname);
+#else
 			char **relationName = &(clusterStmt->relation->relname);
 			char **relationSchemaName = &(clusterStmt->relation->schemaname);
+#endif
 
 			/* prefix with schema name if it is not added already */
 			SetSchemaNameIfNotExist(relationSchemaName, schemaName);
