@@ -266,6 +266,7 @@ DEPS = {
         ["multi_create_table", "multi_create_users"],
     ),
     "multi_prepare_plsql": TestDeps("base_schedule"),
+    "multi_utility_statements": TestDeps("base_schedule"),
     "pg15": TestDeps("base_schedule"),
     "foreign_key_to_reference_shard_rebalance": TestDeps(
         "minimal_schedule", ["remove_coordinator_from_metadata"]
@@ -309,6 +310,9 @@ DEPS = {
         "minimal_schedule", ["multi_behavioral_analytics_create_table"]
     ),
     "multi_subquery_in_where_reference_clause": TestDeps(
+        "minimal_schedule", ["multi_behavioral_analytics_create_table"]
+    ),
+    "adaptive_executor_batching": TestDeps(
         "minimal_schedule", ["multi_behavioral_analytics_create_table"]
     ),
     "subquery_in_where": TestDeps(
