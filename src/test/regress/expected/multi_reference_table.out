@@ -560,7 +560,7 @@ SELECT * FROM reference_table_test WHERE value_1 = 1;
 END;
 -- cursor queries also works fine
 BEGIN;
-DECLARE test_cursor CURSOR FOR
+DECLARE test_cursor SCROLL CURSOR FOR
 	SELECT *
 		FROM reference_table_test
 		WHERE value_1 = 1 OR value_1 = 2
