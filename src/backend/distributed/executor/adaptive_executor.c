@@ -275,7 +275,7 @@ typedef struct DistributedExecution
 	bool raiseInterrupts;
 
 	/* transactional properties of the current execution */
-	TransactionProperties *transactionProperties;
+	TransactionProperties transactionProperties;
 
 	/* indicates whether distributed execution has failed */
 	bool failed;
@@ -290,6 +290,13 @@ typedef struct DistributedExecution
 	 * a single replica's rows that are processed.
 	 */
 	uint64 rowsProcessed;
+
+	/*
+	 * RunDistributedExecution can be called multiple time to perform partial
+	 * execution. In that case, rowsReceivedInCurrentRun contains the number
+	 * of rows received.
+	 */
+	uint64 rowsReceivedInCurrentRun;
 
 	/*
 	 * The following fields are used while receiving results from remote nodes.
@@ -326,6 +333,30 @@ typedef struct DistributedExecution
 	 * run, and the executor reads from the adapter on first fetch.
 	 */
 	bool useSortedMerge;
+
+	/*
+	 * Flag to track whether sessions have already been cleaned up.
+	 * Used to avoid double-cleanup in FinishDistributedExecution when
+	 * SequentialRunDistributedExecution already cleaned up per-task.
+	 */
+	bool sessionsCleanedUp;
+
+	/*
+	 * Flag to track whether local tasks have been executed. Local tasks
+	 * are executed after all remote batches complete.
+	 */
+	bool localTasksExecuted;
+
+	/*
+	 * Maximum number of rows to fetch per batch in RunDistributedExecution.
+	 * Computed from work_mem and TupleDesc, or set via GUC override.
+	 */
+	int maxBatchSize;
+
+	/*
+	 * Memory context for the execution.
+	 */
+	MemoryContext memoryContext;
 } DistributedExecution;
 
 
@@ -514,6 +545,12 @@ int ExecutorSlowStartInterval = 10;
 bool EnableCostBasedConnectionEstablishment = true;
 bool PreventIncompleteConnectionEstablishment = true;
 
+/* GUC, number of rows per batch (0 = auto from work_mem) */
+int ExecutorBatchSize = 0;
+
+/* GUC, max rows per PQgetResult() chunk in chunked row mode (PG17+) */
+int ExecutorChunkSize = 8192;
+
 
 /*
  * TaskExecutionState indicates whether or not a command on a shard
@@ -661,10 +698,11 @@ static TransactionProperties DecideTaskListTransactionProperties(RowModifyLevel
 																 excludeFromTransaction);
 static void StartDistributedExecution(DistributedExecution *execution);
 static void RunLocalExecution(CitusScanState *scanState, DistributedExecution *execution);
-static void RunDistributedExecution(DistributedExecution *execution);
+static void RunDistributedExecution(DistributedExecution *execution, bool toCompletion);
 static void SequentialRunDistributedExecution(DistributedExecution *execution);
 static void FinishDistributedExecution(DistributedExecution *execution);
 static void CleanUpSessions(DistributedExecution *execution);
+static int CalculateMaxBatchSize(TupleDesc tupleDescriptor);
 
 static bool DistributedExecutionModifiesDatabase(DistributedExecution *execution);
 static void AssignTasksToConnectionsOrWorkerPool(DistributedExecution *execution);
@@ -779,15 +817,13 @@ AdaptiveExecutorPreExecutorRun(CitusScanState *scanState)
 
 
 /*
- * AdaptiveExecutor is called via CitusExecScan on the
- * first call of CitusExecScan. The function fills the tupleStore
- * of the input scanScate.
+ * AdaptiveExecutorStart is called via CitusExecScan on the first call.
+ * It initializes the distributed execution state, including the tuplestore,
+ * connections, and batch size. Actual execution happens in AdaptiveExecutorRun.
  */
-TupleTableSlot *
-AdaptiveExecutor(CitusScanState *scanState)
+void
+AdaptiveExecutorStart(CitusScanState *scanState)
 {
-	TupleTableSlot *resultSlot = NULL;
-
 	DistributedPlan *distributedPlan = scanState->distributedPlan;
 	EState *executorState = ScanStateGetExecutorState(scanState);
 	ParamListInfo paramListInfo = executorState->es_param_list_info;
@@ -802,14 +838,10 @@ AdaptiveExecutor(CitusScanState *scanState)
 	/* we should only call this once before the scan finished */
 	Assert(!scanState->finishedRemoteScan);
 
-	MemoryContext localContext = AllocSetContextCreate(CurrentMemoryContext,
-													   "AdaptiveExecutor",
-													   ALLOCSET_DEFAULT_SIZES);
-	MemoryContext oldContext = MemoryContextSwitchTo(localContext);
-
-
-	/* Reset Task fields that are only valid for a single execution */
-	ResetExplainAnalyzeData(taskList);
+	MemoryContext memoryContext = AllocSetContextCreate(executorState->es_query_cxt,
+														"AdaptiveExecutor",
+														ALLOCSET_DEFAULT_SIZES);
+	MemoryContext oldContext = MemoryContextSwitchTo(memoryContext);
 
 	TupleDesc tupleDescriptor = ScanStateGetTupleDescriptor(scanState);
 	TupleDestination *defaultTupleDest = NULL;
@@ -846,6 +878,9 @@ AdaptiveExecutor(CitusScanState *scanState)
 	}
 
 	bool localExecutionSupported = true;
+
+	/* Reset Task fields that are only valid for a single execution */
+	ResetExplainAnalyzeData(taskList);
 
 	if (RequestedForExplainAnalyze(scanState))
 	{
@@ -907,29 +942,113 @@ AdaptiveExecutor(CitusScanState *scanState)
 		localExecutionSupported,
 		distributedPlan->useSortedMerge);
 
+	/* compute batch size from GUC or work_mem */
+	execution->maxBatchSize = CalculateMaxBatchSize(tupleDescriptor);
+
 	/*
 	 * Make sure that we acquire the appropriate locks even if the local tasks
 	 * are going to be executed with local execution.
 	 */
 	StartDistributedExecution(execution);
 
+	/* store the execution in the custom scan state */
+	scanState->execution = execution;
+
+	execution->memoryContext = MemoryContextSwitchTo(oldContext);
+}
+
+
+bool
+AdaptiveExecutorRun(CitusScanState *scanState)
+{
+	DistributedExecution *execution = scanState->execution;
+	DistributedPlan *distributedPlan = scanState->distributedPlan;
+	Job *job = distributedPlan->workerJob;
+	CmdType commandType = job->jobQuery->commandType;
+
+	Assert(execution != NULL);
+
+	MemoryContext oldContext = MemoryContextSwitchTo(execution->memoryContext);
+
+	EState *executorState = ScanStateGetExecutorState(scanState);
+	bool sortTupleStore = false;
+
+	if (SortReturning && distributedPlan->expectResults && commandType != CMD_SELECT)
+	{
+		/* sort the tuple store to get consistent DML output in tests */
+		sortTupleStore = true;
+	}
+
 	if (ShouldRunTasksSequentially(execution->remoteTaskList))
 	{
+		/* sequential execution always runs to completion */
 		SequentialRunDistributedExecution(execution);
 	}
 	else
 	{
-		RunDistributedExecution(execution);
+		/* if we need to sort the whole tuple store, run to completion */
+		bool runToCompletion = sortTupleStore;
+
+		/*
+		 * Disable batching inside a coordinated transaction.
+		 *
+		 * The batched/streaming path may cancel an in-flight worker query
+		 * (e.g. plain LIMIT satisfied with no Sort barrier above the Citus
+		 * scan, EXPLAIN ANALYZE finishing instrumentation, error between
+		 * batches). The cancel leaves the worker's PostgreSQL transaction
+		 * in PQTRANS_INERROR, which is sticky inside a transaction block;
+		 * the only recovery is ROLLBACK or ROLLBACK TO SAVEPOINT to a
+		 * savepoint established before the cancelled statement, and Citus
+		 * does not emit a per-statement savepoint on workers today. The
+		 * connection therefore becomes unusable for the remainder of the
+		 * coordinated transaction and surfaces as one of:
+		 *
+		 *  - "failure on connection marked as essential" at COMMIT (rolls
+		 *    back the entire outer transaction, including prior writes);
+		 *  - "unable to recover from inconsistent state in the connection
+		 *    state machine on coordinator" on the next leg of a multi-leg
+		 *    distributed operation (recursively-planned subquery feed of
+		 *    INSERT..SELECT, CTE feeding a downstream write);
+		 *  - "cannot perform query, because modifications were made over a
+		 *    connection that cannot be used at this time" on the next
+		 *    statement reusing the same connection (EXPLAIN ANALYZE DML
+		 *    inside a transaction block).
+		 *
+		 * runToCompletion drains every task to its tuple store before the
+		 * executor returns, so no cancel is ever sent and the connection
+		 * stays in PQTRANS_INTRANS. The cost is buffering the full result
+		 * (potentially spilling to a temporary file if it exceeds work_mem).
+		 * Top-level statements in autocommit mode -- the primary target of
+		 * the batched executor -- still stream.
+		 *
+		 * Future work: preserve streaming inside coordinated transactions
+		 * by emitting a Citus-owned per-statement savepoint and using
+		 * ROLLBACK TO SAVEPOINT in AdaptiveExecutorEnd to recover the
+		 * connection after cancel.
+		 */
+		if (InCoordinatedTransaction())
+		{
+			runToCompletion = true;
+		}
+
+		RunDistributedExecution(execution, runToCompletion);
+
+		if (execution->unfinishedTaskCount > 0)
+		{
+			MemoryContextSwitchTo(oldContext);
+			return false;
+		}
+
+		/* done with remote tasks, finish the execution */
 	}
 
-	/* execute tasks local to the node (if any) */
-	if (list_length(execution->localTaskList) > 0)
+	/* execute local tasks after remote execution completes */
+	if (list_length(execution->localTaskList) > 0 && !execution->localTasksExecuted)
 	{
-		/* now execute the local tasks */
 		RunLocalExecution(scanState, execution);
+		execution->localTasksExecuted = true;
 	}
 
-	CmdType commandType = job->jobQuery->commandType;
 	if (commandType != CMD_SELECT)
 	{
 		executorState->es_processed = execution->rowsProcessed;
@@ -950,14 +1069,147 @@ AdaptiveExecutor(CitusScanState *scanState)
 		ClearPerTaskDispatchDests(scanState);
 	}
 
-	if (SortReturning && distributedPlan->expectResults && commandType != CMD_SELECT)
+	if (sortTupleStore)
 	{
 		SortTupleStore(scanState);
 	}
 
 	MemoryContextSwitchTo(oldContext);
 
-	return resultSlot;
+	return true;
+}
+
+
+/*
+ * AdaptiveExecutorEnd performs cleanup of a distributed execution that
+ * may still be in progress. This is called from CitusEndScan to handle
+ * the case where execution is aborted between batches (e.g., cursor
+ * closed early, LIMIT satisfied, or error between batches).
+ *
+ * Worker connections may still have in-progress queries from single-row
+ * or chunked mode. We must cancel those queries and drain pending results
+ * before unclaiming the connections, otherwise the subsequent COMMIT will
+ * fail with "another command is already in progress".
+ *
+ * In the normal case (finishedRemoteScan == true), this is a no-op because
+ * FinishDistributedExecution already cleaned up in AdaptiveExecutorRun.
+ */
+void
+AdaptiveExecutorEnd(CitusScanState *scanState)
+{
+	DistributedExecution *execution = scanState->execution;
+	if (execution == NULL)
+	{
+		return;
+	}
+
+	if (scanState->finishedRemoteScan)
+	{
+		return;
+	}
+
+	/*
+	 * Cancel in-progress queries and drain results on all session connections.
+	 * Without this, connections in single-row/chunked mode still have pending
+	 * results, and any subsequent command (like COMMIT) would fail.
+	 */
+	WorkerSession *session = NULL;
+	foreach_declared_ptr(session, execution->sessionList)
+	{
+		MultiConnection *connection = session->connection;
+
+		if (connection->pgConn == NULL)
+		{
+			continue;
+		}
+
+		if (PQstatus(connection->pgConn) == CONNECTION_OK &&
+			PQtransactionStatus(connection->pgConn) == PQTRANS_ACTIVE)
+		{
+			SendCancelationRequest(connection);
+		}
+
+		ClearResultsDiscardWarnings(connection, false);
+		UnclaimConnection(connection);
+	}
+
+	FreeExecutionWaitEvents(execution);
+}
+
+
+/*
+ * EagerAdaptiveExecutor runs the full distributed execution eagerly
+ * (all tuples fetched in a single batch). This is used by sorted-merge
+ * plans which need all per-task tuple stores filled before the merge
+ * adapter can produce globally-sorted output.
+ */
+void
+EagerAdaptiveExecutor(CitusScanState *scanState)
+{
+	AdaptiveExecutorStart(scanState);
+	scanState->execution->maxBatchSize = INT_MAX;
+	scanState->finishedRemoteScan = AdaptiveExecutorRun(scanState);
+}
+
+
+/*
+ * CalculateMaxBatchSize computes the number of rows per batch based on
+ * the GUC citus.executor_batch_size and work_mem.
+ *
+ * If ExecutorBatchSize > 0, use it directly. Otherwise, estimate the
+ * tuple size from the TupleDesc and derive a batch size from work_mem.
+ *
+ * Note: the batch size is a soft limit. ReceiveResults() processes an
+ * entire PQgetResult() chunk (up to ExecutorChunkSize rows on PG17+)
+ * before the batch limit is re-checked, so the actual number of rows
+ * in the tuplestore may exceed maxBatchSize by up to one chunk.
+ */
+static int
+CalculateMaxBatchSize(TupleDesc tupleDescriptor)
+{
+	if (ExecutorBatchSize > 0)
+	{
+		return ExecutorBatchSize;
+	}
+
+	int natts = tupleDescriptor->natts;
+	Size estimatedTupleSize = 0;
+
+	for (int i = 0; i < natts; i++)
+	{
+		Form_pg_attribute attr = TupleDescAttr(tupleDescriptor, i);
+		if (attr->attlen > 0)
+		{
+			/* fixed-width type: use exact length */
+			estimatedTupleSize += attr->attlen;
+		}
+		else
+		{
+			/*
+			 * Variable-length type: use get_typavgwidth() which handles
+			 * type-specific typmod interpretation correctly (e.g. numeric
+			 * precision/scale, varchar character limits, bit counts).
+			 * Falls back to a reasonable default when no statistics exist.
+			 */
+			estimatedTupleSize += get_typavgwidth(attr->atttypid,
+												  attr->atttypmod);
+		}
+	}
+
+	/* add per-tuple overhead: header + null bitmap + alignment */
+	estimatedTupleSize += MAXALIGN(SizeofHeapTupleHeader +
+								   (natts > 0 ? BITMAPLEN(natts) : 0));
+
+	estimatedTupleSize = Max(estimatedTupleSize, 64);
+
+	/* work_mem is in KB */
+	Size workMemBytes = (Size) work_mem * 1024L;
+	int batchSize = (int) (workMemBytes / estimatedTupleSize);
+
+	batchSize = Max(batchSize, 100);
+	batchSize = Min(batchSize, 1000000);
+
+	return batchSize;
 }
 
 
@@ -1171,7 +1423,10 @@ ExecuteTaskListExtended(ExecutionParams *executionParams)
 
 	/* run the remote execution */
 	StartDistributedExecution(execution);
-	RunDistributedExecution(execution);
+
+	bool runToCompletion = true;
+	RunDistributedExecution(execution, runToCompletion);
+
 	FinishDistributedExecution(execution);
 
 	/* now, switch back to the local execution */
@@ -1232,7 +1487,7 @@ CreateDistributedExecution(RowModifyLevel modLevel, List *taskList,
 
 	execution->modLevel = modLevel;
 	execution->remoteAndLocalTaskList = taskList;
-	execution->transactionProperties = xactProperties;
+	execution->transactionProperties = *xactProperties;
 
 	/* we are going to calculate this values below */
 	execution->localTaskList = NIL;
@@ -1391,7 +1646,7 @@ DecideTaskListTransactionProperties(RowModifyLevel modLevel, List *taskList, boo
 void
 StartDistributedExecution(DistributedExecution *execution)
 {
-	TransactionProperties *xactProperties = execution->transactionProperties;
+	TransactionProperties *xactProperties = &(execution->transactionProperties);
 
 	if (xactProperties->useRemoteTransactionBlocks == TRANSACTION_BLOCKS_REQUIRED)
 	{
@@ -1443,6 +1698,20 @@ StartDistributedExecution(DistributedExecution *execution)
 		bool isRemote = true;
 		EnsureTaskExecutionAllowed(isRemote);
 	}
+
+	/*
+	 * We skip AssignTasksToConnectionsOrWorkerPool for sequential executions,
+	 * because we do it separately for each task in SequentialRunDistributedExecution.
+	 */
+	if (!ShouldRunTasksSequentially(execution->remoteTaskList))
+	{
+		/*
+		 * If a (co-located) shard placement was accessed over a session earlier in the
+		 * transaction, assign the task to the same session. Otherwise, assign it to
+		 * the general worker pool(s).
+		 */
+		AssignTasksToConnectionsOrWorkerPool(execution);
+	}
 }
 
 
@@ -1465,6 +1734,14 @@ DistributedExecutionModifiesDatabase(DistributedExecution *execution)
 static void
 FinishDistributedExecution(DistributedExecution *execution)
 {
+	/* Free WaitEventSet that may have been preserved across batches */
+	FreeExecutionWaitEvents(execution);
+
+	if (!execution->sessionsCleanedUp)
+	{
+		CleanUpSessions(execution);
+	}
+
 	if (DistributedExecutionModifiesDatabase(execution))
 	{
 		/* prevent copying shards in same transaction */
@@ -1550,7 +1827,7 @@ AssignTasksToConnectionsOrWorkerPool(DistributedExecution *execution)
 			List *placementAccessList = PlacementAccessListForTask(task, taskPlacement);
 
 			MultiConnection *connection = NULL;
-			if (execution->transactionProperties->useRemoteTransactionBlocks !=
+			if (execution->transactionProperties.useRemoteTransactionBlocks !=
 				TRANSACTION_BLOCKS_DISALLOWED)
 			{
 				/*
@@ -1934,8 +2211,20 @@ SequentialRunDistributedExecution(DistributedExecution *execution)
 			break;
 		}
 
+		/*
+		 * We skipped AssignTasksToConnectionsOrWorkerPool in StartDistributedExecution
+		 * when all the tasks were in the execution. Do it now instead.
+		 */
+		AssignTasksToConnectionsOrWorkerPool(execution);
+
 		/* simply call the regular execution function */
-		RunDistributedExecution(execution);
+		bool runToCompletion = true;
+		RunDistributedExecution(execution, runToCompletion);
+
+		/*
+		 * Unclaim connections since the current execution is technically finished.
+		 */
+		CleanUpSessions(execution);
 	}
 
 	/* set back the original execution mode */
@@ -1951,11 +2240,9 @@ SequentialRunDistributedExecution(DistributedExecution *execution)
  * any of the connections and runs the connection state machine when a connection
  * has an event.
  */
-void
-RunDistributedExecution(DistributedExecution *execution)
+static void
+RunDistributedExecution(DistributedExecution *execution, bool toCompletion)
 {
-	AssignTasksToConnectionsOrWorkerPool(execution);
-
 	PG_TRY();
 	{
 		/* Preemptively step state machines in case of immediate errors */
@@ -1967,8 +2254,16 @@ RunDistributedExecution(DistributedExecution *execution)
 
 		bool cancellationReceived = false;
 
-		/* always (re)build the wait event set the first time */
-		execution->rebuildWaitEventSet = true;
+		/* build the wait event set on first entry; reuse across batches */
+		if (execution->waitEventSet == NULL)
+		{
+			execution->rebuildWaitEventSet = true;
+		}
+		execution->rowsReceivedInCurrentRun = 0;
+
+		/* maxBatchSize is always > 0: either the GUC value or >= 100 from auto-calculation */
+		Assert(execution->maxBatchSize > 0 || toCompletion);
+		int maxBatchSize = execution->maxBatchSize;
 
 		/*
 		 * Iterate until all the tasks are finished. Once all the tasks
@@ -1988,8 +2283,10 @@ RunDistributedExecution(DistributedExecution *execution)
 		 * irrespective of the current status of the tasks or the connections.
 		 */
 		while (!cancellationReceived &&
-			   (execution->unfinishedTaskCount > 0 ||
-				HasIncompleteConnectionEstablishment(execution)))
+			   ((execution->unfinishedTaskCount > 0 ||
+				 HasIncompleteConnectionEstablishment(execution)) &&
+				(toCompletion ||
+				 execution->rowsReceivedInCurrentRun < maxBatchSize)))
 		{
 			WorkerPool *workerPool = NULL;
 			foreach_declared_ptr(workerPool, execution->workerList)
@@ -2043,9 +2340,15 @@ RunDistributedExecution(DistributedExecution *execution)
 							  &cancellationReceived);
 		}
 
-		FreeExecutionWaitEvents(execution);
-
-		CleanUpSessions(execution);
+		/*
+		 * Only free the WaitEventSet when running to completion.
+		 * For batched execution, preserve it across re-entries to
+		 * avoid expensive epoll_create/close syscalls per batch.
+		 */
+		if (toCompletion)
+		{
+			FreeExecutionWaitEvents(execution);
+		}
 	}
 	PG_CATCH();
 	{
@@ -2300,7 +2603,7 @@ ManageWorkerPool(WorkerPool *workerPool)
 	/* increase the open rate every cycle (like TCP slow start) */
 	workerPool->maxNewConnectionsPerCycle += 1;
 
-	OpenNewConnections(workerPool, newConnectionCount, execution->transactionProperties);
+	OpenNewConnections(workerPool, newConnectionCount, &execution->transactionProperties);
 
 	/*
 	 * Cannot establish new connections to the local host, most probably because the
@@ -2830,7 +3133,7 @@ CheckConnectionTimeout(WorkerPool *workerPool)
 				 */
 				logLevel = DEBUG1;
 			}
-			else if (execution->transactionProperties->errorOnAnyFailure ||
+			else if (execution->transactionProperties.errorOnAnyFailure ||
 					 execution->failed)
 			{
 				/*
@@ -3246,7 +3549,7 @@ ConnectionStateMachine(WorkerSession *session)
 
 				if (transaction->transactionCritical ||
 					execution->failed ||
-					(execution->transactionProperties->errorOnAnyFailure &&
+					(execution->transactionProperties.errorOnAnyFailure &&
 					 workerPool->failureState != WORKER_POOL_FAILED_OVER_TO_LOCAL))
 				{
 					/* a task has failed due to this connection failure */
@@ -3438,7 +3741,7 @@ TransactionModifiedDistributedTable(DistributedExecution *execution)
 	 * should not be pretending that we're in a coordinated transaction even
 	 * if XACT_MODIFICATION_DATA is set. That's why we implemented this workaround.
 	 */
-	return execution->transactionProperties->useRemoteTransactionBlocks ==
+	return execution->transactionProperties.useRemoteTransactionBlocks ==
 		   TRANSACTION_BLOCKS_REQUIRED &&
 		   XactModificationLevel == XACT_MODIFICATION_DATA;
 }
@@ -3453,7 +3756,7 @@ TransactionStateMachine(WorkerSession *session)
 	WorkerPool *workerPool = session->workerPool;
 	DistributedExecution *execution = workerPool->distributedExecution;
 	TransactionBlocksUsage useRemoteTransactionBlocks =
-		execution->transactionProperties->useRemoteTransactionBlocks;
+		execution->transactionProperties.useRemoteTransactionBlocks;
 
 	MultiConnection *connection = session->connection;
 	RemoteTransaction *transaction = &(connection->remoteTransaction);
@@ -3880,7 +4183,7 @@ StartPlacementExecutionOnSession(TaskPlacementExecution *placementExecution,
 	ShardPlacement *taskPlacement = placementExecution->shardPlacement;
 	List *placementAccessList = PlacementAccessListForTask(task, taskPlacement);
 
-	if (execution->transactionProperties->useRemoteTransactionBlocks !=
+	if (execution->transactionProperties.useRemoteTransactionBlocks !=
 		TRANSACTION_BLOCKS_DISALLOWED)
 	{
 		/*
@@ -4001,8 +4304,12 @@ SendNextQuery(TaskPlacementExecution *placementExecution,
 		return false;
 	}
 
-	int singleRowMode = PQsetSingleRowMode(connection->pgConn);
-	if (singleRowMode == 0)
+#ifdef LIBPQ_HAS_CHUNK_MODE
+	int rowMode = PQsetChunkedRowsMode(connection->pgConn, ExecutorChunkSize);
+#else
+	int rowMode = PQsetSingleRowMode(connection->pgConn);
+#endif
+	if (rowMode == 0)
 	{
 		connection->connectionState = MULTI_CONNECTION_LOST;
 		return false;
@@ -4089,7 +4396,11 @@ ReceiveResults(WorkerSession *session, bool storeRows)
 			placementExecution->queryIndex++;
 			continue;
 		}
-		else if (resultStatus != PGRES_SINGLE_TUPLE)
+		else if (resultStatus != PGRES_SINGLE_TUPLE
+#ifdef LIBPQ_HAS_CHUNK_MODE
+				 && resultStatus != PGRES_TUPLES_CHUNK
+#endif
+				 )
 		{
 			/* query failures are always hard errors */
 			ReportResultError(connection, result, ERROR);
@@ -4234,6 +4545,7 @@ ReceiveResults(WorkerSession *session, bool storeRows)
 			MemoryContextReset(rowContext);
 
 			execution->rowsProcessed++;
+			execution->rowsReceivedInCurrentRun++;
 		}
 
 		PQclear(result);
@@ -5010,6 +5322,8 @@ CleanUpSessions(DistributedExecution *execution)
 									 "execution: %d", connection->connectionState)));
 		}
 	}
+
+	execution->sessionsCleanedUp = true;
 }
 
 
