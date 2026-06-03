@@ -165,7 +165,10 @@ TransformDefaultExpressionIfNecessary(Node *defaultExpression)
 		case T_A_ArrayExpr:
 		{
 			ParseState *pstate = make_parsestate(NULL);
-			return transformExpr(pstate, defaultExpression, EXPR_KIND_COLUMN_DEFAULT);
+			Node *transformedExpression = transformExpr(pstate, defaultExpression,
+													   EXPR_KIND_COLUMN_DEFAULT);
+			free_parsestate(pstate);
+			return transformedExpression;
 		}
 
 		default:

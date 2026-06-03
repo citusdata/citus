@@ -1480,10 +1480,10 @@ contain_nextval_expression_walker(Node *node, void *context)
 	if (IsA(node, FuncCall))
 	{
 		FuncCall *funcCall = (FuncCall *) node;
-		Node *functionNameNode = llast(funcCall->funcname);
+		Node *lastFunctionNameNode = llast(funcCall->funcname);
 
-		if (functionNameNode != NULL && IsA(functionNameNode, String) &&
-			strcmp(strVal(functionNameNode), "nextval") == 0)
+		if (lastFunctionNameNode != NULL && IsA(lastFunctionNameNode, String) &&
+			strcmp(strVal(lastFunctionNameNode), "nextval") == 0)
 		{
 			return true;
 		}
