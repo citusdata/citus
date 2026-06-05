@@ -75,7 +75,7 @@ EXPLAIN (COSTS FALSE) SELECT * from t;
 EXPLAIN (COSTS FALSE) SELECT * from t WHERE a = 1;
                        QUERY PLAN
 ---------------------------------------------------------------------
- Custom Scan (Citus Adaptive)
+ Custom Scan (Citus Single Task)
    Task Count: 1
    Tasks Shown: All
    ->  Task

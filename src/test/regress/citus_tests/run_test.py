@@ -136,6 +136,7 @@ DEPS = {
     "multi_test_catalog_views": TestDeps(None),
     "multi_insert_select": TestDeps("base_schedule"),
     "multi_partitioning": TestDeps("base_schedule"),
+    "multi_transaction_recovery": TestDeps("minimal_schedule"),
     "multi_mx_create_table": TestDeps(
         None,
         [

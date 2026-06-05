@@ -287,6 +287,17 @@ s/improvement of 0.1[0-9]* is lower/improvement of 0.1xxxxx is lower/g
 # normalize tenants statistics annotations
 s/\/\*\{"cId":.*\*\///g
 
+# normalize repartition hash boundaries in worker_partition_query_result calls
+# (partition count varies by number of readable nodes in the cluster)
+/worker_partition_query_result/s/'\{[0-9,-]+\}'::text\[\]/'{...}'::text[]/g
+
+# normalize repartition partition index suffix (varies by node count)
+s/repartition_([0-9]+_[0-9]+)_[0-9]+/repartition_\1_N/g
+
+# normalize shard IDs in the 1470xxx range (used by local_shard_execution tests)
+# shard-to-worker placement varies depending on which schedule runs before the test
+s/_147[0-9]{4}/_xxxxxxx/g
+
 # Notice message that contains current columnar version that makes it harder to bump versions
 s/(NOTICE:  issuing CREATE EXTENSION IF NOT EXISTS citus_columnar WITH SCHEMA  pg_catalog VERSION )"[0-9]+\.[0-9]+-[0-9]+"/\1 "x.y-z"/
 
