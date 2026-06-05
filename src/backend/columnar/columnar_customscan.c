@@ -213,6 +213,7 @@ columnar_customscan_init(void)
 	 * Re-implement parallel-query/index-only-scan suppression for
 	 * columnar relations through set_rel_pathlist_hook or another
 	 * mechanism. For Phase 1 (build only) the hook is omitted.
+	 * Tracked in #8608.
 	 */
 #endif
 

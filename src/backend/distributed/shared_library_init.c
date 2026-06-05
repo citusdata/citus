@@ -488,6 +488,15 @@ _PG_init(void)
 	set_rel_pathlist_hook = multi_relation_restriction_hook;
 #if PG_VERSION_NUM < PG_VERSION_19
 	get_relation_info_hook = multi_get_relation_info_hook;
+#else
+
+	/*
+	 * TODO(PG19 Phase 2): get_relation_info_hook was removed upstream.
+	 * Re-implement the partitioned-table index stripping done by
+	 * multi_get_relation_info_hook through build_simple_rel_hook (see
+	 * the matching TODO in columnar_customscan.c). For Phase 1 (build
+	 * only) the hook is omitted. Tracked in #8608.
+	 */
 #endif
 	set_join_pathlist_hook = multi_join_restriction_hook;
 	ExecutorStart_hook = CitusExecutorStart;

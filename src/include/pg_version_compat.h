@@ -117,8 +117,9 @@ typedef StringInfo fmStringInfo;
 		((table_beginscan) ((rel), (snap), (nkeys), (key), 0))
 
 /*
- * PG19 collapsed the two long size arguments of ShmemInitHash into a
- * single int64 nelems argument.
+ * PG19 removed the init_size parameter from ShmemInitHash: the old
+ * (init_size, max_size) long pair became a single int64 nelems argument.
+ * Drop init_size and pass max_size (cast to int64) as nelems.
  */
 #define ShmemInitHash(name, init, max, info, flags) \
 		((ShmemInitHash) ((name), (int64) (max), (info), (flags)))
@@ -129,6 +130,7 @@ typedef StringInfo fmStringInfo;
  * both so existing two-step Citus code keeps compiling.  The temporary
  * name "citus-deferred" is only used until Phase 2 refactors call sites
  * to pass the real tranche name directly to LWLockNewTrancheId().
+ * Tracked in #8609.
  */
 #define LWLockNewTrancheId() ((LWLockNewTrancheId) ("citus-deferred"))
 #define LWLockRegisterTranche(id, name) ((void) 0)
