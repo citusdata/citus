@@ -504,7 +504,7 @@ stop_metadata_sync_to_node(PG_FUNCTION_ARGS)
  * (b) the coordinator knows at least one worker with metadata.
  */
 bool
-ClusterHasKnownMetadataWorkers()
+ClusterHasKnownMetadataWorkers(void)
 {
 	return !IsCoordinator() || HasMetadataWorkers();
 }

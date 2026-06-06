@@ -108,8 +108,10 @@ static void AddColumnarScanPathsRec(PlannerInfo *root, RelOptInfo *rel,
 /* hooks and callbacks */
 static void ColumnarSetRelPathlistHook(PlannerInfo *root, RelOptInfo *rel, Index rti,
 									   RangeTblEntry *rte);
+#if PG_VERSION_NUM < PG_VERSION_19
 static void ColumnarGetRelationInfoHook(PlannerInfo *root, Oid relationObjectId,
 										bool inhparent, RelOptInfo *rel);
+#endif
 static Plan * ColumnarScanPath_PlanCustomPath(PlannerInfo *root,
 											  RelOptInfo *rel,
 											  struct CustomPath *best_path,
@@ -143,7 +145,9 @@ static Bitmapset * fixup_inherited_columns(Oid parentId, Oid childId, Bitmapset 
 
 /* saved hook value in case of unload */
 static set_rel_pathlist_hook_type PreviousSetRelPathlistHook = NULL;
+#if PG_VERSION_NUM < PG_VERSION_19
 static get_relation_info_hook_type PreviousGetRelationInfoHook = NULL;
+#endif
 
 static bool EnableColumnarCustomScan = true;
 static bool EnableColumnarQualPushdown = true;
@@ -194,13 +198,24 @@ static const struct config_enum_entry debug_level_options[] = {
  * provide extra paths for columnar tables
  */
 void
-columnar_customscan_init()
+columnar_customscan_init(void)
 {
 	PreviousSetRelPathlistHook = set_rel_pathlist_hook;
 	set_rel_pathlist_hook = ColumnarSetRelPathlistHook;
 
+#if PG_VERSION_NUM < PG_VERSION_19
 	PreviousGetRelationInfoHook = get_relation_info_hook;
 	get_relation_info_hook = ColumnarGetRelationInfoHook;
+#else
+
+	/*
+	 * TODO(PG19 Phase 2): get_relation_info_hook was removed upstream.
+	 * Re-implement parallel-query/index-only-scan suppression for
+	 * columnar relations through set_rel_pathlist_hook or another
+	 * mechanism. For Phase 1 (build only) the hook is omitted.
+	 * Tracked in #8608.
+	 */
+#endif
 
 	/* register customscan specific GUC's */
 	DefineCustomBoolVariable(
@@ -351,6 +366,7 @@ ColumnarSetRelPathlistHook(PlannerInfo *root, RelOptInfo *rel, Index rti,
 }
 
 
+#if PG_VERSION_NUM < PG_VERSION_19
 static void
 ColumnarGetRelationInfoHook(PlannerInfo *root, Oid relationObjectId,
 							bool inhparent, RelOptInfo *rel)
@@ -373,6 +389,9 @@ ColumnarGetRelationInfoHook(PlannerInfo *root, Oid relationObjectId,
 		}
 	}
 }
+
+
+#endif
 
 
 /*

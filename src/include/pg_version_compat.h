@@ -11,7 +11,193 @@
 #ifndef PG_VERSION_COMPAT_H
 #define PG_VERSION_COMPAT_H
 
+#include "lib/stringinfo.h"
+
 #include "pg_version_constants.h"
+
+#if PG_VERSION_NUM >= PG_VERSION_19
+
+/*
+ * PG19 cleaned up its transitive includes.  These headers used to come
+ * in via various other PG headers; pull them in centrally so distributed
+ * .c files that include pg_version_compat.h (typically through
+ * version_compat.h) keep finding the symbols they expect.
+ */
+#include "access/tableam.h"
+#include "catalog/namespace.h"
+#include "executor/executor.h"
+#include "executor/instrument.h"
+#include "optimizer/optimizer.h"
+#include "optimizer/planner.h"
+#include "replication/origin.h"
+#include "storage/condition_variable.h"
+#include "storage/lwlock.h"
+#include "storage/lwlocknames.h"
+#include "storage/proc.h"
+#include "storage/shmem.h"
+#include "tcop/tcopprot.h"
+#include "utils/guc.h"
+#include "utils/lsyscache.h"
+#include "utils/tuplesort.h"
+#include "utils/tuplestore.h"
+#include "utils/wait_event_types.h"
+
+/*
+ * PageSetChecksumInplace was renamed to PageSetChecksum in PG19; the
+ * signature (Page, BlockNumber) is unchanged.
+ */
+#define PageSetChecksumInplace(page, blkno) PageSetChecksum(page, blkno)
+
+/*
+ * PG19 removed the legacy bits16 typedef from c.h.  Citus still uses it
+ * in a few deparser signatures; preserve the historical width here so
+ * the callers don't need per-call-site edits.
+ */
+typedef uint16 bits16;
+
+/*
+ * PG19 dropped the fmStringInfo typedef that was historically used in
+ * fmgr.h to denote a binary-receive buffer.  The underlying type is
+ * still StringInfo.
+ */
+typedef StringInfo fmStringInfo;
+
+/*
+ * PG19 renamed RepOriginId to ReplOriginId (replication/origin.h).
+ */
+#define RepOriginId ReplOriginId
+#ifndef InvalidRepOriginId
+#define InvalidRepOriginId InvalidReplOriginId
+#endif
+
+/*
+ * PG19 removed the global `replorigin_session_origin` in favour of a
+ * `replorigin_xact_state` struct.  Provide an lvalue alias so existing
+ * Citus call sites that read and write the session origin keep working.
+ */
+#define replorigin_session_origin (replorigin_xact_state.origin)
+
+/*
+ * PG19 renamed two publication accessors.
+ */
+#define GetPublicationRelations(pubid, part) GetIncludedPublicationRelations(pubid, part)
+#define GetRelationPublications(relid) GetRelationIncludedPublications(relid)
+
+/*
+ * PG19 renamed QueryDesc->totaltime to QueryDesc->query_instr.  Citus
+ * still uses the historic name in multi_executor.c (assignments only);
+ * the underlying field type now is NodeInstrumentation* rather than
+ * Instrumentation*, but Citus only writes NULL or echoes the value so
+ * the assignment compiles either way.
+ */
+#define totaltime query_instr
+
+/*
+ * PG19 added an ExplainState * parameter to the planner entry points.
+ * Wrap each of them so existing Citus call sites continue to compile.
+ * Parenthesising the function name in the rhs prevents macro recursion.
+ */
+#define pg_plan_query(q, s, co, b) ((pg_plan_query) (q, s, co, b, NULL))
+#define standard_planner(p, s, co, b) ((standard_planner) (p, s, co, b, NULL))
+#define planner(p, s, co, b) ((planner) (p, s, co, b, NULL))
+
+/*
+ * PG19 added an `int *fgc_flags` out-parameter to FuncnameGetCandidates.
+ */
+#define FuncnameGetCandidates(names, nargs, argnames, ev, ed, io, ok) \
+		((FuncnameGetCandidates) (names, nargs, argnames, ev, ed, io, ok, NULL))
+
+/*
+ * PG19 added trailing `uint16 flags` to ExecInitScanTupleSlot and
+ * `uint32 flags` to table_beginscan. Provide 4-arg wrappers passing 0.
+ */
+#define ExecInitScanTupleSlot(estate, scanstate, td, ops) \
+		((ExecInitScanTupleSlot) ((estate), (scanstate), (td), (ops), 0))
+#define table_beginscan(rel, snap, nkeys, key) \
+		((table_beginscan) ((rel), (snap), (nkeys), (key), 0))
+
+/*
+ * PG19 removed the init_size parameter from ShmemInitHash: the old
+ * (init_size, max_size) long pair became a single int64 nelems argument.
+ * Drop init_size and pass max_size (cast to int64) as nelems.
+ */
+#define ShmemInitHash(name, init, max, info, flags) \
+		((ShmemInitHash) ((name), (int64) (max), (info), (flags)))
+
+/*
+ * PG19 internalised tranche registration: LWLockNewTrancheId now takes
+ * the tranche name and there is no public LWLockRegisterTranche.  Wrap
+ * both so existing two-step Citus code keeps compiling.  The temporary
+ * name "citus-deferred" is only used until Phase 2 refactors call sites
+ * to pass the real tranche name directly to LWLockNewTrancheId().
+ * Tracked in #8609.
+ */
+#define LWLockNewTrancheId() ((LWLockNewTrancheId) ("citus-deferred"))
+#define LWLockRegisterTranche(id, name) ((void) 0)
+
+/*
+ * PG19 dropped the public NamedLWLockTranche struct from lwlock.h.
+ * Citus stores its own instances of this layout in shared memory headers;
+ * provide a local-compatible typedef so those usages keep their layout.
+ */
+typedef struct CitusNamedLWLockTrancheCompat
+{
+	int trancheId;
+	char *trancheName;
+} NamedLWLockTranche;
+
+/*
+ * PG19 made the standard_conforming_strings GUC variable file-local
+ * (defined static in guc_tables.c), so extensions can no longer link
+ * against it.  Provide a tiny accessor that fetches the current value
+ * via GetConfigOption() and expose it under the original identifier
+ * via a macro so existing Citus deparser code keeps compiling.
+ */
+static inline bool
+citus_pg19_standard_conforming_strings(void)
+{
+	const char *val = GetConfigOption("standard_conforming_strings", true, false);
+	return (val == NULL) || (strcmp(val, "on") == 0);
+}
+
+
+#define standard_conforming_strings (citus_pg19_standard_conforming_strings())
+
+/*
+ * PG19 removed the replication_origin_filter_cb typedef from
+ * output_plugin.h.  Citus's shardsplit_decoder defines a function of the
+ * same name as a callback; no typedef shim is needed in PG19.
+ */
+
+/*
+ * PG19 replaced ClusterStmt with the unified RepackStmt (which also
+ * subsumes VACUUM FULL).  Provide a typedef so type names compile.
+ * Member access to ->relation / ->indexname will still break and is
+ * tracked as a Phase-1/-2 source-level TODO in cluster.c and
+ * relay_event_utility.c.
+ */
+typedef struct RepackStmt ClusterStmt;
+#define T_ClusterStmt T_RepackStmt
+
+#endif /* PG_VERSION_NUM >= PG_VERSION_19 */
+
+#if PG_VERSION_NUM < PG_VERSION_19
+
+/*
+ * PG19 added the pg_fallthrough macro (c.h) for annotating intentional
+ * switch fall-throughs, which is required by -Wimplicit-fallthrough=5.
+ * Provide the same macro on older PG majors so Citus can annotate
+ * fall-throughs uniformly across all supported versions.
+ */
+#ifndef pg_fallthrough
+#if defined(__has_attribute) && __has_attribute(fallthrough)
+#define pg_fallthrough __attribute__((fallthrough))
+#else
+#define pg_fallthrough
+#endif
+#endif
+
+#endif /* PG_VERSION_NUM < PG_VERSION_19 */
 
 #if PG_VERSION_NUM >= PG_VERSION_18
 #define create_foreignscan_path_compat(a, b, c, d, e, f, g, h, i, j, k) \

@@ -438,7 +438,7 @@ CompareTenantScore(const void *leftElement, const void *rightElement)
  * AttributeMetricsIfApplicable updates the metrics for current tenant's statistics
  */
 static void
-AttributeMetricsIfApplicable()
+AttributeMetricsIfApplicable(void)
 {
 	if (StatTenantsTrack == STAT_TENANTS_TRACK_NONE ||
 		AttributeToColocationGroupId == INVALID_COLOCATION_ID)
@@ -698,7 +698,7 @@ RecordTenantStats(TenantStats *tenantStats, TimestampTz queryTime)
  * CreateSharedMemoryForMultiTenantMonitor creates a dynamic shared memory segment for multi tenant monitor.
  */
 static MultiTenantMonitor *
-CreateSharedMemoryForMultiTenantMonitor()
+CreateSharedMemoryForMultiTenantMonitor(void)
 {
 	bool found = false;
 	MultiTenantMonitor *monitor = ShmemInitStruct(SharedMemoryNameForMultiTenantMonitor,
@@ -735,7 +735,7 @@ CreateSharedMemoryForMultiTenantMonitor()
  * GetMultiTenantMonitor returns the data structure for multi tenant monitor.
  */
 static MultiTenantMonitor *
-GetMultiTenantMonitor()
+GetMultiTenantMonitor(void)
 {
 	bool found = false;
 	MultiTenantMonitor *monitor = ShmemInitStruct(SharedMemoryNameForMultiTenantMonitor,
@@ -757,7 +757,7 @@ GetMultiTenantMonitor()
  * so that the multi tenant monitor can be initialized and stored in shared memory.
  */
 void
-InitializeMultiTenantMonitorSMHandleManagement()
+InitializeMultiTenantMonitorSMHandleManagement(void)
 {
 	prev_shmem_startup_hook = shmem_startup_hook;
 	shmem_startup_hook = MultiTenantMonitorSMInit;
@@ -768,7 +768,7 @@ InitializeMultiTenantMonitorSMHandleManagement()
  * MultiTenantMonitorSMInit initializes the shared memory for MultiTenantMonitorSMData.
  */
 static void
-MultiTenantMonitorSMInit()
+MultiTenantMonitorSMInit(void)
 {
 	CreateSharedMemoryForMultiTenantMonitor();
 

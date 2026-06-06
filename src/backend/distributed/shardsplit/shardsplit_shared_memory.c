@@ -84,7 +84,7 @@ GetShardSplitInfoSMHeaderFromDSMHandle(dsm_handle dsmHandle)
  * GetShardSplitInfoSMHeader returns pointer to the header of shared memory segment.
  */
 ShardSplitInfoSMHeader *
-GetShardSplitInfoSMHeader()
+GetShardSplitInfoSMHeader(void)
 {
 	dsm_handle dsmHandle = GetShardSplitSharedMemoryHandle();
 
@@ -170,7 +170,7 @@ CreateSharedMemoryForShardSplitInfo(int shardSplitInfoCount, dsm_handle *dsmHand
  * explicitly unpinned by calling 'dsm_unpin_segment'.
  */
 void
-ReleaseSharedMemoryOfShardSplitInfo()
+ReleaseSharedMemoryOfShardSplitInfo(void)
 {
 	/* Get handle of dynamic shared memory segment*/
 	dsm_handle dsmHandle = GetShardSplitSharedMemoryHandle();
@@ -217,7 +217,7 @@ ShardSplitShmemInit(void)
 
 	if (!alreadyInitialized)
 	{
-		char *trancheName = "Split Shard Setup Tranche";
+		char * trancheName pg_attribute_unused() = "Split Shard Setup Tranche";
 
 		NamedLWLockTranche *namedLockTranche =
 			&smData->namedLockTranche;

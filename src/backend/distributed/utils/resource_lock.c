@@ -97,7 +97,7 @@ static bool AnyTableReplicated(List *shardIntervalList,
 static void LockShardListResources(List *shardIntervalList, LOCKMODE lockMode);
 static void LockShardListResourcesOnFirstWorker(LOCKMODE lockmode,
 												List *shardIntervalList);
-static bool IsFirstWorkerNode();
+static bool IsFirstWorkerNode(void);
 static void CitusRangeVarCallbackForLockTable(const RangeVar *rangeVar, Oid relationId,
 											  Oid oldRelationId, void *arg);
 static AclResult CitusLockTableAclCheck(Oid relationId, LOCKMODE lockmode, Oid userId);
@@ -369,7 +369,7 @@ LockShardListResourcesOnFirstWorker(LOCKMODE lockmode, List *shardIntervalList)
  * according to the host name and port number.
  */
 static bool
-IsFirstWorkerNode()
+IsFirstWorkerNode(void)
 {
 	List *workerNodeList = ActivePrimaryNonCoordinatorNodeList(NoLock);
 

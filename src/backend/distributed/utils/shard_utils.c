@@ -90,7 +90,7 @@ GetLongestShardNameForLocalPartition(Oid parentTableOid, char *partitionRelation
  * to get the last value from the sequence.
  */
 int
-GetLargestShardId()
+GetLargestShardId(void)
 {
 	Oid savedUserId = InvalidOid;
 	int savedSecurityContext = 0;

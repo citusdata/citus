@@ -545,7 +545,7 @@ BackendManagementShmemInit(void)
 
 	if (!alreadyInitialized)
 	{
-		char *trancheName = "Backend Management Tranche";
+		char * trancheName pg_attribute_unused() = "Backend Management Tranche";
 
 		NamedLWLockTranche *namedLockTranche =
 			&backendManagementShmemData->namedLockTranche;
