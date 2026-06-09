@@ -1416,6 +1416,23 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
+		"citus.enable_or_clause_arm_pruning",
+		gettext_noop("Enables removing the arms of a top-level OR clause that "
+					 "cannot match any row on a shard when generating the "
+					 "per-shard query."),
+		gettext_noop("When a query filters on the distribution column inside "
+					 "each arm of an OR (e.g. (dist=a AND ...) OR (dist=b AND "
+					 "...)), every shard otherwise receives the full OR. With "
+					 "this enabled, each shard's query only keeps the arms that "
+					 "can match on that shard, allowing a single precise index "
+					 "scan instead of an N-way bitmap OR."),
+		&EnableOrClauseArmPruning,
+		true,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
 		"citus.enable_local_execution",
 		gettext_noop("Enables queries on shards that are local to the current node "
 					 "to be planned and executed locally."),
