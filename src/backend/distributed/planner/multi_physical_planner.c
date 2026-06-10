@@ -31,6 +31,7 @@
 #include "catalog/pg_type.h"
 #include "commands/defrem.h"
 #include "commands/sequence.h"
+#include "common/hashfn.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
 #include "nodes/pathnodes.h"
@@ -48,6 +49,7 @@
 #include "utils/datum.h"
 #include "utils/fmgroids.h"
 #include "utils/guc.h"
+#include "utils/hsearch.h"
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
 #include "utils/rel.h"
@@ -190,11 +192,14 @@ static Task * QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 static List * SqlTaskList(Job *job);
 static void PruneOrClausesForTaskFragments(Query *taskQuery,
 										   List *fragmentCombination,
-										   List **armShardMemo);
+										   HTAB **armShardMemo);
 static Node * PruneUnreachableOrArms(Node *qual, Oid relationId, Index rangeTableId,
-									 uint64 shardId, List **armShardMemo);
+									 uint64 shardId, HTAB **armShardMemo);
 static List * ReachableShardListForArm(Node *arm, Oid relationId, Index rangeTableId,
-									   List **armShardMemo);
+									   HTAB **armShardMemo);
+static bool ShardListContainsShardId(List *shardIntervalList, uint64 shardId);
+static uint32 ArmShardMemoHash(const void *key, Size keysize);
+static int ArmShardMemoMatch(const void *key1, const void *key2, Size keysize);
 static bool DependsOnHashPartitionJob(Job *job);
 static uint32 AnchorRangeTableId(List *rangeTableList);
 static List * BaseRangeTableIdList(List *rangeTableList);
@@ -2905,10 +2910,10 @@ SqlTaskList(Job *job)
 	 * Memo of each OR arm's reachable shard set, shared across all tasks of this
 	 * job. An arm's reachability depends only on (relation, range table id, arm
 	 * expression), not on which task we are building, so we compute it once per
-	 * distinct arm here instead of once per shard. Only used when
-	 * EnableOrClauseArmPruning is set.
+	 * distinct arm here instead of once per shard. Created lazily on first use,
+	 * and only when EnableOrClauseArmPruning is set.
 	 */
-	List *armShardMemo = NIL;
+	HTAB *armShardMemo = NULL;
 
 	foreach(fragmentCombinationCell, fragmentCombinationList)
 	{
@@ -2969,15 +2974,28 @@ SqlTaskList(Job *job)
 
 
 /*
- * ArmShardMemoEntry caches the shard set an OR arm can reach for a given
- * (relation, range table id), so PruneShards is run once per distinct arm
- * rather than once per shard. See PruneOrClausesForTaskFragments.
+ * ArmShardMemoKey identifies an OR arm's reachability question: the shard set
+ * that arm can reach for (relationId, rangeTableId). It is the lookup key of
+ * the armShardMemo hash table. Arm equality uses the regular node equal(), so
+ * structurally identical arms from different per-task query copies share an
+ * entry. Must be the first field of ArmShardMemoEntry.
  */
-typedef struct ArmShardMemoEntry
+typedef struct ArmShardMemoKey
 {
 	Oid relationId;
 	Index rangeTableId;
 	Node *arm;
+} ArmShardMemoKey;
+
+
+/*
+ * ArmShardMemoEntry caches the shard set an OR arm can reach, so PruneShards is
+ * run once per distinct arm rather than once per (shard x arm). Lookups are
+ * O(1) via a hash of the arm expression; see ReachableShardListForArm.
+ */
+typedef struct ArmShardMemoEntry
+{
+	ArmShardMemoKey key;
 	List *shardIntervalList;
 } ArmShardMemoEntry;
 
@@ -2995,7 +3013,7 @@ typedef struct ArmShardMemoEntry
  */
 static void
 PruneOrClausesForTaskFragments(Query *taskQuery, List *fragmentCombination,
-							   List **armShardMemo)
+							   HTAB **armShardMemo)
 {
 	Node *quals = taskQuery->jointree->quals;
 	if (quals == NULL)
@@ -3035,62 +3053,6 @@ PruneOrClausesForTaskFragments(Query *taskQuery, List *fragmentCombination,
 
 
 /*
- * ReachableShardListForArm returns the list of ShardIntervals that the given OR
- * arm cannot be proven to exclude for (relationId, rangeTableId), i.e. the
- * shards on which the arm might match a row. Results are memoized in
- * *armShardMemo because reachability depends only on the arm expression and the
- * relation, not on which task we are currently building.
- */
-static List *
-ReachableShardListForArm(Node *arm, Oid relationId, Index rangeTableId,
-						 List **armShardMemo)
-{
-	ArmShardMemoEntry *memoEntry = NULL;
-	foreach_declared_ptr(memoEntry, *armShardMemo)
-	{
-		if (memoEntry->relationId == relationId &&
-			memoEntry->rangeTableId == rangeTableId &&
-			equal(memoEntry->arm, arm))
-		{
-			return memoEntry->shardIntervalList;
-		}
-	}
-
-	List *armClauseList = make_ands_implicit((Expr *) arm);
-	List *shardIntervalList = PruneShards(relationId, rangeTableId, armClauseList, NULL);
-
-	ArmShardMemoEntry *newEntry = palloc0(sizeof(ArmShardMemoEntry));
-	newEntry->relationId = relationId;
-	newEntry->rangeTableId = rangeTableId;
-	newEntry->arm = arm;
-	newEntry->shardIntervalList = shardIntervalList;
-	*armShardMemo = lappend(*armShardMemo, newEntry);
-
-	return shardIntervalList;
-}
-
-
-/*
- * ShardListContainsShardId returns whether shardId appears in the given list
- * of ShardIntervals.
- */
-static bool
-ShardListContainsShardId(List *shardIntervalList, uint64 shardId)
-{
-	ShardInterval *shardInterval = NULL;
-	foreach_declared_ptr(shardInterval, shardIntervalList)
-	{
-		if (shardInterval->shardId == shardId)
-		{
-			return true;
-		}
-	}
-
-	return false;
-}
-
-
-/*
  * PruneUnreachableOrArms walks a (sub)qualification and removes the arms of
  * top-level OR expressions that cannot match any row on the given shard.
  *
@@ -3102,7 +3064,7 @@ ShardListContainsShardId(List *shardIntervalList, uint64 shardId)
  */
 static Node *
 PruneUnreachableOrArms(Node *qual, Oid relationId, Index rangeTableId, uint64 shardId,
-					   List **armShardMemo)
+					   HTAB **armShardMemo)
 {
 	if (qual == NULL)
 	{
@@ -3179,6 +3141,131 @@ PruneUnreachableOrArms(Node *qual, Oid relationId, Index rangeTableId, uint64 sh
 	}
 
 	return qual;
+}
+
+
+/*
+ * ReachableShardListForArm returns the list of ShardIntervals that the given OR
+ * arm cannot be proven to exclude for (relationId, rangeTableId), i.e. the
+ * shards on which the arm might match a row. Results are memoized in
+ * *armShardMemo because reachability depends only on the arm expression and the
+ * relation, not on which task we are currently building.
+ *
+ * The memo is a hash table keyed on (relationId, rangeTableId, arm) so each
+ * lookup is O(1) in the number of distinct arms; this matters because a single
+ * top-level OR can have very many arms (e.g. ORM-generated composite-key batch
+ * reads), and SqlTaskList probes every arm once per shard. The table is created
+ * lazily on the first arm so queries without an eligible OR pay nothing.
+ */
+static List *
+ReachableShardListForArm(Node *arm, Oid relationId, Index rangeTableId,
+						 HTAB **armShardMemo)
+{
+	if (*armShardMemo == NULL)
+	{
+		HASHCTL info;
+		memset(&info, 0, sizeof(info));
+		info.keysize = sizeof(ArmShardMemoKey);
+		info.entrysize = sizeof(ArmShardMemoEntry);
+		info.hash = ArmShardMemoHash;
+		info.match = ArmShardMemoMatch;
+		info.hcxt = CurrentMemoryContext;
+
+		*armShardMemo = hash_create("Or arm shard memo", 32, &info,
+									HASH_ELEM | HASH_FUNCTION | HASH_COMPARE |
+									HASH_CONTEXT);
+	}
+
+	ArmShardMemoKey lookupKey;
+	memset(&lookupKey, 0, sizeof(lookupKey));
+	lookupKey.relationId = relationId;
+	lookupKey.rangeTableId = rangeTableId;
+	lookupKey.arm = arm;
+
+	bool found = false;
+	ArmShardMemoEntry *entry = hash_search(*armShardMemo, &lookupKey, HASH_FIND,
+										   &found);
+	if (found)
+	{
+		return entry->shardIntervalList;
+	}
+
+	/*
+	 * Compute the shard list before inserting the entry so the memo is never
+	 * left holding an entry with an uninitialized value (e.g. if PruneShards
+	 * throws).
+	 */
+	List *armClauseList = make_ands_implicit((Expr *) arm);
+	List *shardIntervalList = PruneShards(relationId, rangeTableId, armClauseList, NULL);
+
+	entry = hash_search(*armShardMemo, &lookupKey, HASH_ENTER, &found);
+	entry->shardIntervalList = shardIntervalList;
+
+	return shardIntervalList;
+}
+
+
+/*
+ * ArmShardMemoHash hashes an ArmShardMemoKey. The arm expression is hashed via
+ * its canonical serialized form so that structurally identical arms (which
+ * ArmShardMemoMatch treats as equal) land in the same bucket.
+ */
+static uint32
+ArmShardMemoHash(const void *key, Size keysize)
+{
+	const ArmShardMemoKey *memoKey = (const ArmShardMemoKey *) key;
+
+	char *armString = nodeToString(memoKey->arm);
+	uint32 hashValue = hash_bytes((const unsigned char *) armString,
+								  strlen(armString));
+	pfree(armString);
+
+	hashValue = hash_combine(hashValue, hash_uint32((uint32) memoKey->relationId));
+	hashValue = hash_combine(hashValue, hash_uint32((uint32) memoKey->rangeTableId));
+
+	return hashValue;
+}
+
+
+/*
+ * ArmShardMemoMatch compares two ArmShardMemoKeys, returning 0 when they are
+ * equal. Arm equality uses node equal() so hash collisions never produce a
+ * wrong memo hit.
+ */
+static int
+ArmShardMemoMatch(const void *key1, const void *key2, Size keysize)
+{
+	const ArmShardMemoKey *memoKey1 = (const ArmShardMemoKey *) key1;
+	const ArmShardMemoKey *memoKey2 = (const ArmShardMemoKey *) key2;
+
+	if (memoKey1->relationId == memoKey2->relationId &&
+		memoKey1->rangeTableId == memoKey2->rangeTableId &&
+		equal(memoKey1->arm, memoKey2->arm))
+	{
+		return 0;
+	}
+
+	return 1;
+}
+
+
+/*
+ * ShardListContainsShardId returns whether shardId appears in the given list
+ * of ShardIntervals.
+ */
+static bool
+ShardListContainsShardId(List *shardIntervalList, uint64 shardId)
+{
+	ShardInterval *shardInterval = NULL;
+	foreach_declared_ptr(shardInterval, shardIntervalList)
+	{
+		if (shardInterval->shardId == shardId)
+		{
+			return true;
+		}
+	}
+
+	return false;
 }
 
 
