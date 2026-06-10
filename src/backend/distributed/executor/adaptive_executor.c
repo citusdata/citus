@@ -1495,6 +1495,9 @@ SingleTaskExecutor(CitusScanState *scanState)
 			Oid *parameterTypes = NULL;
 			const char **parameterValues = NULL;
 
+			/* force evaluation of bound params (e.g. PL/pgSQL variables) */
+			paramListInfo = copyParamList(paramListInfo);
+
 			ExtractParametersForRemoteExecution(paramListInfo, &parameterTypes,
 												&parameterValues);
 			querySent = SendRemoteCommandParams(connection, queryString,
@@ -1561,7 +1564,7 @@ SingleTaskExecutor(CitusScanState *scanState)
 			}
 		}
 
-		/* receive results using simple WaitLatchOrSocket polling */
+		/* receive results using lazily-initialized WaitEventSet */
 		uint64 rowsProcessed = 0;
 
 		MemoryContext rowContext =
@@ -1571,25 +1574,44 @@ SingleTaskExecutor(CitusScanState *scanState)
 								  ALLOCSET_DEFAULT_INITSIZE,
 								  ALLOCSET_DEFAULT_MAXSIZE);
 
+		WaitEventSet *waitEventSet = NULL;
 		bool fetchDone = false;
 		while (!fetchDone)
 		{
 			/* wait for the socket to be readable if busy */
 			if (PQisBusy(connection->pgConn))
 			{
-				int sock = PQsocket(connection->pgConn);
-				int rc = WaitLatchOrSocket(MyLatch,
-										   WL_SOCKET_READABLE | WL_LATCH_SET |
-										   WL_EXIT_ON_PM_DEATH,
-										   sock, 0, PG_WAIT_EXTENSION);
+				if (waitEventSet == NULL)
+				{
+					int sock = PQsocket(connection->pgConn);
+					if (sock == PGINVALID_SOCKET)
+					{
+						UnclaimConnection(connection);
+						ereport(ERROR,
+								(errmsg("connection to %s:%d lost",
+										nodeName, nodePort)));
+					}
+					waitEventSet = CreateWaitEventSet(WaitEventSetTracker_compat, 3);
+					AddWaitEventToSet(waitEventSet, WL_LATCH_SET,
+									  PGINVALID_SOCKET, MyLatch, NULL);
+					AddWaitEventToSet(waitEventSet, WL_EXIT_ON_PM_DEATH,
+									  PGINVALID_SOCKET, NULL, NULL);
+					AddWaitEventToSet(waitEventSet, WL_SOCKET_READABLE,
+									  sock, NULL, NULL);
+				}
+
+				WaitEvent event;
+				int rc = WaitEventSetWait(waitEventSet, 0, &event, 1,
+										  PG_WAIT_EXTENSION);
 
 				ResetLatch(MyLatch);
 				CHECK_FOR_INTERRUPTS();
 
-				if (rc & WL_SOCKET_READABLE)
+				if (rc > 0 && (event.events & WL_SOCKET_READABLE))
 				{
 					if (!PQconsumeInput(connection->pgConn))
 					{
+						FreeWaitEventSet(waitEventSet);
 						UnclaimConnection(connection);
 						ereport(ERROR,
 								(errmsg("failed to receive data from %s:%d",
@@ -1705,6 +1727,11 @@ SingleTaskExecutor(CitusScanState *scanState)
 			}
 
 			PQclear(result);
+		}
+
+		if (waitEventSet != NULL)
+		{
+			FreeWaitEventSet(waitEventSet);
 		}
 
 		MemoryContextDelete(rowContext);

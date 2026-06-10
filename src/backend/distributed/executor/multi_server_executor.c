@@ -110,10 +110,6 @@ JobExecutorType(DistributedPlan *distributedPlan)
 		  IsCitusTableType(distributedPlan->targetRelationId, REFERENCE_TABLE)))
 	{
 		/*
-		 * The one-task executor handles exactly one placement per task.
-		 * Tables with shard_replication_factor > 1 have multiple placements
-		 * and must use the full adaptive executor which writes to all replicas.
-		 *
 		 * We get the relation OID from the task's relationShardList rather
 		 * than distributedPlan->relationIdList because the latter may contain
 		 * shard OIDs after CheckAndBuildDelayedFastPathPlan() replaces the
