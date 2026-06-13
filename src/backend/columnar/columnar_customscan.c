@@ -209,7 +209,7 @@ columnar_customscan_init(void)
 #else
 
 	/*
-	 * TODO(PG19 Phase 2): get_relation_info_hook was removed upstream.
+	 * TODO(PG19, #8614): get_relation_info_hook was removed upstream.
 	 * Re-implement parallel-query/index-only-scan suppression for
 	 * columnar relations through set_rel_pathlist_hook or another
 	 * mechanism. For Phase 1 (build only) the hook is omitted.

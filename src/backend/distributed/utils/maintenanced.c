@@ -925,11 +925,10 @@ MaintenanceDaemonShmemInit(void)
 
 	LWLockAcquire(AddinShmemInitLock, LW_EXCLUSIVE);
 
+	Size maintenanceDaemonControlSize = sizeof(MaintenanceDaemonControlData);
 	MaintenanceDaemonControl =
 		(MaintenanceDaemonControlData *) ShmemInitStruct("Citus Maintenance Daemon",
-														 sizeof(
-															 MaintenanceDaemonControlData)
-																						  ,
+														 maintenanceDaemonControlSize,
 														 &alreadyInitialized);
 
 	/*

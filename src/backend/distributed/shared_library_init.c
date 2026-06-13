@@ -679,10 +679,12 @@ citus_shmem_request(void)
 	 * PG19's ShmemInitHash now allocates all hash elements upfront in shared
 	 * memory.  Each ShmemInitStruct/ShmemInitHash allocation is aligned to a
 	 * cache line, which can waste up to PG_CACHE_LINE_SIZE-1 bytes per call.
-	 * Reserve a small amount of slack to absorb this alignment overhead so
-	 * the final allocation does not fail when the addin space is exhausted.
+	 * Citus makes well under 1024 such allocations across all of its shared
+	 * memory components, so reserve that many cache lines of slack to absorb
+	 * the alignment overhead and keep the final allocation from failing when
+	 * the addin space is exhausted.
 	 */
-	RequestAddinShmemSpace(128 * 1024);
+	RequestAddinShmemSpace(1024 * PG_CACHE_LINE_SIZE);
 #endif
 }
 

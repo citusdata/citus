@@ -84,13 +84,13 @@ typedef StringInfo fmStringInfo;
 #define GetRelationPublications(relid) GetRelationIncludedPublications(relid)
 
 /*
- * PG19 renamed QueryDesc->totaltime to QueryDesc->query_instr.  Citus
- * still uses the historic name in multi_executor.c (assignments only);
- * the underlying field type now is NodeInstrumentation* rather than
- * Instrumentation*, but Citus only writes NULL or echoes the value so
- * the assignment compiles either way.
+ * PG19 renamed QueryDesc->totaltime to QueryDesc->query_instr (still an
+ * Instrumentation*).  Expose a scoped accessor instead of a blanket
+ * `#define totaltime query_instr`, which would silently rewrite every
+ * unrelated identifier named "totaltime" in the codebase (e.g. the local
+ * variable in multi_explain.c).
  */
-#define totaltime query_instr
+#define QueryDescTotalTime(qd) ((qd)->query_instr)
 
 /*
  * PG19 added an ExplainState * parameter to the planner entry points.
@@ -128,9 +128,9 @@ typedef StringInfo fmStringInfo;
  * PG19 internalised tranche registration: LWLockNewTrancheId now takes
  * the tranche name and there is no public LWLockRegisterTranche.  Wrap
  * both so existing two-step Citus code keeps compiling.  The temporary
- * name "citus-deferred" is only used until Phase 2 refactors call sites
- * to pass the real tranche name directly to LWLockNewTrancheId().
- * Tracked in #8609.
+ * name "citus-deferred" is only used until the follow-up in #8609
+ * refactors call sites to pass the real tranche name directly to
+ * LWLockNewTrancheId().
  */
 #define LWLockNewTrancheId() ((LWLockNewTrancheId) ("citus-deferred"))
 #define LWLockRegisterTranche(id, name) ((void) 0)
@@ -172,9 +172,9 @@ citus_pg19_standard_conforming_strings(void)
 /*
  * PG19 replaced ClusterStmt with the unified RepackStmt (which also
  * subsumes VACUUM FULL).  Provide a typedef so type names compile.
- * Member access to ->relation / ->indexname will still break and is
- * tracked as a Phase-1/-2 source-level TODO in cluster.c and
- * relay_event_utility.c.
+ * Member access to ->relation / ->indexname and command discrimination
+ * (CLUSTER vs REPACK vs VACUUM FULL, now sharing one node tag) is tracked
+ * as follow-up work in #8613 (see cluster.c and relay_event_utility.c).
  */
 typedef struct RepackStmt ClusterStmt;
 #define T_ClusterStmt T_RepackStmt
@@ -196,6 +196,12 @@ typedef struct RepackStmt ClusterStmt;
 #define pg_fallthrough
 #endif
 #endif
+
+/*
+ * Pre-PG19 the query-level instrumentation lived in QueryDesc->totaltime.
+ * Provide the same scoped accessor used on PG19 so call sites are uniform.
+ */
+#define QueryDescTotalTime(qd) ((qd)->totaltime)
 
 #endif /* PG_VERSION_NUM < PG_VERSION_19 */
 
