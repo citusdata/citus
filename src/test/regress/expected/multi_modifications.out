@@ -552,7 +552,7 @@ ERROR:  complex joins are only supported when all distributed tables are co-loca
 -- setting shard key to another var that's implied to be equal to shard key --
 UPDATE dist_1 SET a = dist_non_colocated.a FROM dist_non_colocated WHERE dist_1.a = dist_non_colocated.a;
 ERROR:  cannot push down this subquery
-DETAIL:  dist_1 and dist_non_colocated are not colocated
+DETAIL:  <relation> and <relation> are not colocated
 UPDATE dist_1 SET a = dist_2.b FROM dist_2 WHERE dist_1.a = dist_2.b;
 ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 ---- update: a more sophisticated example ----
