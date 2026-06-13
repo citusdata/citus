@@ -92,6 +92,9 @@ static void AddColumnarScanPath(PlannerInfo *root, RelOptInfo *rel,
 /* helper functions to be used when costing paths or altering them */
 static void RemovePathsByPredicate(RelOptInfo *rel, PathPredicate removePathPredicate);
 static bool IsNotIndexPath(Path *path);
+#if PG_VERSION_NUM >= PG_VERSION_19
+static bool IsIndexOnlyScanPath(Path *path);
+#endif
 static Cost ColumnarIndexScanAdditionalCost(PlannerInfo *root, RelOptInfo *rel,
 											Oid relationId, IndexPath *indexPath);
 static int RelationIdGetNumberOfAttributes(Oid relationId);
@@ -209,11 +212,10 @@ columnar_customscan_init(void)
 #else
 
 	/*
-	 * TODO(PG19, #8614): get_relation_info_hook was removed upstream.
-	 * Re-implement parallel-query/index-only-scan suppression for
-	 * columnar relations through set_rel_pathlist_hook or another
-	 * mechanism. For Phase 1 (build only) the hook is omitted.
-	 * Tracked in #8608.
+	 * PG19 removed get_relation_info_hook, which is where we used to disable
+	 * parallel query and index-only scans for columnar relations.  That
+	 * suppression is re-implemented in ColumnarSetRelPathlistHook for PG19;
+	 * see the version-guarded block there.
 	 */
 #endif
 
@@ -310,6 +312,32 @@ ColumnarSetRelPathlistHook(PlannerInfo *root, RelOptInfo *rel, Index rti,
 
 	if (relation->rd_tableam == GetColumnarTableAmRoutine())
 	{
+#if PG_VERSION_NUM >= PG_VERSION_19
+
+		/*
+		 * PG19 removed get_relation_info_hook, where pre-PG19 builds disable
+		 * parallel query and index-only scans for columnar relations (columnar
+		 * scans are always serial and cannot return tuples from an index).
+		 * Re-apply both here.  set_rel_pathlist_hook runs after path
+		 * generation, so besides forbidding future parallel workers we also
+		 * drop any parallel (partial) paths and any IndexOnlyScan paths that
+		 * were already created, and clear the per-index canreturn flags so the
+		 * paths we add below are costed without index-only-scan capability.
+		 */
+		rel->rel_parallel_workers = 0;
+		rel->consider_parallel = false;
+		rel->partial_pathlist = NIL;
+
+		IndexOptInfo *indexOptInfo = NULL;
+		foreach_declared_ptr(indexOptInfo, rel->indexlist)
+		{
+			memset(indexOptInfo->canreturn, false,
+				   indexOptInfo->ncolumns * sizeof(bool));
+		}
+
+		RemovePathsByPredicate(rel, IsIndexOnlyScanPath);
+#endif
+
 		if (rte->tablesample != NULL)
 		{
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -424,6 +452,24 @@ IsNotIndexPath(Path *path)
 {
 	return !IsA(path, IndexPath);
 }
+
+
+#if PG_VERSION_NUM >= PG_VERSION_19
+
+/*
+ * IsIndexOnlyScanPath returns true if given path is an index-only scan path.
+ * Index-only scans are represented as an IndexPath whose pathtype is
+ * T_IndexOnlyScan; columnar cannot return tuples from an index, so these are
+ * removed for columnar relations on PG19.
+ */
+static bool
+IsIndexOnlyScanPath(Path *path)
+{
+	return IsA(path, IndexPath) && path->pathtype == T_IndexOnlyScan;
+}
+
+
+#endif
 
 
 /*
