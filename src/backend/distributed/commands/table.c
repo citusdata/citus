@@ -166,7 +166,7 @@ TransformDefaultExpressionIfNecessary(Node *defaultExpression)
 		{
 			ParseState *pstate = make_parsestate(NULL);
 			Node *transformedExpression = transformExpr(pstate, defaultExpression,
-													   EXPR_KIND_COLUMN_DEFAULT);
+														EXPR_KIND_COLUMN_DEFAULT);
 			free_parsestate(pstate);
 			return transformedExpression;
 		}
@@ -177,6 +177,7 @@ TransformDefaultExpressionIfNecessary(Node *defaultExpression)
 		}
 	}
 }
+
 
 /*
  * PreprocessDropTableStmt processes DROP TABLE commands for Citus tables.
