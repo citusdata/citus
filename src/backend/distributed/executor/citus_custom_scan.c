@@ -355,25 +355,32 @@ CitusExecScan(CustomScanState *node)
 
 
 /*
- * CitusExecOneTaskScan is the ExecCustomScan callback for the one-task
- * adaptive executor. On the first call it executes the single-shard
- * fast-path query via the streamlined SingleTaskExecutor, falling
- * back to the full AdaptiveExecutor for EXPLAIN ANALYZE.
+ * CitusExecOneTaskScan is the ExecCustomScan callback for the single-task
+ * executor. On the first call it sets up execution via SingleTaskExecutorStart.
+ * Each call fetches a batch of rows into the tuplestore and returns one tuple.
+ * When the tuplestore is drained, it fetches the next batch. This keeps memory
+ * bounded by work_mem for large result sets.
+ *
+ * Falls back to the full AdaptiveExecutor for EXPLAIN ANALYZE.
  */
 static TupleTableSlot *
 CitusExecOneTaskScan(CustomScanState *node)
 {
 	CitusScanState *scanState = (CitusScanState *) node;
 
-	if (!scanState->finishedRemoteScan)
+	if (!scanState->executionStarted)
 	{
 		if (RequestedForExplainAnalyze(scanState))
 		{
 			EagerAdaptiveExecutor(scanState);
+			scanState->finishedRemoteScan = true;
 		}
 		else
 		{
-			SingleTaskExecutor(scanState);
+			SingleTaskExecutorStart(scanState);
+
+			/* fetch first batch */
+			scanState->finishedRemoteScan = SingleTaskExecutorRun(scanState);
 		}
 
 		if (!scanState->distributedPlan->disableTrackingQueryCounters)
@@ -381,10 +388,21 @@ CitusExecOneTaskScan(CustomScanState *node)
 			IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_SINGLE_SHARD);
 		}
 
-		scanState->finishedRemoteScan = true;
+		scanState->executionStarted = true;
 	}
 
-	return ReturnTupleFromTuplestore(scanState);
+	TupleTableSlot *resultSlot = ReturnTupleFromTuplestore(scanState);
+
+	if (TupIsNull(resultSlot) && !scanState->finishedRemoteScan)
+	{
+		tuplestore_clear(scanState->tuplestorestate);
+
+		scanState->finishedRemoteScan = SingleTaskExecutorRun(scanState);
+
+		resultSlot = ReturnTupleFromTuplestore(scanState);
+	}
+
+	return resultSlot;
 }
 
 
@@ -1020,6 +1038,12 @@ CitusEndScan(CustomScanState *node)
 	 * ensuring sessions and connections are properly released.
 	 */
 	AdaptiveExecutorEnd(scanState);
+
+	/*
+	 * Clean up single-task execution state. Handles LIMIT / early
+	 * termination by cancelling in-flight queries and draining results.
+	 */
+	SingleTaskExecutorEnd(scanState);
 }
 
 

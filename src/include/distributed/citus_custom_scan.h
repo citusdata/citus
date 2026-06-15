@@ -17,6 +17,7 @@
 #include "distributed/multi_server_executor.h"
 
 struct DistributedExecution;
+struct SingleTaskExecution;
 
 typedef struct CitusScanState
 {
@@ -37,6 +38,9 @@ typedef struct CitusScanState
 
 	/* execution state when using adaptive executor */
 	struct DistributedExecution *execution;
+
+	/* execution state when using single-task executor */
+	struct SingleTaskExecution *singleTaskState;
 } CitusScanState;
 
 

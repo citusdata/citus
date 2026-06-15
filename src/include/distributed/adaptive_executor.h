@@ -33,6 +33,9 @@ extern uint64 ExecuteUtilityTaskListExtended(List *utilityTaskList, int poolSize
 extern uint64 ExecuteTaskListOutsideTransaction(RowModifyLevel modLevel, List *taskList,
 												int targetPoolSize, List *jobIdList);
 extern void EagerAdaptiveExecutor(CitusScanState *scanState);
-extern void SingleTaskExecutor(CitusScanState *scanState);
+extern void SingleTaskExecutorStart(CitusScanState *scanState);
+extern bool SingleTaskExecutorRun(CitusScanState *scanState);
+extern void SingleTaskExecutorEnd(CitusScanState *scanState);
+extern int CalculateMaxBatchSize(TupleDesc tupleDescriptor);
 
 #endif /* ADAPTIVE_EXECUTOR_H */
