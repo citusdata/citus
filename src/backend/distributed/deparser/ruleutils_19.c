@@ -4,7 +4,7 @@
  *	  Functions to convert stored expressions/querytrees back to
  *	  source text
  *
- * Portions Copyright (c) 1996-2025, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2026, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -43,6 +43,11 @@
 #include "catalog/pg_operator.h"
 #include "catalog/pg_partitioned_table.h"
 #include "catalog/pg_proc.h"
+#include "catalog/pg_propgraph_element.h"
+#include "catalog/pg_propgraph_element_label.h"
+#include "catalog/pg_propgraph_label.h"
+#include "catalog/pg_propgraph_label_property.h"
+#include "catalog/pg_propgraph_property.h"
 #include "catalog/pg_statistic_ext.h"
 #include "catalog/pg_trigger.h"
 #include "catalog/pg_type.h"
@@ -391,6 +396,7 @@ static void get_update_query_targetlist_def(Query *query, List *targetList,
 static void get_delete_query_def(Query *query, deparse_context *context);
 static void get_merge_query_def(Query *query, deparse_context *context);
 static void get_utility_query_def(Query *query, deparse_context *context);
+static char *get_lock_clause_strength(LockClauseStrength strength);
 static void get_basic_select_query(Query *query, deparse_context *context);
 static void get_target_list(List *targetList, deparse_context *context);
 static void get_returning_clause(Query *query, deparse_context *context);
@@ -2037,10 +2043,10 @@ set_deparse_plan(deparse_namespace *dpns, Plan *plan)
 	 * source, and all INNER_VAR Vars in other parts of the query refer to its
 	 * targetlist.
 	 *
-	 * For ON CONFLICT .. UPDATE we just need the inner tlist to point to the
-	 * excluded expression's tlist. (Similar to the SubqueryScan we don't want
-	 * to reuse OUTER, it's used for RETURNING in some modify table cases,
-	 * although not INSERT .. CONFLICT).
+	 * For ON CONFLICT DO SELECT/UPDATE we just need the inner tlist to point
+	 * to the excluded expression's tlist. (Similar to the SubqueryScan we
+	 * don't want to reuse OUTER, it's used for RETURNING in some modify table
+	 * cases, although not INSERT .. CONFLICT).
 	 */
 	if (IsA(plan, SubqueryScan))
 		dpns->inner_plan = ((SubqueryScan *) plan)->subplan;
@@ -2264,6 +2270,9 @@ get_query_def_extended(Query *query, StringInfo buf, List *parentnamespace,
 	/*
 	 * Replace any Vars in the query's targetlist and havingQual that
 	 * reference GROUP outputs with the underlying grouping expressions.
+	 *
+	 * We can safely pass NULL for the root here.  Preserving varnullingrels
+	 * makes no difference to the deparsed source text.
 	 */
 	if (query->hasGroupRTE)
 	{
@@ -2631,30 +2640,9 @@ get_select_query_def(Query *query, deparse_context *context)
 			if (rc->pushedDown)
 				continue;
 
-			switch (rc->strength)
-			{
-				case LCS_NONE:
-					/* we intentionally throw an error for LCS_NONE */
-					elog(ERROR, "unrecognized LockClauseStrength %d",
-						 (int) rc->strength);
-					break;
-				case LCS_FORKEYSHARE:
-					appendContextKeyword(context, " FOR KEY SHARE",
-										 -PRETTYINDENT_STD, PRETTYINDENT_STD, 0);
-					break;
-				case LCS_FORSHARE:
-					appendContextKeyword(context, " FOR SHARE",
-										 -PRETTYINDENT_STD, PRETTYINDENT_STD, 0);
-					break;
-				case LCS_FORNOKEYUPDATE:
-					appendContextKeyword(context, " FOR NO KEY UPDATE",
-										 -PRETTYINDENT_STD, PRETTYINDENT_STD, 0);
-					break;
-				case LCS_FORUPDATE:
-					appendContextKeyword(context, " FOR UPDATE",
-										 -PRETTYINDENT_STD, PRETTYINDENT_STD, 0);
-					break;
-			}
+			appendContextKeyword(context,
+								 get_lock_clause_strength(rc->strength),
+								 -PRETTYINDENT_STD, PRETTYINDENT_STD, 0);
 
 			appendStringInfo(buf, " OF %s",
 							 quote_identifier(get_rtable_name(rc->rti,
@@ -2665,6 +2653,28 @@ get_select_query_def(Query *query, deparse_context *context)
 				appendStringInfoString(buf, " SKIP LOCKED");
 		}
 	}
+}
+
+static char *
+get_lock_clause_strength(LockClauseStrength strength)
+{
+	switch (strength)
+	{
+		case LCS_NONE:
+			/* we intentionally throw an error for LCS_NONE */
+			elog(ERROR, "unrecognized LockClauseStrength %d",
+				 (int) strength);
+			break;
+		case LCS_FORKEYSHARE:
+			return " FOR KEY SHARE";
+		case LCS_FORSHARE:
+			return " FOR SHARE";
+		case LCS_FORNOKEYUPDATE:
+			return " FOR NO KEY UPDATE";
+		case LCS_FORUPDATE:
+			return " FOR UPDATE";
+	}
+	return NULL;				/* keep compiler quiet */
 }
 
 /*
@@ -2821,7 +2831,9 @@ get_basic_select_query(Query *query, deparse_context *context)
 		save_ingroupby = context->inGroupBy;
 		context->inGroupBy = true;
 
-		if (query->groupingSets == NIL)
+		if (query->groupByAll)
+			appendStringInfoString(buf, "ALL");
+		else if (query->groupingSets == NIL)
 		{
 			sep = "";
 			foreach(l, query->groupClause)
@@ -3694,12 +3706,29 @@ get_insert_query_def(Query *query, deparse_context *context)
 		{
 			appendStringInfoString(buf, " DO NOTHING");
 		}
-		else
+		else if (confl->action == ONCONFLICT_UPDATE)
 		{
 			appendStringInfoString(buf, " DO UPDATE SET ");
 			/* Deparse targetlist */
 			get_update_query_targetlist_def(query, confl->onConflictSet,
 											context, rte);
+
+			/* Add a WHERE clause if given */
+			if (confl->onConflictWhere != NULL)
+			{
+				appendContextKeyword(context, " WHERE ",
+									 -PRETTYINDENT_STD, PRETTYINDENT_STD, 1);
+				get_rule_expr(confl->onConflictWhere, context, false);
+			}
+		}
+		else
+		{
+			Assert(confl->action == ONCONFLICT_SELECT);
+			appendStringInfoString(buf, " DO SELECT");
+
+			/* Add FOR [KEY] UPDATE/SHARE clause if present */
+			if (confl->lockStrength != LCS_NONE)
+				appendStringInfoString(buf, get_lock_clause_strength(confl->lockStrength));
 
 			/* Add a WHERE clause if given */
 			if (confl->onConflictWhere != NULL)
@@ -4273,6 +4302,171 @@ get_utility_query_def(Query *query, deparse_context *context)
 	{
 		/* Currently only NOTIFY utility commands can appear in rules */
 		elog(ERROR, "unexpected utility statement type");
+	}
+}
+
+
+/*
+ * Parse back a graph label expression
+ */
+static void
+get_graph_label_expr(Node *label_expr, deparse_context *context)
+{
+	StringInfo	buf = context->buf;
+
+	check_stack_depth();
+
+	switch (nodeTag(label_expr))
+	{
+		case T_GraphLabelRef:
+			{
+				GraphLabelRef *lref = (GraphLabelRef *) label_expr;
+
+				appendStringInfoString(buf, quote_identifier(get_propgraph_label_name(lref->labelid)));
+				break;
+			}
+
+		case T_BoolExpr:
+			{
+				BoolExpr   *be = (BoolExpr *) label_expr;
+				ListCell   *lc;
+				bool		first = true;
+
+				Assert(be->boolop == OR_EXPR);
+
+				foreach(lc, be->args)
+				{
+					if (!first)
+					{
+						if (be->boolop == OR_EXPR)
+							appendStringInfoChar(buf, '|');
+					}
+					else
+						first = false;
+					get_graph_label_expr(lfirst(lc), context);
+				}
+
+				break;
+			}
+
+		default:
+			elog(ERROR, "unrecognized node type: %d", (int) nodeTag(label_expr));
+			break;
+	}
+}
+
+/*
+ * Parse back a path pattern expression
+ */
+static void
+get_path_pattern_expr_def(List *path_pattern_expr, deparse_context *context)
+{
+	StringInfo	buf = context->buf;
+	ListCell   *lc;
+
+	foreach(lc, path_pattern_expr)
+	{
+		GraphElementPattern *gep = lfirst_node(GraphElementPattern, lc);
+		const char *sep = "";
+
+		switch (gep->kind)
+		{
+			case VERTEX_PATTERN:
+				appendStringInfoChar(buf, '(');
+				break;
+			case EDGE_PATTERN_LEFT:
+				appendStringInfoString(buf, "<-[");
+				break;
+			case EDGE_PATTERN_RIGHT:
+			case EDGE_PATTERN_ANY:
+				appendStringInfoString(buf, "-[");
+				break;
+			case PAREN_EXPR:
+				appendStringInfoChar(buf, '(');
+				break;
+		}
+
+		if (gep->variable)
+		{
+			appendStringInfoString(buf, quote_identifier(gep->variable));
+			sep = " ";
+		}
+
+		if (gep->labelexpr)
+		{
+			appendStringInfoString(buf, sep);
+			appendStringInfoString(buf, "IS ");
+			get_graph_label_expr(gep->labelexpr, context);
+			sep = " ";
+		}
+
+		if (gep->subexpr)
+		{
+			appendStringInfoString(buf, sep);
+			get_path_pattern_expr_def(gep->subexpr, context);
+			sep = " ";
+		}
+
+		if (gep->whereClause)
+		{
+			appendStringInfoString(buf, sep);
+			appendStringInfoString(buf, "WHERE ");
+			get_rule_expr(gep->whereClause, context, false);
+		}
+
+		switch (gep->kind)
+		{
+			case VERTEX_PATTERN:
+				appendStringInfoChar(buf, ')');
+				break;
+			case EDGE_PATTERN_LEFT:
+			case EDGE_PATTERN_ANY:
+				appendStringInfoString(buf, "]-");
+				break;
+			case EDGE_PATTERN_RIGHT:
+				appendStringInfoString(buf, "]->");
+				break;
+			case PAREN_EXPR:
+				appendStringInfoChar(buf, ')');
+				break;
+		}
+
+		if (gep->quantifier)
+		{
+			int			lower = linitial_int(gep->quantifier);
+			int			upper = lsecond_int(gep->quantifier);
+
+			appendStringInfo(buf, "{%d,%d}", lower, upper);
+		}
+	}
+}
+
+/*
+ * Parse back a graph pattern
+ */
+static void
+get_graph_pattern_def(GraphPattern *graph_pattern, deparse_context *context)
+{
+	StringInfo	buf = context->buf;
+	ListCell   *lc;
+	bool		first = true;
+
+	foreach(lc, graph_pattern->path_pattern_list)
+	{
+		List	   *path_pattern_expr = lfirst_node(List, lc);
+
+		if (!first)
+			appendStringInfoString(buf, ", ");
+		else
+			first = false;
+
+		get_path_pattern_expr_def(path_pattern_expr, context);
+	}
+
+	if (graph_pattern->whereClause)
+	{
+		appendStringInfoString(buf, "WHERE ");
+		get_rule_expr(graph_pattern->whereClause, context, false);
 	}
 }
 
@@ -5537,8 +5731,16 @@ get_parameter(Param *param, deparse_context *context)
 	subplan = find_param_generator(param, context, &column);
 	if (subplan)
 	{
-		appendStringInfo(context->buf, "(%s%s).col%d",
+		const char *nameprefix;
+
+		if (subplan->isInitPlan)
+			nameprefix = "InitPlan ";
+		else
+			nameprefix = "SubPlan ";
+
+		appendStringInfo(context->buf, "(%s%s%s).col%d",
 						 subplan->useHashTable ? "hashed " : "",
+						 nameprefix,
 						 subplan->plan_name, column + 1);
 
 		return;
@@ -6383,11 +6585,19 @@ get_rule_expr(Node *node, deparse_context *context,
 				}
 				else
 				{
+					const char *nameprefix;
+
 					/* No referencing Params, so show the SubPlan's name */
-					if (subplan->useHashTable)
-						appendStringInfo(buf, "hashed %s)", subplan->plan_name);
+					if (subplan->isInitPlan)
+						nameprefix = "InitPlan ";
 					else
-						appendStringInfo(buf, "%s)", subplan->plan_name);
+						nameprefix = "SubPlan ";
+					if (subplan->useHashTable)
+						appendStringInfo(buf, "hashed %s%s)",
+										 nameprefix, subplan->plan_name);
+					else
+						appendStringInfo(buf, "%s%s)",
+										 nameprefix, subplan->plan_name);
 				}
 			}
 			break;
@@ -6407,11 +6617,18 @@ get_rule_expr(Node *node, deparse_context *context,
 				foreach(lc, asplan->subplans)
 				{
 					SubPlan    *splan = lfirst_node(SubPlan, lc);
+					const char *nameprefix;
 
-					if (splan->useHashTable)
-						appendStringInfo(buf, "hashed %s", splan->plan_name);
+					if (splan->isInitPlan)
+						nameprefix = "InitPlan ";
 					else
-						appendStringInfoString(buf, splan->plan_name);
+						nameprefix = "SubPlan ";
+					if (splan->useHashTable)
+						appendStringInfo(buf, "hashed %s%s", nameprefix,
+										 splan->plan_name);
+					else
+						appendStringInfo(buf, "%s%s", nameprefix,
+										 splan->plan_name);
 					if (lnext(asplan->subplans, lc))
 						appendStringInfoString(buf, " or ");
 				}
@@ -6428,7 +6645,7 @@ get_rule_expr(Node *node, deparse_context *context,
 				bool		need_parens;
 
 				/*
-				 * Parenthesize the argument unless it's an SubscriptingRef or
+				 * Parenthesize the argument unless it's a SubscriptingRef or
 				 * another FieldSelect.  Note in particular that it would be
 				 * WRONG to not parenthesize a Var argument; simplicity is not
 				 * the issue here, having the right number of names is.
@@ -6711,7 +6928,7 @@ get_rule_expr(Node *node, deparse_context *context,
 					Node	   *e = (Node *) lfirst(arg);
 
 					if (tupdesc == NULL ||
-						!TupleDescAttr(tupdesc, i)->attisdropped)
+						!TupleDescCompactAttr(tupdesc, i)->attisdropped)
 					{
 						appendStringInfoString(buf, sep);
 
@@ -6735,7 +6952,7 @@ get_rule_expr(Node *node, deparse_context *context,
 				{
 					while (i < tupdesc->natts)
 					{
-						if (!TupleDescAttr(tupdesc, i)->attisdropped)
+						if (!TupleDescCompactAttr(tupdesc, i)->attisdropped)
 						{
 							appendStringInfoString(buf, sep);
 							appendStringInfoString(buf, "NULL");
@@ -6934,7 +7151,7 @@ get_rule_expr(Node *node, deparse_context *context,
 
 						if (needcomma)
 							appendStringInfoString(buf, ", ");
-						get_rule_expr((Node *) e, context, true);
+						get_rule_expr(e, context, true);
 						appendStringInfo(buf, " AS %s",
 										 quote_identifier(map_xml_name_to_sql_identifier(argname)));
 						needcomma = true;
@@ -7951,7 +8168,12 @@ get_windowfunc_expr_helper(WindowFunc *wfunc, deparse_context *context,
 		get_rule_expr((Node *) wfunc->aggfilter, context, false);
 	}
 
-	appendStringInfoString(buf, ") OVER ");
+	appendStringInfoString(buf, ") ");
+
+	if (wfunc->ignore_nulls == PARSER_IGNORE_NULLS)
+		appendStringInfoString(buf, "IGNORE NULLS ");
+
+	appendStringInfoString(buf, "OVER ");
 
 	if (context->windowClause)
 	{
@@ -8546,6 +8768,21 @@ get_json_constructor(JsonConstructorExpr *ctor, deparse_context *context,
 		get_json_agg_constructor(ctor, context, "JSON_ARRAYAGG", false);
 		return;
 	}
+	else if (ctor->type == JSCTOR_JSON_ARRAY_QUERY)
+	{
+		Query	   *query = castNode(Query, ctor->orig_query);
+
+		appendStringInfo(buf, "JSON_ARRAY(");
+
+		get_query_def(query, buf, context->namespaces, NULL, false,
+					  context->prettyFlags, context->wrapColumn,
+					  context->indentLevel);
+
+		get_json_constructor_options(ctor, buf);
+		appendStringInfoChar(buf, ')');
+
+		return;
+	}
 
 	switch (ctor->type)
 	{
@@ -8653,16 +8890,14 @@ simple_quote_literal(StringInfo buf, const char *val)
 	const char *valptr;
 
 	/*
-	 * We form the string literal according to the prevailing setting of
-	 * standard_conforming_strings; we never use E''. User is responsible for
-	 * making sure result is used correctly.
+	 * We always form the string literal according to standard SQL rules.
 	 */
 	appendStringInfoChar(buf, '\'');
 	for (valptr = val; *valptr; valptr++)
 	{
 		char		ch = *valptr;
 
-		if (SQL_STR_DOUBLE(ch, !standard_conforming_strings))
+		if (SQL_STR_DOUBLE(ch, false))
 			appendStringInfoChar(buf, ch);
 		appendStringInfoChar(buf, ch);
 	}
@@ -9366,6 +9601,29 @@ get_from_clause_item(Node *jtnode, Query *query, deparse_context *context)
 				break;
 			case RTE_TABLEFUNC:
 				get_tablefunc(rte->tablefunc, context, true);
+				break;
+			case RTE_GRAPH_TABLE:
+				appendStringInfoString(buf, "GRAPH_TABLE (");
+				appendStringInfoString(buf, generate_relation_name(rte->relid, context->namespaces));
+				appendStringInfoString(buf, " MATCH ");
+				get_graph_pattern_def(rte->graph_pattern, context);
+				appendStringInfoString(buf, " COLUMNS (");
+				{
+					bool		first = true;
+
+					foreach_node(TargetEntry, te, rte->graph_table_columns)
+					{
+						if (!first)
+							appendStringInfoString(buf, ", ");
+						else
+							first = false;
+
+						get_rule_expr((Node *) te->expr, context, false);
+						appendStringInfoString(buf, " AS ");
+						appendStringInfoString(buf, quote_identifier(te->resname));
+					}
+				}
+				appendStringInfoString(buf, "))");
 				break;
 			case RTE_VALUES:
 				/* Values list RTE */

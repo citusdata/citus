@@ -816,12 +816,6 @@ AddEdgesForWaitQueue(WaitGraph *waitGraph, PGPROC *waitingProc, PROCStack *remai
 		{
 			AddWaitEdge(waitGraph, waitingProc, currentProc, remaining);
 		}
-
-#if PG_VERSION_NUM >= PG_VERSION_19
-		currentProc = (PGPROC *) currentProc->waitLink.next;
-#else
-		currentProc = (PGPROC *) currentProc->links.next;
-#endif
 	}
 }
 
