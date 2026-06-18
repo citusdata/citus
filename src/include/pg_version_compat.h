@@ -102,10 +102,13 @@ typedef StringInfo fmStringInfo;
 #define planner(p, s, co, b) ((planner) (p, s, co, b, NULL))
 
 /*
- * PG19 added an `int *fgc_flags` out-parameter to FuncnameGetCandidates.
+ * PG19 added an `int *fgc_flags` out-parameter to FuncnameGetCandidates,
+ * which the callee writes to unconditionally — passing NULL crashes.
+ * Wrap so callers continue to use the old 7-arg signature.
  */
 #define FuncnameGetCandidates(names, nargs, argnames, ev, ed, io, ok) \
-		((FuncnameGetCandidates) (names, nargs, argnames, ev, ed, io, ok, NULL))
+		((FuncnameGetCandidates) (names, nargs, argnames, ev, ed, io, ok, \
+								  &(int) { 0 }))
 
 /*
  * PG19 added trailing `uint16 flags` to ExecInitScanTupleSlot and
@@ -179,6 +182,37 @@ citus_pg19_standard_conforming_strings(void)
 typedef struct RepackStmt ClusterStmt;
 #define T_ClusterStmt T_RepackStmt
 
+/*
+ * PG19 added TupleDesc->firstNonCachedOffsetAttr (an offset cache populated
+ * by TupleDescFinalize()).  BlessTupleDesc() and slot_deform_heap_tuple()
+ * now assert that the cache is initialised.  Citus builds many TupleDescs
+ * by hand (CreateTemplateTupleDesc + TupleDescInitEntry...) and historically
+ * relied on BlessTupleDesc as the "finalise + register" step.  Wrap
+ * BlessTupleDesc so it finalises first; pre-PG19 builds get a no-op
+ * TupleDescFinalize().  Sites that build a TupleDesc and use it with a
+ * slot WITHOUT going through BlessTupleDesc must call TupleDescFinalize()
+ * explicitly (handled at those call sites).
+ */
+#include "funcapi.h"
+
+#include "access/tupdesc.h"
+
+/*
+ * Single-evaluation wrapper: defined before the macro so the call below
+ * resolves to the real BlessTupleDesc(), and so the macro argument is only
+ * evaluated once (a plain comma-expression macro would evaluate it twice,
+ * duplicating any side effects such as BlessTupleDesc(CreateTemplateTupleDesc(...))).
+ */
+static inline TupleDesc
+citus_BlessTupleDesc(TupleDesc td)
+{
+	TupleDescFinalize(td);
+	return BlessTupleDesc(td);
+}
+
+
+#define BlessTupleDesc(td) citus_BlessTupleDesc(td)
+
 #endif /* PG_VERSION_NUM >= PG_VERSION_19 */
 
 #if PG_VERSION_NUM < PG_VERSION_19
@@ -202,6 +236,13 @@ typedef struct RepackStmt ClusterStmt;
  * Provide the same scoped accessor used on PG19 so call sites are uniform.
  */
 #define QueryDescTotalTime(qd) ((qd)->totaltime)
+
+/*
+ * PG19 builds rely on TupleDescFinalize() to populate the offset cache; on
+ * older majors there is no such cache, so provide a no-op for the explicit
+ * call sites that build TupleDescs without going through BlessTupleDesc.
+ */
+#define TupleDescFinalize(td) ((void) 0)
 
 #endif /* PG_VERSION_NUM < PG_VERSION_19 */
 

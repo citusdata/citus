@@ -2919,7 +2919,18 @@ OverridePostgresConfigProperties(void)
 
 		if (strcmp(var->name, "application_name") == 0)
 		{
+#if PG_VERSION_NUM >= PG_VERSION_19
+
+			/*
+			 * In PG19, struct config_generic embeds a union of the
+			 * type-specific fields (e.g. _string) rather than being a
+			 * prefix of struct config_string.  Access the embedded
+			 * config_string via the union member.
+			 */
+			struct config_string *stringVar = &var->_string;
+#else
 			struct config_string *stringVar = (struct config_string *) var;
+#endif
 
 			OldApplicationNameAssignHook = stringVar->assign_hook;
 			stringVar->assign_hook = ApplicationNameAssignHook;
