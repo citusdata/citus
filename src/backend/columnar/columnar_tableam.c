@@ -424,7 +424,7 @@ ErrorIfInvalidRowNumber(uint64 rowNumber)
 static Size
 columnar_parallelscan_estimate(Relation rel)
 {
-	return sizeof(ParallelBlockTableScanDescData);
+	return table_block_parallelscan_estimate(rel);
 }
 
 
@@ -2365,6 +2365,47 @@ ColumnarProcessUtility(PlannedStmt *pstmt,
 			break;
 		}
 
+		case T_ReindexStmt:
+		{
+			ReindexStmt *reindexStmt = castNode(ReindexStmt, parsetree);
+
+			/*
+			 * REINDEX on a columnar table rebuilds its index(es) and, just
+			 * like CREATE INDEX, first flushes any pending writes -- which
+			 * updates the stripe reservation entry in columnar.stripe.  That
+			 * update is disallowed inside a parallel operation, so we must
+			 * force a serial build here too (see the T_IndexStmt case above).
+			 *
+			 * Only REINDEX {TABLE,INDEX} target a single relation and can run
+			 * inside a transaction block (hence may carry pending writes).
+			 * REINDEX {SCHEMA,DATABASE,SYSTEM} cannot run in a transaction
+			 * block, so they never have pending writes to flush and need no
+			 * special handling here.
+			 */
+			if (reindexStmt->relation != NULL &&
+				(reindexStmt->kind == REINDEX_OBJECT_TABLE ||
+				 reindexStmt->kind == REINDEX_OBJECT_INDEX))
+			{
+				Oid relationId = RangeVarGetRelid(reindexStmt->relation,
+												  AccessShareLock, true);
+
+				if (OidIsValid(relationId))
+				{
+					Oid heapRelationId =
+						(reindexStmt->kind == REINDEX_OBJECT_INDEX) ?
+						IndexGetRelation(relationId, true) :
+						relationId;
+
+					if (OidIsValid(heapRelationId) &&
+						IsColumnarTableAmTable(heapRelationId))
+					{
+						indexBuildOnColumnar = true;
+					}
+				}
+			}
+			break;
+		}
+
 		case T_CreateStmt:
 		{
 			CreateStmt *createStmt = castNode(CreateStmt, parsetree);
@@ -2453,9 +2494,9 @@ ColumnarProcessUtility(PlannedStmt *pstmt,
 	if (indexBuildOnColumnar)
 	{
 		saveNestLevel = NewGUCNestLevel();
-		(void) set_config_option("max_parallel_maintenance_workers", "0",
-								 PGC_USERSET, PGC_S_SESSION,
-								 GUC_ACTION_SAVE, true, 0, false);
+		set_config_option("max_parallel_maintenance_workers", "0",
+						  PGC_USERSET, PGC_S_SESSION,
+						  GUC_ACTION_SAVE, true, 0, false);
 	}
 
 	PG_TRY();
