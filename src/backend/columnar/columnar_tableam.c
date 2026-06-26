@@ -412,24 +412,33 @@ ErrorIfInvalidRowNumber(uint64 rowNumber)
 }
 
 
+/*
+ * Columnar scans are always serial regardless of the parallel scan descriptor
+ * (rs_parallel is stored but never read by the columnar scan path).  We still
+ * provide working parallelscan callbacks so that callers that unconditionally
+ * size and initialize a parallel scan descriptor (for example, PG19's parallel
+ * btree index build path) do not abort.  Delegating to the heap block helpers
+ * is safe: columnar never partitions work using the descriptor, so any state
+ * written there is simply unused.
+ */
 static Size
 columnar_parallelscan_estimate(Relation rel)
 {
-	elog(ERROR, "columnar_parallelscan_estimate not implemented");
+	return table_block_parallelscan_estimate(rel);
 }
 
 
 static Size
 columnar_parallelscan_initialize(Relation rel, ParallelTableScanDesc pscan)
 {
-	elog(ERROR, "columnar_parallelscan_initialize not implemented");
+	return table_block_parallelscan_initialize(rel, pscan);
 }
 
 
 static void
 columnar_parallelscan_reinitialize(Relation rel, ParallelTableScanDesc pscan)
 {
-	elog(ERROR, "columnar_parallelscan_reinitialize not implemented");
+	table_block_parallelscan_reinitialize(rel, pscan);
 }
 
 
@@ -1528,10 +1537,13 @@ columnar_index_build_range_scan(Relation columnarRelation,
 	if (scan)
 	{
 		/*
-		 * Parallel scans on columnar tables are already discardad by
-		 * ColumnarGetRelationInfoHook but be on the safe side.
+		 * Starting with PG19 the planner may hand us a parallel scan descriptor
+		 * even for tables (like columnar) whose AM only supports serial scans.
+		 * Discard it: columnar never partitions index-build work across workers
+		 * and always starts its own serial scan below.  This mirrors how the
+		 * existing serial path ignores any externally supplied scan.
 		 */
-		elog(ERROR, "parallel scans on columnar are not supported");
+		scan = NULL;
 	}
 
 	/*
@@ -2315,6 +2327,7 @@ ColumnarProcessUtility(PlannedStmt *pstmt,
 
 	RangeVar *columnarRangeVar = NULL;
 	List *columnarOptions = NIL;
+	bool indexBuildOnColumnar = false;
 
 	switch (nodeTag(parsetree))
 	{
@@ -2337,9 +2350,59 @@ ColumnarProcessUtility(PlannedStmt *pstmt,
 										   "index on columnar table %s",
 										   RelationGetRelationName(rel))));
 				}
+
+				/*
+				 * Columnar does not support parallel index build (its scan path is
+				 * always serial and writes during the build would violate parallel
+				 * mode).  Force max_parallel_maintenance_workers to 0 for this
+				 * statement so PG does not spawn workers.  Starting with PG19 the
+				 * default of 2 caused CREATE INDEX on a columnar table to fail.
+				 */
+				indexBuildOnColumnar = true;
 			}
 
 			RelationClose(rel);
+			break;
+		}
+
+		case T_ReindexStmt:
+		{
+			ReindexStmt *reindexStmt = castNode(ReindexStmt, parsetree);
+
+			/*
+			 * REINDEX on a columnar table rebuilds its index(es) and, just
+			 * like CREATE INDEX, first flushes any pending writes -- which
+			 * updates the stripe reservation entry in columnar.stripe.  That
+			 * update is disallowed inside a parallel operation, so we must
+			 * force a serial build here too (see the T_IndexStmt case above).
+			 *
+			 * Only REINDEX {TABLE,INDEX} target a single relation and can run
+			 * inside a transaction block (hence may carry pending writes).
+			 * REINDEX {SCHEMA,DATABASE,SYSTEM} cannot run in a transaction
+			 * block, so they never have pending writes to flush and need no
+			 * special handling here.
+			 */
+			if (reindexStmt->relation != NULL &&
+				(reindexStmt->kind == REINDEX_OBJECT_TABLE ||
+				 reindexStmt->kind == REINDEX_OBJECT_INDEX))
+			{
+				Oid relationId = RangeVarGetRelid(reindexStmt->relation,
+												  AccessShareLock, true);
+
+				if (OidIsValid(relationId))
+				{
+					Oid heapRelationId =
+						(reindexStmt->kind == REINDEX_OBJECT_INDEX) ?
+						IndexGetRelation(relationId, true) :
+						relationId;
+
+					if (OidIsValid(heapRelationId) &&
+						IsColumnarTableAmTable(heapRelationId))
+					{
+						indexBuildOnColumnar = true;
+					}
+				}
+			}
 			break;
 		}
 
@@ -2427,8 +2490,28 @@ ColumnarProcessUtility(PlannedStmt *pstmt,
 		CheckCitusColumnarAlterExtensionStmt(parsetree);
 	}
 
-	PrevProcessUtilityHook(pstmt, queryString, false, context,
-						   params, queryEnv, dest, completionTag);
+	int saveNestLevel = -1;
+	if (indexBuildOnColumnar)
+	{
+		saveNestLevel = NewGUCNestLevel();
+		set_config_option("max_parallel_maintenance_workers", "0",
+						  PGC_USERSET, PGC_S_SESSION,
+						  GUC_ACTION_SAVE, true, 0, false);
+	}
+
+	PG_TRY();
+	{
+		PrevProcessUtilityHook(pstmt, queryString, false, context,
+							   params, queryEnv, dest, completionTag);
+	}
+	PG_FINALLY();
+	{
+		if (saveNestLevel >= 0)
+		{
+			AtEOXact_GUC(true, saveNestLevel);
+		}
+	}
+	PG_END_TRY();
 
 	if (columnarOptions != NIL)
 	{
