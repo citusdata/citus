@@ -10,6 +10,7 @@
 
 #include "postgres.h"
 
+#include "fmgr.h"
 #include "miscadmin.h"
 
 #include "catalog/dependency.h"
@@ -24,7 +25,9 @@
 #include "distributed/listutils.h"
 #include "distributed/metadata/dependency.h"
 #include "distributed/metadata/distobject.h"
+#include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
+#include "distributed/metadata_utility.h"
 #include "distributed/multi_executor.h"
 #include "distributed/relation_access_tracking.h"
 #include "distributed/remote_commands.h"
@@ -44,9 +47,70 @@ static int ObjectAddressComparator(const void *a, const void *b);
 static void EnsureDependenciesExistOnAllNodes(const ObjectAddress *target);
 static void EnsureRequiredObjectSetExistOnAllNodes(const ObjectAddress *target,
 												   RequiredObjectSet requiredObjectSet);
+static void EnsureObjectExistsOnAllNodes(const ObjectAddress *target);
 static List * GetDependencyCreateDDLCommands(const ObjectAddress *dependency);
 static bool ShouldPropagateObject(const ObjectAddress *address);
 static char * DropTableIfExistsCommand(Oid relationId);
+
+PG_FUNCTION_INFO_V1(citus_internal_distribute_object);
+
+/*
+ * citus_internal_distribute_object recreates a single object on all worker nodes
+ * and records it in pg_dist_object on the coordinator and all worker nodes, in an
+ * idempotent manner.
+ *
+ * It is a superuser-only repair tool that is meant to be used when an object that
+ * should have been distributed was not, e.g., due to a bug. Once such an object is
+ * identified, this function can be used to create it as a distributed object across
+ * the cluster.
+ *
+ * Different than the regular object propagation path, this function deliberately
+ * ignores the dependencies of the given object: it only executes the DDL commands
+ * that Citus would use to (re)create the object itself on another node. The caller
+ * is responsible for making sure that the dependencies of the object already exist
+ * on all nodes.
+ */
+Datum
+citus_internal_distribute_object(PG_FUNCTION_ARGS)
+{
+	CheckCitusVersion(ERROR);
+	EnsureCoordinator();
+	EnsureSuperUser();
+
+	Oid classId = PG_GETARG_OID(0);
+	Oid objectId = PG_GETARG_OID(1);
+
+	ObjectAddress *objectAddress = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*objectAddress, classId, objectId);
+
+	/*
+	 * The object must exist on the local node so that we can generate the DDL
+	 * commands to (re)create it on the other nodes.
+	 */
+	if (!ObjectExists(objectAddress))
+	{
+		ereport(ERROR, (errmsg("object with classid %u and objid %u does not exist "
+							   "on the local node", classId, objectId)));
+	}
+
+	/*
+	 * Make sure that Citus knows how to (re)create the object on the other nodes
+	 * before attempting to do so. Otherwise, GetDependencyCreateDDLCommands would
+	 * fail with a hard error for an unsupported object type.
+	 */
+	if (!SupportedDependencyByCitus(objectAddress))
+	{
+		char *objectIdentity =
+			getObjectIdentity(objectAddress, /* missingOk: */ false);
+		ereport(ERROR, (errmsg("cannot distribute object \"%s\"", objectIdentity),
+						errdetail("Citus does not support distributing objects of "
+								  "this type.")));
+	}
+
+	EnsureObjectExistsOnAllNodes(objectAddress);
+
+	PG_RETURN_VOID();
+}
 
 /*
  * EnsureObjectAndDependenciesExistOnAllNodes is a wrapper around
@@ -85,6 +149,70 @@ EnsureObjectAndDependenciesExistOnAllNodes(const ObjectAddress *target)
 		return;
 	}
 	EnsureRequiredObjectSetExistOnAllNodes(target, REQUIRE_OBJECT_AND_DEPENDENCIES);
+}
+
+
+/*
+ * EnsureObjectExistsOnAllNodes creates the given object --but not its
+ * dependencies-- on all worker nodes in an idempotent manner and records it in
+ * pg_dist_object on the coordinator and all worker nodes.
+ *
+ * This is a focused variant of EnsureRequiredObjectSetExistOnAllNodes that
+ * deliberately skips all dependency handling; it only (re)creates the object
+ * itself. It is intended to repair objects that should be distributed but are
+ * not, hence it always records the object in pg_dist_object even if there are
+ * no DDL commands to execute on the workers.
+ *
+ * The objects are created via a separate session that is committed directly so
+ * that they are visible to the (current transaction's) metadata connection when
+ * we mark the object distributed below.
+ */
+static void
+EnsureObjectExistsOnAllNodes(const ObjectAddress *target)
+{
+	List *ddlCommands = GetDependencyCreateDDLCommands(target);
+
+	/*
+	 * Make sure that no new nodes are added after this point until the end of the
+	 * transaction by taking a RowShareLock on pg_dist_node, which conflicts with
+	 * the ExclusiveLock taken by citus_add_node.
+	 * This guarantees that all active nodes will have the object, because they
+	 * will either get it now, or get it in citus_add_node after this transaction
+	 * finishes and the pg_dist_object record becomes visible.
+	 */
+	List *remoteNodeList = ActivePrimaryRemoteNodeList(RowShareLock);
+
+	/*
+	 * Lock the object to be created explicitly to make sure that the same DDL
+	 * command won't be sent multiple times from parallel sessions.
+	 */
+	LockDatabaseObject(target->classId, target->objectId, target->objectSubId,
+					   ExclusiveLock);
+
+	if (list_length(ddlCommands) > 0)
+	{
+		/* since we are executing ddl commands, disable propagation, primarily for mx */
+		ddlCommands = list_concat(list_make1(DISABLE_DDL_PROPAGATION), ddlCommands);
+
+		WorkerNode *workerNode = NULL;
+		foreach_declared_ptr(workerNode, remoteNodeList)
+		{
+			const char *nodeName = workerNode->workerName;
+			uint32 nodePort = workerNode->workerPort;
+
+			SendCommandListToWorkerOutsideTransaction(nodeName, nodePort,
+													  CitusExtensionOwnerName(),
+													  ddlCommands);
+		}
+	}
+
+	/*
+	 * We mark the object distributed after creating it on the remote nodes so
+	 * that MarkObjectDistributedViaSuperUser wouldn't fail. The pg_dist_object
+	 * record is inserted in an idempotent manner (ON CONFLICT DO NOTHING) both on
+	 * the coordinator and on all worker nodes.
+	 */
+	MarkObjectDistributedViaSuperUser(target);
 }
 
 

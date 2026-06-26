@@ -1,0 +1,74 @@
+--
+-- CITUS_INTERNAL_DISTRIBUTE_OBJECT
+--
+-- Tests for the superuser-only citus_internal.distribute_object() repair UDF
+-- that (re)creates a single object on all worker nodes and records it in
+-- pg_dist_object on the coordinator and all worker nodes in an idempotent
+-- manner. Dependencies of the object are deliberately not considered.
+--
+SET client_min_messages TO WARNING;
+-- Create a function only on the coordinator (metadata sync off), simulating an
+-- object that should have been distributed but was not, e.g. due to a bug.
+SET citus.enable_metadata_sync TO OFF;
+CREATE FUNCTION public.dist_obj_repair_fn(int) RETURNS int LANGUAGE sql IMMUTABLE AS $fn$ SELECT $1 $fn$;
+RESET citus.enable_metadata_sync;
+-- It is not recorded in pg_dist_object on the coordinator ...
+SELECT count(*) AS coordinator_before FROM pg_catalog.pg_dist_object WHERE classid = 'pg_catalog.pg_proc'::regclass AND objid = 'public.dist_obj_repair_fn(int)'::regprocedure;
+ coordinator_before
+---------------------------------------------------------------------
+                  0
+(1 row)
+
+-- ... and it does not exist on any worker node.
+SELECT bool_and(result::int = 0) AS missing_on_all_workers FROM run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname = 'dist_obj_repair_fn'$$);
+ missing_on_all_workers
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- Repair it: (re)create on all workers and record in pg_dist_object everywhere.
+SELECT citus_internal.distribute_object('pg_catalog.pg_proc'::regclass::oid, 'public.dist_obj_repair_fn(int)'::regprocedure::oid);
+ distribute_object
+---------------------------------------------------------------------
+
+(1 row)
+
+-- Now it is recorded in pg_dist_object on the coordinator ...
+SELECT count(*) AS coordinator_after FROM pg_catalog.pg_dist_object WHERE classid = 'pg_catalog.pg_proc'::regclass AND objid = 'public.dist_obj_repair_fn(int)'::regprocedure;
+ coordinator_after
+---------------------------------------------------------------------
+                 1
+(1 row)
+
+-- ... it exists on all worker nodes ...
+SELECT bool_and(result::int = 1) AS exists_on_all_workers FROM run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname = 'dist_obj_repair_fn'$$);
+ exists_on_all_workers
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- ... and it is recorded in pg_dist_object on all worker nodes.
+SELECT bool_and(result::int = 1) AS distributed_on_all_workers FROM run_command_on_workers($$SELECT count(*) FROM pg_catalog.pg_dist_object WHERE classid = 'pg_catalog.pg_proc'::regclass AND objid = 'public.dist_obj_repair_fn(int)'::regprocedure$$);
+ distributed_on_all_workers
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- Calling it again is a no-op (idempotent) and does not error.
+SELECT citus_internal.distribute_object('pg_catalog.pg_proc'::regclass::oid, 'public.dist_obj_repair_fn(int)'::regprocedure::oid);
+ distribute_object
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT count(*) AS coordinator_idempotent FROM pg_catalog.pg_dist_object WHERE classid = 'pg_catalog.pg_proc'::regclass AND objid = 'public.dist_obj_repair_fn(int)'::regprocedure;
+ coordinator_idempotent
+---------------------------------------------------------------------
+                      1
+(1 row)
+
+-- It errors for an object that does not exist on the local node.
+SELECT citus_internal.distribute_object('pg_catalog.pg_proc'::regclass::oid, 0);
+ERROR:  object with classid 1255 and objid 0 does not exist on the local node
+-- Cleanup.
+DROP FUNCTION public.dist_obj_repair_fn(int);
