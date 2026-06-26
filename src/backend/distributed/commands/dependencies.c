@@ -16,7 +16,9 @@
 #include "catalog/dependency.h"
 #include "catalog/objectaddress.h"
 #include "commands/extension.h"
+#include "lib/stringinfo.h"
 #include "storage/lmgr.h"
+#include "utils/builtins.h"
 #include "utils/lsyscache.h"
 
 #include "distributed/commands.h"
@@ -48,6 +50,9 @@ static void EnsureDependenciesExistOnAllNodes(const ObjectAddress *target);
 static void EnsureRequiredObjectSetExistOnAllNodes(const ObjectAddress *target,
 												   RequiredObjectSet requiredObjectSet);
 static void EnsureObjectExistsOnAllNodes(const ObjectAddress *target);
+static char * ObjectExistsOnNodeCommand(const ObjectAddress *target);
+static bool RemoteObjectExists(MultiConnection *connection,
+							   const char *existenceCheckCommand);
 static List * GetDependencyCreateDDLCommands(const ObjectAddress *dependency);
 static bool ShouldPropagateObject(const ObjectAddress *address);
 static char * DropTableIfExistsCommand(Oid relationId);
@@ -82,7 +87,7 @@ citus_internal_distribute_object(PG_FUNCTION_ARGS)
 	if (!ObjectExists(objectAddress))
 	{
 		ereport(ERROR, (errmsg("object with classid %u and objid %u does not exist "
-							   "on the coordinator", classId, objectId)));
+							   "on the local node", classId, objectId)));
 	}
 
 	/*
@@ -147,33 +152,29 @@ EnsureObjectAndDependenciesExistOnAllNodes(const ObjectAddress *target)
 
 /*
  * EnsureObjectExistsOnAllNodes creates the given object --but not its
- * dependencies-- on all worker nodes in an idempotent manner and records it in
+ * dependencies-- on the worker nodes that are missing it and records it in
  * pg_dist_object on all nodes.
  *
- * This only (re)creates the object itself.
+ * For each remote node, we first check whether the object already exists there
+ * --resolved by name, so that OID differences between nodes don't matter-- and
+ * only (re)create it on the nodes that are missing it. This way we never hand a
+ * "create or replace" style command to a node that already has the object,
+ * which --for some object classes-- would otherwise rename the existing object
+ * out of the way before recreating it.
  *
- * The objects are created via a separate session that is committed directly so
- * that they are visible to the (current transaction's) metadata connection when
- * we mark the object distributed below.
+ * We deliberately accept the small TOCTOU window where the object might be
+ * created by someone else between our existence check and our own creation
+ * attempt: the worst case is that the create command fails loudly, which is
+ * acceptable for a superuser-only repair UDF.
+ *
+ * The object is created via a separate session that is committed directly so
+ * that it is visible to the (current transaction's) metadata connection when we
+ * mark the object distributed below.
  */
 static void
 EnsureObjectExistsOnAllNodes(const ObjectAddress *target)
 {
 	List *ddlCommands = GetDependencyCreateDDLCommands(target);
-
-	/*
-	 * Make sure that no new nodes are added after this point until the end of the
-	 * transaction by taking a RowShareLock on pg_dist_node, which conflicts with
-	 * the ExclusiveLock taken by citus_add_node.
-	 */
-	List *remoteNodeList = ActivePrimaryRemoteNodeList(RowShareLock);
-
-	/*
-	 * Lock objects to be created explicitly to make sure same DDL command won't
-	 * be sent multiple times from parallel sessions.
-	 */
-	LockDatabaseObject(target->classId, target->objectId, target->objectSubId,
-					   ExclusiveLock);
 
 	if (list_length(ddlCommands) == 0)
 	{
@@ -185,18 +186,145 @@ EnsureObjectExistsOnAllNodes(const ObjectAddress *target)
 	/* since we are executing DDL commands, disable propagation */
 	ddlCommands = list_concat(list_make1(DISABLE_DDL_PROPAGATION), ddlCommands);
 
+	/*
+	 * Build the command that we use to check whether the object already exists
+	 * on a node once, before the loop, so that we deparse the object identity
+	 * only a single time.
+	 */
+	char *existenceCheckCommand = ObjectExistsOnNodeCommand(target);
+
+	/*
+	 * Make sure that no new nodes are added after this point until the end of the
+	 * transaction by taking a RowShareLock on pg_dist_node, which conflicts with
+	 * the ExclusiveLock taken by citus_add_node.
+	 */
+	List *remoteNodeList = ActivePrimaryRemoteNodeList(RowShareLock);
+
+	/*
+	 * Lock the object to be created explicitly to make sure same DDL command
+	 * won't be sent multiple times from parallel sessions.
+	 */
+	LockDatabaseObject(target->classId, target->objectId, target->objectSubId,
+					   ExclusiveLock);
+
 	WorkerNode *workerNode = NULL;
 	foreach_declared_ptr(workerNode, remoteNodeList)
 	{
 		const char *nodeName = workerNode->workerName;
 		uint32 nodePort = workerNode->workerPort;
 
-		SendCommandListToWorkerOutsideTransaction(nodeName, nodePort,
-												  CitusExtensionOwnerName(),
-												  ddlCommands);
+		int connectionFlags = FORCE_NEW_CONNECTION;
+		MultiConnection *connection =
+			GetNodeUserDatabaseConnection(connectionFlags, nodeName, nodePort,
+										  CitusExtensionOwnerName(), NULL);
+
+		if (!RemoteObjectExists(connection, existenceCheckCommand))
+		{
+			SendCommandListToWorkerOutsideTransactionWithConnection(connection,
+																	ddlCommands);
+		}
+
+		CloseConnection(connection);
 	}
 
 	MarkObjectDistributedViaSuperUser(target);
+}
+
+
+/*
+ * ObjectExistsOnNodeCommand returns a query that returns a single row when the
+ * given object exists on the node it is executed on, and raises an error
+ * otherwise.
+ *
+ * The object is identified by its name --object type, names and args, the same
+ * representation that pg_identify_object_as_address() produces-- rather than by
+ * its OID, since OIDs are not guaranteed to match across nodes.
+ */
+static char *
+ObjectExistsOnNodeCommand(const ObjectAddress *target)
+{
+	bool missingOk = false;
+	char *objectType = getObjectTypeDescription(target, missingOk);
+
+	List *objectNames = NIL;
+	List *objectArgs = NIL;
+	getObjectIdentityParts(target, &objectNames, &objectArgs, missingOk);
+
+	StringInfo command = makeStringInfo();
+	appendStringInfo(command,
+					 "SELECT 1 FROM pg_catalog.pg_get_object_address(%s, ",
+					 quote_literal_cstr(objectType));
+
+	appendStringInfoString(command, "ARRAY[");
+
+	char *objectName = NULL;
+	bool firstName = true;
+	foreach_declared_ptr(objectName, objectNames)
+	{
+		appendStringInfo(command, "%s%s", firstName ? "" : ", ",
+						 quote_literal_cstr(objectName));
+		firstName = false;
+	}
+
+	appendStringInfoString(command, "]::text[], ARRAY[");
+
+	char *objectArg = NULL;
+	bool firstArg = true;
+	foreach_declared_ptr(objectArg, objectArgs)
+	{
+		appendStringInfo(command, "%s%s", firstArg ? "" : ", ",
+						 quote_literal_cstr(objectArg));
+		firstArg = false;
+	}
+
+	appendStringInfoString(command, "]::text[])");
+
+	return command->data;
+}
+
+
+/*
+ * RemoteObjectExists executes the given existence-check command --built by
+ * ObjectExistsOnNodeCommand()-- over the provided connection and returns whether
+ * the object exists on the remote node.
+ *
+ * pg_get_object_address() resolves the object by name and raises an error when
+ * it cannot find it. We treat such a statement-level error as "the object does
+ * not exist on this node" and only surface connection-level failures as errors.
+ */
+static bool
+RemoteObjectExists(MultiConnection *connection, const char *existenceCheckCommand)
+{
+	int querySent = SendRemoteCommand(connection, existenceCheckCommand);
+	if (querySent == 0)
+	{
+		ReportConnectionError(connection, ERROR);
+	}
+
+	bool raiseInterrupts = true;
+	PGresult *result = GetRemoteCommandResult(connection, raiseInterrupts);
+
+	bool objectExists = false;
+	if (IsResponseOK(result))
+	{
+		objectExists = PQntuples(result) > 0;
+	}
+	else if (PQstatus(connection->pgConn) != CONNECTION_OK)
+	{
+		/* we lost the connection while probing, so error out after cleanup */
+		PQclear(result);
+		ForgetResults(connection);
+		ReportConnectionError(connection, ERROR);
+	}
+
+	/*
+	 * Otherwise pg_get_object_address() could not resolve the object by name,
+	 * which we interpret as the object being absent on this node.
+	 */
+	PQclear(result);
+	ForgetResults(connection);
+
+	return objectExists;
 }
 
 
