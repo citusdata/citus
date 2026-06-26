@@ -181,7 +181,7 @@ EnsureObjectExistsOnAllNodes(const ObjectAddress *target)
 							   "with classid %u and objid %u",
 							   target->classId, target->objectId)));
 	}
-	
+
 	/* since we are executing DDL commands, disable propagation */
 	ddlCommands = list_concat(list_make1(DISABLE_DDL_PROPAGATION), ddlCommands);
 
@@ -192,10 +192,10 @@ EnsureObjectExistsOnAllNodes(const ObjectAddress *target)
 		uint32 nodePort = workerNode->workerPort;
 
 		SendCommandListToWorkerOutsideTransaction(nodeName, nodePort,
-													CitusExtensionOwnerName(),
-													ddlCommands);
+												  CitusExtensionOwnerName(),
+												  ddlCommands);
 	}
-	
+
 	MarkObjectDistributedViaSuperUser(target);
 }
 
