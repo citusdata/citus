@@ -30,6 +30,13 @@ static bool IsClusterStmtVerbose_compat(ClusterStmt *clusterStmt);
  * creates a DDLJob to encapsulate information needed during the worker node
  * portion of DDL execution before returning that DDLJob in a List. If no
  * distributed table is involved, this function returns NIL.
+ *
+ * On PG19 the same node (RepackStmt, aliased as ClusterStmt) backs both CLUSTER
+ * and REPACK; the two are told apart by ->command (ClusterStmtIsRepack).  Citus
+ * propagates REPACK exactly like CLUSTER -- the original command text is shipped
+ * to every shard placement -- so the only command-specific behaviour here is the
+ * wording of the user-facing WARNING/ERROR messages.  VACUUM FULL never reaches
+ * this path (it stays on the T_VacuumStmt / vacuum code path).
  */
 List *
 PreprocessClusterStmt(Node *node, const char *clusterCommand,
@@ -37,14 +44,16 @@ PreprocessClusterStmt(Node *node, const char *clusterCommand,
 {
 	ClusterStmt *clusterStmt = castNode(ClusterStmt, node);
 	bool missingOK = false;
+	const char *commandName = ClusterStmtCommandName(clusterStmt);
 
 	if (clusterStmt->relation == NULL)
 	{
 		if (EnableUnsupportedFeatureMessages)
 		{
-			ereport(WARNING, (errmsg("not propagating CLUSTER command to worker nodes"),
-							  errhint("Provide a specific table in order to CLUSTER "
-									  "distributed tables.")));
+			ereport(WARNING, (errmsg("not propagating %s command to worker nodes",
+									 commandName),
+							  errhint("Provide a specific table in order to %s "
+									  "distributed tables.", commandName)));
 		}
 
 		return NIL;
@@ -87,10 +96,11 @@ PreprocessClusterStmt(Node *node, const char *clusterCommand,
 	{
 		if (EnableUnsupportedFeatureMessages)
 		{
-			ereport(WARNING, (errmsg("not propagating CLUSTER command for partitioned "
-									 "table to worker nodes"),
+			ereport(WARNING, (errmsg("not propagating %s command for partitioned "
+									 "table to worker nodes", commandName),
 							  errhint("Provide a child partition table names in order to "
-									  "CLUSTER distributed partitioned tables.")));
+									  "%s distributed partitioned tables.", commandName)))
+			;
 		}
 
 		return NIL;
@@ -98,7 +108,7 @@ PreprocessClusterStmt(Node *node, const char *clusterCommand,
 
 	if (IsClusterStmtVerbose_compat(clusterStmt))
 	{
-		ereport(ERROR, (errmsg("cannot run CLUSTER command"),
+		ereport(ERROR, (errmsg("cannot run %s command", commandName),
 						errdetail("VERBOSE option is currently unsupported "
 								  "for distributed tables.")));
 	}

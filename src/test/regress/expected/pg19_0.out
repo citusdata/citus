@@ -1,0 +1,9 @@
+--
+-- PG19
+--
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+')::int >= 19 AS server_version_ge_19
+\gset
+\if :server_version_ge_19
+\else
+\q

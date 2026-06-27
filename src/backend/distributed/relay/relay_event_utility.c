@@ -239,6 +239,15 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 		{
 			ClusterStmt *clusterStmt = (ClusterStmt *) parseTree;
 
+			/*
+			 * On PG19 T_ClusterStmt aliases T_RepackStmt, so this also relays
+			 * REPACK.  Both forms carry the target in ->relation and the
+			 * optional order-by index in ->indexname, so the shardId is
+			 * appended to the relation name and (when present) the index name
+			 * for either command.  The ->relation member layout differs
+			 * between versions and is handled by the guard below.
+			 */
+
 			/* we do not support clustering the entire database */
 			if (clusterStmt->relation == NULL)
 			{
