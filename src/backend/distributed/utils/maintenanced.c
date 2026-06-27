@@ -937,10 +937,9 @@ MaintenanceDaemonShmemInit(void)
 	 */
 	if (!alreadyInitialized)
 	{
-		MaintenanceDaemonControl->trancheId = LWLockNewTrancheId();
 		MaintenanceDaemonControl->lockTrancheName = "Citus Maintenance Daemon";
-		LWLockRegisterTranche(MaintenanceDaemonControl->trancheId,
-							  MaintenanceDaemonControl->lockTrancheName);
+		MaintenanceDaemonControl->trancheId =
+			LWLockNewTrancheIdCompat(MaintenanceDaemonControl->lockTrancheName);
 
 		LWLockInitialize(&MaintenanceDaemonControl->lock,
 						 MaintenanceDaemonControl->trancheId);

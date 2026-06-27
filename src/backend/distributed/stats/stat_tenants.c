@@ -709,11 +709,9 @@ CreateSharedMemoryForMultiTenantMonitor(void)
 		return monitor;
 	}
 
-	monitor->namedLockTranche.trancheId = LWLockNewTrancheId();
 	monitor->namedLockTranche.trancheName = MonitorTrancheName;
-
-	LWLockRegisterTranche(monitor->namedLockTranche.trancheId,
-						  monitor->namedLockTranche.trancheName);
+	monitor->namedLockTranche.trancheId =
+		LWLockNewTrancheIdCompat(monitor->namedLockTranche.trancheName);
 	LWLockInitialize(&monitor->lock, monitor->namedLockTranche.trancheId);
 
 	HASHCTL info;

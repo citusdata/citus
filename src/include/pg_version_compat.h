@@ -12,6 +12,7 @@
 #define PG_VERSION_COMPAT_H
 
 #include "lib/stringinfo.h"
+#include "storage/lwlock.h"
 
 #include "pg_version_constants.h"
 
@@ -128,15 +129,13 @@ typedef StringInfo fmStringInfo;
 		((ShmemInitHash) ((name), (int64) (max), (info), (flags)))
 
 /*
- * PG19 internalised tranche registration: LWLockNewTrancheId now takes
- * the tranche name and there is no public LWLockRegisterTranche.  Wrap
- * both so existing two-step Citus code keeps compiling.  The temporary
- * name "citus-deferred" is only used until the follow-up in #8609
- * refactors call sites to pass the real tranche name directly to
- * LWLockNewTrancheId().
+ * PG19 changed LWLockNewTrancheId() to take the tranche name directly and
+ * removed the public LWLockRegisterTranche(); tranche names now live in
+ * shared memory and are visible to every backend.  Expose a one-call helper
+ * that forwards the real name.  The PG<=18 counterpart (further below) keeps
+ * the historical allocate-then-register two-step behind the same interface.
  */
-#define LWLockNewTrancheId() ((LWLockNewTrancheId) ("citus-deferred"))
-#define LWLockRegisterTranche(id, name) ((void) 0)
+#define LWLockNewTrancheIdCompat(name) LWLockNewTrancheId(name)
 
 /*
  * PG19 dropped the public NamedLWLockTranche struct from lwlock.h.
@@ -243,6 +242,20 @@ citus_BlessTupleDesc(TupleDesc td)
  * call sites that build TupleDescs without going through BlessTupleDesc.
  */
 #define TupleDescFinalize(td) ((void) 0)
+
+/*
+ * PG<=18 registers tranche names in two steps: allocate the id with
+ * LWLockNewTrancheId(), then associate the name via LWLockRegisterTranche().
+ * Wrap that dance so call sites use the same one-call LWLockNewTrancheIdCompat()
+ * helper as PG19.
+ */
+static inline int
+LWLockNewTrancheIdCompat(const char *name)
+{
+	int trancheId = LWLockNewTrancheId();
+	LWLockRegisterTranche(trancheId, name);
+	return trancheId;
+}
 
 #endif /* PG_VERSION_NUM < PG_VERSION_19 */
 

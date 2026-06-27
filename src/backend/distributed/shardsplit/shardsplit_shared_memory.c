@@ -217,7 +217,7 @@ ShardSplitShmemInit(void)
 
 	if (!alreadyInitialized)
 	{
-		char * trancheName pg_attribute_unused() = "Split Shard Setup Tranche";
+		char *trancheName = "Split Shard Setup Tranche";
 
 		NamedLWLockTranche *namedLockTranche =
 			&smData->namedLockTranche;
@@ -226,9 +226,7 @@ ShardSplitShmemInit(void)
 		memset(smData, 0,
 			   sizeof(ShardSplitShmemData));
 
-		namedLockTranche->trancheId = LWLockNewTrancheId();
-
-		LWLockRegisterTranche(namedLockTranche->trancheId, trancheName);
+		namedLockTranche->trancheId = LWLockNewTrancheIdCompat(trancheName);
 		LWLockInitialize(&smData->lock,
 						 namedLockTranche->trancheId);
 
