@@ -33,8 +33,6 @@
 #include "distributed/multi_executor.h"
 #include "distributed/relation_access_tracking.h"
 #include "distributed/remote_commands.h"
-#include "distributed/remote_transaction.h"
-#include "distributed/transaction_management.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_transaction.h"
 
@@ -177,13 +175,9 @@ EnsureObjectAndDependenciesExistOnAllNodes(const ObjectAddress *target)
  * attempt: the worst case is that the create command fails loudly, which is
  * acceptable for a superuser-only repair UDF.
  *
- * Everything happens within a single coordinated, 2PC transaction: the object
- * creation on the remote nodes and the pg_dist_object records that
- * MarkObjectDistributedViaSuperUser() adds below are committed --or rolled
- * back-- atomically. We do this over the metadata connection to each node and
- * MarkObjectDistributedViaSuperUser() reuses the very same connection, so the
- * freshly created --but not yet committed-- object is visible to the
- * pg_dist_object insert that follows.
+ * The object is created via a separate session that is committed directly so
+ * that it is visible to the (current transaction's) metadata connection when we
+ * mark the object distributed below.
  */
 static void
 EnsureObjectExistsOnAllNodes(const ObjectAddress *target, bool forceRecreate)
@@ -197,7 +191,7 @@ EnsureObjectExistsOnAllNodes(const ObjectAddress *target, bool forceRecreate)
 							   target->classId, target->objectId)));
 	}
 
-	/* since we are executing DDL commands, disable propagation on the remote node */
+	/* since we are executing DDL commands, disable propagation */
 	ddlCommands = list_concat(list_make1(DISABLE_DDL_PROPAGATION), ddlCommands);
 
 	/*
@@ -209,24 +203,11 @@ EnsureObjectExistsOnAllNodes(const ObjectAddress *target, bool forceRecreate)
 		forceRecreate ? NULL : ObjectExistsOnNodeCommand(target);
 
 	/*
-	 * Do everything within a single coordinated, 2PC transaction so that the
-	 * object creation on the remote nodes and the pg_dist_object records added
-	 * by MarkObjectDistributedViaSuperUser() below are committed atomically.
+	 * Make sure that no new nodes are added after this point until the end of the
+	 * transaction by taking a RowShareLock on pg_dist_node, which conflicts with
+	 * the ExclusiveLock taken by citus_add_node.
 	 */
-	UseCoordinatedTransaction();
-	Use2PCForCoordinatedTransaction();
-
-	/*
-	 * We target the metadata nodes --and reuse the metadata connection to each
-	 * of them-- so that the same session that creates the object also inserts
-	 * the pg_dist_object record below; otherwise the not-yet-committed object
-	 * wouldn't be visible to the metadata insert.
-	 *
-	 * Taking a RowShareLock on pg_dist_node makes sure that no new node is added
-	 * concurrently until the end of the transaction, as it conflicts with the
-	 * ExclusiveLock taken by citus_add_node.
-	 */
-	List *remoteNodeList = TargetWorkerSetNodeList(REMOTE_METADATA_NODES, RowShareLock);
+	List *remoteNodeList = ActivePrimaryRemoteNodeList(RowShareLock);
 
 	/*
 	 * Lock the object to be created explicitly to make sure same DDL command
@@ -235,36 +216,24 @@ EnsureObjectExistsOnAllNodes(const ObjectAddress *target, bool forceRecreate)
 	LockDatabaseObject(target->classId, target->objectId, target->objectSubId,
 					   ExclusiveLock);
 
-	List *connectionList = NIL;
 	WorkerNode *workerNode = NULL;
 	foreach_declared_ptr(workerNode, remoteNodeList)
 	{
-		int connectionFlags = REQUIRE_METADATA_CONNECTION;
+		const char *nodeName = workerNode->workerName;
+		uint32 nodePort = workerNode->workerPort;
+
+		int connectionFlags = FORCE_NEW_CONNECTION;
 		MultiConnection *connection =
-			StartNodeUserDatabaseConnection(connectionFlags, workerNode->workerName,
-											workerNode->workerPort,
-											CitusExtensionOwnerName(), NULL);
-		MarkRemoteTransactionCritical(connection);
-		connectionList = lappend(connectionList, connection);
-	}
+			GetNodeUserDatabaseConnection(connectionFlags, nodeName, nodePort,
+										  CitusExtensionOwnerName(), NULL);
 
-	FinishConnectionListEstablishment(connectionList);
-	RemoteTransactionsBeginIfNecessary(connectionList);
-
-	MultiConnection *connection = NULL;
-	foreach_declared_ptr(connection, connectionList)
-	{
-		if (!forceRecreate && RemoteObjectExists(connection, existenceCheckCommand))
+		if (forceRecreate || !RemoteObjectExists(connection, existenceCheckCommand))
 		{
-			/* the node already has the object, leave it untouched */
-			continue;
+			SendCommandListToWorkerOutsideTransactionWithConnection(connection,
+																	ddlCommands);
 		}
 
-		char *command = NULL;
-		foreach_declared_ptr(command, ddlCommands)
-		{
-			ExecuteCriticalRemoteCommand(connection, command);
-		}
+		CloseConnection(connection);
 	}
 
 	MarkObjectDistributedViaSuperUser(target);
@@ -272,12 +241,9 @@ EnsureObjectExistsOnAllNodes(const ObjectAddress *target, bool forceRecreate)
 
 
 /*
- * ObjectExistsOnNodeCommand returns a query that returns a single boolean row
- * indicating whether the given object exists on the node it is executed on.
- *
- * The probe goes through citus_internal.object_exists(), which traps the error
- * that pg_get_object_address() would otherwise raise for a missing object, so
- * the command never errors and is safe to run over a transactional connection.
+ * ObjectExistsOnNodeCommand returns a query that returns a single row when the
+ * given object exists on the node it is executed on, and raises an error
+ * otherwise.
  *
  * The object is identified by its name --object type, names and args, the same
  * representation that pg_identify_object_as_address() produces-- rather than by
@@ -295,8 +261,10 @@ ObjectExistsOnNodeCommand(const ObjectAddress *target)
 
 	StringInfo command = makeStringInfo();
 	appendStringInfo(command,
-					 "SELECT citus_internal.object_exists(%s, ARRAY[",
+					 "SELECT 1 FROM pg_catalog.pg_get_object_address(%s, ",
 					 quote_literal_cstr(objectType));
+
+	appendStringInfoString(command, "ARRAY[");
 
 	char *objectName = NULL;
 	bool firstName = true;
@@ -329,8 +297,9 @@ ObjectExistsOnNodeCommand(const ObjectAddress *target)
  * ObjectExistsOnNodeCommand()-- over the provided connection and returns whether
  * the object exists on the remote node.
  *
- * The command returns a single boolean row and never raises for a missing
- * object, so we only surface genuine query/connection failures as errors.
+ * pg_get_object_address() resolves the object by name and raises an error when
+ * it cannot find it. We treat such a statement-level error as "the object does
+ * not exist on this node" and only surface connection-level failures as errors.
  */
 static bool
 RemoteObjectExists(MultiConnection *connection, const char *existenceCheckCommand)
@@ -343,18 +312,24 @@ RemoteObjectExists(MultiConnection *connection, const char *existenceCheckComman
 
 	bool raiseInterrupts = true;
 	PGresult *result = GetRemoteCommandResult(connection, raiseInterrupts);
-	if (!IsResponseOK(result))
-	{
-		ReportResultError(connection, result, ERROR);
-	}
 
 	bool objectExists = false;
-	if (PQntuples(result) == 1 && PQnfields(result) == 1 &&
-		!PQgetisnull(result, 0, 0))
+	if (IsResponseOK(result))
 	{
-		objectExists = (strcmp(PQgetvalue(result, 0, 0), "t") == 0);
+		objectExists = PQntuples(result) > 0;
+	}
+	else if (PQstatus(connection->pgConn) != CONNECTION_OK)
+	{
+		/* we lost the connection while probing, so error out after cleanup */
+		PQclear(result);
+		ForgetResults(connection);
+		ReportConnectionError(connection, ERROR);
 	}
 
+	/*
+	 * Otherwise pg_get_object_address() could not resolve the object by name,
+	 * which we interpret as the object being absent on this node.
+	 */
 	PQclear(result);
 	ForgetResults(connection);
 
