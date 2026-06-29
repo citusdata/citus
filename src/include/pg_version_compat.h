@@ -258,6 +258,7 @@ LWLockNewTrancheIdCompat(const char *name)
 	return trancheId;
 }
 
+
 #endif /* PG_VERSION_NUM < PG_VERSION_19 */
 
 #if PG_VERSION_NUM >= PG_VERSION_18
