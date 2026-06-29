@@ -67,6 +67,14 @@ SELECT count(*) AS coordinator_idempotent FROM pg_catalog.pg_dist_object WHERE c
                       1
 (1 row)
 
+-- force_recreate := true re-applies the DDL on all nodes regardless of whether
+-- the object already exists there; still a no-op for pg_dist_object here.
+SELECT citus_internal.distribute_object('pg_catalog.pg_proc'::regclass::oid, 'public.dist_obj_repair_fn(int)'::regprocedure::oid, force_recreate := true);
+ distribute_object
+---------------------------------------------------------------------
+
+(1 row)
+
 -- It errors for an object that does not exist on the local node.
 SELECT citus_internal.distribute_object('pg_catalog.pg_proc'::regclass::oid, 0);
 ERROR:  object with classid 1255 and objid 0 does not exist on the local node

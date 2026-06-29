@@ -27,6 +27,9 @@ SELECT bool_and(result::int = 1) AS distributed_on_all_workers FROM run_command_
 -- Calling it again is a no-op (idempotent) and does not error.
 SELECT citus_internal.distribute_object('pg_catalog.pg_proc'::regclass::oid, 'public.dist_obj_repair_fn(int)'::regprocedure::oid);
 SELECT count(*) AS coordinator_idempotent FROM pg_catalog.pg_dist_object WHERE classid = 'pg_catalog.pg_proc'::regclass AND objid = 'public.dist_obj_repair_fn(int)'::regprocedure;
+-- force_recreate := true re-applies the DDL on all nodes regardless of whether
+-- the object already exists there; still a no-op for pg_dist_object here.
+SELECT citus_internal.distribute_object('pg_catalog.pg_proc'::regclass::oid, 'public.dist_obj_repair_fn(int)'::regprocedure::oid, force_recreate := true);
 -- It errors for an object that does not exist on the local node.
 SELECT citus_internal.distribute_object('pg_catalog.pg_proc'::regclass::oid, 0);
 -- Cleanup.

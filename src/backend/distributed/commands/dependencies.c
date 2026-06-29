@@ -49,7 +49,8 @@ static int ObjectAddressComparator(const void *a, const void *b);
 static void EnsureDependenciesExistOnAllNodes(const ObjectAddress *target);
 static void EnsureRequiredObjectSetExistOnAllNodes(const ObjectAddress *target,
 												   RequiredObjectSet requiredObjectSet);
-static void EnsureObjectExistsOnAllNodes(const ObjectAddress *target);
+static void EnsureObjectExistsOnAllNodes(const ObjectAddress *target,
+										 bool forceRecreate);
 static char * ObjectExistsOnNodeCommand(const ObjectAddress *target);
 static bool RemoteObjectExists(MultiConnection *connection,
 							   const char *existenceCheckCommand);
@@ -66,6 +67,9 @@ PG_FUNCTION_INFO_V1(citus_internal_distribute_object);
  * Different than the regular object propagation path, this function deliberately
  * ignores the dependencies of the given object: it only executes the DDL commands
  * that Citus would use to (re)create the object itself on another node.
+ *
+ * By default a node is skipped if it already has the object; pass
+ * force_recreate => true to (re)apply the DDL on every node regardless.
  */
 Datum
 citus_internal_distribute_object(PG_FUNCTION_ARGS)
@@ -76,6 +80,7 @@ citus_internal_distribute_object(PG_FUNCTION_ARGS)
 
 	Oid classId = PG_GETARG_OID(0);
 	Oid objectId = PG_GETARG_OID(1);
+	bool forceRecreate = PG_GETARG_BOOL(2);
 
 	ObjectAddress *objectAddress = palloc0(sizeof(ObjectAddress));
 	ObjectAddressSet(*objectAddress, classId, objectId);
@@ -105,7 +110,7 @@ citus_internal_distribute_object(PG_FUNCTION_ARGS)
 								  "this type.")));
 	}
 
-	EnsureObjectExistsOnAllNodes(objectAddress);
+	EnsureObjectExistsOnAllNodes(objectAddress, forceRecreate);
 
 	PG_RETURN_VOID();
 }
@@ -160,7 +165,10 @@ EnsureObjectAndDependenciesExistOnAllNodes(const ObjectAddress *target)
  * only (re)create it on the nodes that are missing it. This way we never hand a
  * "create or replace" style command to a node that already has the object,
  * which --for some object classes-- would otherwise rename the existing object
- * out of the way before recreating it.
+ * out of the way before recreating it. The caller can pass forceRecreate to
+ * skip the per-node existence check and always (re)apply the DDL, which is
+ * useful to sync drift --e.g. role grants/options that were never propagated--
+ * onto nodes that already have the object.
  *
  * We deliberately accept the small TOCTOU window where the object might be
  * created by someone else between our existence check and our own creation
@@ -172,7 +180,7 @@ EnsureObjectAndDependenciesExistOnAllNodes(const ObjectAddress *target)
  * mark the object distributed below.
  */
 static void
-EnsureObjectExistsOnAllNodes(const ObjectAddress *target)
+EnsureObjectExistsOnAllNodes(const ObjectAddress *target, bool forceRecreate)
 {
 	List *ddlCommands = GetDependencyCreateDDLCommands(target);
 
@@ -191,7 +199,8 @@ EnsureObjectExistsOnAllNodes(const ObjectAddress *target)
 	 * on a node once, before the loop, so that we deparse the object identity
 	 * only a single time.
 	 */
-	char *existenceCheckCommand = ObjectExistsOnNodeCommand(target);
+	char *existenceCheckCommand =
+		forceRecreate ? NULL : ObjectExistsOnNodeCommand(target);
 
 	/*
 	 * Make sure that no new nodes are added after this point until the end of the
@@ -218,7 +227,7 @@ EnsureObjectExistsOnAllNodes(const ObjectAddress *target)
 			GetNodeUserDatabaseConnection(connectionFlags, nodeName, nodePort,
 										  CitusExtensionOwnerName(), NULL);
 
-		if (!RemoteObjectExists(connection, existenceCheckCommand))
+		if (forceRecreate || !RemoteObjectExists(connection, existenceCheckCommand))
 		{
 			SendCommandListToWorkerOutsideTransactionWithConnection(connection,
 																	ddlCommands);
