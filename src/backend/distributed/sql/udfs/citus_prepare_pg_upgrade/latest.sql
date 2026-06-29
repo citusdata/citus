@@ -1,7 +1,7 @@
 CREATE OR REPLACE FUNCTION pg_catalog.citus_prepare_pg_upgrade()
     RETURNS void
     LANGUAGE plpgsql
-    SET search_path = pg_catalog
+    SET search_path = pg_catalog, pg_temp
     AS $cppu$
 BEGIN
 

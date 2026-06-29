@@ -9,7 +9,7 @@ DECLARE
     table_name text;
 BEGIN
     -- drop shell tables within single or multiple transactions according to the flag singleTransaction
-    FOR table_name IN SELECT logicalrelid::regclass::text FROM pg_dist_partition
+    FOR table_name IN SELECT logicalrelid::regclass::text FROM pg_catalog.pg_dist_partition
     LOOP
         PERFORM pg_catalog.worker_drop_shell_table(table_name);
         IF not singleTransaction THEN

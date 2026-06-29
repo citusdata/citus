@@ -1,7 +1,7 @@
 CREATE OR REPLACE FUNCTION pg_catalog.citus_drop_trigger()
     RETURNS event_trigger
     LANGUAGE plpgsql
-    SET search_path = pg_catalog
+    SET search_path = pg_catalog, pg_temp
     AS $cdbdt$
 DECLARE
     constraint_event_count INTEGER;

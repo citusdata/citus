@@ -1,3 +1,25 @@
+### citus v12.1.12 (April 22, 2026) ###
+
+* Hardens extension SQL against `search_path` attacks by schema-qualifying
+  identifiers in view/upgrade scripts and setting
+  `SET search_path = pg_catalog, pg_temp` on Citus UDFs and procedures
+
+### citus v12.1.11 (Mar 14, 2026) ###
+
+* Adds support for `CREATE STATISTICS` on expressions and enables it by
+  default (#8501, #8512)
+
+* Fixes metadata sync for distributed tables that use domain types,
+  including domains in non-public schemas (#8454)
+
+* Fixes a planning error when PostgreSQL optimizations remove all Citus
+  tables from a query (#8448)
+
+* Prevents reusing the local plan cache for multi-shard queries (#8447)
+
+* Fixes an address sanitizer crash caused by an invalid GUC declaration
+  when querying `pg_settings` (#8301)
+
 ### citus v12.1.10 (Oct 1, 2025) ###
 
 * Adds support for latest PG minors: 14.19, 15.14, 16.10 (#7986, #8142)
