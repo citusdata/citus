@@ -253,6 +253,7 @@ static inline int
 LWLockNewTrancheIdCompat(const char *name)
 {
 	int trancheId = LWLockNewTrancheId();
+
 	LWLockRegisterTranche(trancheId, name);
 	return trancheId;
 }
