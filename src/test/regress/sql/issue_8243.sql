@@ -69,6 +69,7 @@ FROM (select t1.name as name from schmshrd.t1 t1, ref1 r1 where t1.id = r1.id an
 -- Test 6: sanity tests - the fix does not interfere with outer join between reference and distributed table
 -- where a restriction prunes out shard index 0 of the distributed table.
 
+SET enable_memoize TO off;
 -- Plan has 3 tasks
 EXPLAIN (verbose, costs off)
 SELECT  x1.name, dist1_8243.val
@@ -81,6 +82,7 @@ SELECT  x1.name, dist2_8243.val
 FROM ref3 x1 left outer join dist2_8243  using (id)
 WHERE dist2_8243.id IN (10001, 999989);
 
+RESET enable_memoize;
 -- Test 7: failing query from https://github.com/citusdata/citus/issues/8243
 SET search_path TO schmshrd;
 INSERT INTO t2 (name) VALUES ('user1'), ('user2'), ('user3'), ('user1'), ('user2'), ('user1');
