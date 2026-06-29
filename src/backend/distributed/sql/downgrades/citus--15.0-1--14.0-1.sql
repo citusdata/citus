@@ -28,3 +28,4 @@ DROP FUNCTION IF EXISTS pg_catalog.citus_cluster_changes_unblock();
 DROP FUNCTION IF EXISTS pg_catalog.citus_cluster_changes_block_status();
 
 DROP FUNCTION IF EXISTS citus_internal.distribute_object(oid, oid, boolean);
+DROP FUNCTION IF EXISTS citus_internal.object_exists(text, text[], text[]);

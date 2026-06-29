@@ -38,13 +38,6 @@
 #include "distributed/worker_manager.h"
 #include "distributed/worker_transaction.h"
 
-/*
- * Savepoint name used to probe whether an object exists on a remote node without
- * letting a "does not exist" statement-level error abort the surrounding
- * transaction. See RemoteObjectExists().
- */
-#define OBJECT_EXISTENCE_SAVEPOINT_NAME "citus_distribute_object_existence_check"
-
 typedef enum RequiredObjectSet
 {
 	REQUIRE_ONLY_DEPENDENCIES = 1,
@@ -279,9 +272,12 @@ EnsureObjectExistsOnAllNodes(const ObjectAddress *target, bool forceRecreate)
 
 
 /*
- * ObjectExistsOnNodeCommand returns a query that returns a single row when the
- * given object exists on the node it is executed on, and raises an error
- * otherwise.
+ * ObjectExistsOnNodeCommand returns a query that returns a single boolean row
+ * indicating whether the given object exists on the node it is executed on.
+ *
+ * The probe goes through citus_internal.object_exists(), which traps the error
+ * that pg_get_object_address() would otherwise raise for a missing object, so
+ * the command never errors and is safe to run over a transactional connection.
  *
  * The object is identified by its name --object type, names and args, the same
  * representation that pg_identify_object_as_address() produces-- rather than by
@@ -299,10 +295,8 @@ ObjectExistsOnNodeCommand(const ObjectAddress *target)
 
 	StringInfo command = makeStringInfo();
 	appendStringInfo(command,
-					 "SELECT 1 FROM pg_catalog.pg_get_object_address(%s, ",
+					 "SELECT citus_internal.object_exists(%s, ARRAY[",
 					 quote_literal_cstr(objectType));
-
-	appendStringInfoString(command, "ARRAY[");
 
 	char *objectName = NULL;
 	bool firstName = true;
@@ -335,19 +329,12 @@ ObjectExistsOnNodeCommand(const ObjectAddress *target)
  * ObjectExistsOnNodeCommand()-- over the provided connection and returns whether
  * the object exists on the remote node.
  *
- * pg_get_object_address() resolves the object by name and raises an error when
- * it cannot find it. Since the connection participates in our coordinated
- * transaction, we run the probe inside a savepoint and roll back to it on a
- * statement-level error so that the surrounding remote transaction stays usable.
- * We treat such an error as "the object does not exist on this node" and only
- * surface connection-level failures as errors.
+ * The command returns a single boolean row and never raises for a missing
+ * object, so we only surface genuine query/connection failures as errors.
  */
 static bool
 RemoteObjectExists(MultiConnection *connection, const char *existenceCheckCommand)
 {
-	ExecuteCriticalRemoteCommand(connection,
-								 "SAVEPOINT " OBJECT_EXISTENCE_SAVEPOINT_NAME);
-
 	int querySent = SendRemoteCommand(connection, existenceCheckCommand);
 	if (querySent == 0)
 	{
@@ -356,39 +343,20 @@ RemoteObjectExists(MultiConnection *connection, const char *existenceCheckComman
 
 	bool raiseInterrupts = true;
 	PGresult *result = GetRemoteCommandResult(connection, raiseInterrupts);
+	if (!IsResponseOK(result))
+	{
+		ReportResultError(connection, result, ERROR);
+	}
 
 	bool objectExists = false;
-	if (IsResponseOK(result))
+	if (PQntuples(result) == 1 && PQnfields(result) == 1 &&
+		!PQgetisnull(result, 0, 0))
 	{
-		objectExists = PQntuples(result) > 0;
-
-		PQclear(result);
-		ForgetResults(connection);
-
-		ExecuteCriticalRemoteCommand(connection,
-									 "RELEASE SAVEPOINT " OBJECT_EXISTENCE_SAVEPOINT_NAME);
-
-		return objectExists;
+		objectExists = (strcmp(PQgetvalue(result, 0, 0), "t") == 0);
 	}
 
-	if (PQstatus(connection->pgConn) != CONNECTION_OK)
-	{
-		/* we lost the connection while probing, so error out after cleanup */
-		PQclear(result);
-		ForgetResults(connection);
-		ReportConnectionError(connection, ERROR);
-	}
-
-	/*
-	 * Otherwise pg_get_object_address() could not resolve the object by name,
-	 * which we interpret as the object being absent on this node. Roll back to
-	 * the savepoint so that the remote transaction stays usable.
-	 */
 	PQclear(result);
 	ForgetResults(connection);
-
-	ExecuteCriticalRemoteCommand(connection,
-								 "ROLLBACK TO SAVEPOINT " OBJECT_EXISTENCE_SAVEPOINT_NAME);
 
 	return objectExists;
 }
