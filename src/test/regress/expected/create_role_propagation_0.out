@@ -295,8 +295,9 @@ SELECT rolname FROM pg_authid WHERE rolname LIKE '%dist\_%' ORDER BY 1;
  dist_role_2
  dist_role_3
  dist_role_4
+ non_dist_role_1
  non_dist_role_4
-(5 rows)
+(6 rows)
 
 \c - - - :master_port
 DROP ROLE dist_role_3, non_dist_role_3, dist_role_4, non_dist_role_4;
@@ -744,11 +745,11 @@ FROM pg_auth_members
 WHERE roleid::regrole::text IN ('read_only_role', 'interdep_role1', 'interdep_role2')
    OR member::regrole::text IN ('read_only_role', 'interdep_role1', 'interdep_role2')
 ORDER BY role, member;
-      role      |     member     |    grantor     | admin_option
+      role      |     member     | grantor  | admin_option
 ---------------------------------------------------------------------
- interdep_role1 | interdep_role2 | postgres       | t
- read_only_role | interdep_role1 | postgres       | t
- read_only_role | interdep_role2 | postgres       | f
+ interdep_role1 | interdep_role2 | postgres | t
+ read_only_role | interdep_role1 | postgres | t
+ read_only_role | interdep_role2 | postgres | f
 (3 rows)
 
 \c - - - :master_port
