@@ -1747,7 +1747,7 @@ SELECT * FROM multi_extension.print_extension_changes();
 ---------------------------------------------------------------------
  function worker_adjust_identity_column_seq_ranges(regclass) void |
  function worker_apply_sequence_command(text,regtype) void        |
-                                                                  | function citus_internal.distribute_object(oid,oid) void
+                                                                  | function citus_internal.distribute_object(oid,oid,boolean) void
 (3 rows)
 
 DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;

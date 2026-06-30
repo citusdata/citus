@@ -115,6 +115,7 @@ citus_internal_distribute_object(PG_FUNCTION_ARGS)
 	PG_RETURN_VOID();
 }
 
+
 /*
  * EnsureObjectAndDependenciesExistOnAllNodes is a wrapper around
  * EnsureRequiredObjectSetExistOnAllNodes to ensure the "object itself" (together
