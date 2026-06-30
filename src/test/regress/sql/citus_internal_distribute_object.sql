@@ -10,10 +10,20 @@
 --   i)   force_recreate := false on a missing object -> created on workers
 --   ii-a) force_recreate := true when it already exists -> no error
 --   ii-b) force_recreate := true after coordinator-only drift -> drift synced
+--   iv)  force_recreate := false on a partially present object (present on the
+--        coordinator and a single worker) -> created on the missing workers only
+--   v)   force_recreate := false on an object already present everywhere ->
+--        not recreated on any worker (the by-name object oids stay unchanged)
 -- Table (OCLASS_CLASS) and database (OCLASS_DATABASE) are intentionally excluded.
 SET client_min_messages TO WARNING;
 CREATE SCHEMA distobj;
 SET search_path TO distobj, public;
+-- Capture one active worker so the iv) scenarios below can create an object on a
+-- single node and exercise the "partially present" repair path.
+SELECT nodeport AS one_worker_port
+FROM pg_dist_node
+WHERE isactive AND noderole = 'primary' AND groupid <> 0
+ORDER BY nodeport LIMIT 1 \gset
 -- ---------------------------------------------------------------------------
 -- FUNCTION (OCLASS_PROC)
 -- ---------------------------------------------------------------------------
@@ -32,6 +42,19 @@ ALTER FUNCTION distobj.fn(int) STRICT;
 RESET citus.enable_metadata_sync;
 SELECT citus_internal.distribute_object('pg_proc'::regclass::oid, 'distobj.fn(int)'::regprocedure::oid, force_recreate := true);
 SELECT bool_and(result = 't') AS fn_strict_synced FROM run_command_on_workers($$SELECT proisstrict FROM pg_proc WHERE proname = 'fn' AND pronamespace = 'distobj'::regnamespace$$);
+-- iv: present on the coordinator and a single worker -> created on the missing workers.
+SET citus.enable_metadata_sync TO OFF;
+CREATE FUNCTION distobj.fn4(int) RETURNS int LANGUAGE sql IMMUTABLE AS $fn$ SELECT $1 $fn$;
+RESET citus.enable_metadata_sync;
+SELECT bool_and(success) AS fn_iv_placed FROM master_run_on_worker(ARRAY['localhost']::text[], ARRAY[:one_worker_port]::int[], ARRAY[$$SET citus.enable_ddl_propagation TO off; CREATE FUNCTION distobj.fn4(int) RETURNS int LANGUAGE sql IMMUTABLE AS 'SELECT $1'$$]::text[], false);
+SELECT bool_and(result::int = 1) AS fn_iv_partial FROM run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname = 'fn4' AND pronamespace = 'distobj'::regnamespace$$);
+SELECT citus_internal.distribute_object('pg_proc'::regclass::oid, 'distobj.fn4(int)'::regprocedure::oid);
+SELECT bool_and(result::int = 1) AS fn_iv_full FROM run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname = 'fn4' AND pronamespace = 'distobj'::regnamespace$$);
+DROP FUNCTION distobj.fn4(int);
+-- v: already present on every worker -> not recreated anywhere (oids unchanged).
+SELECT string_agg(result, ',' ORDER BY nodeport) AS fn_oids FROM run_command_on_workers($$SELECT 'distobj.fn(int)'::regprocedure::oid::text$$) \gset
+SELECT citus_internal.distribute_object('pg_proc'::regclass::oid, 'distobj.fn(int)'::regprocedure::oid);
+SELECT string_agg(result, ',' ORDER BY nodeport) = :'fn_oids' AS fn_v_unchanged FROM run_command_on_workers($$SELECT 'distobj.fn(int)'::regprocedure::oid::text$$);
 -- ---------------------------------------------------------------------------
 -- SCHEMA (OCLASS_SCHEMA)
 -- ---------------------------------------------------------------------------
@@ -41,6 +64,19 @@ RESET citus.enable_metadata_sync;
 SELECT citus_internal.distribute_object('pg_namespace'::regclass::oid, 'distobj_s'::regnamespace::oid);
 SELECT bool_and(result::int = 1) AS schema_exists FROM run_command_on_workers($$SELECT count(*) FROM pg_namespace WHERE nspname = 'distobj_s'$$);
 SELECT citus_internal.distribute_object('pg_namespace'::regclass::oid, 'distobj_s'::regnamespace::oid, force_recreate := true);
+-- iv: present on the coordinator and a single worker -> created on the missing workers.
+SET citus.enable_metadata_sync TO OFF;
+CREATE SCHEMA distobj_s4;
+RESET citus.enable_metadata_sync;
+SELECT bool_and(success) AS schema_iv_placed FROM master_run_on_worker(ARRAY['localhost']::text[], ARRAY[:one_worker_port]::int[], ARRAY[$$SET citus.enable_ddl_propagation TO off; CREATE SCHEMA distobj_s4$$]::text[], false);
+SELECT bool_and(result::int = 1) AS schema_iv_partial FROM run_command_on_workers($$SELECT count(*) FROM pg_namespace WHERE nspname = 'distobj_s4'$$);
+SELECT citus_internal.distribute_object('pg_namespace'::regclass::oid, 'distobj_s4'::regnamespace::oid);
+SELECT bool_and(result::int = 1) AS schema_iv_full FROM run_command_on_workers($$SELECT count(*) FROM pg_namespace WHERE nspname = 'distobj_s4'$$);
+DROP SCHEMA distobj_s4;
+-- v: already present on every worker -> not recreated anywhere (oids unchanged).
+SELECT string_agg(result, ',' ORDER BY nodeport) AS schema_oids FROM run_command_on_workers($$SELECT 'distobj_s'::regnamespace::oid::text$$) \gset
+SELECT citus_internal.distribute_object('pg_namespace'::regclass::oid, 'distobj_s'::regnamespace::oid);
+SELECT string_agg(result, ',' ORDER BY nodeport) = :'schema_oids' AS schema_v_unchanged FROM run_command_on_workers($$SELECT 'distobj_s'::regnamespace::oid::text$$);
 -- ---------------------------------------------------------------------------
 -- COLLATION (OCLASS_COLLATION)
 -- ---------------------------------------------------------------------------
@@ -50,6 +86,19 @@ RESET citus.enable_metadata_sync;
 SELECT citus_internal.distribute_object('pg_collation'::regclass::oid, 'distobj.coll'::regcollation::oid);
 SELECT bool_and(result::int = 1) AS coll_exists FROM run_command_on_workers($$SELECT count(*) FROM pg_collation WHERE collname = 'coll'$$);
 SELECT citus_internal.distribute_object('pg_collation'::regclass::oid, 'distobj.coll'::regcollation::oid, force_recreate := true);
+-- iv: present on the coordinator and a single worker -> created on the missing workers.
+SET citus.enable_metadata_sync TO OFF;
+CREATE COLLATION distobj.coll4 (locale = 'C');
+RESET citus.enable_metadata_sync;
+SELECT bool_and(success) AS coll_iv_placed FROM master_run_on_worker(ARRAY['localhost']::text[], ARRAY[:one_worker_port]::int[], ARRAY[$$SET citus.enable_ddl_propagation TO off; CREATE COLLATION distobj.coll4 (locale = 'C')$$]::text[], false);
+SELECT bool_and(result::int = 1) AS coll_iv_partial FROM run_command_on_workers($$SELECT count(*) FROM pg_collation WHERE collname = 'coll4'$$);
+SELECT citus_internal.distribute_object('pg_collation'::regclass::oid, 'distobj.coll4'::regcollation::oid);
+SELECT bool_and(result::int = 1) AS coll_iv_full FROM run_command_on_workers($$SELECT count(*) FROM pg_collation WHERE collname = 'coll4'$$);
+DROP COLLATION distobj.coll4;
+-- v: already present on every worker -> not recreated anywhere (oids unchanged).
+SELECT string_agg(result, ',' ORDER BY nodeport) AS coll_oids FROM run_command_on_workers($$SELECT 'distobj.coll'::regcollation::oid::text$$) \gset
+SELECT citus_internal.distribute_object('pg_collation'::regclass::oid, 'distobj.coll'::regcollation::oid);
+SELECT string_agg(result, ',' ORDER BY nodeport) = :'coll_oids' AS coll_v_unchanged FROM run_command_on_workers($$SELECT 'distobj.coll'::regcollation::oid::text$$);
 -- ---------------------------------------------------------------------------
 -- TYPE (OCLASS_TYPE)
 -- ---------------------------------------------------------------------------
@@ -59,6 +108,19 @@ RESET citus.enable_metadata_sync;
 SELECT citus_internal.distribute_object('pg_type'::regclass::oid, 'distobj.ty'::regtype::oid);
 SELECT bool_and(result::int = 1) AS type_exists FROM run_command_on_workers($$SELECT count(*) FROM pg_type WHERE typname = 'ty'$$);
 SELECT citus_internal.distribute_object('pg_type'::regclass::oid, 'distobj.ty'::regtype::oid, force_recreate := true);
+-- iv: present on the coordinator and a single worker -> created on the missing workers.
+SET citus.enable_metadata_sync TO OFF;
+CREATE TYPE distobj.ty4 AS (a int, b text);
+RESET citus.enable_metadata_sync;
+SELECT bool_and(success) AS type_iv_placed FROM master_run_on_worker(ARRAY['localhost']::text[], ARRAY[:one_worker_port]::int[], ARRAY[$$SET citus.enable_ddl_propagation TO off; CREATE TYPE distobj.ty4 AS (a int, b text)$$]::text[], false);
+SELECT bool_and(result::int = 1) AS type_iv_partial FROM run_command_on_workers($$SELECT count(*) FROM pg_type WHERE typname = 'ty4'$$);
+SELECT citus_internal.distribute_object('pg_type'::regclass::oid, 'distobj.ty4'::regtype::oid);
+SELECT bool_and(result::int = 1) AS type_iv_full FROM run_command_on_workers($$SELECT count(*) FROM pg_type WHERE typname = 'ty4'$$);
+DROP TYPE distobj.ty4;
+-- v: already present on every worker -> not recreated anywhere (oids unchanged).
+SELECT string_agg(result, ',' ORDER BY nodeport) AS type_oids FROM run_command_on_workers($$SELECT 'distobj.ty'::regtype::oid::text$$) \gset
+SELECT citus_internal.distribute_object('pg_type'::regclass::oid, 'distobj.ty'::regtype::oid);
+SELECT string_agg(result, ',' ORDER BY nodeport) = :'type_oids' AS type_v_unchanged FROM run_command_on_workers($$SELECT 'distobj.ty'::regtype::oid::text$$);
 -- ---------------------------------------------------------------------------
 -- TEXT SEARCH DICTIONARY / CONFIGURATION (OCLASS_TSDICT / OCLASS_TSCONFIG)
 -- ---------------------------------------------------------------------------
@@ -68,9 +130,35 @@ CREATE TEXT SEARCH CONFIGURATION distobj.cfg (parser = default);
 RESET citus.enable_metadata_sync;
 SELECT citus_internal.distribute_object('pg_ts_dict'::regclass::oid, 'distobj.dict'::regdictionary::oid);
 SELECT bool_and(result::int = 1) AS dict_exists FROM run_command_on_workers($$SELECT count(*) FROM pg_ts_dict WHERE dictname = 'dict'$$);
+-- iv: present on the coordinator and a single worker -> created on the missing workers.
+SET citus.enable_metadata_sync TO OFF;
+CREATE TEXT SEARCH DICTIONARY distobj.dict4 (template = simple);
+RESET citus.enable_metadata_sync;
+SELECT bool_and(success) AS dict_iv_placed FROM master_run_on_worker(ARRAY['localhost']::text[], ARRAY[:one_worker_port]::int[], ARRAY[$$SET citus.enable_ddl_propagation TO off; CREATE TEXT SEARCH DICTIONARY distobj.dict4 (template = simple)$$]::text[], false);
+SELECT bool_and(result::int = 1) AS dict_iv_partial FROM run_command_on_workers($$SELECT count(*) FROM pg_ts_dict WHERE dictname = 'dict4'$$);
+SELECT citus_internal.distribute_object('pg_ts_dict'::regclass::oid, 'distobj.dict4'::regdictionary::oid);
+SELECT bool_and(result::int = 1) AS dict_iv_full FROM run_command_on_workers($$SELECT count(*) FROM pg_ts_dict WHERE dictname = 'dict4'$$);
+DROP TEXT SEARCH DICTIONARY distobj.dict4;
+-- v: already present on every worker -> not recreated anywhere (oids unchanged).
+SELECT string_agg(result, ',' ORDER BY nodeport) AS dict_oids FROM run_command_on_workers($$SELECT 'distobj.dict'::regdictionary::oid::text$$) \gset
+SELECT citus_internal.distribute_object('pg_ts_dict'::regclass::oid, 'distobj.dict'::regdictionary::oid);
+SELECT string_agg(result, ',' ORDER BY nodeport) = :'dict_oids' AS dict_v_unchanged FROM run_command_on_workers($$SELECT 'distobj.dict'::regdictionary::oid::text$$);
 SELECT citus_internal.distribute_object('pg_ts_config'::regclass::oid, 'distobj.cfg'::regconfig::oid);
 SELECT bool_and(result::int = 1) AS cfg_exists FROM run_command_on_workers($$SELECT count(*) FROM pg_ts_config WHERE cfgname = 'cfg'$$);
 SELECT citus_internal.distribute_object('pg_ts_config'::regclass::oid, 'distobj.cfg'::regconfig::oid, force_recreate := true);
+-- iv: present on the coordinator and a single worker -> created on the missing workers.
+SET citus.enable_metadata_sync TO OFF;
+CREATE TEXT SEARCH CONFIGURATION distobj.cfg4 (parser = default);
+RESET citus.enable_metadata_sync;
+SELECT bool_and(success) AS cfg_iv_placed FROM master_run_on_worker(ARRAY['localhost']::text[], ARRAY[:one_worker_port]::int[], ARRAY[$$SET citus.enable_ddl_propagation TO off; CREATE TEXT SEARCH CONFIGURATION distobj.cfg4 (parser = default)$$]::text[], false);
+SELECT bool_and(result::int = 1) AS cfg_iv_partial FROM run_command_on_workers($$SELECT count(*) FROM pg_ts_config WHERE cfgname = 'cfg4'$$);
+SELECT citus_internal.distribute_object('pg_ts_config'::regclass::oid, 'distobj.cfg4'::regconfig::oid);
+SELECT bool_and(result::int = 1) AS cfg_iv_full FROM run_command_on_workers($$SELECT count(*) FROM pg_ts_config WHERE cfgname = 'cfg4'$$);
+DROP TEXT SEARCH CONFIGURATION distobj.cfg4;
+-- v: already present on every worker -> not recreated anywhere (oids unchanged).
+SELECT string_agg(result, ',' ORDER BY nodeport) AS cfg_oids FROM run_command_on_workers($$SELECT 'distobj.cfg'::regconfig::oid::text$$) \gset
+SELECT citus_internal.distribute_object('pg_ts_config'::regclass::oid, 'distobj.cfg'::regconfig::oid);
+SELECT string_agg(result, ',' ORDER BY nodeport) = :'cfg_oids' AS cfg_v_unchanged FROM run_command_on_workers($$SELECT 'distobj.cfg'::regconfig::oid::text$$);
 -- ---------------------------------------------------------------------------
 -- SEQUENCE (OCLASS_CLASS / RELKIND_SEQUENCE)
 -- ---------------------------------------------------------------------------
@@ -80,6 +168,19 @@ RESET citus.enable_metadata_sync;
 SELECT citus_internal.distribute_object('pg_class'::regclass::oid, 'distobj.seq'::regclass::oid);
 SELECT bool_and(result::int = 1) AS seq_exists FROM run_command_on_workers($$SELECT count(*) FROM pg_class WHERE relname = 'seq' AND relkind = 'S'$$);
 SELECT citus_internal.distribute_object('pg_class'::regclass::oid, 'distobj.seq'::regclass::oid, force_recreate := true);
+-- iv: present on the coordinator and a single worker -> created on the missing workers.
+SET citus.enable_metadata_sync TO OFF;
+CREATE SEQUENCE distobj.seq4;
+RESET citus.enable_metadata_sync;
+SELECT bool_and(success) AS seq_iv_placed FROM master_run_on_worker(ARRAY['localhost']::text[], ARRAY[:one_worker_port]::int[], ARRAY[$$SET citus.enable_ddl_propagation TO off; CREATE SEQUENCE distobj.seq4$$]::text[], false);
+SELECT bool_and(result::int = 1) AS seq_iv_partial FROM run_command_on_workers($$SELECT count(*) FROM pg_class WHERE relname = 'seq4' AND relkind = 'S'$$);
+SELECT citus_internal.distribute_object('pg_class'::regclass::oid, 'distobj.seq4'::regclass::oid);
+SELECT bool_and(result::int = 1) AS seq_iv_full FROM run_command_on_workers($$SELECT count(*) FROM pg_class WHERE relname = 'seq4' AND relkind = 'S'$$);
+DROP SEQUENCE distobj.seq4;
+-- v: already present on every worker -> not recreated anywhere (oids unchanged).
+SELECT string_agg(result, ',' ORDER BY nodeport) AS seq_oids FROM run_command_on_workers($$SELECT 'distobj.seq'::regclass::oid::text$$) \gset
+SELECT citus_internal.distribute_object('pg_class'::regclass::oid, 'distobj.seq'::regclass::oid);
+SELECT string_agg(result, ',' ORDER BY nodeport) = :'seq_oids' AS seq_v_unchanged FROM run_command_on_workers($$SELECT 'distobj.seq'::regclass::oid::text$$);
 -- ---------------------------------------------------------------------------
 -- VIEW (OCLASS_CLASS / RELKIND_VIEW)
 -- ---------------------------------------------------------------------------
@@ -89,6 +190,19 @@ RESET citus.enable_metadata_sync;
 SELECT citus_internal.distribute_object('pg_class'::regclass::oid, 'distobj.vw'::regclass::oid);
 SELECT bool_and(result::int = 1) AS view_exists FROM run_command_on_workers($$SELECT count(*) FROM pg_class WHERE relname = 'vw' AND relkind = 'v'$$);
 SELECT citus_internal.distribute_object('pg_class'::regclass::oid, 'distobj.vw'::regclass::oid, force_recreate := true);
+-- iv: present on the coordinator and a single worker -> created on the missing workers.
+SET citus.enable_metadata_sync TO OFF;
+CREATE VIEW distobj.vw4 AS SELECT 1 AS a;
+RESET citus.enable_metadata_sync;
+SELECT bool_and(success) AS view_iv_placed FROM master_run_on_worker(ARRAY['localhost']::text[], ARRAY[:one_worker_port]::int[], ARRAY[$$SET citus.enable_ddl_propagation TO off; CREATE VIEW distobj.vw4 AS SELECT 1 AS a$$]::text[], false);
+SELECT bool_and(result::int = 1) AS view_iv_partial FROM run_command_on_workers($$SELECT count(*) FROM pg_class WHERE relname = 'vw4' AND relkind = 'v'$$);
+SELECT citus_internal.distribute_object('pg_class'::regclass::oid, 'distobj.vw4'::regclass::oid);
+SELECT bool_and(result::int = 1) AS view_iv_full FROM run_command_on_workers($$SELECT count(*) FROM pg_class WHERE relname = 'vw4' AND relkind = 'v'$$);
+DROP VIEW distobj.vw4;
+-- v: already present on every worker -> not recreated anywhere (oids unchanged).
+SELECT string_agg(result, ',' ORDER BY nodeport) AS view_oids FROM run_command_on_workers($$SELECT 'distobj.vw'::regclass::oid::text$$) \gset
+SELECT citus_internal.distribute_object('pg_class'::regclass::oid, 'distobj.vw'::regclass::oid);
+SELECT string_agg(result, ',' ORDER BY nodeport) = :'view_oids' AS view_v_unchanged FROM run_command_on_workers($$SELECT 'distobj.vw'::regclass::oid::text$$);
 -- ---------------------------------------------------------------------------
 -- PUBLICATION (OCLASS_PUBLICATION)
 -- ---------------------------------------------------------------------------
@@ -98,6 +212,19 @@ RESET citus.enable_metadata_sync;
 SELECT citus_internal.distribute_object('pg_publication'::regclass::oid, oid) FROM pg_publication WHERE pubname = 'distobj_pub';
 SELECT bool_and(result::int = 1) AS pub_exists FROM run_command_on_workers($$SELECT count(*) FROM pg_publication WHERE pubname = 'distobj_pub'$$);
 SELECT citus_internal.distribute_object('pg_publication'::regclass::oid, oid, force_recreate := true) FROM pg_publication WHERE pubname = 'distobj_pub';
+-- iv: present on the coordinator and a single worker -> created on the missing workers.
+SET citus.enable_metadata_sync TO OFF;
+CREATE PUBLICATION distobj_pub4;
+RESET citus.enable_metadata_sync;
+SELECT bool_and(success) AS pub_iv_placed FROM master_run_on_worker(ARRAY['localhost']::text[], ARRAY[:one_worker_port]::int[], ARRAY[$$SET citus.enable_ddl_propagation TO off; CREATE PUBLICATION distobj_pub4$$]::text[], false);
+SELECT bool_and(result::int = 1) AS pub_iv_partial FROM run_command_on_workers($$SELECT count(*) FROM pg_publication WHERE pubname = 'distobj_pub4'$$);
+SELECT citus_internal.distribute_object('pg_publication'::regclass::oid, oid) FROM pg_publication WHERE pubname = 'distobj_pub4';
+SELECT bool_and(result::int = 1) AS pub_iv_full FROM run_command_on_workers($$SELECT count(*) FROM pg_publication WHERE pubname = 'distobj_pub4'$$);
+DROP PUBLICATION distobj_pub4;
+-- v: already present on every worker -> not recreated anywhere (oids unchanged).
+SELECT string_agg(result, ',' ORDER BY nodeport) AS pub_oids FROM run_command_on_workers($$SELECT oid::text FROM pg_publication WHERE pubname = 'distobj_pub'$$) \gset
+SELECT citus_internal.distribute_object('pg_publication'::regclass::oid, oid) FROM pg_publication WHERE pubname = 'distobj_pub';
+SELECT string_agg(result, ',' ORDER BY nodeport) = :'pub_oids' AS pub_v_unchanged FROM run_command_on_workers($$SELECT oid::text FROM pg_publication WHERE pubname = 'distobj_pub'$$);
 -- ---------------------------------------------------------------------------
 -- ROLE (OCLASS_ROLE) -- the motivating case: a role created before the
 -- extension that later received ALTERs that never reached all nodes.
@@ -114,6 +241,19 @@ ALTER ROLE distobj_role CONNECTION LIMIT 7;
 RESET citus.enable_metadata_sync;
 SELECT citus_internal.distribute_object('pg_authid'::regclass::oid, 'distobj_role'::regrole::oid, force_recreate := true);
 SELECT bool_and(result = '7') AS role_connlimit_resynced FROM run_command_on_workers($$SELECT rolconnlimit FROM pg_authid WHERE rolname = 'distobj_role'$$);
+-- iv: present on the coordinator and a single worker -> created on the missing workers.
+SET citus.enable_metadata_sync TO OFF;
+CREATE ROLE distobj_role4 CONNECTION LIMIT 3;
+RESET citus.enable_metadata_sync;
+SELECT bool_and(success) AS role_iv_placed FROM master_run_on_worker(ARRAY['localhost']::text[], ARRAY[:one_worker_port]::int[], ARRAY[$$SET citus.enable_ddl_propagation TO off; CREATE ROLE distobj_role4 CONNECTION LIMIT 3$$]::text[], false);
+SELECT bool_and(result::int = 1) AS role_iv_partial FROM run_command_on_workers($$SELECT count(*) FROM pg_roles WHERE rolname = 'distobj_role4'$$);
+SELECT citus_internal.distribute_object('pg_authid'::regclass::oid, 'distobj_role4'::regrole::oid);
+SELECT bool_and(result::int = 1) AS role_iv_full FROM run_command_on_workers($$SELECT count(*) FROM pg_roles WHERE rolname = 'distobj_role4'$$);
+DROP ROLE distobj_role4;
+-- v: already present on every worker -> not recreated anywhere (oids unchanged).
+SELECT string_agg(result, ',' ORDER BY nodeport) AS role_oids FROM run_command_on_workers($$SELECT 'distobj_role'::regrole::oid::text$$) \gset
+SELECT citus_internal.distribute_object('pg_authid'::regclass::oid, 'distobj_role'::regrole::oid);
+SELECT string_agg(result, ',' ORDER BY nodeport) = :'role_oids' AS role_v_unchanged FROM run_command_on_workers($$SELECT 'distobj_role'::regrole::oid::text$$);
 -- ---------------------------------------------------------------------------
 -- EXTENSION (OCLASS_EXTENSION)
 -- ---------------------------------------------------------------------------
@@ -123,6 +263,19 @@ RESET citus.enable_metadata_sync;
 SELECT citus_internal.distribute_object('pg_extension'::regclass::oid, oid) FROM pg_extension WHERE extname = 'seg';
 SELECT bool_and(result::int = 1) AS ext_exists FROM run_command_on_workers($$SELECT count(*) FROM pg_extension WHERE extname = 'seg'$$);
 SELECT citus_internal.distribute_object('pg_extension'::regclass::oid, oid, force_recreate := true) FROM pg_extension WHERE extname = 'seg';
+-- v: already present on every worker -> not recreated anywhere (oids unchanged).
+SELECT string_agg(result, ',' ORDER BY nodeport) AS ext_oids FROM run_command_on_workers($$SELECT oid::text FROM pg_extension WHERE extname = 'seg'$$) \gset
+SELECT citus_internal.distribute_object('pg_extension'::regclass::oid, oid) FROM pg_extension WHERE extname = 'seg';
+SELECT string_agg(result, ',' ORDER BY nodeport) = :'ext_oids' AS ext_v_unchanged FROM run_command_on_workers($$SELECT oid::text FROM pg_extension WHERE extname = 'seg'$$);
+-- iv: a fresh extension present on the coordinator and a single worker -> created on the rest.
+SET citus.enable_metadata_sync TO OFF;
+CREATE EXTENSION cube;
+RESET citus.enable_metadata_sync;
+SELECT bool_and(success) AS ext_iv_placed FROM master_run_on_worker(ARRAY['localhost']::text[], ARRAY[:one_worker_port]::int[], ARRAY[$$SET citus.enable_ddl_propagation TO off; CREATE EXTENSION cube$$]::text[], false);
+SELECT bool_and(result::int = 1) AS ext_iv_partial FROM run_command_on_workers($$SELECT count(*) FROM pg_extension WHERE extname = 'cube'$$);
+SELECT citus_internal.distribute_object('pg_extension'::regclass::oid, oid) FROM pg_extension WHERE extname = 'cube';
+SELECT bool_and(result::int = 1) AS ext_iv_full FROM run_command_on_workers($$SELECT count(*) FROM pg_extension WHERE extname = 'cube'$$);
+DROP EXTENSION cube;
 DROP EXTENSION seg;
 -- ---------------------------------------------------------------------------
 -- FOREIGN SERVER (OCLASS_FOREIGN_SERVER)
@@ -136,6 +289,19 @@ SELECT citus_internal.distribute_object('pg_extension'::regclass::oid, oid) FROM
 SELECT citus_internal.distribute_object('pg_foreign_server'::regclass::oid, oid) FROM pg_foreign_server WHERE srvname = 'distobj_srv';
 SELECT bool_and(result::int = 1) AS srv_exists FROM run_command_on_workers($$SELECT count(*) FROM pg_foreign_server WHERE srvname = 'distobj_srv'$$);
 SELECT citus_internal.distribute_object('pg_foreign_server'::regclass::oid, oid, force_recreate := true) FROM pg_foreign_server WHERE srvname = 'distobj_srv';
+-- v: already present on every worker -> not recreated anywhere (oids unchanged).
+SELECT string_agg(result, ',' ORDER BY nodeport) AS srv_oids FROM run_command_on_workers($$SELECT oid::text FROM pg_foreign_server WHERE srvname = 'distobj_srv'$$) \gset
+SELECT citus_internal.distribute_object('pg_foreign_server'::regclass::oid, oid) FROM pg_foreign_server WHERE srvname = 'distobj_srv';
+SELECT string_agg(result, ',' ORDER BY nodeport) = :'srv_oids' AS srv_v_unchanged FROM run_command_on_workers($$SELECT oid::text FROM pg_foreign_server WHERE srvname = 'distobj_srv'$$);
+-- iv: a fresh server present on the coordinator and a single worker -> created on the rest.
+SET citus.enable_metadata_sync TO OFF;
+CREATE SERVER distobj_srv4 FOREIGN DATA WRAPPER postgres_fdw OPTIONS (host 'localhost');
+RESET citus.enable_metadata_sync;
+SELECT bool_and(success) AS srv_iv_placed FROM master_run_on_worker(ARRAY['localhost']::text[], ARRAY[:one_worker_port]::int[], ARRAY[$$SET citus.enable_ddl_propagation TO off; CREATE SERVER distobj_srv4 FOREIGN DATA WRAPPER postgres_fdw OPTIONS (host 'localhost')$$]::text[], false);
+SELECT bool_and(result::int = 1) AS srv_iv_partial FROM run_command_on_workers($$SELECT count(*) FROM pg_foreign_server WHERE srvname = 'distobj_srv4'$$);
+SELECT citus_internal.distribute_object('pg_foreign_server'::regclass::oid, oid) FROM pg_foreign_server WHERE srvname = 'distobj_srv4';
+SELECT bool_and(result::int = 1) AS srv_iv_full FROM run_command_on_workers($$SELECT count(*) FROM pg_foreign_server WHERE srvname = 'distobj_srv4'$$);
+DROP SERVER distobj_srv4;
 DROP SERVER distobj_srv;
 DROP EXTENSION postgres_fdw;
 DROP ROLE distobj_role;

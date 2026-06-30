@@ -52,8 +52,8 @@ static void EnsureRequiredObjectSetExistOnAllNodes(const ObjectAddress *target,
 static void EnsureObjectExistsOnAllNodes(const ObjectAddress *target,
 										 bool forceRecreate);
 static char * ObjectExistsOnNodeCommand(const ObjectAddress *target);
-static bool RemoteObjectExists(MultiConnection *connection,
-							   const char *existenceCheckCommand);
+static bool RemoteCommandReturnsRow(MultiConnection *connection,
+									const char *command);
 static List * GetDependencyCreateDDLCommands(const ObjectAddress *dependency);
 static bool ShouldPropagateObject(const ObjectAddress *address);
 static char * DropTableIfExistsCommand(Oid relationId);
@@ -227,7 +227,7 @@ EnsureObjectExistsOnAllNodes(const ObjectAddress *target, bool forceRecreate)
 			GetNodeUserDatabaseConnection(connectionFlags, nodeName, nodePort,
 										  CitusExtensionOwnerName(), NULL);
 
-		if (forceRecreate || !RemoteObjectExists(connection, existenceCheckCommand))
+		if (forceRecreate || !RemoteCommandReturnsRow(connection, existenceCheckCommand))
 		{
 			SendCommandListToWorkerOutsideTransactionWithConnection(connection,
 																	ddlCommands);
@@ -293,18 +293,18 @@ ObjectExistsOnNodeCommand(const ObjectAddress *target)
 
 
 /*
- * RemoteObjectExists executes the given existence-check command --built by
- * ObjectExistsOnNodeCommand()-- over the provided connection and returns whether
- * the object exists on the remote node.
+ * RemoteCommandReturnsRow executes the given command over the provided
+ * connection and returns whether it produced at least one row.
  *
- * pg_get_object_address() resolves the object by name and raises an error when
- * it cannot find it. We treat such a statement-level error as "the object does
- * not exist on this node" and only surface connection-level failures as errors.
+ * A statement-level error --for example when the command references an object
+ * that does not exist on the node-- is treated as "no rows returned", so callers
+ * can use this to probe for existence without the command aborting on their
+ * behalf. Only connection-level failures are surfaced as errors.
  */
 static bool
-RemoteObjectExists(MultiConnection *connection, const char *existenceCheckCommand)
+RemoteCommandReturnsRow(MultiConnection *connection, const char *command)
 {
-	int querySent = SendRemoteCommand(connection, existenceCheckCommand);
+	int querySent = SendRemoteCommand(connection, command);
 	if (querySent == 0)
 	{
 		ReportConnectionError(connection, ERROR);
@@ -313,27 +313,27 @@ RemoteObjectExists(MultiConnection *connection, const char *existenceCheckComman
 	bool raiseInterrupts = true;
 	PGresult *result = GetRemoteCommandResult(connection, raiseInterrupts);
 
-	bool objectExists = false;
+	bool returnedRow = false;
 	if (IsResponseOK(result))
 	{
-		objectExists = PQntuples(result) > 0;
+		returnedRow = PQntuples(result) > 0;
 	}
 	else if (PQstatus(connection->pgConn) != CONNECTION_OK)
 	{
-		/* we lost the connection while probing, so error out after cleanup */
+		/* we lost the connection while running the command, so error out */
 		PQclear(result);
 		ForgetResults(connection);
 		ReportConnectionError(connection, ERROR);
 	}
 
 	/*
-	 * Otherwise pg_get_object_address() could not resolve the object by name,
-	 * which we interpret as the object being absent on this node.
+	 * Otherwise the command raised a statement-level error, which we treat as
+	 * "no rows returned" so that an existence probe reports the object as absent.
 	 */
 	PQclear(result);
 	ForgetResults(connection);
 
-	return objectExists;
+	return returnedRow;
 }
 
 
