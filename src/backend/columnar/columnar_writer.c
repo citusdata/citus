@@ -46,6 +46,12 @@ struct ColumnarWriteState
 	FmgrInfo **comparisonFunctionArray;
 	RelFileLocator relfilelocator;
 
+	/*
+	 * We can't rely on RelidByRelfilenumber for temp tables since
+	 * PG18(it was backpatched through PG13).
+	 */
+	Oid temp_relid;
+
 	MemoryContext stripeWriteContext;
 	MemoryContext perTupleContext;
 	StripeBuffers *stripeBuffers;
@@ -91,10 +97,12 @@ static StringInfo CopyStringInfo(StringInfo sourceString);
  * data load operation.
  */
 ColumnarWriteState *
-ColumnarBeginWrite(RelFileLocator relfilelocator,
+ColumnarBeginWrite(Relation rel,
 				   ColumnarOptions options,
 				   TupleDesc tupleDescriptor)
 {
+	RelFileLocator relfilelocator = RelationPhysicalIdentifier_compat(rel);
+
 	/* get comparison function pointers for each of the columns */
 	uint32 columnCount = tupleDescriptor->natts;
 	FmgrInfo **comparisonFunctionArray = palloc0(columnCount * sizeof(FmgrInfo *));
@@ -132,6 +140,7 @@ ColumnarBeginWrite(RelFileLocator relfilelocator,
 
 	ColumnarWriteState *writeState = palloc0(sizeof(ColumnarWriteState));
 	writeState->relfilelocator = relfilelocator;
+	writeState->temp_relid = RelationPrecomputeOid(rel);
 	writeState->options = options;
 	writeState->tupleDescriptor = CreateTupleDescCopy(tupleDescriptor);
 	writeState->comparisonFunctionArray = comparisonFunctionArray;
@@ -181,10 +190,9 @@ ColumnarWriteRow(ColumnarWriteState *writeState, Datum *columnValues, bool *colu
 		writeState->stripeSkipList = stripeSkipList;
 		writeState->compressionBuffer = makeStringInfo();
 
-		Oid relationId = RelidByRelfilenumber(RelationTablespace_compat(
-												  writeState->relfilelocator),
-											  RelationPhysicalIdentifierNumber_compat(
-												  writeState->relfilelocator));
+		Oid relationId = ColumnarRelationId(writeState->temp_relid,
+											writeState->relfilelocator);
+
 		Relation relation = relation_open(relationId, NoLock);
 		writeState->emptyStripeReservation =
 			ReserveEmptyStripe(relation, columnCount, chunkRowCount,
@@ -402,10 +410,9 @@ FlushStripe(ColumnarWriteState *writeState)
 
 	elog(DEBUG1, "Flushing Stripe of size %d", stripeBuffers->rowCount);
 
-	Oid relationId = RelidByRelfilenumber(RelationTablespace_compat(
-											  writeState->relfilelocator),
-										  RelationPhysicalIdentifierNumber_compat(
-											  writeState->relfilelocator));
+	Oid relationId = ColumnarRelationId(writeState->temp_relid,
+										writeState->relfilelocator);
+
 	Relation relation = relation_open(relationId, NoLock);
 
 	/*
@@ -497,10 +504,12 @@ FlushStripe(ColumnarWriteState *writeState)
 		}
 	}
 
-	SaveChunkGroups(writeState->relfilelocator,
+	SaveChunkGroups(writeState->temp_relid,
+					writeState->relfilelocator,
 					stripeMetadata->id,
 					writeState->chunkGroupRowCounts);
-	SaveStripeSkipList(writeState->relfilelocator,
+	SaveStripeSkipList(writeState->temp_relid,
+					   writeState->relfilelocator,
 					   stripeMetadata->id,
 					   stripeSkipList, tupleDescriptor);
 
