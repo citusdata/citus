@@ -3615,6 +3615,12 @@ citus_internal_delete_placement_metadata(PG_FUNCTION_ARGS)
 	PG_ENSURE_ARGNOTNULL(0, "placement_id");
 	int64 placementId = PG_GETARG_INT64(0);
 
+	bool missingOk = false;
+	GroupShardPlacement *placement = LookupGroupPlacementByPlacementId(placementId,
+																	   missingOk);
+
+	EnsureShardOwner(placement->shardId, missingOk);
+
 	if (!ShouldSkipMetadataChecks())
 	{
 		/* this UDF is not allowed allowed for executing as a separate command */
@@ -3986,6 +3992,14 @@ citus_internal_add_tenant_schema(PG_FUNCTION_ARGS)
 	PG_ENSURE_ARGNOTNULL(1, "colocation_id");
 	uint32 colocationId = PG_GETARG_INT32(1);
 
+	EnsureSchemaOwner(schemaId);
+
+	if (!ShouldSkipMetadataChecks())
+	{
+		/* this UDF is not allowed allowed for executing as a separate command */
+		EnsureCoordinatorInitiatedOperation();
+	}
+
 	InsertTenantSchemaLocally(schemaId, colocationId);
 
 	PG_RETURN_VOID();
@@ -4007,6 +4021,14 @@ citus_internal_delete_tenant_schema(PG_FUNCTION_ARGS)
 
 	PG_ENSURE_ARGNOTNULL(0, "schema_id");
 	Oid schemaId = PG_GETARG_OID(0);
+
+	EnsureSchemaOwner(schemaId);
+
+	if (!ShouldSkipMetadataChecks())
+	{
+		/* this UDF is not allowed allowed for executing as a separate command */
+		EnsureCoordinatorInitiatedOperation();
+	}
 
 	DeleteTenantSchemaLocally(schemaId);
 
@@ -4035,6 +4057,8 @@ citus_internal_update_none_dist_table_metadata(PG_FUNCTION_ARGS)
 
 	PG_ENSURE_ARGNOTNULL(3, "auto_converted");
 	bool autoConverted = PG_GETARG_BOOL(3);
+
+	EnsureTableOwner(relationId);
 
 	if (!ShouldSkipMetadataChecks())
 	{
