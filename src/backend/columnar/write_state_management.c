@@ -191,8 +191,7 @@ columnar_init_write_state(Relation relation, TupleDesc tupdesc,
 	ReadColumnarOptions(tupSlotRelationId, &columnarOptions);
 
 	SubXidWriteState *stackEntry = palloc0(sizeof(SubXidWriteState));
-	stackEntry->writeState = ColumnarBeginWrite(RelationPhysicalIdentifier_compat(
-													relation),
+	stackEntry->writeState = ColumnarBeginWrite(relation,
 												columnarOptions,
 												tupdesc);
 	stackEntry->subXid = currentSubXid;
