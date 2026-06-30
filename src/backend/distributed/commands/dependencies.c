@@ -161,21 +161,6 @@ EnsureObjectAndDependenciesExistOnAllNodes(const ObjectAddress *target)
  * dependencies-- on the worker nodes that are missing it and records it in
  * pg_dist_object on all nodes.
  *
- * For each remote node, we first check whether the object already exists there
- * --resolved by name, so that OID differences between nodes don't matter-- and
- * only (re)create it on the nodes that are missing it. This way we never hand a
- * "create or replace" style command to a node that already has the object,
- * which --for some object classes-- would otherwise rename the existing object
- * out of the way before recreating it. The caller can pass forceRecreate to
- * skip the per-node existence check and always (re)apply the DDL, which is
- * useful to sync drift --e.g. role grants/options that were never propagated--
- * onto nodes that already have the object.
- *
- * We deliberately accept the small TOCTOU window where the object might be
- * created by someone else between our existence check and our own creation
- * attempt: the worst case is that the create command fails loudly, which is
- * acceptable for a superuser-only repair UDF.
- *
  * The object is created via a separate session that is committed directly so
  * that it is visible to the (current transaction's) metadata connection when we
  * mark the object distributed below.
