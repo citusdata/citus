@@ -7,7 +7,9 @@
 -- manner. Dependencies of the object are deliberately not considered.
 --
 -- For each supported, DDL-generating object type we test:
---   i)   force_recreate := false on a missing object -> created on workers
+--   i)   force_recreate := false on a missing object -> created on the workers
+--        and recorded in pg_dist_object on the coordinator and all worker nodes
+--        (asserted absent before and present after the call)
 --   ii-a) force_recreate := true when it already exists -> no error
 --   ii-b) force_recreate := true after coordinator-only drift -> drift synced
 --   iv)  force_recreate := false on a partially present object (present on the
@@ -36,6 +38,21 @@ SELECT bool_and(result::int = 0) AS fn_missing FROM run_command_on_workers($$SEL
  t
 (1 row)
 
+-- before: the function is not yet recorded in pg_dist_object on any node. We probe
+-- pg_dist_object through a by-name join (rather than a regprocedure cast) so the
+-- query does not error on the workers where the function does not exist yet.
+SELECT count(*) = 0 AS fn_undistributed_coordinator FROM pg_dist_object d JOIN pg_proc p ON d.objid = p.oid WHERE d.classid = 'pg_proc'::regclass AND p.proname = 'fn' AND p.pronamespace = 'distobj'::regnamespace;
+ fn_undistributed_coordinator
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT bool_and(result::int = 0) AS fn_undistributed_workers FROM run_command_on_workers($$SELECT count(*) FROM pg_dist_object d JOIN pg_proc p ON d.objid = p.oid WHERE d.classid = 'pg_proc'::regclass AND p.proname = 'fn' AND p.pronamespace = 'distobj'::regnamespace$$);
+ fn_undistributed_workers
+---------------------------------------------------------------------
+ t
+(1 row)
+
 SELECT citus_internal.distribute_object('pg_proc'::regclass::oid, 'distobj.fn(int)'::regprocedure::oid);
  distribute_object
 ---------------------------------------------------------------------
@@ -48,8 +65,15 @@ SELECT bool_and(result::int = 1) AS fn_exists FROM run_command_on_workers($$SELE
  t
 (1 row)
 
-SELECT bool_and(result::int = 1) AS fn_distributed FROM run_command_on_workers($$SELECT count(*) FROM pg_dist_object WHERE classid = 'pg_proc'::regclass AND objid = 'distobj.fn(int)'::regprocedure$$);
- fn_distributed
+-- after: the function is recorded in pg_dist_object on the coordinator and every worker.
+SELECT count(*) = 1 AS fn_distributed_coordinator FROM pg_dist_object d JOIN pg_proc p ON d.objid = p.oid WHERE d.classid = 'pg_proc'::regclass AND p.proname = 'fn' AND p.pronamespace = 'distobj'::regnamespace;
+ fn_distributed_coordinator
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT bool_and(result::int = 1) AS fn_distributed_workers FROM run_command_on_workers($$SELECT count(*) FROM pg_dist_object d JOIN pg_proc p ON d.objid = p.oid WHERE d.classid = 'pg_proc'::regclass AND p.proname = 'fn' AND p.pronamespace = 'distobj'::regnamespace$$);
+ fn_distributed_workers
 ---------------------------------------------------------------------
  t
 (1 row)
@@ -652,6 +676,21 @@ SELECT string_agg(result, ',' ORDER BY nodeport) = :'pub_oids' AS pub_v_unchange
 SET citus.enable_metadata_sync TO OFF;
 CREATE ROLE distobj_role CONNECTION LIMIT 3;
 RESET citus.enable_metadata_sync;
+-- before: the role is not yet recorded in pg_dist_object on any node. We probe
+-- pg_dist_object through a by-name join (rather than a regrole cast) so the query
+-- does not error on the workers where the role does not exist yet.
+SELECT count(*) = 0 AS role_undistributed_coordinator FROM pg_dist_object d JOIN pg_authid a ON d.objid = a.oid WHERE d.classid = 'pg_authid'::regclass AND a.rolname = 'distobj_role';
+ role_undistributed_coordinator
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT bool_and(result::int = 0) AS role_undistributed_workers FROM run_command_on_workers($$SELECT count(*) FROM pg_dist_object d JOIN pg_authid a ON d.objid = a.oid WHERE d.classid = 'pg_authid'::regclass AND a.rolname = 'distobj_role'$$);
+ role_undistributed_workers
+---------------------------------------------------------------------
+ t
+(1 row)
+
 SELECT citus_internal.distribute_object('pg_authid'::regclass::oid, 'distobj_role'::regrole::oid);
  distribute_object
 ---------------------------------------------------------------------
@@ -666,6 +705,19 @@ SELECT bool_and(result::int = 1) AS role_exists FROM run_command_on_workers($$SE
 
 SELECT bool_and(result = '3') AS role_connlimit_synced FROM run_command_on_workers($$SELECT rolconnlimit FROM pg_authid WHERE rolname = 'distobj_role'$$);
  role_connlimit_synced
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- after: the role is recorded in pg_dist_object on the coordinator and every worker.
+SELECT count(*) = 1 AS role_distributed_coordinator FROM pg_dist_object d JOIN pg_authid a ON d.objid = a.oid WHERE d.classid = 'pg_authid'::regclass AND a.rolname = 'distobj_role';
+ role_distributed_coordinator
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT bool_and(result::int = 1) AS role_distributed_workers FROM run_command_on_workers($$SELECT count(*) FROM pg_dist_object d JOIN pg_authid a ON d.objid = a.oid WHERE d.classid = 'pg_authid'::regclass AND a.rolname = 'distobj_role'$$);
+ role_distributed_workers
 ---------------------------------------------------------------------
  t
 (1 row)
