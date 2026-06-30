@@ -316,13 +316,23 @@ RemoteCommandOnNodeReturnsRow(const char *nodeName, uint32 nodePort,
 	bool raiseInterrupts = true;
 	PGresult *result = GetRemoteCommandResult(connection, raiseInterrupts);
 
-	if (!IsResponseOK(result))
+	bool returnedRow = false;
+	if (IsResponseOK(result))
 	{
-		ReportResultError(connection, result, ERROR);
+		returnedRow = PQntuples(result) > 0;
+	}
+	else if (PQstatus(connection->pgConn) != CONNECTION_OK)
+	{
+		/* we lost the connection while running the command, so error out */
+		PQclear(result);
+		ForgetResults(connection);
+		ReportConnectionError(connection, ERROR);
 	}
 
-	bool returnedRow = PQntuples(result) > 0;
-
+	/*
+	 * Otherwise the command raised a statement-level error, which we treat as
+	 * "no rows returned" so that an existence probe reports the object as absent.
+	 */
 	PQclear(result);
 	ForgetResults(connection);
 
