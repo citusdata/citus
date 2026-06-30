@@ -52,8 +52,8 @@ static void EnsureRequiredObjectSetExistOnAllNodes(const ObjectAddress *target,
 static void EnsureObjectExistsOnAllNodes(const ObjectAddress *target,
 										 bool forceRecreate);
 static char * ObjectExistsOnNodeCommand(const ObjectAddress *target);
-static bool RemoteCommandReturnsRow(MultiConnection *connection,
-									const char *command);
+static bool RemoteCommandOnNodeReturnsRow(const char *nodeName, uint32 nodePort,
+										  const char *command);
 static List * GetDependencyCreateDDLCommands(const ObjectAddress *dependency);
 static bool ShouldPropagateObject(const ObjectAddress *address);
 static char * DropTableIfExistsCommand(Oid relationId);
@@ -222,18 +222,13 @@ EnsureObjectExistsOnAllNodes(const ObjectAddress *target, bool forceRecreate)
 		const char *nodeName = workerNode->workerName;
 		uint32 nodePort = workerNode->workerPort;
 
-		int connectionFlags = FORCE_NEW_CONNECTION;
-		MultiConnection *connection =
-			GetNodeUserDatabaseConnection(connectionFlags, nodeName, nodePort,
-										  CitusExtensionOwnerName(), NULL);
-
-		if (forceRecreate || !RemoteCommandReturnsRow(connection, existenceCheckCommand))
+		if (forceRecreate ||
+			!RemoteCommandOnNodeReturnsRow(nodeName, nodePort, existenceCheckCommand))
 		{
-			SendCommandListToWorkerOutsideTransactionWithConnection(connection,
-																	ddlCommands);
+			SendCommandListToWorkerOutsideTransaction(nodeName, nodePort,
+													  CitusExtensionOwnerName(),
+													  ddlCommands);
 		}
-
-		CloseConnection(connection);
 	}
 
 	MarkObjectDistributedViaSuperUser(target);
@@ -293,17 +288,24 @@ ObjectExistsOnNodeCommand(const ObjectAddress *target)
 
 
 /*
- * RemoteCommandReturnsRow executes the given command over the provided
- * connection and returns whether it produced at least one row.
+ * RemoteCommandOnNodeReturnsRow opens an outside-transaction connection to
+ * the node identified by nodeName and nodePort, executes the given command
+ * over it, and returns whether the command produced at least one row.
  *
- * A statement-level error --for example when the command references an object
- * that does not exist on the node-- is treated as "no rows returned", so callers
- * can use this to probe for existence without the command aborting on their
- * behalf. Only connection-level failures are surfaced as errors.
+ * Since the connection is opened with the OUTSIDE_TRANSACTION flag, a
+ * statement-level error raised by the command is reported as "no rows returned"
+ * and never rolls back the caller's transaction. Only connection-level failures
+ * are surfaced as errors.
  */
 static bool
-RemoteCommandReturnsRow(MultiConnection *connection, const char *command)
+RemoteCommandOnNodeReturnsRow(const char *nodeName, uint32 nodePort,
+							  const char *command)
 {
+	int connectionFlags = OUTSIDE_TRANSACTION;
+	MultiConnection *connection =
+		GetNodeUserDatabaseConnection(connectionFlags, nodeName, nodePort,
+									  CitusExtensionOwnerName(), NULL);
+
 	int querySent = SendRemoteCommand(connection, command);
 	if (querySent == 0)
 	{
@@ -313,23 +315,13 @@ RemoteCommandReturnsRow(MultiConnection *connection, const char *command)
 	bool raiseInterrupts = true;
 	PGresult *result = GetRemoteCommandResult(connection, raiseInterrupts);
 
-	bool returnedRow = false;
-	if (IsResponseOK(result))
+	if (!IsResponseOK(result))
 	{
-		returnedRow = PQntuples(result) > 0;
-	}
-	else if (PQstatus(connection->pgConn) != CONNECTION_OK)
-	{
-		/* we lost the connection while running the command, so error out */
-		PQclear(result);
-		ForgetResults(connection);
-		ReportConnectionError(connection, ERROR);
+		ReportResultError(connection, result, ERROR);
 	}
 
-	/*
-	 * Otherwise the command raised a statement-level error, which we treat as
-	 * "no rows returned" so that an existence probe reports the object as absent.
-	 */
+	bool returnedRow = PQntuples(result) > 0;
+
 	PQclear(result);
 	ForgetResults(connection);
 
