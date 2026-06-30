@@ -43,8 +43,11 @@ SELECT bool_and(result::int = 1) AS fn_exists FROM run_command_on_workers($$SELE
 -- after: the function is recorded in pg_dist_object on the coordinator and every worker.
 SELECT count(*) = 1 AS fn_distributed_coordinator FROM pg_dist_object d JOIN pg_proc p ON d.objid = p.oid WHERE d.classid = 'pg_proc'::regclass AND p.proname = 'fn' AND p.pronamespace = 'distobj'::regnamespace;
 SELECT bool_and(result::int = 1) AS fn_distributed_workers FROM run_command_on_workers($$SELECT count(*) FROM pg_dist_object d JOIN pg_proc p ON d.objid = p.oid WHERE d.classid = 'pg_proc'::regclass AND p.proname = 'fn' AND p.pronamespace = 'distobj'::regnamespace$$);
--- ii-a: force on an object that already exists everywhere is a no-op.
+-- ii-a: force on an object that already exists everywhere is a no-op and keeps a
+-- single pg_dist_object row on every node (the mark is idempotent).
 SELECT citus_internal.distribute_object('pg_proc'::regclass::oid, 'distobj.fn(int)'::regprocedure::oid, force_recreate := true);
+SELECT count(*) = 1 AS fn_iia_distributed_coordinator FROM pg_dist_object d JOIN pg_proc p ON d.objid = p.oid WHERE d.classid = 'pg_proc'::regclass AND p.proname = 'fn' AND p.pronamespace = 'distobj'::regnamespace;
+SELECT bool_and(result::int = 1) AS fn_iia_distributed_workers FROM run_command_on_workers($$SELECT count(*) FROM pg_dist_object d JOIN pg_proc p ON d.objid = p.oid WHERE d.classid = 'pg_proc'::regclass AND p.proname = 'fn' AND p.pronamespace = 'distobj'::regnamespace$$);
 -- ii-b: drift the function on the coordinator, then force-sync to workers.
 SET citus.enable_metadata_sync TO OFF;
 ALTER FUNCTION distobj.fn(int) STRICT;
@@ -252,6 +255,11 @@ SELECT bool_and(result = '3') AS role_connlimit_synced FROM run_command_on_worke
 -- after: the role is recorded in pg_dist_object on the coordinator and every worker.
 SELECT count(*) = 1 AS role_distributed_coordinator FROM pg_dist_object d JOIN pg_authid a ON d.objid = a.oid WHERE d.classid = 'pg_authid'::regclass AND a.rolname = 'distobj_role';
 SELECT bool_and(result::int = 1) AS role_distributed_workers FROM run_command_on_workers($$SELECT count(*) FROM pg_dist_object d JOIN pg_authid a ON d.objid = a.oid WHERE d.classid = 'pg_authid'::regclass AND a.rolname = 'distobj_role'$$);
+-- ii-a: force on an object that already exists everywhere is a no-op and keeps a
+-- single pg_dist_object row on every node (the mark is idempotent).
+SELECT citus_internal.distribute_object('pg_authid'::regclass::oid, 'distobj_role'::regrole::oid, force_recreate := true);
+SELECT count(*) = 1 AS role_iia_distributed_coordinator FROM pg_dist_object d JOIN pg_authid a ON d.objid = a.oid WHERE d.classid = 'pg_authid'::regclass AND a.rolname = 'distobj_role';
+SELECT bool_and(result::int = 1) AS role_iia_distributed_workers FROM run_command_on_workers($$SELECT count(*) FROM pg_dist_object d JOIN pg_authid a ON d.objid = a.oid WHERE d.classid = 'pg_authid'::regclass AND a.rolname = 'distobj_role'$$);
 -- ii-b: alter the role on the coordinator only, then force-sync to workers.
 SET citus.enable_metadata_sync TO OFF;
 ALTER ROLE distobj_role CONNECTION LIMIT 7;

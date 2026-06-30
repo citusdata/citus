@@ -78,11 +78,24 @@ SELECT bool_and(result::int = 1) AS fn_distributed_workers FROM run_command_on_w
  t
 (1 row)
 
--- ii-a: force on an object that already exists everywhere is a no-op.
+-- ii-a: force on an object that already exists everywhere is a no-op and keeps a
+-- single pg_dist_object row on every node (the mark is idempotent).
 SELECT citus_internal.distribute_object('pg_proc'::regclass::oid, 'distobj.fn(int)'::regprocedure::oid, force_recreate := true);
  distribute_object
 ---------------------------------------------------------------------
 
+(1 row)
+
+SELECT count(*) = 1 AS fn_iia_distributed_coordinator FROM pg_dist_object d JOIN pg_proc p ON d.objid = p.oid WHERE d.classid = 'pg_proc'::regclass AND p.proname = 'fn' AND p.pronamespace = 'distobj'::regnamespace;
+ fn_iia_distributed_coordinator
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT bool_and(result::int = 1) AS fn_iia_distributed_workers FROM run_command_on_workers($$SELECT count(*) FROM pg_dist_object d JOIN pg_proc p ON d.objid = p.oid WHERE d.classid = 'pg_proc'::regclass AND p.proname = 'fn' AND p.pronamespace = 'distobj'::regnamespace$$);
+ fn_iia_distributed_workers
+---------------------------------------------------------------------
+ t
 (1 row)
 
 -- ii-b: drift the function on the coordinator, then force-sync to workers.
@@ -718,6 +731,26 @@ SELECT count(*) = 1 AS role_distributed_coordinator FROM pg_dist_object d JOIN p
 
 SELECT bool_and(result::int = 1) AS role_distributed_workers FROM run_command_on_workers($$SELECT count(*) FROM pg_dist_object d JOIN pg_authid a ON d.objid = a.oid WHERE d.classid = 'pg_authid'::regclass AND a.rolname = 'distobj_role'$$);
  role_distributed_workers
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- ii-a: force on an object that already exists everywhere is a no-op and keeps a
+-- single pg_dist_object row on every node (the mark is idempotent).
+SELECT citus_internal.distribute_object('pg_authid'::regclass::oid, 'distobj_role'::regrole::oid, force_recreate := true);
+ distribute_object
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT count(*) = 1 AS role_iia_distributed_coordinator FROM pg_dist_object d JOIN pg_authid a ON d.objid = a.oid WHERE d.classid = 'pg_authid'::regclass AND a.rolname = 'distobj_role';
+ role_iia_distributed_coordinator
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT bool_and(result::int = 1) AS role_iia_distributed_workers FROM run_command_on_workers($$SELECT count(*) FROM pg_dist_object d JOIN pg_authid a ON d.objid = a.oid WHERE d.classid = 'pg_authid'::regclass AND a.rolname = 'distobj_role'$$);
+ role_iia_distributed_workers
 ---------------------------------------------------------------------
  t
 (1 row)
