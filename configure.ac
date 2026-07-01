@@ -5,7 +5,7 @@
 # everyone needing autoconf installed, the resulting files are checked
 # into the SCM.
 
-AC_INIT([Citus], [12.1.12])
+AC_INIT([Citus], [12.1.13])
 AC_COPYRIGHT([Copyright (c) Citus Data, Inc.])
 
 # we'll need sed and awk for some of the version commands
