@@ -1,3 +1,23 @@
+### citus v12.1.13 (July 1, 2026) ###
+
+* Fixes a crash when creating statistics on a relation that is not a plain
+  table, such as a subquery or `VALUES` expression (#8306)
+
+* Enforces object ownership for more Citus internal UDFs (#8626)
+
+* Fixes a deadlock when adding a named constraint with a long partition name
+  (#8627)
+
+* Fixes incorrect ignoring of reference or schema sharded tables in worker
+  subquery task construction when there are no distributed tables involved
+  (#8519)
+
+* Keeps the temporary relation OID for columnar cases so it works on newer
+  PostgreSQL minor versions (#8328)
+
+* Adds grantor role dependencies to fix node addition with interdependent
+  roles (#8569)
+
 ### citus v12.1.12 (April 22, 2026) ###
 
 * Hardens extension SQL against `search_path` attacks by schema-qualifying
