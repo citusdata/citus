@@ -1272,6 +1272,151 @@ OneTaskNoOpNoticeReceiver(void *arg, const PGresult *result)
 
 
 /*
+ * ShouldUseBinaryResultsFor returns whether results for the given tuple
+ * descriptor should be requested in binary format. Shared by the single-task
+ * and adaptive executor paths.
+ */
+static bool
+ShouldUseBinaryResultsFor(TupleDesc tupleDescriptor)
+{
+	return EnableBinaryProtocol && tupleDescriptor != NULL &&
+		   CanUseBinaryCopyFormat(tupleDescriptor);
+}
+
+
+/*
+ * SendQueryStringToConnection sends queryString over the connection. When
+ * there are unresolved bound parameters it forces their evaluation and uses
+ * the parameterized send (also required whenever binaryResults is desired);
+ * otherwise it uses the simple send. Returns the value of the underlying libpq
+ * send call (0 on failure).
+ *
+ * Note: SendRemoteCommandParams only supports a single query in the query
+ * string. Callers that may have multiple queries must ensure binaryResults is
+ * false so the simple SendRemoteCommand path is taken.
+ */
+static int
+SendQueryStringToConnection(MultiConnection *connection, char *queryString,
+							ParamListInfo paramListInfo, bool parametersResolved,
+							bool binaryResults)
+{
+	int querySent = 0;
+
+	if (paramListInfo != NULL && !parametersResolved)
+	{
+		int parameterCount = paramListInfo->numParams;
+		Oid *parameterTypes = NULL;
+		const char **parameterValues = NULL;
+
+		/* force evaluation of bound params */
+		paramListInfo = copyParamList(paramListInfo);
+		ExtractParametersForRemoteExecution(paramListInfo, &parameterTypes,
+											&parameterValues);
+		querySent = SendRemoteCommandParams(connection, queryString, parameterCount,
+											parameterTypes, parameterValues,
+											binaryResults);
+	}
+	else
+	{
+		if (!binaryResults)
+		{
+			querySent = SendRemoteCommand(connection, queryString);
+		}
+		else
+		{
+			querySent = SendRemoteCommandParams(connection, queryString, 0, NULL, NULL,
+												binaryResults);
+		}
+	}
+
+	return querySent;
+}
+
+
+/*
+ * SetConnectionRowMode enables per-row (or chunked, when libpq supports it)
+ * result delivery on the connection. Returns 0 on failure.
+ */
+static int
+SetConnectionRowMode(MultiConnection *connection)
+{
+#ifdef LIBPQ_HAS_CHUNK_MODE
+	return PQsetChunkedRowsMode(connection->pgConn, ExecutorChunkSize);
+#else
+	return PQsetSingleRowMode(connection->pgConn);
+#endif
+}
+
+
+/*
+ * BuildTupleFromResultRow converts a single row (rowIndex) of a libpq result
+ * into a HeapTuple. columnArray and stringInfoDataArray are caller-provided
+ * scratch buffers with at least columnCount entries; when binaryResults is
+ * true the values are validated to be in binary format (and vice versa). The
+ * total libpq byte size of the row's non-null values is added to
+ * *tupleLibpqSize.
+ *
+ * The caller is responsible for switching to a per-row memory context before
+ * calling and resetting it afterwards.
+ */
+static HeapTuple
+BuildTupleFromResultRow(PGresult *result, uint32 rowIndex, uint32 columnCount,
+						bool binaryResults, AttInMetadata *attInMetadata,
+						void **columnArray, StringInfoData *stringInfoDataArray,
+						uint64 *tupleLibpqSize)
+{
+	memset(columnArray, 0, columnCount * sizeof(void *));
+
+	for (uint32 columnIndex = 0; columnIndex < columnCount; columnIndex++)
+	{
+		if (PQgetisnull(result, rowIndex, columnIndex))
+		{
+			columnArray[columnIndex] = NULL;
+		}
+		else
+		{
+			int valueLength = PQgetlength(result, rowIndex, columnIndex);
+			char *value = PQgetvalue(result, rowIndex, columnIndex);
+
+			if (binaryResults)
+			{
+				if (PQfformat(result, columnIndex) == 0)
+				{
+					ereport(ERROR, (errmsg("unexpected text result")));
+				}
+				resetStringInfo(&stringInfoDataArray[columnIndex]);
+				appendBinaryStringInfo(&stringInfoDataArray[columnIndex],
+									   value, valueLength);
+				columnArray[columnIndex] = &stringInfoDataArray[columnIndex];
+			}
+			else
+			{
+				if (PQfformat(result, columnIndex) == 1)
+				{
+					ereport(ERROR, (errmsg("unexpected binary result")));
+				}
+				columnArray[columnIndex] = value;
+			}
+
+			*tupleLibpqSize += valueLength;
+		}
+	}
+
+	HeapTuple heapTuple;
+	if (binaryResults)
+	{
+		heapTuple = BuildTupleFromBytes(attInMetadata, (fmStringInfo *) columnArray);
+	}
+	else
+	{
+		heapTuple = BuildTupleFromCStrings(attInMetadata, (char **) columnArray);
+	}
+
+	return heapTuple;
+}
+
+
+/*
  * SingleTaskExecutorStart sets up the single-task execution: creates the
  * tuplestore, handles transaction setup, acquires locks, splits local/remote
  * tasks, runs local tasks immediately, establishes the remote connection,
@@ -1504,42 +1649,12 @@ SingleTaskExecutorStart(CitusScanState *scanState)
 
 	/* send the query */
 	char *queryString = TaskQueryStringAtIndex(task, 0);
-	int querySent = 0;
-	bool binaryResults = false;
-
-	if (EnableBinaryProtocol && tupleDescriptor != NULL &&
-		CanUseBinaryCopyFormat(tupleDescriptor))
-	{
-		binaryResults = true;
-	}
+	bool binaryResults = ShouldUseBinaryResultsFor(tupleDescriptor);
 	ste->binaryResults = binaryResults;
 
-	if (paramListInfo != NULL && !task->parametersInQueryStringResolved)
-	{
-		int parameterCount = paramListInfo->numParams;
-		Oid *parameterTypes = NULL;
-		const char **parameterValues = NULL;
-
-		paramListInfo = copyParamList(paramListInfo);
-		ExtractParametersForRemoteExecution(paramListInfo, &parameterTypes,
-											&parameterValues);
-		querySent = SendRemoteCommandParams(connection, queryString,
-											parameterCount, parameterTypes,
-											parameterValues, binaryResults);
-	}
-	else
-	{
-		if (!binaryResults)
-		{
-			querySent = SendRemoteCommand(connection, queryString);
-		}
-		else
-		{
-			querySent = SendRemoteCommandParams(connection, queryString,
-												0, NULL, NULL, binaryResults);
-		}
-	}
-
+	int querySent = SendQueryStringToConnection(connection, queryString, paramListInfo,
+												task->parametersInQueryStringResolved,
+												binaryResults);
 	if (querySent == 0)
 	{
 		UnclaimConnection(connection);
@@ -1549,11 +1664,7 @@ SingleTaskExecutorStart(CitusScanState *scanState)
 						nodeName, nodePort)));
 	}
 
-#ifdef LIBPQ_HAS_CHUNK_MODE
-	if (PQsetChunkedRowsMode(connection->pgConn, ExecutorChunkSize) == 0)
-#else
-	if (PQsetSingleRowMode(connection->pgConn) == 0)
-#endif
+	if (SetConnectionRowMode(connection) == 0)
 	{
 		UnclaimConnection(connection);
 		ste->connection = NULL;
@@ -1720,50 +1831,18 @@ SingleTaskExecutorRun(CitusScanState *scanState)
 		{
 			MemoryContext prevContext = MemoryContextSwitchTo(ste->rowContext);
 
-			memset(ste->columnArray, 0, columnCount * sizeof(void *));
-
-			for (uint32 colIndex = 0; colIndex < columnCount; colIndex++)
-			{
-				if (PQgetisnull(result, rowIndex, colIndex))
-				{
-					ste->columnArray[colIndex] = NULL;
-				}
-				else
-				{
-					int valueLength = PQgetlength(result, rowIndex, colIndex);
-					char *value = PQgetvalue(result, rowIndex, colIndex);
-
-					if (ste->binaryResults)
-					{
-						resetStringInfo(&ste->stringInfoDataArray[colIndex]);
-						appendBinaryStringInfo(&ste->stringInfoDataArray[colIndex],
-											   value, valueLength);
-						ste->columnArray[colIndex] = &ste->stringInfoDataArray[colIndex];
-					}
-					else
-					{
-						ste->columnArray[colIndex] = value;
-					}
-				}
-			}
-
-			HeapTuple heapTuple;
-			if (ste->binaryResults)
-			{
-				heapTuple = BuildTupleFromBytes(ste->attInMetadata,
-												(fmStringInfo *) ste->columnArray);
-			}
-			else
-			{
-				heapTuple = BuildTupleFromCStrings(ste->attInMetadata,
-												   (char **) ste->columnArray);
-			}
+			uint64 tupleLibpqSize = 0;
+			HeapTuple heapTuple =
+				BuildTupleFromResultRow(result, rowIndex, columnCount,
+										ste->binaryResults, ste->attInMetadata,
+										ste->columnArray, ste->stringInfoDataArray,
+										&tupleLibpqSize);
 
 			MemoryContextSwitchTo(prevContext);
 
 			TupleDestination *tupleDest = ste->task->tupleDest ?
 										  ste->task->tupleDest : ste->defaultTupleDest;
-			tupleDest->putTuple(tupleDest, ste->task, 0, 0, heapTuple, 0);
+			tupleDest->putTuple(tupleDest, ste->task, 0, 0, heapTuple, tupleLibpqSize);
 
 			MemoryContextReset(ste->rowContext);
 
@@ -2623,7 +2702,7 @@ SetAttributeInputMetadata(DistributedExecution *execution,
 		{
 			attInMetadata = NULL;
 		}
-		else if (EnableBinaryProtocol && CanUseBinaryCopyFormat(tupleDescriptor))
+		else if (ShouldUseBinaryResultsFor(tupleDescriptor))
 		{
 			attInMetadata = TupleDescGetAttBinaryInMetadata(tupleDescriptor);
 			shardCommandExecution->binaryResults = true;
@@ -4894,51 +4973,14 @@ SendNextQuery(TaskPlacementExecution *placementExecution,
 	bool binaryResults = shardCommandExecution->binaryResults;
 	Task *task = shardCommandExecution->task;
 	ParamListInfo paramListInfo = execution->paramListInfo;
-	int querySent = 0;
 	uint32 queryIndex = placementExecution->queryIndex;
 
 	Assert(queryIndex < task->queryCount);
 	char *queryString = TaskQueryStringAtIndex(task, queryIndex);
 
-	if (paramListInfo != NULL && !task->parametersInQueryStringResolved)
-	{
-		int parameterCount = paramListInfo->numParams;
-		Oid *parameterTypes = NULL;
-		const char **parameterValues = NULL;
-
-		/* force evaluation of bound params */
-		paramListInfo = copyParamList(paramListInfo);
-
-		ExtractParametersForRemoteExecution(paramListInfo, &parameterTypes,
-											&parameterValues);
-		querySent = SendRemoteCommandParams(connection, queryString, parameterCount,
-											parameterTypes, parameterValues,
-											binaryResults);
-	}
-	else
-	{
-		/*
-		 * We only need to use SendRemoteCommandParams when we desire
-		 * binaryResults. One downside of SendRemoteCommandParams is that it
-		 * only supports one query in the query string. In some cases we have
-		 * more than one query. In those cases we already make sure before that
-		 * binaryResults is false.
-		 *
-		 * XXX: It also seems that SendRemoteCommandParams does something
-		 * strange/incorrectly with select statements. In
-		 * isolation_select_vs_all.spec, when doing an s1-router-select in one
-		 * session blocked an s2-ddl-create-index-concurrently in another.
-		 */
-		if (!binaryResults)
-		{
-			querySent = SendRemoteCommand(connection, queryString);
-		}
-		else
-		{
-			querySent = SendRemoteCommandParams(connection, queryString, 0, NULL, NULL,
+	int querySent = SendQueryStringToConnection(connection, queryString, paramListInfo,
+												task->parametersInQueryStringResolved,
 												binaryResults);
-		}
-	}
 
 	if (querySent == 0)
 	{
@@ -4946,12 +4988,7 @@ SendNextQuery(TaskPlacementExecution *placementExecution,
 		return false;
 	}
 
-#ifdef LIBPQ_HAS_CHUNK_MODE
-	int rowMode = PQsetChunkedRowsMode(connection->pgConn, ExecutorChunkSize);
-#else
-	int rowMode = PQsetSingleRowMode(connection->pgConn);
-#endif
-	if (rowMode == 0)
+	if (SetConnectionRowMode(connection) == 0)
 	{
 		connection->connectionState = MULTI_CONNECTION_LOST;
 		return false;
@@ -4994,7 +5031,6 @@ ReceiveResults(WorkerSession *session, bool storeRows)
 
 	while (!PQisBusy(connection->pgConn))
 	{
-		uint32 columnIndex = 0;
 		uint32 rowsProcessed = 0;
 
 		PGresult *result = PQgetResult(connection->pgConn);
@@ -5128,55 +5164,13 @@ ReceiveResults(WorkerSession *session, bool storeRows)
 			 */
 			MemoryContext oldContext = MemoryContextSwitchTo(rowContext);
 
-			memset(columnArray, 0, columnCount * sizeof(void *));
-
-			for (columnIndex = 0; columnIndex < columnCount; columnIndex++)
-			{
-				if (PQgetisnull(result, rowIndex, columnIndex))
-				{
-					columnArray[columnIndex] = NULL;
-				}
-				else
-				{
-					int valueLength = PQgetlength(result, rowIndex, columnIndex);
-					char *value = PQgetvalue(result, rowIndex, columnIndex);
-					if (binaryResults)
-					{
-						if (PQfformat(result, columnIndex) == 0)
-						{
-							ereport(ERROR, (errmsg("unexpected text result")));
-						}
-						resetStringInfo(&stringInfoDataArray[columnIndex]);
-						appendBinaryStringInfo(&stringInfoDataArray[columnIndex],
-											   value, valueLength);
-						columnArray[columnIndex] = &stringInfoDataArray[columnIndex];
-					}
-					else
-					{
-						if (PQfformat(result, columnIndex) == 1)
-						{
-							ereport(ERROR, (errmsg("unexpected binary result")));
-						}
-						columnArray[columnIndex] = value;
-					}
-
-					tupleLibpqSize += valueLength;
-				}
-			}
-
 			AttInMetadata *attInMetadata =
 				shardCommandExecution->attributeInputMetadata[queryIndex];
-			HeapTuple heapTuple;
-			if (binaryResults)
-			{
-				heapTuple = BuildTupleFromBytes(attInMetadata,
-												(fmStringInfo *) columnArray);
-			}
-			else
-			{
-				heapTuple = BuildTupleFromCStrings(attInMetadata,
-												   (char **) columnArray);
-			}
+			HeapTuple heapTuple =
+				BuildTupleFromResultRow(result, rowIndex, columnCount,
+										binaryResults, attInMetadata,
+										columnArray, stringInfoDataArray,
+										&tupleLibpqSize);
 
 			MemoryContextSwitchTo(oldContext);
 
