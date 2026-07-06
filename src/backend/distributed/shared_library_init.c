@@ -1058,6 +1058,28 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
+		"citus.allow_unsafe_insert_select_pushdown",
+		gettext_noop("Allows pushdown of otherwise-unsafe colocated "
+					 "INSERT ... SELECT queries."),
+		gettext_noop("When enabled, Citus relaxes safety checks (GROUP BY / window / "
+					 "aggregate / DISTINCT constructs on non-distribution columns) "
+					 "for colocated INSERT ... SELECT, so that batching and any batch "
+					 "UDF call run on the shards instead of pulling data to the "
+					 "coordinator. The INSERT's distribution column may then be a "
+					 "provably shard-local unnest(array_agg(<distribution column>)); "
+					 "any other derived distribution value is still rejected, since it "
+					 "could route rows that actually belong to a different shard. "
+					 "Colocation is still enforced, but the user takes responsibility "
+					 "for keeping batches order-preserving; otherwise results may be "
+					 "silently incorrect. This is an experimental feature and semantics "
+					 "may change in future releases."),
+		&AllowUnsafeInsertSelectPushdown,
+		false,
+		PGC_USERSET,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
 		"citus.allow_unsafe_locks_from_workers",
 		gettext_noop("Enables acquiring a distributed lock from a worker "
 					 "when the coordinator is not in the metadata"),

@@ -10,6 +10,8 @@
 
 #include "postgres.h"
 
+#include "miscadmin.h"
+
 #include "catalog/pg_class.h"
 #include "catalog/pg_type.h"
 #include "nodes/makefuncs.h"
@@ -26,6 +28,7 @@
 #include "parser/parsetree.h"
 #include "tcop/tcopprot.h"
 #include "utils/builtins.h"
+#include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
 
@@ -94,6 +97,10 @@ static TargetEntry * SelectTargetEntryForInsertPartitionColumn(Query *query,
 															   RangeTblEntry *subqueryRte,
 															   TargetEntry **
 															   insertTargetEntry);
+static bool IsInsertSelectBatchPassThroughDistributionColumn(Expr *expr, Query *query);
+static Query * WrapBatchSelectWithNotNullFilter(Query *selectQuery,
+												TargetEntry *distTargetEntry);
+static Node * AppendNotNullTest(Node *existingQuals, Expr *arg);
 static DistributedPlan * CreateNonPushableInsertSelectPlan(uint64 planId, Query *parse,
 														   ParamListInfo boundParams);
 static DeferredErrorMessage * NonPushableInsertSelectSupported(Query *insertSelectQuery);
@@ -776,14 +783,16 @@ DistributedInsertSelectSupported(Query *queryTree, RangeTblEntry *insertRte,
 		/* first apply toplevel pushdown checks to SELECT query */
 		error =
 			DeferErrorIfUnsupportedSubqueryPushdown(subquery, plannerRestrictionContext,
-													true, false);
+													true, AllowUnsafeInsertSelectPushdown)
+		;
 		if (error)
 		{
 			return error;
 		}
 
 		/* then apply subquery pushdown checks to SELECT query */
-		error = DeferErrorIfCannotPushdownSubquery(subquery, false, false);
+		error = DeferErrorIfCannotPushdownSubquery(subquery, false,
+												   AllowUnsafeInsertSelectPushdown);
 		if (error)
 		{
 			return error;
@@ -826,11 +835,29 @@ DistributedInsertSelectSupported(Query *queryTree, RangeTblEntry *insertRte,
 								 "table", NULL, NULL);
 		}
 
+		/*
+		 * Ensure that INSERT's partition column comes from SELECT's partition
+		 * column. Normally this requires a plain-Var partition-column match.
+		 * With unsafe INSERT ... SELECT pushdown enabled we additionally accept a
+		 * batch pass-through of the distribution column, i.e.
+		 * unnest(array_agg(dist_key)), which re-emits distribution values verbatim
+		 * from the current shard's rows; combined with the co-location check below,
+		 * those values route back into this shard. Any other derived distribution
+		 * value is still rejected, because it could route rows that belong to a
+		 * different shard.
+		 */
 		if (HasDistributionKey(targetRelationId))
 		{
-			/* ensure that INSERT's partition column comes from SELECT's partition column */
-			error = InsertPartitionColumnMatchesSelect(queryTree, insertRte, subqueryRte,
+			error = InsertPartitionColumnMatchesSelect(queryTree, insertRte,
+													   subqueryRte,
 													   &selectPartitionColumnTableId);
+			if (error && AllowUnsafeInsertSelectPushdown &&
+				InsertPartitionColumnIsBatchPassThrough(queryTree, insertRte,
+														subqueryRte))
+			{
+				error = NULL;
+			}
+
 			if (error)
 			{
 				return error;
@@ -960,7 +987,16 @@ RouterModifyTaskForShardInterval(Query *originalQuery,
 		copiedSubquery);
 	if (subqueryRteListProperties->hasDistTableWithShardKey)
 	{
-		AddPartitionKeyNotNullFilterToSelect(copiedSubquery, false);
+		bool distributionColumnIsBatchPassThrough =
+			InsertPartitionColumnIsBatchPassThrough(copiedQuery, copiedInsertRte,
+													copiedSubqueryRte);
+		AddPartitionKeyNotNullFilterToSelect(copiedSubquery,
+											 distributionColumnIsBatchPassThrough);
+		if (distributionColumnIsBatchPassThrough)
+		{
+			AddBatchPassThroughNotNullFilter(copiedQuery, copiedInsertRte,
+											 copiedSubqueryRte);
+		}
 	}
 
 	/* mark that we don't want the router planner to generate dummy hosts/queries */
@@ -1198,6 +1234,208 @@ ReorderInsertSelectTargetLists(Query *originalQuery, RangeTblEntry *insertRte,
 	subqueryRte->eref->colnames = columnNameList;
 
 	return NULL;
+}
+
+
+/*
+ * InsertPartitionColumnIsBatchPassThrough returns true if the SELECT target
+ * entry that feeds the INSERT's distribution column is a batch pass-through,
+ * i.e. unnest(array_agg(<distribution column>)). See
+ * IsInsertSelectBatchPassThroughDistributionColumn for the exact invariant and
+ * its known limitations.
+ */
+bool
+InsertPartitionColumnIsBatchPassThrough(Query *query, RangeTblEntry *insertRte,
+										RangeTblEntry *subqueryRte)
+{
+	TargetEntry *subqueryTargetEntry =
+		SelectTargetEntryForInsertPartitionColumn(query, insertRte, subqueryRte, NULL);
+	if (subqueryTargetEntry == NULL)
+	{
+		return false;
+	}
+
+	return IsInsertSelectBatchPassThroughDistributionColumn(subqueryTargetEntry->expr,
+															subqueryRte->subquery);
+}
+
+
+/*
+ * AddBatchPassThroughNotNullFilter drops rows whose batch pass-through
+ * distribution value came out NULL, by adding a distribution-column IS NOT NULL
+ * qual to the pushed-down SELECT.
+ *
+ * The batch pass-through unnest(array_agg(<dist col>)) emits one value per group
+ * row, but a sibling set-returning target in the same projection - e.g. an
+ * over-emitting batch UDF unnest(f(array_agg(<other col>))) - can be longer, so
+ * PostgreSQL's ProjectSet NULL-pads the shorter distribution-column set. Because
+ * the batch path skips AddPartitionKeyNotNullFilterToSelect, without this filter
+ * such a NULL (mis-routed) distribution key would be inserted silently. Dropping
+ * the NULL row matches how Citus handles a NULL distribution value in a normal
+ * INSERT ... SELECT (AddPartitionKeyNotNullFilterToSelect).
+ *
+ * The distribution column can surface in two shapes:
+ *   - as a plain Var, when the unnest lives in an inner subquery
+ *     (SELECT dist_var, ... FROM ( SELECT unnest(array_agg(dist_col)) dist_var,
+ *     ... ) s); the qual is attached to the pushed-down SELECT directly, or
+ *   - as a bare set-returning expression projected in the SELECT list
+ *     (SELECT unnest(array_agg(dist_col)), ... GROUP BY ...); the SELECT is
+ *     wrapped in a pass-through subquery so the column becomes a Var we can
+ *     filter.
+ *
+ * Returns true if a filter was added.
+ */
+bool
+AddBatchPassThroughNotNullFilter(Query *query, RangeTblEntry *insertRte,
+								 RangeTblEntry *subqueryRte)
+{
+	Query *selectQuery = subqueryRte->subquery;
+	TargetEntry *distTargetEntry =
+		SelectTargetEntryForInsertPartitionColumn(query, insertRte, subqueryRte, NULL);
+	if (distTargetEntry == NULL)
+	{
+		return false;
+	}
+
+	Expr *distExpr = (Expr *) strip_implicit_coercions((Node *) distTargetEntry->expr);
+	if (IsA(distExpr, Var))
+	{
+		/*
+		 * Outer-subquery shape: the distribution column already surfaces as a
+		 * plain Var (the unnest lives in an inner subquery), so we can attach
+		 * the qual to the pushed-down SELECT directly.
+		 */
+		selectQuery->jointree->quals =
+			AppendNotNullTest(selectQuery->jointree->quals, distExpr);
+		return true;
+	}
+
+	/*
+	 * Flat shape: the distribution column is projected as a bare set-returning
+	 * expression (e.g. unnest(array_agg(<dist col>)) directly in the SELECT
+	 * list), so there is no Var handle a WHERE clause can reference. Wrap the
+	 * SELECT in a pass-through subquery, which turns the set-returning column
+	 * into an ordinary output column, then filter that column for NULL:
+	 *
+	 *     SELECT dist_col, ...
+	 *       FROM ( <original SELECT> ) citus_insert_select_subquery
+	 *      WHERE dist_col IS NOT NULL
+	 */
+	subqueryRte->subquery = WrapBatchSelectWithNotNullFilter(selectQuery,
+															 distTargetEntry);
+	return true;
+}
+
+
+/*
+ * WrapBatchSelectWithNotNullFilter wraps the given batch pass-through SELECT in
+ * a pass-through subquery and filters out rows whose distribution column (given
+ * by distTargetEntry) came out NULL:
+ *
+ *     SELECT <columns> FROM ( <selectQuery> ) citus_insert_select_subquery
+ *      WHERE <dist column> IS NOT NULL
+ *
+ * It is used when the distribution column is projected as a bare set-returning
+ * expression, so it has no Var handle a WHERE clause could reference in the
+ * original SELECT. Unlike WrapSubquery, this wrapper is a pure pass-through: it
+ * references every non-junk output column as an ordinary Var and never lifts
+ * expressions to the outer query, so the batch call keeps running on the shard.
+ */
+static Query *
+WrapBatchSelectWithNotNullFilter(Query *selectQuery, TargetEntry *distTargetEntry)
+{
+	ParseState *pstate = make_parsestate(NULL);
+	Query *wrapperQuery = makeNode(Query);
+	wrapperQuery->commandType = CMD_SELECT;
+
+	Alias *alias = makeAlias("citus_insert_select_subquery", NIL);
+	RangeTblEntry *subqueryRte =
+		RangeTableEntryFromNSItem(
+			addRangeTableEntryForSubquery(pstate, selectQuery, alias,
+										  false /* not LATERAL */,
+										  true /* in FROM clause */));
+	wrapperQuery->rtable = list_make1(subqueryRte);
+	wrapperQuery->rteperminfos = NIL;
+
+	RangeTblRef *rangeTableRef = makeNode(RangeTblRef);
+	rangeTableRef->rtindex = 1;
+
+	List *wrapperTargetList = NIL;
+	Var *distColumnVar = NULL;
+	TargetEntry *innerTargetEntry = NULL;
+	foreach_declared_ptr(innerTargetEntry, selectQuery->targetList)
+	{
+		if (innerTargetEntry->resjunk)
+		{
+			continue;
+		}
+
+		Var *outerVar = makeVar(1 /* single subquery RTE */,
+								innerTargetEntry->resno,
+								exprType((Node *) innerTargetEntry->expr),
+								exprTypmod((Node *) innerTargetEntry->expr),
+								exprCollation((Node *) innerTargetEntry->expr),
+								0);
+
+		TargetEntry *outerTargetEntry =
+			makeTargetEntry((Expr *) outerVar,
+							list_length(wrapperTargetList) + 1,
+							innerTargetEntry->resname,
+							false);
+
+		wrapperTargetList = lappend(wrapperTargetList, outerTargetEntry);
+
+		if (innerTargetEntry == distTargetEntry)
+		{
+			/* the distribution target entry appears exactly once in the list */
+			Assert(distColumnVar == NULL);
+			distColumnVar = outerVar;
+		}
+	}
+
+	/*
+	 * distColumnVar is set only if the loop above matched the (non-resjunk)
+	 * distribution target entry in the wrapper target list. The caller only
+	 * reaches this path for the flat batch pass-through shape where that entry
+	 * is guaranteed to be present, so a NULL here is an internal error: fail
+	 * hard instead of building a NOT NULL test over a NULL Var in a release
+	 * build.
+	 */
+	if (distColumnVar == NULL)
+	{
+		ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
+						errmsg("distribution column target entry not found while "
+							   "wrapping the batch INSERT ... SELECT with a NOT "
+							   "NULL filter")));
+	}
+	wrapperQuery->targetList = wrapperTargetList;
+
+	Node *notNullQual = AppendNotNullTest(NULL, (Expr *) distColumnVar);
+	wrapperQuery->jointree = makeFromExpr(list_make1(rangeTableRef), notNullQual);
+
+	return wrapperQuery;
+}
+
+
+/*
+ * AppendNotNullTest returns existingQuals AND (arg IS NOT NULL). When
+ * existingQuals is NULL the bare NOT NULL test is returned.
+ */
+static Node *
+AppendNotNullTest(Node *existingQuals, Expr *arg)
+{
+	NullTest *nullTest = makeNode(NullTest);
+	nullTest->nulltesttype = IS_NOT_NULL;
+	nullTest->arg = (Expr *) copyObject(arg);
+	nullTest->argisrow = false;
+	nullTest->location = -1;
+
+	if (existingQuals == NULL)
+	{
+		return (Node *) nullTest;
+	}
+
+	return make_and_qual(existingQuals, (Node *) nullTest);
 }
 
 
@@ -1477,6 +1715,167 @@ SelectTargetEntryForInsertPartitionColumn(Query *query, RangeTblEntry *insertRte
 	}
 
 	return NULL;
+}
+
+
+/*
+ * IsInsertSelectBatchPassThroughDistributionColumn returns true if the given SELECT target
+ * expression is a batch pass-through of the distribution
+ * column, i.e. it has the shape
+ *
+ *     unnest(array_agg(<partition column>))
+ *
+ * (optionally projected through one or more plain-Var subquery indirections, and
+ * with array_agg allowed to carry an ORDER BY modifier). DISTINCT and FILTER on
+ * the aggregate are rejected: they make the pass-through emit fewer values than
+ * the group has rows, so ProjectSet would NULL-pad the distribution column when a
+ * sibling set-returning target is longer (see the DISTINCT/FILTER guard below).
+ *
+ * The invariant is narrow: unnest(array_agg(<partition column>)) re-emits
+ * distribution values verbatim from source rows of the current shard, so -
+ * given source and target are colocated - each value routes back into this
+ * shard's range. Any intermediate transformation (e.g. unnest(array_agg(dist_key
+ * + 1)) or unnest(f(array_agg(dist_key)))) is rejected because it could produce
+ * values that route to a different shard.
+ *
+ * This shape check alone does not prove the whole INSERT is shard-local. It
+ * assumes the row reaching the INSERT actually carries one of those original
+ * distribution values, and not a targetlist/SRF artifact such as a NULL-padded
+ * row emitted when a sibling set-returning target in the same projection emits
+ * more rows than this pass-through. We cannot rule that out here without also
+ * rejecting the supported batched shape, e.g. unnest(batch_udf(array_agg(col))),
+ * whose row count is a runtime property of the (user) batch function. That
+ * residual is exactly why the enabling GUC is explicitly unsafe and opt-in.
+ */
+bool
+IsInsertSelectBatchPassThroughDistributionColumn(Expr *expr, Query *query)
+{
+	Query *leafQuery = query;
+
+	/*
+	 * Peel plain-Var subquery projection indirection down to the underlying
+	 * expression. We only follow the simple "SELECT <col> FROM (subquery)"
+	 * projection form; anything else makes us conservatively bail out.
+	 */
+	for (;;)
+	{
+		CHECK_FOR_INTERRUPTS();
+
+		expr = (Expr *) strip_implicit_coercions((Node *) expr);
+
+		if (!IsA(expr, Var))
+		{
+			break;
+		}
+
+		Var *var = (Var *) expr;
+		if (var->varlevelsup != 0 || var->varattno <= InvalidAttrNumber)
+		{
+			return false;
+		}
+
+		if (var->varno <= 0 || var->varno > list_length(leafQuery->rtable))
+		{
+			return false;
+		}
+
+		RangeTblEntry *rte = rt_fetch(var->varno, leafQuery->rtable);
+		if (rte->rtekind != RTE_SUBQUERY)
+		{
+			return false;
+		}
+
+		Query *subquery = rte->subquery;
+		if (var->varattno > list_length(subquery->targetList))
+		{
+			return false;
+		}
+
+		TargetEntry *targetEntry = list_nth(subquery->targetList, var->varattno - 1);
+		expr = targetEntry->expr;
+		leafQuery = subquery;
+	}
+
+	/* the leaf expression must be unnest(...) over a single array argument */
+	if (!IsA(expr, FuncExpr))
+	{
+		return false;
+	}
+
+	FuncExpr *unnestExpr = (FuncExpr *) expr;
+	if (unnestExpr->funcid != F_UNNEST_ANYARRAY ||
+		list_length(unnestExpr->args) != 1)
+	{
+		return false;
+	}
+
+	/* the unnest argument must be array_agg(...) with no wrapping transform */
+	Expr *unnestArg = (Expr *) strip_implicit_coercions(
+		(Node *) linitial(unnestExpr->args));
+	if (!IsA(unnestArg, Aggref))
+	{
+		return false;
+	}
+
+	Aggref *arrayAgg = (Aggref *) unnestArg;
+	if (arrayAgg->aggfnoid != F_ARRAY_AGG_ANYNONARRAY &&
+		arrayAgg->aggfnoid != F_ARRAY_AGG_ANYARRAY)
+	{
+		return false;
+	}
+
+	/*
+	 * DISTINCT or FILTER make array_agg emit fewer values than the group has
+	 * rows, so this pass-through set-returning expression becomes shorter than a
+	 * sibling set-returning target in the same projection. ProjectSet then
+	 * NULL-pads the distribution column, which would insert a NULL (mis-routed)
+	 * distribution key. A plain array_agg re-emits exactly one value per source
+	 * row, so reject DISTINCT/FILTER here (ORDER BY is fine: it only reorders the
+	 * shard-local values, it does not change their count).
+	 */
+	if (arrayAgg->aggdistinct != NIL || arrayAgg->aggfilter != NULL)
+	{
+		return false;
+	}
+
+	/*
+	 * Locate the single aggregated value argument. ORDER BY keys that differ
+	 * from the aggregated value appear as additional resjunk target entries;
+	 * they only reorder the (shard-local) values and do not affect routing.
+	 */
+	TargetEntry *aggValueTargetEntry = NULL;
+	TargetEntry *aggArgTargetEntry = NULL;
+	foreach_declared_ptr(aggArgTargetEntry, arrayAgg->args)
+	{
+		if (aggArgTargetEntry->resjunk)
+		{
+			continue;
+		}
+
+		if (aggValueTargetEntry != NULL)
+		{
+			/*
+			 * array_agg (the OIDs we matched above) is a single-argument
+			 * aggregate, so a second non-resjunk entry cannot occur for a
+			 * well-formed tree. Assert to catch a broken invariant in debug
+			 * builds, but still bail out gracefully in production: a false
+			 * result only forgoes the optimization, it is never unsafe.
+			 */
+			Assert(false);
+			return false;
+		}
+
+		aggValueTargetEntry = aggArgTargetEntry;
+	}
+
+	if (aggValueTargetEntry == NULL)
+	{
+		return false;
+	}
+
+	/* the aggregated value must be the untransformed source partition column */
+	bool skipOuterVars = false;
+	return IsPartitionColumn(aggValueTargetEntry->expr, leafQuery, skipOuterVars);
 }
 
 

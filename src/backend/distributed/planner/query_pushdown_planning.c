@@ -80,6 +80,7 @@ typedef struct RelidsReferenceWalkerContext
 /* Config variable managed via guc.c */
 bool SubqueryPushdown = false; /* is subquery pushdown enabled */
 int ValuesMaterializationThreshold = 100;
+bool AllowUnsafeInsertSelectPushdown = false;
 
 /* Local functions forward declarations */
 static bool JoinTreeContainsSubqueryWalker(Node *joinTreeNode, void *context);

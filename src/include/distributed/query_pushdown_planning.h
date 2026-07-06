@@ -22,6 +22,7 @@
 /* Config variables managed via guc.c */
 extern bool SubqueryPushdown;
 extern int ValuesMaterializationThreshold;
+extern bool AllowUnsafeInsertSelectPushdown;
 extern bool AllowAggregateWorkerCombineOnInternalTypes;
 
 
