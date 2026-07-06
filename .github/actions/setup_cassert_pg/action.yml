@@ -46,9 +46,6 @@ runs:
         # This removes both -DUSE_VALGRIND and -ggdb while pinning the decided flags, and keeps
         # --enable-debug --enable-cassert --enable-tap-tests + ssl/xml/xslt/uuid=e2fs/icu/lz4.
         cp .devcontainer/pgenv/config/default.conf "$HOME/.pgenv/config/default.conf"
-        # Defensive: strip any CR so bash can `source` the config. No-op on a normal Linux
-        # (LF) checkout; needed if the runner checked out with autocrlf (e.g. self-hosted Windows).
-        sed -i 's/\r$//' "$HOME/.pgenv/config/default.conf"
         sed -i "s|'CFLAGS=[^']*'|'CFLAGS=-Og -g3 -fno-omit-frame-pointer'|" \
           "$HOME/.pgenv/config/default.conf"
         echo "----- effective pgenv default.conf -----"
@@ -78,4 +75,3 @@ runs:
         make -j"$(nproc)" all
         # Installs into the $HOME pgenv prefix for this version -> no sudo, no clobber across versions.
         make install
-        ulimit -c unlimited || true
