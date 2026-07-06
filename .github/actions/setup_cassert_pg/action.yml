@@ -63,6 +63,10 @@ runs:
         PG_CONFIG="$HOME/.pgenv/pgsql/bin/pg_config"
         BINDIR="$("$PG_CONFIG" --bindir)"
         echo "Using PG_CONFIG=$PG_CONFIG (bindir=$BINDIR)"
+        # Guard: assertions are the entire point of this nightly. If the inherited devcontainer
+        # config ever loses --enable-cassert, fail loudly instead of silently running asserts-off.
+        "$PG_CONFIG" --configure | grep -q -- '--enable-cassert' \
+          || { echo "FATAL: built PG is not --enable-cassert; refusing to run nightly without asserts"; exit 1; }
         echo "bindir=$BINDIR" >> "$GITHUB_OUTPUT"
         # Persist for subsequent workflow steps: pgenv bin must shadow any system PG.
         echo "$HOME/.pgenv/bin"       >> "$GITHUB_PATH"
