@@ -44,10 +44,14 @@ extern DeferredErrorMessage * DeferErrorIfUnsupportedSubqueryPushdown(Query *
 																	  PlannerRestrictionContext
 																	  *
 																	  plannerRestrictionContext,
-																	  bool plannerPhase);
+																	  bool plannerPhase,
+																	  bool
+																	  allowUnsafeShardLocalGroupingForSubqueries);
 extern DeferredErrorMessage * DeferErrorIfCannotPushdownSubquery(Query *subqueryTree,
 																 bool
-																 outerMostQueryHasLimit);
+																 outerMostQueryHasLimit,
+																 bool
+																 allowUnsafeShardLocalGrouping);
 extern DeferredErrorMessage * DeferErrorIfUnsupportedUnionQuery(Query *queryTree);
 extern bool IsJsonTableRTE(RangeTblEntry *rte);
 extern bool IsOuterJoinExpr(Node *node);

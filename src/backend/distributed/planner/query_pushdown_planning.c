@@ -92,7 +92,9 @@ static DeferredErrorMessage * DeferredErrorIfUnsupportedRecurringTuplesJoin(
 static DeferredErrorMessage * DeferErrorIfUnsupportedTableCombination(Query *queryTree);
 static DeferredErrorMessage * DeferErrorIfSubqueryRequiresMerge(Query *subqueryTree, bool
 																lateral,
-																char *referencedThing);
+																char *referencedThing,
+																bool
+																allowUnsafeShardLocalGrouping);
 static bool ExtractSetOperationStatementWalker(Node *node, List **setOperationList);
 static RecurringTuplesType FetchFirstRecurType(PlannerInfo *plannerInfo,
 											   Relids relids);
@@ -550,7 +552,7 @@ SubqueryMultiNodeTree(Query *originalQuery, Query *queryTree,
 	DeferredErrorMessage *subqueryPushdownError = DeferErrorIfUnsupportedSubqueryPushdown(
 		originalQuery,
 		plannerRestrictionContext,
-		false);
+		false, false);
 
 	if (subqueryPushdownError != NULL)
 	{
@@ -570,12 +572,21 @@ SubqueryMultiNodeTree(Query *originalQuery, Query *queryTree,
  * entry list and uses helper functions to check if we can push down subquery
  * to worker nodes. These helper functions returns a deferred error if we
  * cannot push down the subquery.
+ *
+ * allowUnsafeShardLocalGroupingForSubqueries is forwarded as-is to
+ * DeferErrorIfCannotPushdownSubquery for every subquery checked here. Today it's
+ * only set for colocated INSERT ... SELECT under citus.allow_unsafe_insert_select_pushdown;
+ * when true, the GROUP BY / aggregate / window / DISTINCT merge-step requirements
+ * are skipped, assuming those grouping constructs stay shard-local.
+ * All other pushdown checks (co-location, joins on the distribution column, recurring
+ * tuples, LIMIT/OFFSET) remain enforced.
  */
 DeferredErrorMessage *
 DeferErrorIfUnsupportedSubqueryPushdown(Query *originalQuery,
 										PlannerRestrictionContext *
 										plannerRestrictionContext,
-										bool plannerPhase)
+										bool plannerPhase,
+										bool allowUnsafeShardLocalGroupingForSubqueries)
 {
 	bool outerMostQueryHasLimit = false;
 	ListCell *subqueryCell = NULL;
@@ -648,7 +659,8 @@ DeferErrorIfUnsupportedSubqueryPushdown(Query *originalQuery,
 	{
 		Query *subquery = lfirst(subqueryCell);
 		error = DeferErrorIfCannotPushdownSubquery(subquery,
-												   outerMostQueryHasLimit);
+												   outerMostQueryHasLimit,
+												   allowUnsafeShardLocalGroupingForSubqueries);
 		if (error)
 		{
 			return error;
@@ -970,8 +982,8 @@ DeferredErrorIfUnsupportedRecurringTuplesJoin(PlannerRestrictionContext *
 bool
 CanPushdownSubquery(Query *subqueryTree, bool outerMostQueryHasLimit)
 {
-	return DeferErrorIfCannotPushdownSubquery(subqueryTree, outerMostQueryHasLimit) ==
-		   NULL;
+	return DeferErrorIfCannotPushdownSubquery(subqueryTree, outerMostQueryHasLimit,
+											  false) == NULL;
 }
 
 
@@ -996,9 +1008,18 @@ CanPushdownSubquery(Query *subqueryTree, bool outerMostQueryHasLimit)
  * a subquery has a group by on another subquery which includes order by with
  * limit, we let this query to run, but results could be wrong depending on the
  * features of underlying tables.
+ *
+ * When allowUnsafeShardLocalGrouping is true, we assume any GROUP BY / aggregate
+ * / window / DISTINCT in the subquery can stay within a single shard, so the
+ * partition-column requirements that would otherwise force a coordinator merge step
+ * are skipped (this flag is forwarded to DeferErrorIfSubqueryRequiresMerge).
+ * LIMIT/OFFSET handling is unaffected. The flag today is only set for colocated
+ * INSERT ... SELECT under citus.allow_unsafe_insert_select_pushdown, where keeping
+ * batches shard-local becomes the user's responsibility.
  */
 DeferredErrorMessage *
-DeferErrorIfCannotPushdownSubquery(Query *subqueryTree, bool outerMostQueryHasLimit)
+DeferErrorIfCannotPushdownSubquery(Query *subqueryTree, bool outerMostQueryHasLimit,
+								   bool allowUnsafeShardLocalGrouping)
 {
 	bool preconditionsSatisfied = true;
 	char *errorDetail = NULL;
@@ -1027,7 +1048,8 @@ DeferErrorIfCannotPushdownSubquery(Query *subqueryTree, bool outerMostQueryHasLi
 	if (!ContainsReferencesToOuterQuery(subqueryTree))
 	{
 		deferredError = DeferErrorIfSubqueryRequiresMerge(subqueryTree, false,
-														  "another query");
+														  "another query",
+														  allowUnsafeShardLocalGrouping);
 		if (deferredError)
 		{
 			return deferredError;
@@ -1125,10 +1147,18 @@ FlattenGroupExprs(Query *queryTree)
  * DeferErrorIfSubqueryRequiresMerge returns a deferred error if the subquery
  * requires a merge step on the coordinator (e.g. limit, group by non-distribution
  * column, etc.).
+ *
+ * When allowUnsafeShardLocalGrouping is true, the partition-column requirements for
+ * GROUP BY / aggregate / window / DISTINCT are skipped: so we assume these grouping
+ * constructs are shard-local, so they do not need a coordinator merge.
+ * LIMIT/OFFSET are still rejected, because those require a merge regardless of the
+ * distribution column. Today the flag is only ever true for colocated
+ * INSERT ... SELECT under citus.allow_unsafe_insert_select_pushdown.
  */
 static DeferredErrorMessage *
 DeferErrorIfSubqueryRequiresMerge(Query *subqueryTree, bool lateral,
-								  char *referencedThing)
+								  char *referencedThing,
+								  bool allowUnsafeShardLocalGrouping)
 {
 	bool preconditionsSatisfied = true;
 	char *errorDetail = NULL;
@@ -1152,68 +1182,81 @@ DeferErrorIfSubqueryRequiresMerge(Query *subqueryTree, bool lateral,
 							   referencedThing);
 	}
 
-	/* group clause list must include partition column */
-	if (subqueryTree->groupClause)
-	{
-		List *groupClauseList = subqueryTree->groupClause;
-		List *targetEntryList = subqueryTree->targetList;
-		List *groupTargetEntryList = GroupTargetEntryList(groupClauseList,
-														  targetEntryList);
-		bool groupOnPartitionColumn =
-			TargetListOnPartitionColumn(subqueryTree, groupTargetEntryList);
-		if (!groupOnPartitionColumn)
-		{
-			preconditionsSatisfied = false;
-			errorDetail = psprintf("Group by list without partition column is currently "
-								   "unsupported when a %ssubquery references a column "
-								   "from %s", lateralString, referencedThing);
-		}
-	}
-
-	/* we don't support aggregates without group by */
-	if (subqueryTree->hasAggs && (subqueryTree->groupClause == NULL))
-	{
-		preconditionsSatisfied = false;
-		errorDetail = psprintf("Aggregates without group by are currently unsupported "
-							   "when a %ssubquery references a column from %s",
-							   lateralString, referencedThing);
-	}
-
-	/* having clause without group by on partition column is not supported */
-	if (subqueryTree->havingQual && (subqueryTree->groupClause == NULL))
-	{
-		preconditionsSatisfied = false;
-		errorDetail = psprintf("Having qual without group by on partition column is "
-							   "currently unsupported when a %ssubquery references "
-							   "a column from %s", lateralString, referencedThing);
-	}
-
 	/*
-	 * We support window functions when the window function
-	 * is partitioned on distribution column.
+	 * With unsafe INSERT ... SELECT pushdown the entire subquery executes on a
+	 * single shard (colocation is enforced separately), so grouping / aggregation
+	 * / window / distinct on non-distribution columns stays shard-local and does
+	 * not require a merge step. Skip the partition-column requirements in that
+	 * case.
 	 */
-	StringInfo errorInfo = NULL;
-	if (subqueryTree->hasWindowFuncs && !SafeToPushdownWindowFunction(subqueryTree,
-																	  &errorInfo))
+	if (!allowUnsafeShardLocalGrouping)
 	{
-		errorDetail = (char *) errorInfo->data;
-		preconditionsSatisfied = false;
-	}
+		/* group clause list must include partition column */
+		if (subqueryTree->groupClause)
+		{
+			List *groupClauseList = subqueryTree->groupClause;
+			List *targetEntryList = subqueryTree->targetList;
+			List *groupTargetEntryList = GroupTargetEntryList(groupClauseList,
+															  targetEntryList);
+			bool groupOnPartitionColumn =
+				TargetListOnPartitionColumn(subqueryTree, groupTargetEntryList);
+			if (!groupOnPartitionColumn)
+			{
+				preconditionsSatisfied = false;
+				errorDetail = psprintf(
+					"Group by list without partition column is currently "
+					"unsupported when a %ssubquery references a column "
+					"from %s", lateralString, referencedThing);
+			}
+		}
 
-	/* distinct clause list must include partition column */
-	if (subqueryTree->distinctClause)
-	{
-		List *distinctClauseList = subqueryTree->distinctClause;
-		List *targetEntryList = subqueryTree->targetList;
-		List *distinctTargetEntryList = GroupTargetEntryList(distinctClauseList,
-															 targetEntryList);
-		bool distinctOnPartitionColumn =
-			TargetListOnPartitionColumn(subqueryTree, distinctTargetEntryList);
-		if (!distinctOnPartitionColumn)
+		/* we don't support aggregates without group by */
+		if (subqueryTree->hasAggs && (subqueryTree->groupClause == NULL))
 		{
 			preconditionsSatisfied = false;
-			errorDetail = "Distinct on columns without partition column is "
-						  "currently unsupported";
+			errorDetail = psprintf(
+				"Aggregates without group by are currently unsupported "
+				"when a %ssubquery references a column from %s",
+				lateralString, referencedThing);
+		}
+
+		/* having clause without group by on partition column is not supported */
+		if (subqueryTree->havingQual && (subqueryTree->groupClause == NULL))
+		{
+			preconditionsSatisfied = false;
+			errorDetail = psprintf(
+				"Having qual without group by on partition column is "
+				"currently unsupported when a %ssubquery references "
+				"a column from %s", lateralString, referencedThing);
+		}
+
+		/*
+		 * We support window functions when the window function
+		 * is partitioned on distribution column.
+		 */
+		StringInfo errorInfo = NULL;
+		if (subqueryTree->hasWindowFuncs && !SafeToPushdownWindowFunction(subqueryTree,
+																		  &errorInfo))
+		{
+			errorDetail = (char *) errorInfo->data;
+			preconditionsSatisfied = false;
+		}
+
+		/* distinct clause list must include partition column */
+		if (subqueryTree->distinctClause)
+		{
+			List *distinctClauseList = subqueryTree->distinctClause;
+			List *targetEntryList = subqueryTree->targetList;
+			List *distinctTargetEntryList = GroupTargetEntryList(distinctClauseList,
+																 targetEntryList);
+			bool distinctOnPartitionColumn =
+				TargetListOnPartitionColumn(subqueryTree, distinctTargetEntryList);
+			if (!distinctOnPartitionColumn)
+			{
+				preconditionsSatisfied = false;
+				errorDetail = "Distinct on columns without partition column is "
+							  "currently unsupported";
+			}
 		}
 	}
 
@@ -1763,7 +1806,7 @@ DeferredErrorIfUnsupportedLateralSubquery(PlannerInfo *plannerInfo,
 
 			/* property number 3, has a merge step */
 			DeferredErrorMessage *deferredError = DeferErrorIfSubqueryRequiresMerge(
-				rangeTableEntry->subquery, true, recurTypeDescription);
+				rangeTableEntry->subquery, true, recurTypeDescription, false);
 			if (deferredError)
 			{
 				return deferredError;
