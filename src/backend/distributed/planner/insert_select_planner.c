@@ -960,7 +960,7 @@ RouterModifyTaskForShardInterval(Query *originalQuery,
 		copiedSubquery);
 	if (subqueryRteListProperties->hasDistTableWithShardKey)
 	{
-		AddPartitionKeyNotNullFilterToSelect(copiedSubquery);
+		AddPartitionKeyNotNullFilterToSelect(copiedSubquery, false);
 	}
 
 	/* mark that we don't want the router planner to generate dummy hosts/queries */

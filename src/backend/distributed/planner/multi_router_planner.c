@@ -347,9 +347,15 @@ ShardIntervalOpExpressions(ShardInterval *shardInterval, Index rteIndex)
  *
  * The function expects and asserts that subquery's target list contains a partition
  * column value. Thus, this function should never be called with reference tables.
+ *
+ * The exception is unsafe INSERT ... SELECT pushdown, where the distribution
+ * column may be a batch pass-through with no plain Var to
+ * filter on; callers signal that case via distributionColumnIsBatchPassThrough so
+ * the filter is skipped.
  */
 void
-AddPartitionKeyNotNullFilterToSelect(Query *subqery)
+AddPartitionKeyNotNullFilterToSelect(Query *subqery, bool
+									 distributionColumnIsBatchPassThrough)
 {
 	List *targetList = subqery->targetList;
 	ListCell *targetEntryCell = NULL;
@@ -367,6 +373,21 @@ AddPartitionKeyNotNullFilterToSelect(Query *subqery)
 			targetPartitionColumnVar = (Var *) targetEntry->expr;
 			break;
 		}
+	}
+
+	/*
+	 * Normally the SELECT projects the distribution column as a plain Var. With
+	 * unsafe INSERT ... SELECT pushdown the distribution column may instead be a
+	 * batch pass-through, i.e. unnest(array_agg(dist_col)).
+	 * In that case there is no plain Var here to attach a NOT NULL filter to, so
+	 * we skip it; the NULL (mis-routed) distribution key is instead dropped at
+	 * runtime by AddBatchPassThroughNotNullFilter. The caller determines whether
+	 * the query has this shape and passes the result in
+	 * distributionColumnIsBatchPassThrough.
+	 */
+	if (targetPartitionColumnVar == NULL && distributionColumnIsBatchPassThrough)
+	{
+		return;
 	}
 
 	/* we should have found target partition column */
