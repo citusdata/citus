@@ -439,9 +439,9 @@ EnsureSingleNodePromotion(WorkerNode *primaryNode)
 
 /*
  * AdjustCloneSequenceRangesForNewGroup re-ranges the promoted clone's
- * distributed-table sequences (serial / bigint nextval(...) defaults and
- * GENERATED ... AS IDENTITY columns) to the clone's newly-allocated group-id
- * window.
+ * sequence-backed columns for the same table surface that classical
+ * add/activate-node flow syncs to metadata workers (i.e. tables where
+ * ShouldSyncTableMetadata(relationId) is true).
  *
  * A clone is a physical streaming replica of its source primary, so its
  * sequence objects are byte-for-byte copies that still carve out the source
@@ -463,10 +463,15 @@ AdjustCloneSequenceRangesForNewGroup(WorkerNode *cloneNode)
 {
 	List *ddlCommandList = NIL;
 
-	List *distributedTableList = CitusTableTypeIdList(DISTRIBUTED_TABLE);
+	List *citusTableIdList = AllCitusTableIds();
 	Oid relationId = InvalidOid;
-	foreach_declared_oid(relationId, distributedTableList)
+	foreach_declared_oid(relationId, citusTableIdList)
 	{
+		if (!ShouldSyncTableMetadata(relationId))
+		{
+			continue;
+		}
+
 		ddlCommandList = list_concat(ddlCommandList,
 									 DependentSequenceRangeAdjustCommandList(relationId));
 		ddlCommandList = list_concat(ddlCommandList,
@@ -475,7 +480,7 @@ AdjustCloneSequenceRangesForNewGroup(WorkerNode *cloneNode)
 
 	if (ddlCommandList == NIL)
 	{
-		/* no sequence-backed distributed-table columns to re-range */
+		/* no sequence-backed Citus-table columns to re-range */
 		return;
 	}
 
