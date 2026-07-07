@@ -117,7 +117,7 @@ RebuildQueryStrings(Job *workerJob)
 				;
 				if (distributionColumnIsShardKeyIdentity)
 				{
-					AddBatchPassThroughNotNullFilter(query, copiedInsertRte,
+					AddShardKeyIdentityNotNullFilter(query, copiedInsertRte,
 													 copiedSubqueryRte);
 				}
 			}

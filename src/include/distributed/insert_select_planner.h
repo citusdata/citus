@@ -49,7 +49,7 @@ extern Query * WrapSubquery(Query *subquery);
 extern bool InsertPartitionColumnIsShardKeyIdentity(Query *query,
 													RangeTblEntry *insertRte,
 													RangeTblEntry *subqueryRte);
-extern bool AddBatchPassThroughNotNullFilter(Query *query,
+extern bool AddShardKeyIdentityNotNullFilter(Query *query,
 											 RangeTblEntry *insertRte,
 											 RangeTblEntry *subqueryRte);
 

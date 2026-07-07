@@ -99,8 +99,8 @@ static TargetEntry * SelectTargetEntryForInsertPartitionColumn(Query *query,
 															   insertTargetEntry);
 static bool DistributionColumnIsShardKeyIdentity(Expr *expr, Query *query);
 static bool IsInsertSelectBatchPassThroughDistributionColumn(Expr *expr, Query *query);
-static Query * WrapBatchSelectWithNotNullFilter(Query *selectQuery,
-												TargetEntry *distTargetEntry);
+static Query * WrapSelectWithNotNullFilter(Query *selectQuery,
+										   TargetEntry *distTargetEntry);
 static Node * AppendNotNullTest(Node *existingQuals, Expr *arg);
 static DistributedPlan * CreateNonPushableInsertSelectPlan(uint64 planId, Query *parse,
 														   ParamListInfo boundParams);
@@ -992,7 +992,7 @@ RouterModifyTaskForShardInterval(Query *originalQuery,
 											 distributionColumnIsShardKeyIdentity);
 		if (distributionColumnIsShardKeyIdentity)
 		{
-			AddBatchPassThroughNotNullFilter(copiedQuery, copiedInsertRte,
+			AddShardKeyIdentityNotNullFilter(copiedQuery, copiedInsertRte,
 											 copiedSubqueryRte);
 		}
 	}
@@ -1283,32 +1283,32 @@ DistributionColumnIsShardKeyIdentity(Expr *expr, Query *query)
 
 
 /*
- * AddBatchPassThroughNotNullFilter drops rows whose batch pass-through
+ * AddShardKeyIdentityNotNullFilter drops rows whose shard-key identity
  * distribution value came out NULL, by adding a distribution-column IS NOT NULL
  * qual to the pushed-down SELECT.
  *
- * The batch pass-through unnest(array_agg(<dist col>)) emits one value per group
- * row, but a sibling set-returning target in the same projection - e.g. an
- * over-emitting batch UDF unnest(f(array_agg(<other col>))) - can be longer, so
- * PostgreSQL's ProjectSet NULL-pads the shorter distribution-column set. Because
- * the batch path skips AddPartitionKeyNotNullFilterToSelect, without this filter
- * such a NULL (mis-routed) distribution key would be inserted silently. Dropping
- * the NULL row matches how Citus handles a NULL distribution value in a normal
+ * A shard-key identity projection can still yield a NULL distribution value
+ * (for example when a sibling target in the same projection forces PostgreSQL to
+ * NULL-pad the distribution column). Because the identity path skips
+ * AddPartitionKeyNotNullFilterToSelect, without this filter such a NULL
+ * (mis-routed) distribution key would be inserted silently. Dropping the NULL
+ * row matches how Citus handles a NULL distribution value in a normal
  * INSERT ... SELECT (AddPartitionKeyNotNullFilterToSelect).
  *
- * The distribution column can surface in two shapes:
- *   - as a plain Var, when the unnest lives in an inner subquery
- *     (SELECT dist_var, ... FROM ( SELECT unnest(array_agg(dist_col)) dist_var,
- *     ... ) s); the qual is attached to the pushed-down SELECT directly, or
- *   - as a bare set-returning expression projected in the SELECT list
- *     (SELECT unnest(array_agg(dist_col)), ... GROUP BY ...); the SELECT is
- *     wrapped in a pass-through subquery so the column becomes a Var we can
- *     filter.
+ * The main question here is whether the distribution column already surfaces as
+ * a plain Var:
+ *   - if it does, e.g. when it is projected up from an inner subquery
+ *     (SELECT dist_var, ... FROM ( SELECT ... AS dist_var, ... ) s), the qual is
+ *     attached to the pushed-down SELECT directly;
+ *   - if it does not, i.e. it is projected as a bare expression with no Var a
+ *     WHERE clause can reference (SELECT <expr> AS dist_col, ... GROUP BY ...),
+ *     the SELECT is wrapped in a pass-through subquery so the column becomes a
+ *     Var we can filter.
  *
  * Returns true if a filter was added.
  */
 bool
-AddBatchPassThroughNotNullFilter(Query *query, RangeTblEntry *insertRte,
+AddShardKeyIdentityNotNullFilter(Query *query, RangeTblEntry *insertRte,
 								 RangeTblEntry *subqueryRte)
 {
 	Query *selectQuery = subqueryRte->subquery;
@@ -1343,16 +1343,16 @@ AddBatchPassThroughNotNullFilter(Query *query, RangeTblEntry *insertRte,
 	 *       FROM ( <original SELECT> ) citus_insert_select_subquery
 	 *      WHERE dist_col IS NOT NULL
 	 */
-	subqueryRte->subquery = WrapBatchSelectWithNotNullFilter(selectQuery,
-															 distTargetEntry);
+	subqueryRte->subquery = WrapSelectWithNotNullFilter(selectQuery,
+														distTargetEntry);
 	return true;
 }
 
 
 /*
- * WrapBatchSelectWithNotNullFilter wraps the given batch pass-through SELECT in
- * a pass-through subquery and filters out rows whose distribution column (given
- * by distTargetEntry) came out NULL:
+ * WrapSelectWithNotNullFilter wraps the given SELECT in a pass-through subquery
+ * and filters out rows whose distribution column (given by distTargetEntry) came
+ * out NULL:
  *
  *     SELECT <columns> FROM ( <selectQuery> ) citus_insert_select_subquery
  *      WHERE <dist column> IS NOT NULL
@@ -1361,10 +1361,11 @@ AddBatchPassThroughNotNullFilter(Query *query, RangeTblEntry *insertRte,
  * expression, so it has no Var handle a WHERE clause could reference in the
  * original SELECT. Unlike WrapSubquery, this wrapper is a pure pass-through: it
  * references every non-junk output column as an ordinary Var and never lifts
- * expressions to the outer query, so the batch call keeps running on the shard.
+ * expressions to the outer query, so the pushed-down computation keeps running
+ * on the shard.
  */
 static Query *
-WrapBatchSelectWithNotNullFilter(Query *selectQuery, TargetEntry *distTargetEntry)
+WrapSelectWithNotNullFilter(Query *selectQuery, TargetEntry *distTargetEntry)
 {
 	ParseState *pstate = make_parsestate(NULL);
 	Query *wrapperQuery = makeNode(Query);

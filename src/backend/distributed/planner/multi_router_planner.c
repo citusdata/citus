@@ -381,7 +381,7 @@ AddPartitionKeyNotNullFilterToSelect(Query *subqery, bool
 	 * unnest(array_agg(dist_col)).
 	 * In that case there is no plain Var here to attach a NOT NULL filter to, so
 	 * we skip it; the NULL (mis-routed) distribution key is instead dropped at
-	 * runtime by AddBatchPassThroughNotNullFilter. The caller determines whether
+	 * runtime by AddShardKeyIdentityNotNullFilter. The caller determines whether
 	 * the query has this shape and passes the result in
 	 * distributionColumnIsShardKeyIdentity.
 	 */
