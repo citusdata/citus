@@ -89,6 +89,21 @@ SELECT citus_add_local_table_to_metadata('clone_seq_local');
 INSERT INTO clone_seq_local (id, payload)
     SELECT g, 'seed' FROM generate_series(1, 20) g;
 
+-- Quoted / mixed-case schema + sequence name coverage. The re-range command is
+-- built with generate_qualified_relation_name + quote_literal_cstr; the tables
+-- above all live in public with plain identifiers, so this case exercises the
+-- quoting/escaping path (which has historically been a source of deparse bugs).
+CREATE SCHEMA "Edge Schema";
+CREATE SEQUENCE "Edge Schema"."Weird Seq!" AS bigint;
+CREATE TABLE "Edge Schema"."Edge Tbl" (
+    id int,
+    nextval_col bigint DEFAULT nextval('"Edge Schema"."Weird Seq!"'),
+    payload text
+);
+SELECT create_distributed_table('"Edge Schema"."Edge Tbl"', 'id', 'hash');
+INSERT INTO "Edge Schema"."Edge Tbl" (id, payload)
+    SELECT g, 'seed' FROM generate_series(1, 20) g;
+
 -- Register follower_worker_4 as a clone of worker_4, then promote it. The
 -- promotion path must re-range the clone's sequences (for all of the tables
 -- above) to its new group window.
@@ -166,6 +181,13 @@ SELECT
     :'ref_primary_nextval_window'::bigint   <> :'ref_clone_nextval_window'::bigint   AS ref_nextval_windows_differ,
     :'ref_primary_identity_window'::bigint  <> :'ref_clone_identity_window'::bigint  AS ref_identity_windows_differ;
 
+-- All generated values across the table must also be globally unique.
+SELECT
+    count(*) = count(DISTINCT bigserial_col) AS ref_bigserial_unique,
+    count(*) = count(DISTINCT nextval_col)   AS ref_nextval_unique,
+    count(*) = count(DISTINCT identity_col)  AS ref_identity_unique
+FROM clone_seq_ref;
+
 -- ===========================================================================
 -- CITUS LOCAL table assertions
 -- ===========================================================================
@@ -205,6 +227,38 @@ SELECT
     count(*) = count(DISTINCT identity_col)  AS local_identity_unique
 FROM clone_seq_local;
 
+-- ===========================================================================
+-- QUOTED / MIXED-CASE SCHEMA assertions
+-- ===========================================================================
+-- Same worker-vs-clone window check as the distributed section, but for a
+-- sequence whose qualified name needs quoting/escaping.
+
+-- Generate values on the SOURCE PRIMARY.
+\c - - - :worker_4_port
+SET client_min_messages TO WARNING;
+INSERT INTO "Edge Schema"."Edge Tbl" (id, payload)
+    SELECT g, 'edge_primary' FROM generate_series(7001, 7050) g;
+SELECT max(nextval_col >> 48) AS edge_primary_window
+FROM "Edge Schema"."Edge Tbl"
+WHERE payload = 'edge_primary' \gset
+
+-- Generate values on the PROMOTED CLONE.
+\c - - - :follower_worker_4_port
+SET client_min_messages TO WARNING;
+INSERT INTO "Edge Schema"."Edge Tbl" (id, payload)
+    SELECT g, 'edge_clone' FROM generate_series(8001, 8050) g;
+SELECT max(nextval_col >> 48) AS edge_clone_window
+FROM "Edge Schema"."Edge Tbl"
+WHERE payload = 'edge_clone' \gset
+
+\c - - - :master_port
+-- The clone's window must differ from the source primary's.
+SELECT :'edge_primary_window'::bigint <> :'edge_clone_window'::bigint AS edge_nextval_windows_differ;
+
+-- All generated values must be globally unique.
+SELECT count(*) = count(DISTINCT nextval_col) AS edge_nextval_unique
+FROM "Edge Schema"."Edge Tbl";
+
 -- cleanup
 DROP TABLE clone_seq_dist;
 DROP TABLE clone_seq_ref;
@@ -212,6 +266,7 @@ DROP TABLE clone_seq_local;
 DROP SEQUENCE clone_seq_dist_manual;
 DROP SEQUENCE clone_seq_ref_manual;
 DROP SEQUENCE clone_seq_local_manual;
+DROP SCHEMA "Edge Schema" CASCADE;
 SET client_min_messages TO WARNING;
 SELECT citus_remove_node('localhost', :master_port);
 SET client_min_messages TO DEFAULT;

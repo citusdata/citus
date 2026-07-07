@@ -473,7 +473,7 @@ AdjustCloneSequenceRangesForNewGroup(WorkerNode *cloneNode)
 		}
 
 		ddlCommandList = list_concat(ddlCommandList,
-									 DependentSequenceRangeAdjustCommandList(relationId));
+									 SequenceRangeAdjustCommandList(relationId));
 		ddlCommandList = list_concat(ddlCommandList,
 									 IdentitySequenceDependencyCommandList(relationId));
 	}

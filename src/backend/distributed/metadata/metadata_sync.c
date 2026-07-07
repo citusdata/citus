@@ -2019,7 +2019,7 @@ IdentitySequenceDependencyCommandList(Oid targetRelationId)
 
 
 /*
- * DependentSequenceRangeAdjustCommandList generates a list of commands to
+ * SequenceRangeAdjustCommandList generates a list of commands to
  * execute WORKER_ADJUST_IDENTITY_COLUMN_SEQ_SETTINGS for each nextval/serial
  * sequence that the given relation depends on, so that those sequences' min/max
  * values are re-ranged to the target node's local group-id window (producing
@@ -2035,7 +2035,7 @@ IdentitySequenceDependencyCommandList(Oid targetRelationId)
  * primary.
  */
 List *
-DependentSequenceRangeAdjustCommandList(Oid relationId)
+SequenceRangeAdjustCommandList(Oid relationId)
 {
 	List *commandList = NIL;
 
@@ -2059,7 +2059,7 @@ DependentSequenceRangeAdjustCommandList(Oid relationId)
  * workers (and sets last_value/is_called on the coordinator).
  *
  * It is shared by IdentitySequenceDependencyCommandList and
- * DependentSequenceRangeAdjustCommandList so the two stay in sync.
+ * SequenceRangeAdjustCommandList so the two stay in sync.
  */
 static void
 AppendSequenceRangeAdjustCommand(Oid sequenceId, List **commandList)
