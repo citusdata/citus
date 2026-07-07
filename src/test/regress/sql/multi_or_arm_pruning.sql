@@ -115,6 +115,18 @@ SELECT * FROM shard_filters($$
   SELECT * FROM dt WHERE (k <= 4 AND v=7) OR (k=5 AND v=7)
 $$) ORDER BY 1;
 
+-- Two EQUALITY arms whose dist-key values hash to the SAME shard must BOTH be
+-- kept there, while a third arm that lives on another shard collapses to a
+-- single arm on that shard. k=1 and k=5 collide on one shard; k=2 is on another;
+-- shards owning none of {1,2,5} are pruned away at the job level and get no task.
+-- This asserts the >=2-equality-arms-kept shape (not just the range mix above)
+-- and makes the k=1/k=5 collision self-checking: if they ever stopped colliding
+-- the "(k = 1) OR (k = 5)" grouping below would split into two separate filters.
+SELECT * FROM shard_filters($$
+  EXPLAIN (COSTS OFF)
+  SELECT * FROM dt WHERE (k=1 AND v=7) OR (k=5 AND v=7) OR (k=2 AND v=7)
+$$) ORDER BY 1;
+
 RESET enable_indexscan;
 RESET enable_bitmapscan;
 
@@ -154,6 +166,13 @@ SELECT parity($$SELECT * FROM dt WHERE v=7$$);
 SELECT parity($$SELECT * FROM dt WHERE v=7 OR v=8$$);
 SELECT parity($$SELECT * FROM dt WHERE (v=7 AND k=1) OR (v=8)$$);
 
+-- no WHERE clause at all (the quals == NULL early return)
+SELECT parity($$SELECT * FROM dt$$);
+
+-- top-level NOT wrapping a prunable OR: the walker does not descend into NOT, so
+-- the OR is left intact and results are unchanged
+SELECT parity($$SELECT * FROM dt WHERE NOT ((k=1 AND v=7) OR (k=2 AND v=7))$$);
+
 -- join with a reference table: the reference fragment is not hash-distributed,
 -- so it is skipped and all arms are kept; results must be unchanged.
 CREATE TABLE ref (k int, w int);
@@ -161,6 +180,27 @@ SELECT create_reference_table('ref');
 INSERT INTO ref SELECT g, g FROM generate_series(1, 8) g;
 ANALYZE ref;
 SELECT parity($$SELECT dt.v FROM dt JOIN ref ON dt.k = ref.k WHERE (dt.k=1 AND ref.w=1) OR (dt.k=2 AND ref.w=2)$$);
+
+-- join with a single-shard (null distribution key) table: that fragment has no
+-- distribution column, so PruneOrClausesForTaskFragments skips it via the
+-- !HasDistributionKeyCacheEntry guard; the hash table's arms still prune and
+-- results must be unchanged.
+CREATE TABLE nk (k int, w int);
+SELECT create_distributed_table('nk', NULL, distribution_type => NULL);
+INSERT INTO nk SELECT g, g FROM generate_series(1, 8) g;
+ANALYZE nk;
+SET citus.enable_repartition_joins TO on;
+SELECT parity($$SELECT dt.v, nk.w FROM dt JOIN nk ON dt.k = nk.k WHERE (dt.k=1 AND nk.w=1) OR (dt.k=2 AND nk.w=2)$$);
+
+-- repartition (non-colocated) join on a non-distribution column: the top job's
+-- fragments include non-relation (intermediate result) fragments, which the
+-- fragmentType != CITUS_RTE_RELATION guard skips; results must be unchanged.
+CREATE TABLE dt3 (k int, y int);
+SELECT create_distributed_table('dt3', 'k', colocate_with => 'none');
+INSERT INTO dt3 SELECT k, y FROM generate_series(1, 8) k, generate_series(1, 50) y;
+ANALYZE dt3;
+SELECT parity($$SELECT dt.v, dt3.y FROM dt JOIN dt3 ON dt.v = dt3.y WHERE (dt.k=1 AND dt3.y=7) OR (dt.k=2 AND dt3.y=7)$$);
+RESET citus.enable_repartition_joins;
 
 -- parameterized (prepared) query: a custom plan substitutes the params as
 -- constants, so pruning still applies and must not change the result.
