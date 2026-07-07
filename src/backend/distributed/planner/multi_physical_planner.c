@@ -3052,7 +3052,7 @@ PruneOrClausesForTaskFragments(Query *taskQuery, List *fragmentCombination,
 
 
 /*
- * PruneUnreachableOrArms walks a (sub)qualification and removes the arms of
+ * PruneUnreachableOrArms walks a (sub)qual and removes the arms of
  * top-level OR expressions that cannot match any row on the given shard.
  *
  * For each arm of an OR, we run the regular shard-pruning machinery
