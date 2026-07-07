@@ -52,14 +52,14 @@ jobs:
       fail-fast: false
       matrix:
         pg: ${{ fromJson(needs.params.outputs.pg_versions) }}
-        group: [ regress, isolation, columnar, failure, tap ]
+        group: [ regress, isolation, columnar, failure, tap, generator ]
     steps:
       - uses: actions/checkout@v5
       - uses: ./.github/actions/setup_cassert_pg
         with:
           pg_full: ${{ matrix.pg.full }}
-      - name: Install failure-suite python env (mitmproxy fork)
-        if: ${{ matrix.group == 'failure' }}
+      - name: Install python test env
+        if: ${{ matrix.group == 'failure' || matrix.group == 'generator' }}
         shell: bash
         run: ( cd src/test/regress && pipenv install --deploy )
       - name: Run ${{ matrix.group }}
@@ -72,16 +72,21 @@ jobs:
               make -C src/test/regress \
                 check-multi check-multi-1 check-multi-1-create-citus check-multi-mx \
                 check-split check-operations check-follower-cluster \
-                check-vanilla check-enterprise ;;
+                check-vanilla check-enterprise check-add-backup-node ;;
             isolation)
               make -C src/test/regress \
-                check-isolation check-enterprise-isolation check-columnar-isolation ;;
+                check-isolation check-enterprise-isolation check-columnar-isolation \
+                check-enterprise-isolation-logicalrep-1 \
+                check-enterprise-isolation-logicalrep-2 \
+                check-enterprise-isolation-logicalrep-3 ;;
             columnar)
               make -C src/test/regress check-columnar ;;
             failure)
               ( cd src/test/regress && pipenv run make check-failure check-enterprise-failure ) ;;
             tap)
               make -C src/test/regress check-tap ;;
+            generator)
+              ( cd src/test/regress && pipenv run make check-query-generator check-pytest ) ;;
           esac
       - uses: ./.github/actions/save_logs_and_results
         if: always()
@@ -169,10 +174,52 @@ jobs:
         with:
           folder: cassert_${{ matrix.pg.major }}_citus_upgrade
 
+  # ---- arbitrary-configs: run the full config-fuzz matrix, sharded 6 ways for runtime ----
+  arbitrary-configs:
+    needs: params
+    name: cassert PG${{ matrix.pg.major }} - arbitrary-configs-${{ matrix.parallel }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        pg: ${{ fromJson(needs.params.outputs.pg_versions) }}
+        parallel: [ 0, 1, 2, 3, 4, 5 ]   # shard count is the #1 runtime knob
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup_cassert_pg
+        with:
+          pg_full: ${{ matrix.pg.full }}
+      - name: Install python test env
+        shell: bash
+        run: ( cd src/test/regress && pipenv install --deploy )
+      - name: check-arbitrary-configs (shard ${{ matrix.parallel }}/6)
+        shell: bash
+        timeout-minutes: 120
+        run: |
+          set -euo pipefail
+          cd src/test/regress
+          # Split the config list into 6 shards and run only this job's shard (mirrors build_and_test.yml).
+          N=6
+          X=${{ matrix.parallel }}
+          TESTS=$(pipenv run python3 citus_tests/print_test_names.py |
+            tr '\n' ',' | awk -v N="$N" -v X="$X" -F, '{
+              split("", parts)
+              for (i = 1; i <= NF; i++) {
+                  parts[i % N] = parts[i % N] $i ","
+              }
+              print substr(parts[X], 1, length(parts[X])-1)
+          }')
+          echo "$TESTS"
+          pipenv run make check-arbitrary-configs parallel=4 CONFIGS="$TESTS"
+      - uses: ./.github/actions/save_logs_and_results
+        if: always()
+        with:
+          folder: cassert_${{ matrix.pg.major }}_arbitrary_configs_${{ matrix.parallel }}
+
   # ---- failure notification: open/append a dated GitHub issue if anything failed ----
   notify:
     name: Open issue on failure
-    needs: [ test, pg-upgrade, citus-upgrade ]
+    needs: [ test, pg-upgrade, citus-upgrade, arbitrary-configs ]
     if: failure()
     runs-on: ubuntu-latest
     steps:
@@ -180,37 +227,75 @@ jobs:
         with:
           script: |
             const day = new Date().toISOString().slice(0, 10);
-            const title = `Nightly cassert failures (${day})`;
             const label = 'nightly-cassert';
             const url = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
-            const body = [
-              'Nightly full-cassert run failed.',
-              '',
-              `Run: ${url}`,
-              '',
-              'First runs are EXPECTED red as pre-existing PG-core and Citus asserts surface.',
-              'This is the intended signal, not a regression gate.',
-            ].join('\n');
-            const found = await github.rest.issues.listForRepo({
+
+            // Failure signature = sorted set of failed job names in this run.
+            const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: context.runId,
+              per_page: 100,
+            });
+            const failed = jobs.filter(j => j.conclusion === 'failure').map(j => j.name).sort();
+            const signature = JSON.stringify(failed);
+            const marker = `<!-- cassert-failures: ${signature} -->`;
+
+            // Existing open issues and the failure sets they already track.
+            const open = await github.paginate(github.rest.issues.listForRepo, {
               owner: context.repo.owner,
               repo: context.repo.repo,
               state: 'open',
               labels: label,
             });
-            const existing = found.data.find(i => i.title === title);
-            if (existing) {
+            const sigOf = (i) => {
+              const m = (i.body || '').match(/<!-- cassert-failures: (.*?) -->/);
+              if (!m) return null;
+              try { return JSON.stringify(JSON.parse(m[1]).sort()); } catch { return null; }
+            };
+
+            const intro = [
+              'Nightly full-cassert run failed.',
+              '',
+              `Run: ${url}`,
+              '',
+              'Failing jobs:',
+              ...failed.map(n => `- ${n}`),
+            ].join('\n');
+
+            // Same failing set as an open issue -> append; otherwise open a new issue.
+            const match = open.find(i => sigOf(i) === signature);
+            if (match) {
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                issue_number: existing.number,
-                body,
+                issue_number: match.number,
+                body: `Same failing set recurred (${day}).\n\nRun: ${url}`,
               });
-            } else {
-              await github.rest.issues.create({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                title,
-                body,
-                labels: [label],
-              });
+              return;
             }
+
+            // New/different set: highlight failures not already tracked by any open issue.
+            const tracked = new Set();
+            for (const i of open) {
+              const s = sigOf(i);
+              if (s) for (const n of JSON.parse(s)) tracked.add(n);
+            }
+            const newOnes = failed.filter(n => !tracked.has(n));
+            const newSection = (tracked.size && newOnes.length)
+              ? ['', 'New failures not previously tracked:', ...newOnes.map(n => `- ${n}`)].join('\n')
+              : '';
+
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `Nightly cassert failures (${day})`,
+              body: [
+                intro,
+                newSection,
+                '',
+                'First runs are EXPECTED red as pre-existing PG-core and Citus asserts surface.',
+                marker,
+              ].join('\n'),
+              labels: [label],
+            });
