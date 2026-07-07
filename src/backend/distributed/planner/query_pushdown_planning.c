@@ -576,11 +576,7 @@ SubqueryMultiNodeTree(Query *originalQuery, Query *queryTree,
  *
  * allowUnsafeShardLocalGroupingForSubqueries is forwarded as-is to
  * DeferErrorIfCannotPushdownSubquery for every subquery checked here. Today it's
- * only set for colocated INSERT ... SELECT under citus.allow_unsafe_insert_select_pushdown;
- * when true, the GROUP BY / aggregate / window / DISTINCT merge-step requirements
- * are skipped, assuming those grouping constructs stay shard-local.
- * All other pushdown checks (co-location, joins on the distribution column, recurring
- * tuples, LIMIT/OFFSET) remain enforced.
+ * only set for colocated INSERT ... SELECT under citus.allow_unsafe_insert_select_pushdown.
  */
 DeferredErrorMessage *
 DeferErrorIfUnsupportedSubqueryPushdown(Query *originalQuery,
@@ -1010,13 +1006,8 @@ CanPushdownSubquery(Query *subqueryTree, bool outerMostQueryHasLimit)
  * limit, we let this query to run, but results could be wrong depending on the
  * features of underlying tables.
  *
- * When allowUnsafeShardLocalGrouping is true, we assume any GROUP BY / aggregate
- * / window / DISTINCT in the subquery can stay within a single shard, so the
- * partition-column requirements that would otherwise force a coordinator merge step
- * are skipped (this flag is forwarded to DeferErrorIfSubqueryRequiresMerge).
- * LIMIT/OFFSET handling is unaffected. The flag today is only set for colocated
- * INSERT ... SELECT under citus.allow_unsafe_insert_select_pushdown, where keeping
- * batches shard-local becomes the user's responsibility.
+ * When allowUnsafeShardLocalGrouping is true, some of the partition-column
+ * requirements that would otherwise force a coordinator merge step are skipped.
  */
 DeferredErrorMessage *
 DeferErrorIfCannotPushdownSubquery(Query *subqueryTree, bool outerMostQueryHasLimit,
@@ -1153,8 +1144,7 @@ FlattenGroupExprs(Query *queryTree)
  * GROUP BY / aggregate / window / DISTINCT are skipped: so we assume these grouping
  * constructs are shard-local, so they do not need a coordinator merge.
  * LIMIT/OFFSET are still rejected, because those require a merge regardless of the
- * distribution column. Today the flag is only ever true for colocated
- * INSERT ... SELECT under citus.allow_unsafe_insert_select_pushdown.
+ * distribution column.
  */
 static DeferredErrorMessage *
 DeferErrorIfSubqueryRequiresMerge(Query *subqueryTree, bool lateral,
@@ -1183,13 +1173,6 @@ DeferErrorIfSubqueryRequiresMerge(Query *subqueryTree, bool lateral,
 							   referencedThing);
 	}
 
-	/*
-	 * With unsafe INSERT ... SELECT pushdown the entire subquery executes on a
-	 * single shard (colocation is enforced separately), so grouping / aggregation
-	 * / window / distinct on non-distribution columns stays shard-local and does
-	 * not require a merge step. Skip the partition-column requirements in that
-	 * case.
-	 */
 	if (!allowUnsafeShardLocalGrouping)
 	{
 		/* group clause list must include partition column */

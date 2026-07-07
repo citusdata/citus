@@ -97,6 +97,7 @@ static TargetEntry * SelectTargetEntryForInsertPartitionColumn(Query *query,
 															   RangeTblEntry *subqueryRte,
 															   TargetEntry **
 															   insertTargetEntry);
+static bool DistributionColumnIsShardKeyIdentity(Expr *expr, Query *query);
 static bool IsInsertSelectBatchPassThroughDistributionColumn(Expr *expr, Query *query);
 static Query * WrapBatchSelectWithNotNullFilter(Query *selectQuery,
 												TargetEntry *distTargetEntry);
@@ -839,12 +840,9 @@ DistributedInsertSelectSupported(Query *queryTree, RangeTblEntry *insertRte,
 		 * Ensure that INSERT's partition column comes from SELECT's partition
 		 * column. Normally this requires a plain-Var partition-column match.
 		 * With unsafe INSERT ... SELECT pushdown enabled we additionally accept a
-		 * batch pass-through of the distribution column, i.e.
-		 * unnest(array_agg(dist_key)), which re-emits distribution values verbatim
-		 * from the current shard's rows; combined with the co-location check below,
-		 * those values route back into this shard. Any other derived distribution
-		 * value is still rejected, because it could route rows that belong to a
-		 * different shard.
+		 * distribution column that is a shard-key identity: a routing-preserving
+		 * projection of the source shard key whose values route back into this
+		 * shard.
 		 */
 		if (HasDistributionKey(targetRelationId))
 		{
@@ -852,7 +850,7 @@ DistributedInsertSelectSupported(Query *queryTree, RangeTblEntry *insertRte,
 													   subqueryRte,
 													   &selectPartitionColumnTableId);
 			if (error && AllowUnsafeInsertSelectPushdown &&
-				InsertPartitionColumnIsBatchPassThrough(queryTree, insertRte,
+				InsertPartitionColumnIsShardKeyIdentity(queryTree, insertRte,
 														subqueryRte))
 			{
 				error = NULL;
@@ -987,12 +985,12 @@ RouterModifyTaskForShardInterval(Query *originalQuery,
 		copiedSubquery);
 	if (subqueryRteListProperties->hasDistTableWithShardKey)
 	{
-		bool distributionColumnIsBatchPassThrough =
-			InsertPartitionColumnIsBatchPassThrough(copiedQuery, copiedInsertRte,
+		bool distributionColumnIsShardKeyIdentity =
+			InsertPartitionColumnIsShardKeyIdentity(copiedQuery, copiedInsertRte,
 													copiedSubqueryRte);
 		AddPartitionKeyNotNullFilterToSelect(copiedSubquery,
-											 distributionColumnIsBatchPassThrough);
-		if (distributionColumnIsBatchPassThrough)
+											 distributionColumnIsShardKeyIdentity);
+		if (distributionColumnIsShardKeyIdentity)
 		{
 			AddBatchPassThroughNotNullFilter(copiedQuery, copiedInsertRte,
 											 copiedSubqueryRte);
@@ -1238,14 +1236,13 @@ ReorderInsertSelectTargetLists(Query *originalQuery, RangeTblEntry *insertRte,
 
 
 /*
- * InsertPartitionColumnIsBatchPassThrough returns true if the SELECT target
- * entry that feeds the INSERT's distribution column is a batch pass-through,
- * i.e. unnest(array_agg(<distribution column>)). See
- * IsInsertSelectBatchPassThroughDistributionColumn for the exact invariant and
- * its known limitations.
+ * InsertPartitionColumnIsShardKeyIdentity returns true if the SELECT target
+ * entry that feeds the INSERT's distribution column is a shard-key identity,
+ * i.e. a routing-preserving projection of the source shard key. See
+ * DistributionColumnIsShardKeyIdentity for the recognized identity forms.
  */
 bool
-InsertPartitionColumnIsBatchPassThrough(Query *query, RangeTblEntry *insertRte,
+InsertPartitionColumnIsShardKeyIdentity(Query *query, RangeTblEntry *insertRte,
 										RangeTblEntry *subqueryRte)
 {
 	TargetEntry *subqueryTargetEntry =
@@ -1255,8 +1252,33 @@ InsertPartitionColumnIsBatchPassThrough(Query *query, RangeTblEntry *insertRte,
 		return false;
 	}
 
-	return IsInsertSelectBatchPassThroughDistributionColumn(subqueryTargetEntry->expr,
-															subqueryRte->subquery);
+	return DistributionColumnIsShardKeyIdentity(subqueryTargetEntry->expr,
+												subqueryRte->subquery);
+}
+
+
+/*
+ * DistributionColumnIsShardKeyIdentity returns true if the given SELECT target
+ * expression projects the INSERT's distribution column as an "identity" of the
+ * source shard key: every value it produces routes back into the same shard as
+ * the source row it came from, so - given source and target are colocated - the
+ * INSERT ... SELECT stays shard-local and can be pushed down.
+ */
+static bool
+DistributionColumnIsShardKeyIdentity(Expr *expr, Query *query)
+{
+	/*
+	 * Batch pass-through: unnest(array_agg(<distribution column>)).
+	 * Any intermediate transformation (e.g. unnest(array_agg(dist_key
+	 * + 1)) or unnest(f(array_agg(dist_key)))) is rejected because it
+	 * could produce values that belong to a different shard.
+	 */
+	if (IsInsertSelectBatchPassThroughDistributionColumn(expr, query))
+	{
+		return true;
+	}
+
+	return false;
 }
 
 
@@ -1734,18 +1756,13 @@ SelectTargetEntryForInsertPartitionColumn(Query *query, RangeTblEntry *insertRte
  * The invariant is narrow: unnest(array_agg(<partition column>)) re-emits
  * distribution values verbatim from source rows of the current shard, so -
  * given source and target are colocated - each value routes back into this
- * shard's range. Any intermediate transformation (e.g. unnest(array_agg(dist_key
- * + 1)) or unnest(f(array_agg(dist_key)))) is rejected because it could produce
- * values that route to a different shard.
+ * shard's range.
  *
  * This shape check alone does not prove the whole INSERT is shard-local. It
  * assumes the row reaching the INSERT actually carries one of those original
  * distribution values, and not a targetlist/SRF artifact such as a NULL-padded
  * row emitted when a sibling set-returning target in the same projection emits
- * more rows than this pass-through. We cannot rule that out here without also
- * rejecting the supported batched shape, e.g. unnest(batch_udf(array_agg(col))),
- * whose row count is a runtime property of the (user) batch function. That
- * residual is exactly why the enabling GUC is explicitly unsafe and opt-in.
+ * more rows than this pass-through.
  */
 bool
 IsInsertSelectBatchPassThroughDistributionColumn(Expr *expr, Query *query)

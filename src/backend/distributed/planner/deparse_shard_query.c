@@ -109,13 +109,13 @@ RebuildQueryStrings(Job *workerJob)
 			/* there are no restrictions to add for reference and citus local tables */
 			if (IsCitusTableType(shardInterval->relationId, DISTRIBUTED_TABLE))
 			{
-				bool distributionColumnIsBatchPassThrough =
-					InsertPartitionColumnIsBatchPassThrough(query, copiedInsertRte,
+				bool distributionColumnIsShardKeyIdentity =
+					InsertPartitionColumnIsShardKeyIdentity(query, copiedInsertRte,
 															copiedSubqueryRte);
 				AddPartitionKeyNotNullFilterToSelect(copiedSubquery,
-													 distributionColumnIsBatchPassThrough)
+													 distributionColumnIsShardKeyIdentity)
 				;
-				if (distributionColumnIsBatchPassThrough)
+				if (distributionColumnIsShardKeyIdentity)
 				{
 					AddBatchPassThroughNotNullFilter(query, copiedInsertRte,
 													 copiedSubqueryRte);

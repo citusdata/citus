@@ -46,7 +46,7 @@ extern DistributedPlan * CreateInsertSelectIntoLocalTablePlan(uint64 planId,
 extern char * InsertSelectResultIdPrefix(uint64 planId);
 extern bool PlanningInsertSelect(void);
 extern Query * WrapSubquery(Query *subquery);
-extern bool InsertPartitionColumnIsBatchPassThrough(Query *query,
+extern bool InsertPartitionColumnIsShardKeyIdentity(Query *query,
 													RangeTblEntry *insertRte,
 													RangeTblEntry *subqueryRte);
 extern bool AddBatchPassThroughNotNullFilter(Query *query,

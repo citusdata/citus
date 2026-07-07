@@ -80,7 +80,7 @@ extern RangeTblEntry * ExtractResultRelationRTEOrError(Query *query);
 extern RangeTblEntry * ExtractDistributedInsertValuesRTE(Query *query);
 extern bool IsMultiRowInsert(Query *query);
 extern void AddPartitionKeyNotNullFilterToSelect(Query *subqery,
-												 bool distributionColumnIsBatchPassThrough
+												 bool distributionColumnIsShardKeyIdentity
 												 );
 extern bool UpdateOrDeleteOrMergeQuery(Query *query);
 extern bool IsMergeQuery(Query *query);
