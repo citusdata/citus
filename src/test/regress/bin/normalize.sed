@@ -290,30 +290,10 @@ s/\/\*\{"cId":.*\*\///g
 # Notice message that contains current columnar version that makes it harder to bump versions
 s/(NOTICE:  issuing CREATE EXTENSION IF NOT EXISTS citus_columnar WITH SCHEMA  pg_catalog VERSION )"[0-9]+\.[0-9]+-[0-9]+"/\1 "x.y-z"/
 
-# pg16 changes
-# can be removed when dropping PG14&15 support
-#if PG_VERSION_NUM < PG_VERSION_16
-# (This is not preprocessor directive, but a reminder for the developer that will drop PG14&15 support )
-
-s/, password_required=false//g
-s/provide the file or change sslmode/provide the file, use the system's trusted roots with sslrootcert=system, or change sslmode/g
-
-#pg18 varreturningtype - change needed for PG16, PG17 tests
-s/(:varnullingrels \(b\) :varlevelsup 0) (:varnosyn 1)/\1 :varreturningtype 0 \2/g
-
-#pg16 varnullingrels and pg18 varreturningtype - change needed for PG15 tests
-s/(:varcollid [0-9]+) :varlevelsup 0/\1 :varnullingrels (b) :varlevelsup 0 :varreturningtype 0/g
-
-s/table_name_for_view\.([_a-z0-9]+)(,| |$)/\1\2/g
-s/permission denied to terminate process/must be a superuser to terminate superuser process/g
-s/permission denied to cancel query/must be a superuser to cancel superuser query/g
-
-#endif /* PG_VERSION_NUM < PG_VERSION_16 */
-
 # pg17 changes
-# can be removed when dropping PG15&16 support
+# can be removed when dropping PG16 support
 #if PG_VERSION_NUM < PG_VERSION_17
-# (This is not preprocessor directive, but a reminder for the developer that will drop PG15&16 support )
+# (This is not preprocessor directive, but a reminder for the developer that will drop PG16 support )
 
 s/COPY DEFAULT only available using COPY FROM/COPY DEFAULT cannot be used with COPY TO/
 s/COPY delimiter must not appear in the DEFAULT specification/COPY delimiter character must not appear in the DEFAULT specification/
@@ -321,7 +301,7 @@ s/COPY delimiter must not appear in the DEFAULT specification/COPY delimiter cha
 #endif /* PG_VERSION_NUM < PG_VERSION_17 */
 
 # PG 17 Removes outer parentheses from CHECK constraints
-# we add them back for pg15,pg16 compatibility
+# we add them back for pg16 compatibility
 # e.g. change CHECK other_col >= 100 to CHECK (other_col >= 100)
 s/\| CHECK ([a-zA-Z])(.*)/| CHECK \(\1\2\)/g
 
@@ -332,30 +312,37 @@ s/\| CHECK ([a-zA-Z])(.*)/| CHECK \(\1\2\)/g
 
 /DEBUG:  drop auto-cascades to type [a-zA-Z_]*.pg_temp_[0-9]*/d
 
-# PG18 change: strip trailing ".0..." from Actual Rows across formats
-# Text EXPLAIN (simple case: "actual rows=50.00")
+# --- PG18 Actual Rows normalization ---
+# New in PG18: Actual Rows in EXPLAIN output are now rounded to
+# 1) 0.50 (and 0.5, 0.5000...) -> 0
+s/(actual[[:space:]]*rows[[:space:]]*[=:][[:space:]]*)0\.50*/\10/gI
+s/(actual[^)]*rows[[:space:]]*=[[:space:]]*)0\.50*/\10/gI
+
+# 2) 0.51+ -> 1
+s/(actual[[:space:]]*rows[[:space:]]*[=:][[:space:]]*)0\.(5[1-9][0-9]*|[6-9][0-9]*)/\11/gI
+s/(actual[^)]*rows[[:space:]]*=[[:space:]]*)0\.(5[1-9][0-9]*|[6-9][0-9]*)/\11/gI
+
+# 3) Strip trivial trailing ".0..." (6.00 -> 6)  [keep your existing cross-format rules]
 s/(actual[[:space:]]*rows[[:space:]]*[=:][[:space:]]*)([0-9]+)\.0+/\1\2/gI
-# Text EXPLAIN (inside "(actual time=... rows=50.00 ...)")
 s/(actual[^)]*rows[[:space:]]*=[[:space:]]*)([0-9]+)\.0+/\1\2/gI
-# YAML (e.g., "Actual Rows: 1.00")
+
+# 4) YAML/XML/JSON: strip trailing ".0..."
 s/(Actual[[:space:]]+Rows:[[:space:]]*[0-9]+)\.0+/\1/gI
-# XML (e.g., "<Actual-Rows>1.00</Actual-Rows>")
 s/(<Actual-Rows>[0-9]+)\.0+(<\/Actual-Rows>)/\1\2/g
-# JSON (e.g., '"Actual Rows": 1.00')
 s/("Actual[[:space:]]+Rows":[[:space:]]*[0-9]+)\.0+/\1/gI
-# JSON placeholder cleanup: '"Actual Rows": N.0...' -> N
+
+# 5) Placeholder cleanups (kept from existing rules; harmless if unused)
+#    JSON placeholder cleanup: '"Actual Rows": N.N' -> N
 s/("Actual[[:space:]]+Rows":[[:space:]]*)N\.N/\1N/gI
-# Collapse placeholder in text EXPLAIN: "rows=N.N" -> "rows=N"
+#    Text EXPLAIN collapse: "rows=N.N" -> "rows=N"
 s/(rows[[:space:]]*=[[:space:]]*)N\.N/\1N/gI
-# YAML placeholder: "Actual Rows: N.N" -> "Actual Rows: N"
+#    YAML placeholder: "Actual Rows: N.N" -> "Actual Rows: N"
 s/(Actual[[:space:]]+Rows:[[:space:]]*)N\.N/\1N/gI
+# --- PG18 Actual Rows normalization ---
 
 # pg18 “Disabled” change start
 # ignore any “Disabled:” lines in test output
 /^\s*Disabled:/d
-
-# ignore any JSON-style Disabled field
-/^\s*"Disabled":/d
 
 # ignore XML <Disabled>true</Disabled> or <Disabled>false</Disabled>
 /^\s*<Disabled>.*<\/Disabled>/d
@@ -375,3 +362,29 @@ s/\<is referenced from table\>/is still referenced from table/g
 # pg18 extension_control_path GUC debugs
 # ignore any "find_in_path:" lines in test output
 /DEBUG:  find_in_path: trying .*/d
+
+# EXPLAIN (PG18+): hide Materialize storage instrumentation
+# this rule can be removed when PG18 is the minimum supported version
+/^[ \t]*Storage:[ \t].*$/d
+
+# PG18: drop 'subscription "<name>"' prefix
+# this rule can be removed when PG18 is the minimum supported version
+s/^[[:space:]]*ERROR:[[:space:]]+subscription "[^"]+" could not connect to the publisher:[[:space:]]*/ERROR:  could not connect to the publisher: /I
+# PG18: drop verbose 'connection to server … failed:' preamble
+s/^[[:space:]]*ERROR:[[:space:]]+could not connect to the publisher:[[:space:]]*connection to server .* failed:[[:space:]]*/ERROR:  could not connect to the publisher: /I
+
+# PG18: replace named window refs like "OVER w1" with neutral "OVER (?)"
+# this rule can be removed when PG18 is the minimum supported version
+# only on Sort Key / Group Key / Output lines
+# Sort Key
+/^[[:space:]]*Sort Key:/ s/(OVER[[:space:]]+)w[0-9]+/\1(?)/g
+# Group Key
+/^[[:space:]]*Group Key:/ s/(OVER[[:space:]]+)w[0-9]+/\1(?)/g
+# Output
+/^[[:space:]]*Output:/   s/(OVER[[:space:]]+)w[0-9]+/\1(?)/g
+# end PG18 window ref normalization
+
+# pg18 varreturningtype - change needed for PG16, PG17 tests
+# can be removed when dropping pg17 support
+s/(:varnullingrels \(b\) :varlevelsup 0) (:varnosyn 1)/\1 :varreturningtype 0 \2/g
+# end pg18 varreturningtype

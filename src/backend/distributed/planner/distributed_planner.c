@@ -29,6 +29,7 @@
 #include "optimizer/plancat.h"
 #include "optimizer/planmain.h"
 #include "optimizer/planner.h"
+#include "parser/parse_relation.h"
 #include "parser/parse_type.h"
 #include "parser/parsetree.h"
 #include "utils/builtins.h"
@@ -36,6 +37,7 @@
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
 #include "utils/syscache.h"
+#include "utils/typcache.h"
 
 #include "pg_version_constants.h"
 
@@ -71,10 +73,6 @@
 #include "distributed/version_compat.h"
 #include "distributed/worker_shard_visibility.h"
 
-#if PG_VERSION_NUM >= PG_VERSION_16
-#include "parser/parse_relation.h"
-#endif
-
 
 static List *plannerRestrictionContextList = NIL;
 int MultiTaskQueryLogLevel = CITUS_LOG_LEVEL_OFF; /* multi-task query log level */
@@ -85,8 +83,9 @@ int PlannerLevel = 0;
 
 static bool ListContainsDistributedTableRTE(List *rangeTableList,
 											bool *maybeHasForeignDistributedTable);
-static PlannedStmt * CreateDistributedPlannedStmt(
-	DistributedPlanningContext *planContext);
+static bool PlanContainsDistributedSubPlanRTE(DistributedPlanningContext *planContext);
+static PlannedStmt * CreateDistributedPlannedStmt(DistributedPlanningContext *
+												  planContext);
 static PlannedStmt * InlineCtesAndCreateDistributedPlannedStmt(uint64 planId,
 															   DistributedPlanningContext
 															   *planContext);
@@ -95,7 +94,8 @@ static PlannedStmt * TryCreateDistributedPlannedStmt(PlannedStmt *localPlan,
 													 Query *query, ParamListInfo
 													 boundParams,
 													 PlannerRestrictionContext *
-													 plannerRestrictionContext);
+													 plannerRestrictionContext,
+													 int cursorOptions);
 static DeferredErrorMessage * DeferErrorIfPartitionTableNotSingleReplicated(Oid
 																			relationId);
 
@@ -110,6 +110,7 @@ static PlannedStmt * FinalizeNonRouterPlan(PlannedStmt *localPlan,
 static PlannedStmt * FinalizeRouterPlan(PlannedStmt *localPlan, CustomScan *customScan);
 static AppendRelInfo * FindTargetAppendRelInfo(PlannerInfo *root, int relationRteIndex);
 static List * makeTargetListFromCustomScanList(List *custom_scan_tlist);
+static void DisableTrackingQueryCountersForPlanTree(struct Plan *planTree);
 static List * makeCustomScanTargetlistFromExistingTargetList(List *existingTargetlist);
 static int32 BlessRecordExpressionList(List *exprs);
 static void CheckNodeIsDumpable(Node *node);
@@ -125,12 +126,14 @@ static void AdjustReadIntermediateResultsCostInternal(RelOptInfo *relOptInfo,
 													  Const *resultFormatConst);
 static List * OuterPlanParamsList(PlannerInfo *root);
 static List * CopyPlanParamList(List *originalPlanParamList);
-static PlannerRestrictionContext * CreateAndPushPlannerRestrictionContext(
-	FastPathRestrictionContext *fastPathContext);
+static void CreateAndPushPlannerRestrictionContext(DistributedPlanningContext *
+												   planContext,
+												   FastPathRestrictionContext *
+												   fastPathContext);
 static PlannerRestrictionContext * CurrentPlannerRestrictionContext(void);
 static void PopPlannerRestrictionContext(void);
-static void ResetPlannerRestrictionContext(
-	PlannerRestrictionContext *plannerRestrictionContext);
+static void ResetPlannerRestrictionContext(PlannerRestrictionContext *
+										   plannerRestrictionContext);
 static PlannedStmt * PlanFastPathDistributedStmt(DistributedPlanningContext *planContext);
 static PlannedStmt * PlanDistributedStmt(DistributedPlanningContext *planContext,
 										 int rteIdCounter);
@@ -245,9 +248,9 @@ distributed_planner(Query *parse,
 	 */
 	HideCitusDependentObjectsOnQueriesOfPgMetaTables((Node *) parse, NULL);
 
-	/* create a restriction context and put it at the end of context list */
-	planContext.plannerRestrictionContext = CreateAndPushPlannerRestrictionContext(
-		&fastPathContext);
+	/* create a restriction context and put it at the end of our plan context's context list */
+	CreateAndPushPlannerRestrictionContext(&planContext,
+										   &fastPathContext);
 
 	/*
 	 * We keep track of how many times we've recursed into the planner, primarily
@@ -281,6 +284,9 @@ distributed_planner(Query *parse,
 				Assert(saveNestLevel > 0);
 				AtEOXact_GUC(true, saveNestLevel);
 			}
+
+			/* Pop the plan context from the current restriction context */
+			planContext.plannerRestrictionContext->planContext = NULL;
 #endif
 			needsDistributedPlanning = CheckPostPlanDistribution(&planContext,
 																 needsDistributedPlanning,
@@ -422,6 +428,62 @@ ListContainsDistributedTableRTE(List *rangeTableList,
 				*maybeHasForeignDistributedTable = true;
 			}
 
+			return true;
+		}
+	}
+
+	return false;
+}
+
+
+/*
+ * PlanContainsDistributedSubPlanRTE checks whether any of the subplans in the
+ * plan context's PlannedStmt->subplans list is a Read Intermediate Result
+ * function scan.
+ *
+ * It is used by the check after standard_planner() to determine whether the plan
+ * still requires distributed planning; in addition to checking the range table for
+ * distributed tables, we also need to check whether there are any subplans that
+ * read intermediate results, which indicates a distributed subplan and therefore
+ * that distributed planning is required.
+ */
+static bool
+PlanContainsDistributedSubPlanRTE(DistributedPlanningContext *planContext)
+{
+	/*
+	 * We iterate over planContext->plan->subplans, which is PostgreSQL's
+	 * PlannedStmt->subplans list. PostgreSQL's setrefs.c (set_plan_references)
+	 * resolves AlternativeSubPlan nodes by picking one alternative and setting
+	 * the discarded subplan entries to NULL. We must therefore skip NULL entries.
+	 */
+	List *subPlanList = planContext->plan->subplans;
+	ListCell *subPlanCell = NULL;
+
+	foreach(subPlanCell, subPlanList)
+	{
+		Node *planRoot = (Node *) lfirst(subPlanCell);
+
+		if (planRoot == NULL)
+		{
+			continue;
+		}
+
+		if (!IsA(planRoot, FunctionScan))
+		{
+			continue;
+		}
+
+		List *functionList = ((FunctionScan *) planRoot)->functions;
+
+		if (functionList == NIL)
+		{
+			continue;
+		}
+
+		RangeTblFunction *rangeTblfunction = (RangeTblFunction *) linitial(functionList);
+
+		if (IsReadIntermediateResultFunction(rangeTblfunction->funcexpr))
+		{
 			return true;
 		}
 	}
@@ -805,7 +867,8 @@ CreateDistributedPlannedStmt(DistributedPlanningContext *planContext)
 	distributedPlan->planId = planId;
 
 	/* create final plan by combining local plan with distributed plan */
-	resultPlan = FinalizePlan(planContext->plan, distributedPlan);
+	resultPlan = FinalizePlan(planContext->plan, distributedPlan,
+							  planContext->cursorOptions);
 
 	/*
 	 * As explained above, force planning costs to be unrealistically high if
@@ -854,7 +917,9 @@ InlineCtesAndCreateDistributedPlannedStmt(uint64 planId,
 														  planContext->query,
 														  planContext->boundParams,
 														  planContext->
-														  plannerRestrictionContext);
+														  plannerRestrictionContext,
+														  planContext->
+														  cursorOptions);
 
 	return result;
 }
@@ -870,7 +935,8 @@ static PlannedStmt *
 TryCreateDistributedPlannedStmt(PlannedStmt *localPlan,
 								Query *originalQuery,
 								Query *query, ParamListInfo boundParams,
-								PlannerRestrictionContext *plannerRestrictionContext)
+								PlannerRestrictionContext *plannerRestrictionContext,
+								int cursorOptions)
 {
 	MemoryContext savedContext = CurrentMemoryContext;
 	PlannedStmt *result = NULL;
@@ -882,6 +948,7 @@ TryCreateDistributedPlannedStmt(PlannedStmt *localPlan,
 	planContext->originalQuery = originalQuery;
 	planContext->query = query;
 	planContext->plannerRestrictionContext = plannerRestrictionContext;
+	planContext->cursorOptions = cursorOptions;
 
 
 	PG_TRY();
@@ -1389,7 +1456,8 @@ GetDistributedPlan(CustomScan *customScan)
  * which can be run by the PostgreSQL executor.
  */
 PlannedStmt *
-FinalizePlan(PlannedStmt *localPlan, DistributedPlan *distributedPlan)
+FinalizePlan(PlannedStmt *localPlan, DistributedPlan *distributedPlan,
+			 int cursorOptions)
 {
 	PlannedStmt *finalPlan = NULL;
 	CustomScan *customScan = makeNode(CustomScan);
@@ -1408,6 +1476,12 @@ FinalizePlan(PlannedStmt *localPlan, DistributedPlan *distributedPlan)
 		case MULTI_EXECUTOR_ADAPTIVE:
 		{
 			customScan->methods = &AdaptiveExecutorCustomScanMethods;
+			break;
+		}
+
+		case MULTI_EXECUTOR_SORTED_MERGE:
+		{
+			customScan->methods = &SortedMergeCustomScanMethods;
 			break;
 		}
 
@@ -1450,8 +1524,8 @@ FinalizePlan(PlannedStmt *localPlan, DistributedPlan *distributedPlan)
 
 	customScan->custom_private = list_make1(distributedPlanData);
 
-	/* necessary to avoid extra Result node in PG15 */
-	customScan->flags = CUSTOMPATH_SUPPORT_BACKWARD_SCAN | CUSTOMPATH_SUPPORT_PROJECTION;
+	/* CUSTOMPATH_SUPPORT_PROJECTION avoids an extra Result node in PG15+ */
+	customScan->flags = CUSTOMPATH_SUPPORT_PROJECTION;
 
 	/*
 	 * Fast path queries cannot have any subplans by definition, so skip
@@ -1476,6 +1550,21 @@ FinalizePlan(PlannedStmt *localPlan, DistributedPlan *distributedPlan)
 	else
 	{
 		finalPlan = FinalizeRouterPlan(localPlan, customScan);
+	}
+
+	/*
+	 * For SCROLL cursors, wrap the plan in a Material node so that backward
+	 * scan works correctly with batched execution. PG's standard_planner()
+	 * already added a Material node, but Citus discarded the entire plan tree
+	 * above and replaced it with a CustomScan. Re-apply it here.
+	 *
+	 * Material is lazy (non-blocking): it fetches one tuple at a time from the
+	 * child and appends it to its own tuplestore, so batching is preserved.
+	 */
+	if ((cursorOptions & CURSOR_OPT_SCROLL) &&
+		!ExecSupportsBackwardScan(finalPlan->planTree))
+	{
+		finalPlan->planTree = materialize_finished_plan(finalPlan->planTree);
 	}
 
 	return finalPlan;
@@ -1505,7 +1594,6 @@ static void
 ConcatenateRTablesAndPerminfos(PlannedStmt *mainPlan, PlannedStmt *concatPlan)
 {
 	mainPlan->rtable = list_concat(mainPlan->rtable, concatPlan->rtable);
-#if PG_VERSION_NUM >= PG_VERSION_16
 
 	/*
 	 * concatPlan's range table list is concatenated to mainPlan's range table list
@@ -1527,7 +1615,6 @@ ConcatenateRTablesAndPerminfos(PlannedStmt *mainPlan, PlannedStmt *concatPlan)
 
 	/* finally, concatenate perminfos as well */
 	mainPlan->permInfos = list_concat(mainPlan->permInfos, concatPlan->permInfos);
-#endif
 }
 
 
@@ -1658,6 +1745,64 @@ makeTargetListFromCustomScanList(List *custom_scan_tlist)
 
 
 /*
+ * DisableTrackingQueryCountersForPlannedStmt takes a PlannedStmt and
+ * disables tracking query counters for the distributed parts of the plan.
+ */
+void
+DisableTrackingQueryCountersForPlannedStmt(PlannedStmt *plannedStmt)
+{
+	DisableTrackingQueryCountersForPlanTree(plannedStmt->planTree);
+}
+
+
+/*
+ * DisableTrackingQueryCountersForPlanTree takes a plan tree and
+ * disables tracking query counters for it if it's a distributed plan
+ * and its distributed children recursively.
+ *
+ * Note that today none of the callers provide a plan tree with subplans
+ * at any level, so we throw an error if we find any subplans to avoid
+ * unnecessary implementation.
+ */
+static void
+DisableTrackingQueryCountersForPlanTree(struct Plan *planTree)
+{
+	/* we don't expect very deep plan trees but let's be on the safe side */
+	CHECK_FOR_INTERRUPTS();
+	check_stack_depth();
+
+	if (planTree == NULL)
+	{
+		return;
+	}
+
+	DisableTrackingQueryCountersForPlanTree(planTree->lefttree);
+	DisableTrackingQueryCountersForPlanTree(planTree->righttree);
+
+	if (!IsCitusCustomScan(planTree))
+	{
+		return;
+	}
+
+	DistributedPlan *distPlan = GetDistributedPlan((CustomScan *) planTree);
+	distPlan->disableTrackingQueryCounters = true;
+
+	if (distPlan->selectPlanForModifyViaCoordinatorOrRepartition)
+	{
+		DisableTrackingQueryCountersForPlanTree(distPlan->
+												selectPlanForModifyViaCoordinatorOrRepartition
+												->planTree);
+	}
+
+	if (list_length(distPlan->subPlanList) > 0 ||
+		list_length(distPlan->usedSubPlanNodeList) > 0)
+	{
+		ereport(ERROR, (errmsg("unexpected subplans in distributed plan")));
+	}
+}
+
+
+/*
  * BlessRecordExpression ensures we can parse an anonymous composite type on the
  * target list of a query that is sent to the worker.
  *
@@ -1722,6 +1867,57 @@ BlessRecordExpression(Expr *expr)
 		BlessTupleDesc(rowTupleDesc);
 
 		typeMod = rowTupleDesc->tdtypmod;
+	}
+
+	/*
+	 * Record aggregates need blessed typmods to parse worker results.
+	 * For PG18, AGG_MATCH_RECORD allows MIN/MAX on composite types.
+	 *
+	 * Limitation: For multi-argument aggregates returning RECORD, we only
+	 * bless the first argument's type. This works for MIN/MAX (single-argument)
+	 * but may not handle custom multi-argument aggregates correctly.
+	 */
+	else if (IsA(expr, Aggref))
+	{
+		Aggref *aggref = (Aggref *) expr;
+
+		if (aggref->aggtype == RECORDOID && list_length(aggref->args) > 0)
+		{
+			if (list_length(aggref->args) > 1)
+			{
+				ereport(DEBUG2,
+						(errmsg(
+							 "blessing record aggregate with %d arguments, using first",
+							 list_length(aggref->args))));
+			}
+
+			TargetEntry *argTle = (TargetEntry *) linitial(aggref->args);
+			Oid argTypeId = exprType((Node *) argTle->expr);
+			int32 argTypeMod = exprTypmod((Node *) argTle->expr);
+
+			if (argTypeId == RECORDOID)
+			{
+				argTypeMod = BlessRecordExpression((Expr *) argTle->expr);
+			}
+
+			/* Use a RECORD TupleDesc derived from a named rowtype argument. */
+			if (type_is_rowtype(argTypeId))
+			{
+				TupleDesc argTupleDesc =
+					lookup_rowtype_tupdesc_copy(argTypeId, argTypeMod);
+
+				argTupleDesc->tdtypeid = RECORDOID;
+				argTupleDesc->tdtypmod = -1;
+				BlessTupleDesc(argTupleDesc);
+				typeMod = argTupleDesc->tdtypmod;
+			}
+
+			/*
+			 * If argTypeId is not a rowtype, we leave typeMod as -1.
+			 * This should not happen in practice since AGG_MATCH_RECORD
+			 * only matches rowtypes, but it's safe to fall through.
+			 */
+		}
 	}
 	else if (IsA(expr, ArrayExpr))
 	{
@@ -2013,18 +2209,6 @@ multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo,
 	{
 		cacheEntry = GetCitusTableCacheEntry(rte->relid);
 
-#if PG_VERSION_NUM == PG_VERSION_15
-
-		/*
-		 * Postgres 15.0 had a bug regarding inherited statistics expressions,
-		 * which is fixed in 15.1 via Postgres commit
-		 * 1f1865e9083625239769c26f68b9c2861b8d4b1c.
-		 *
-		 * Hence, we only set this value on exactly PG15.0
-		 */
-		relOptInfo->statlist = NIL;
-#endif
-
 		relationRestrictionContext->allReferenceTables &=
 			IsCitusTableTypeCacheEntry(cacheEntry, REFERENCE_TABLE);
 	}
@@ -2033,6 +2217,32 @@ multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo,
 		lappend(relationRestrictionContext->relationRestrictionList, relationRestriction);
 
 	MemoryContextSwitchTo(oldMemoryContext);
+
+#if PG_VERSION_NUM >= PG_VERSION_18
+	if (root->query_level == 1 && plannerRestrictionContext->planContext != NULL)
+	{
+		/* We're at the top query with a distributed context; see if Postgres
+		 * has changed the query tree we passed to it in distributed_planner().
+		 * This check was necessitated by PG commit 1e4351a, becuase in it the
+		 * planner modfies a copy of the passed in query tree with the consequence
+		 * that changes are not reflected back to the caller of standard_planner().
+		 */
+		Query *query = plannerRestrictionContext->planContext->query;
+		if (root->parse != query)
+		{
+			/*
+			 * The Postgres planner has reconstructed the query tree, so the query
+			 * tree our distributed context passed in (to standard_planner() is
+			 * updated to track the new query tree.
+			 */
+			ereport(DEBUG4, (errmsg(
+								 "Detected query reconstruction by Postgres planner, updating "
+								 "planContext to track it")));
+
+			plannerRestrictionContext->planContext->query = root->parse;
+		}
+	}
+#endif
 }
 
 
@@ -2410,11 +2620,13 @@ CopyPlanParamList(List *originalPlanParamList)
  * context with an empty relation restriction context and an empty join and
  * a copy of the given fast path restriction context (if present). Finally,
  * the planner restriction context is inserted to the beginning of the
- * global plannerRestrictionContextList and it is returned.
+ * global plannerRestrictionContextList and, in PG18+, given a reference to
+ * its distributed plan context.
  */
-static PlannerRestrictionContext *
-CreateAndPushPlannerRestrictionContext(
-	FastPathRestrictionContext *fastPathRestrictionContext)
+static void
+CreateAndPushPlannerRestrictionContext(DistributedPlanningContext *planContext,
+									   FastPathRestrictionContext *
+									   fastPathRestrictionContext)
 {
 	PlannerRestrictionContext *plannerRestrictionContext =
 		palloc0(sizeof(PlannerRestrictionContext));
@@ -2451,7 +2663,11 @@ CreateAndPushPlannerRestrictionContext(
 	plannerRestrictionContextList = lcons(plannerRestrictionContext,
 										  plannerRestrictionContextList);
 
-	return plannerRestrictionContext;
+	planContext->plannerRestrictionContext = plannerRestrictionContext;
+
+#if PG_VERSION_NUM >= PG_VERSION_18
+	plannerRestrictionContext->planContext = planContext;
+#endif
 }
 
 
@@ -2512,6 +2728,18 @@ CurrentPlannerRestrictionContext(void)
 static void
 PopPlannerRestrictionContext(void)
 {
+#if PG_VERSION_NUM >= PG_VERSION_18
+
+	/*
+	 * PG18+: Clear the restriction context's planContext pointer; this is done
+	 * by distributed_planner() when popping the context, but in case of error
+	 * during standard_planner() we want to clean up here also.
+	 */
+	PlannerRestrictionContext *plannerRestrictionContext =
+		(PlannerRestrictionContext *) linitial(plannerRestrictionContextList);
+	plannerRestrictionContext->planContext = NULL;
+#endif
+
 	plannerRestrictionContextList = list_delete_first(plannerRestrictionContextList);
 }
 
@@ -2775,20 +3003,26 @@ CheckPostPlanDistribution(DistributedPlanningContext *planContext, bool
 		#endif
 
 		/*
-		 * The WHERE quals have been eliminated by the Postgres planner, possibly by
-		 * an OR clause that was simplified to TRUE. In such cases, we need to check
-		 * if the planned query still requires distributed planning.
+		 * If the WHERE quals have been eliminated by the Postgres planner, possibly
+		 * by an OR clause that was simplified to TRUE, we need to check if the
+		 * planned query still requires distributed planning.
 		 */
 		if (origQuals != NULL && plannedQuals == NULL)
 		{
-			bool planHasDistTable = ListContainsDistributedTableRTE(
+			/* First check if the plan has a distributed table */
+			bool planHasDistribution = ListContainsDistributedTableRTE(
 				planContext->plan->rtable, NULL);
 
+			/* ..or a distributed subplan */
+			planHasDistribution = planHasDistribution ||
+								  PlanContainsDistributedSubPlanRTE(
+				planContext);
+
 			/*
-			 * If the Postgres plan has a distributed table, we know for sure that
+			 * The plan has a distributed relation, so we know for sure that
 			 * the query requires distributed planning.
 			 */
-			if (planHasDistTable)
+			if (planHasDistribution)
 			{
 				return true;
 			}
@@ -2801,8 +3035,16 @@ CheckPostPlanDistribution(DistributedPlanningContext *planContext, bool
 			List *rtesPostPlan = ExtractRangeTableEntryList(plannedQuery);
 			if (list_length(rtesPostPlan) < list_length(rangeTableList))
 			{
-				isDistributedQuery = ListContainsDistributedTableRTE(
+				bool hasDistTable = ListContainsDistributedTableRTE(
 					rtesPostPlan, NULL);
+				if (hasDistTable != isDistributedQuery)
+				{
+					ereport(DEBUG4, (errmsg(
+										 "Plan has flipped from distributed to local "
+										 "after Postgres planning, updating distributed to %u",
+										 hasDistTable)));
+					isDistributedQuery = hasDistTable;
+				}
 			}
 		}
 	}

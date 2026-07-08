@@ -105,15 +105,16 @@ static void EnsureObjectMetadataIsSane(int distributionArgumentIndex,
 static List * GetFunctionDependenciesForObjects(ObjectAddress *objectAddress);
 static char * SchemaOwnerName(Oid objectId);
 static bool HasMetadataWorkers(void);
-static void CreateShellTableOnWorkers(Oid relationId);
-static void CreateTableMetadataOnWorkers(Oid relationId);
-static void CreateDependingViewsOnWorkers(Oid relationId);
+static void CreateShellTableOnRemoteNodes(Oid relationId);
+static void CreateTableMetadataOnRemoteNodes(Oid relationId);
+static void CreateDependingViewsOnRemoteNodes(Oid relationId);
 static void AddTableToPublications(Oid relationId);
 static NodeMetadataSyncResult SyncNodeMetadataToNodesOptional(void);
 static bool ShouldSyncTableMetadataInternal(bool hashDistributed,
 											bool citusTableWithNoDistKey);
 static bool SyncNodeMetadataSnapshotToNode(WorkerNode *workerNode, bool raiseOnError);
 static void DropMetadataSnapshotOnNode(WorkerNode *workerNode);
+static void FetchSequenceState(Oid sequenceId, int64 *lastValue, bool *isCalled);
 static char * CreateSequenceDependencyCommand(Oid relationId, Oid sequenceId,
 											  char *columnName);
 static GrantStmt * GenerateGrantStmtForRights(ObjectType objectType,
@@ -154,7 +155,8 @@ static char * ColocationGroupCreateCommand(uint32 colocationId, int shardCount,
 static char * ColocationGroupDeleteCommand(uint32 colocationId);
 static char * RemoteSchemaIdExpressionById(Oid schemaId);
 static char * RemoteSchemaIdExpressionByName(char *schemaName);
-static char * RemoteTypeIdExpression(Oid typeId);
+static char * GetRemoteTypeName(Oid typeId);
+static char * GetRemoteTypeNamespace(Oid typeId);
 static char * RemoteCollationIdExpression(Oid colocationId);
 static char * RemoteTableIdExpression(Oid relationId);
 
@@ -264,19 +266,19 @@ start_metadata_sync_to_all_nodes(PG_FUNCTION_ARGS)
 
 
 /*
- * SyncCitusTableMetadata syncs citus table metadata to worker nodes with metadata.
+ * SyncCitusTableMetadata syncs citus table metadata to remote nodes with metadata.
  * Our definition of metadata includes the shell table and its inter relations with
  * other shell tables, corresponding pg_dist_object, pg_dist_partiton, pg_dist_shard
  * and pg_dist_shard placement entries. This function also propagates the views that
- * depend on the given relation, to the metadata workers, and adds the relation to
+ * depend on the given relation, to the remote metadata nodes, and adds the relation to
  * the appropriate publications.
  */
 void
 SyncCitusTableMetadata(Oid relationId)
 {
-	CreateShellTableOnWorkers(relationId);
-	CreateTableMetadataOnWorkers(relationId);
-	CreateInterTableRelationshipOfRelationOnWorkers(relationId);
+	CreateShellTableOnRemoteNodes(relationId);
+	CreateTableMetadataOnRemoteNodes(relationId);
+	CreateInterTableRelationshipOfRelationOnRemoteNodes(relationId);
 
 	if (!IsTableOwnedByExtension(relationId))
 	{
@@ -285,17 +287,17 @@ SyncCitusTableMetadata(Oid relationId)
 		MarkObjectDistributed(&relationAddress);
 	}
 
-	CreateDependingViewsOnWorkers(relationId);
+	CreateDependingViewsOnRemoteNodes(relationId);
 	AddTableToPublications(relationId);
 }
 
 
 /*
- * CreateDependingViewsOnWorkers takes a relationId and creates the views that depend on
- * that relation on workers with metadata. Propagated views are marked as distributed.
+ * CreateDependingViewsOnRemoteNodes takes a relationId and creates the views that depend on
+ * that relation on remote nodes with metadata. Propagated views are marked as distributed.
  */
 static void
-CreateDependingViewsOnWorkers(Oid relationId)
+CreateDependingViewsOnRemoteNodes(Oid relationId)
 {
 	List *views = GetDependingViews(relationId);
 
@@ -305,7 +307,7 @@ CreateDependingViewsOnWorkers(Oid relationId)
 		return;
 	}
 
-	SendCommandToWorkersWithMetadata(DISABLE_DDL_PROPAGATION);
+	SendCommandToRemoteNodesWithMetadata(DISABLE_DDL_PROPAGATION);
 
 	Oid viewOid = InvalidOid;
 	foreach_declared_oid(viewOid, views)
@@ -322,18 +324,18 @@ CreateDependingViewsOnWorkers(Oid relationId)
 		char *createViewCommand = CreateViewDDLCommand(viewOid);
 		char *alterViewOwnerCommand = AlterViewOwnerCommand(viewOid);
 
-		SendCommandToWorkersWithMetadata(createViewCommand);
-		SendCommandToWorkersWithMetadata(alterViewOwnerCommand);
+		SendCommandToRemoteNodesWithMetadata(createViewCommand);
+		SendCommandToRemoteNodesWithMetadata(alterViewOwnerCommand);
 
 		MarkObjectDistributed(viewAddress);
 	}
 
-	SendCommandToWorkersWithMetadata(ENABLE_DDL_PROPAGATION);
+	SendCommandToRemoteNodesWithMetadata(ENABLE_DDL_PROPAGATION);
 }
 
 
 /*
- * AddTableToPublications adds the table to a publication on workers with metadata.
+ * AddTableToPublications adds the table to a publication on remote nodes with metadata.
  */
 static void
 AddTableToPublications(Oid relationId)
@@ -346,7 +348,7 @@ AddTableToPublications(Oid relationId)
 
 	Oid publicationId = InvalidOid;
 
-	SendCommandToWorkersWithMetadata(DISABLE_DDL_PROPAGATION);
+	SendCommandToRemoteNodesWithMetadata(DISABLE_DDL_PROPAGATION);
 
 	foreach_declared_oid(publicationId, publicationIds)
 	{
@@ -368,10 +370,10 @@ AddTableToPublications(Oid relationId)
 			GetAlterPublicationTableDDLCommand(publicationId, relationId, isAdd);
 
 		/* send ALTER PUBLICATION .. ADD to workers with metadata */
-		SendCommandToWorkersWithMetadata(alterPublicationCommand);
+		SendCommandToRemoteNodesWithMetadata(alterPublicationCommand);
 	}
 
-	SendCommandToWorkersWithMetadata(ENABLE_DDL_PROPAGATION);
+	SendCommandToRemoteNodesWithMetadata(ENABLE_DDL_PROPAGATION);
 }
 
 
@@ -459,6 +461,17 @@ stop_metadata_sync_to_node(PG_FUNCTION_ARGS)
 		{
 			ereport(NOTICE, (errmsg("dropping metadata on the node (%s,%d)",
 									nodeNameString, nodePort)));
+
+			/*
+			 * Note that we don't yet reset the local group id on the to node we
+			 * stop syncing metadata to. This is because, resetting the local group
+			 * id means setting it to COORDINATOR_GROUP_ID, and we don't yet want it
+			 * to assume that it's the coordinator as we still have it as a worker
+			 * in the metadata.
+			 *
+			 * We reset local group id only after / if we remove the node from the
+			 * metadata, see RemoveNodeFromCluster().
+			 */
 			DropMetadataSnapshotOnNode(workerNode);
 		}
 		else
@@ -700,8 +713,6 @@ DropMetadataSnapshotOnNode(WorkerNode *workerNode)
 									  WorkerDropAllShellTablesCommand(singleTransaction));
 	dropMetadataCommandList = list_concat(dropMetadataCommandList,
 										  NodeMetadataDropCommands());
-	dropMetadataCommandList = lappend(dropMetadataCommandList,
-									  LocalGroupIdUpdateCommand(0));
 
 	/* remove all dist table and object/table related metadata afterwards */
 	dropMetadataCommandList = lappend(dropMetadataCommandList, DELETE_ALL_PARTITIONS);
@@ -1480,11 +1491,18 @@ DDLCommandsForSequence(Oid sequenceOid, char *ownerName)
 	Oid sequenceTypeOid = sequenceData->seqtypid;
 	char *typeName = format_type_be(sequenceTypeOid);
 
-	/* create schema if needed */
+	/* prevent concurrent updates to the sequence until the end of the transaction */
+	LockRelationOid(sequenceOid, RowExclusiveLock);
+
+	int64 lastValue = 0;
+	bool isCalled = false;
+	FetchSequenceState(sequenceOid, &lastValue, &isCalled);
+
 	appendStringInfo(wrappedSequenceDef,
 					 WORKER_APPLY_SEQUENCE_COMMAND,
 					 escapedSequenceDef,
-					 quote_literal_cstr(typeName));
+					 quote_literal_cstr(typeName),
+					 lastValue, isCalled ? "true" : "false");
 
 	appendStringInfo(sequenceGrantStmt,
 					 "ALTER SEQUENCE %s OWNER TO %s", sequenceName,
@@ -1957,9 +1975,12 @@ SequenceDependencyCommandList(Oid relationId)
 
 
 /*
- * IdentitySequenceDependencyCommandList generate a command to execute
- * a UDF (WORKER_ADJUST_IDENTITY_COLUMN_SEQ_RANGES) on workers to modify the identity
- * columns min/max values to produce unique values on workers.
+ * IdentitySequenceDependencyCommandList, generates a list of commands to execute
+ * WORKER_ADJUST_IDENTITY_COLUMN_SEQ_SETTINGS for each identity sequence of
+ * the given relation on remote nodes to i) set identity column min/max
+ * values to produce unique values on workers and ii) set the sequence
+ * last_value and is_called on the coordinator to continue after the maximum
+ * value used so far.
  */
 List *
 IdentitySequenceDependencyCommandList(Oid targetRelationId)
@@ -1969,37 +1990,122 @@ IdentitySequenceDependencyCommandList(Oid targetRelationId)
 	Relation relation = relation_open(targetRelationId, AccessShareLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(relation);
 
-	bool tableHasIdentityColumn = false;
 	for (int attributeIndex = 0; attributeIndex < tupleDescriptor->natts;
 		 attributeIndex++)
 	{
-		Form_pg_attribute attributeForm = TupleDescAttr(tupleDescriptor, attributeIndex);
+		Form_pg_attribute attributeForm = TupleDescAttr(tupleDescriptor,
+														attributeIndex);
 
-		if (attributeForm->attidentity)
+		if (attributeForm->attisdropped || !attributeForm->attidentity)
 		{
-			tableHasIdentityColumn = true;
-			break;
+			continue;
 		}
+
+		bool missingOk = false;
+		Oid sequenceId = getIdentitySequence(
+			identitySequenceRelation_compat(relation),
+			attributeForm->attnum,
+			missingOk
+			);
+
+		char *qualifiedSequenceName = generate_qualified_relation_name(sequenceId);
+
+		/* prevent concurrent updates to the sequence until the end of the transaction */
+		LockRelationOid(sequenceId, RowExclusiveLock);
+
+		int64 lastValue = 0;
+		bool isCalled = false;
+		FetchSequenceState(sequenceId, &lastValue, &isCalled);
+
+		StringInfo stringInfo = makeStringInfo();
+		appendStringInfo(stringInfo,
+						 WORKER_ADJUST_IDENTITY_COLUMN_SEQ_SETTINGS,
+						 quote_literal_cstr(qualifiedSequenceName),
+						 lastValue, isCalled ? "true" : "false");
+
+		commandList = lappend(commandList,
+							  makeTableDDLCommandString(stringInfo->data));
 	}
 
 	relation_close(relation, NoLock);
 
-	if (tableHasIdentityColumn)
-	{
-		StringInfo stringInfo = makeStringInfo();
-		char *tableName = generate_qualified_relation_name(targetRelationId);
-
-		appendStringInfo(stringInfo,
-						 WORKER_ADJUST_IDENTITY_COLUMN_SEQ_RANGES,
-						 quote_literal_cstr(tableName));
-
-
-		commandList = lappend(commandList,
-							  makeTableDDLCommandString(
-								  stringInfo->data));
-	}
-
 	return commandList;
+}
+
+
+/*
+ * FetchSequenceState fetches the last_value and is_called for the sequence with
+ * given oid.
+ */
+static void
+FetchSequenceState(Oid sequenceId, int64 *lastValue, bool *isCalled)
+{
+	char *qualifiedSequenceName = generate_qualified_relation_name(sequenceId);
+
+	StringInfo query = makeStringInfo();
+	appendStringInfo(query, "SELECT last_value, is_called FROM %s",
+					 qualifiedSequenceName);
+
+	bool spiConnected = false;
+
+	PG_TRY();
+	{
+		int spiStatus = SPI_connect();
+		if (spiStatus != SPI_OK_CONNECT)
+		{
+			elog(ERROR, "SPI_connect failed: %d", spiStatus);
+		}
+
+		spiConnected = true;
+
+		spiStatus = SPI_execute(query->data, true, 1);
+		if (spiStatus != SPI_OK_SELECT)
+		{
+			elog(ERROR, "SPI_execute failed: %d", spiStatus);
+		}
+
+		if (SPI_processed != 1 || SPI_tuptable == NULL ||
+			SPI_tuptable->tupdesc == NULL ||
+			SPI_tuptable->tupdesc->natts != 2)
+		{
+			elog(ERROR, "could not properly fetch last_value for sequence %s",
+				 qualifiedSequenceName);
+		}
+
+		bool isNull = false;
+
+		Datum lastValueDatum = SPI_getbinval(SPI_tuptable->vals[0],
+											 SPI_tuptable->tupdesc,
+											 1, &isNull);
+		if (isNull)
+		{
+			elog(ERROR, "last_value for sequence %s is NULL", qualifiedSequenceName);
+		}
+
+		*lastValue = DatumGetInt64(lastValueDatum);
+
+		Datum isCalledDatum = SPI_getbinval(SPI_tuptable->vals[0],
+											SPI_tuptable->tupdesc,
+											2, &isNull);
+		if (isNull)
+		{
+			elog(ERROR, "is_called for sequence %s is NULL", qualifiedSequenceName);
+		}
+
+		*isCalled = DatumGetBool(isCalledDatum);
+
+		SPI_finish();
+		spiConnected = false;
+	}
+	PG_CATCH();
+	{
+		if (spiConnected)
+		{
+			SPI_finish();
+		}
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
 }
 
 
@@ -2752,11 +2858,11 @@ HasMetadataWorkers(void)
 
 
 /*
- * CreateInterTableRelationshipOfRelationOnWorkers create inter table relationship
- * for the the given relation id on each worker node with metadata.
+ * CreateInterTableRelationshipOfRelationOnRemoteNodes create inter table relationship
+ * for the the given relation id on each remote node with metadata.
  */
 void
-CreateInterTableRelationshipOfRelationOnWorkers(Oid relationId)
+CreateInterTableRelationshipOfRelationOnRemoteNodes(Oid relationId)
 {
 	/* if the table is owned by an extension we don't create */
 	bool tableOwnedByExtension = IsTableOwnedByExtension(relationId);
@@ -2769,12 +2875,12 @@ CreateInterTableRelationshipOfRelationOnWorkers(Oid relationId)
 		InterTableRelationshipOfRelationCommandList(relationId);
 
 	/* prevent recursive propagation */
-	SendCommandToWorkersWithMetadata(DISABLE_DDL_PROPAGATION);
+	SendCommandToRemoteNodesWithMetadata(DISABLE_DDL_PROPAGATION);
 
 	const char *command = NULL;
 	foreach_declared_ptr(command, commandList)
 	{
-		SendCommandToWorkersWithMetadata(command);
+		SendCommandToRemoteNodesWithMetadata(command);
 	}
 }
 
@@ -2802,63 +2908,85 @@ InterTableRelationshipOfRelationCommandList(Oid relationId)
 
 
 /*
- * CreateShellTableOnWorkers creates the shell table on each worker node with metadata
+ * CreateShellTableOnRemoteNodes creates the shell table on each remote node with metadata
  * including sequence dependency and truncate triggers.
  */
 static void
-CreateShellTableOnWorkers(Oid relationId)
+CreateShellTableOnRemoteNodes(Oid relationId)
 {
 	if (IsTableOwnedByExtension(relationId))
 	{
 		return;
 	}
 
-	List *commandList = list_make1(DISABLE_DDL_PROPAGATION);
-
+	/* 1 - collect commands to be executed on remote workers and execute them */
 	IncludeSequenceDefaults includeSequenceDefaults = WORKER_NEXTVAL_SEQUENCE_DEFAULTS;
 	IncludeIdentities includeIdentityDefaults = INCLUDE_IDENTITY;
-
 	bool creatingShellTableOnRemoteNode = true;
 	List *tableDDLCommands = GetFullTableCreationCommands(relationId,
 														  includeSequenceDefaults,
 														  includeIdentityDefaults,
 														  creatingShellTableOnRemoteNode);
 
+	SendCommandToRemoteWorkersWithMetadata(DISABLE_DDL_PROPAGATION);
+
 	TableDDLCommand *tableDDLCommand = NULL;
 	foreach_declared_ptr(tableDDLCommand, tableDDLCommands)
 	{
 		Assert(CitusIsA(tableDDLCommand, TableDDLCommand));
-		commandList = lappend(commandList, GetTableDDLCommand(tableDDLCommand));
+		SendCommandToRemoteWorkersWithMetadata(GetTableDDLCommand(tableDDLCommand));
 	}
 
-	const char *command = NULL;
-	foreach_declared_ptr(command, commandList)
+	/*
+	 * 2 - if this is not the coordinator, need to create the shell table on
+	 * the coordinator as well.
+	 *
+	 * The only difference in the commands to be executed on coordinator vs
+	 * remote workers is that while we use WORKER_NEXTVAL_SEQUENCE_DEFAULTS
+	 * for remote workers to set int / smallint sequence defaults, we use
+	 * NEXTVAL_SEQUENCE_DEFAULTS for coordinator to set the defaults to
+	 * nextval(..).
+	 */
+	if (!IsCoordinator())
 	{
-		SendCommandToWorkersWithMetadata(command);
+		includeSequenceDefaults = NEXTVAL_SEQUENCE_DEFAULTS;
+		tableDDLCommands = GetFullTableCreationCommands(relationId,
+														includeSequenceDefaults,
+														includeIdentityDefaults,
+														creatingShellTableOnRemoteNode);
+
+		SendCommandToCoordinator(DISABLE_DDL_PROPAGATION);
+
+		tableDDLCommand = NULL;
+		foreach_declared_ptr(tableDDLCommand, tableDDLCommands)
+		{
+			Assert(CitusIsA(tableDDLCommand, TableDDLCommand));
+			SendCommandToCoordinator(GetTableDDLCommand(tableDDLCommand));
+		}
 	}
 }
 
 
 /*
- * CreateTableMetadataOnWorkers creates the list of commands needed to create the
- * metadata of the given distributed table and sends these commands to all metadata
- * workers i.e. workers with hasmetadata=true. Before sending the commands, in order
+ * CreateTableMetadataOnRemoteNodes creates the list of commands needed to
+ * create the metadata of the given distributed table and sends these commands to all
+ * remote metadata nodes i.e. hasmetadata=true. Before sending the commands, in order
  * to prevent recursive propagation, DDL propagation on workers are disabled with a
  * `SET citus.enable_ddl_propagation TO off;` command.
  */
 static void
-CreateTableMetadataOnWorkers(Oid relationId)
+CreateTableMetadataOnRemoteNodes(Oid relationId)
 {
 	List *commandList = CitusTableMetadataCreateCommandList(relationId);
 
 	/* prevent recursive propagation */
-	SendCommandToWorkersWithMetadata(DISABLE_DDL_PROPAGATION);
+	SendCommandToRemoteNodesWithMetadata(DISABLE_DDL_PROPAGATION);
 
 	/* send the commands one by one */
 	const char *command = NULL;
 	foreach_declared_ptr(command, commandList)
 	{
-		SendCommandToWorkersWithMetadata(command);
+		SendCommandToRemoteNodesWithMetadata(command);
 	}
 }
 
@@ -3195,7 +3323,7 @@ SignalMetadataSyncDaemon(Oid database, int sig)
 	int backendCount = pgstat_fetch_stat_numbackends();
 	for (int backend = 1; backend <= backendCount; backend++)
 	{
-		LocalPgBackendStatus *localBeEntry = pgstat_fetch_stat_local_beentry(backend);
+		LocalPgBackendStatus *localBeEntry = pgstat_get_local_beentry_by_index(backend);
 		if (!localBeEntry)
 		{
 			continue;
@@ -3666,6 +3794,12 @@ citus_internal_delete_placement_metadata(PG_FUNCTION_ARGS)
 	PG_ENSURE_ARGNOTNULL(0, "placement_id");
 	int64 placementId = PG_GETARG_INT64(0);
 
+	bool missingOk = false;
+	GroupShardPlacement *placement = LookupGroupPlacementByPlacementId(placementId,
+																	   missingOk);
+
+	EnsureShardOwner(placement->shardId, missingOk);
+
 	if (!ShouldSkipMetadataChecks())
 	{
 		/* this UDF is not allowed allowed for executing as a separate command */
@@ -4037,6 +4171,14 @@ citus_internal_add_tenant_schema(PG_FUNCTION_ARGS)
 	PG_ENSURE_ARGNOTNULL(1, "colocation_id");
 	uint32 colocationId = PG_GETARG_INT32(1);
 
+	EnsureSchemaOwner(schemaId);
+
+	if (!ShouldSkipMetadataChecks())
+	{
+		/* this UDF is not allowed allowed for executing as a separate command */
+		EnsureCitusInitiatedOperation();
+	}
+
 	InsertTenantSchemaLocally(schemaId, colocationId);
 
 	PG_RETURN_VOID();
@@ -4058,6 +4200,14 @@ citus_internal_delete_tenant_schema(PG_FUNCTION_ARGS)
 
 	PG_ENSURE_ARGNOTNULL(0, "schema_id");
 	Oid schemaId = PG_GETARG_OID(0);
+
+	EnsureSchemaOwner(schemaId);
+
+	if (!ShouldSkipMetadataChecks())
+	{
+		/* this UDF is not allowed allowed for executing as a separate command */
+		EnsureCitusInitiatedOperation();
+	}
 
 	DeleteTenantSchemaLocally(schemaId);
 
@@ -4086,6 +4236,8 @@ citus_internal_update_none_dist_table_metadata(PG_FUNCTION_ARGS)
 
 	PG_ENSURE_ARGNOTNULL(3, "auto_converted");
 	bool autoConverted = PG_GETARG_BOOL(3);
+
+	EnsureTableOwner(relationId);
 
 	if (!ShouldSkipMetadataChecks())
 	{
@@ -4179,7 +4331,7 @@ SyncNewColocationGroupToNodes(uint32 colocationId, int shardCount, int replicati
 	 * We require superuser for all pg_dist_colocation operations because we have
 	 * no reasonable way of restricting access.
 	 */
-	SendCommandToWorkersWithMetadataViaSuperUser(command);
+	SendCommandToRemoteNodesWithMetadataViaSuperUser(command);
 }
 
 
@@ -4192,13 +4344,53 @@ ColocationGroupCreateCommand(uint32 colocationId, int shardCount, int replicatio
 {
 	StringInfo insertColocationCommand = makeStringInfo();
 
+	/*
+	 * Get type name and schema separately to defer type resolution.
+	 * This approach matches how SendColocationMetadataCommands handles types.
+	 */
+	char *typeName = GetRemoteTypeName(distributionColumnType);
+	char *typeSchemaName = GetRemoteTypeNamespace(distributionColumnType);
+
 	appendStringInfo(insertColocationCommand,
-					 "SELECT citus_internal.add_colocation_metadata("
-					 "%d, %d, %d, %s, %s)",
+					 "WITH colocation_data("
+					 "colocationid, shardcount, replicationfactor, "
+					 "typeschema, typename, collationid) "
+					 "AS (VALUES (%d, %d, %d, ",
 					 colocationId,
 					 shardCount,
-					 replicationFactor,
-					 RemoteTypeIdExpression(distributionColumnType),
+					 replicationFactor);
+
+	if (typeSchemaName != NULL && typeName != NULL)
+	{
+		/* Use quote_identifier so the schema name can be cast to regnamespace */
+		appendStringInfo(insertColocationCommand,
+						 "%s, %s, ",
+						 quote_literal_cstr(quote_identifier(typeSchemaName)),
+						 quote_literal_cstr(typeName));
+	}
+	else if (typeName != NULL)
+	{
+		appendStringInfo(insertColocationCommand,
+						 "NULL, %s, ",
+						 quote_literal_cstr(typeName));
+	}
+	else
+	{
+		appendStringInfo(insertColocationCommand,
+						 "NULL, NULL, ");
+	}
+
+	appendStringInfo(insertColocationCommand,
+					 "%s)) "
+					 "SELECT citus_internal.add_colocation_metadata("
+					 "colocationid, shardcount, replicationfactor, "
+					 "coalesce(t.oid, 0), collationid) "
+					 "FROM colocation_data "
+					 "LEFT JOIN pg_type t ON ("
+					 "typename = t.typname "
+					 "AND (typeschema IS NULL OR "
+					 "t.typnamespace = "
+					 "(SELECT oid FROM pg_namespace WHERE nspname = typeschema)))",
 					 RemoteCollationIdExpression(distributionColumnCollation));
 
 	return insertColocationCommand->data;
@@ -4206,37 +4398,61 @@ ColocationGroupCreateCommand(uint32 colocationId, int shardCount, int replicatio
 
 
 /*
- * RemoteTypeIdExpression returns an expression in text form that can
- * be used to obtain the OID of a type on a different node when included
- * in a query string.
+ * GetRemoteTypeName returns the unqualified name of a type.
+ * Returns NULL for InvalidOid.
  */
 static char *
-RemoteTypeIdExpression(Oid typeId)
+GetRemoteTypeName(Oid typeId)
 {
-	/* by default, use 0 (InvalidOid) */
-	char *expression = "0";
-
-	/* we also have pg_dist_colocation entries for reference tables */
-	if (typeId != InvalidOid)
+	if (typeId == InvalidOid)
 	{
-		char *typeName = format_type_extended(typeId, -1,
-											  FORMAT_TYPE_FORCE_QUALIFY |
-											  FORMAT_TYPE_ALLOW_INVALID);
-
-		/* format_type_extended returns ??? in case of an unknown type */
-		if (strcmp(typeName, "???") != 0)
-		{
-			StringInfo regtypeExpression = makeStringInfo();
-
-			appendStringInfo(regtypeExpression,
-							 "%s::regtype",
-							 quote_literal_cstr(typeName));
-
-			expression = regtypeExpression->data;
-		}
+		return NULL;
 	}
 
-	return expression;
+	HeapTuple typeTuple = SearchSysCache1(TYPEOID, ObjectIdGetDatum(typeId));
+	if (!HeapTupleIsValid(typeTuple))
+	{
+		return NULL;
+	}
+
+	Form_pg_type typeForm = (Form_pg_type) GETSTRUCT(typeTuple);
+	char *typeName = pstrdup(NameStr(typeForm->typname));
+
+	ReleaseSysCache(typeTuple);
+	return typeName;
+}
+
+
+/*
+ * GetRemoteTypeNamespace returns the schema name of a type.
+ * Returns NULL for InvalidOid or types in pg_catalog.
+ */
+static char *
+GetRemoteTypeNamespace(Oid typeId)
+{
+	if (typeId == InvalidOid)
+	{
+		return NULL;
+	}
+
+	HeapTuple typeTuple = SearchSysCache1(TYPEOID, ObjectIdGetDatum(typeId));
+	if (!HeapTupleIsValid(typeTuple))
+	{
+		return NULL;
+	}
+
+	Form_pg_type typeForm = (Form_pg_type) GETSTRUCT(typeTuple);
+	Oid typeNamespace = typeForm->typnamespace;
+
+	ReleaseSysCache(typeTuple);
+
+	/* Don't include schema for pg_catalog types for backward compatibility */
+	if (typeNamespace == PG_CATALOG_NAMESPACE)
+	{
+		return NULL;
+	}
+
+	return get_namespace_name(typeNamespace);
 }
 
 
@@ -4292,7 +4508,7 @@ SyncDeleteColocationGroupToNodes(uint32 colocationId)
 	 * We require superuser for all pg_dist_colocation operations because we have
 	 * no reasonable way of restricting access.
 	 */
-	SendCommandToWorkersWithMetadataViaSuperUser(command);
+	SendCommandToRemoteNodesWithMetadataViaSuperUser(command);
 }
 
 
@@ -4953,19 +5169,52 @@ SendColocationMetadataCommands(MetadataSyncContext *context)
 		StringInfo colocationGroupCreateCommand = makeStringInfo();
 		appendStringInfo(colocationGroupCreateCommand,
 						 "WITH colocation_group_data (colocationid, shardcount, "
-						 "replicationfactor, distributioncolumntype, "
+						 "replicationfactor, distributioncolumntypeschema, "
+						 "distributioncolumntypename, "
 						 "distributioncolumncollationname, "
 						 "distributioncolumncollationschema)  AS (VALUES ");
 
 		Form_pg_dist_colocation colocationForm =
 			(Form_pg_dist_colocation) GETSTRUCT(nextTuple);
 
+		/*
+		 * Get the type name and schema separately to defer type resolution.
+		 * This is necessary when the type (e.g., a domain) is defined in a
+		 * non-public schema that may not exist on the worker yet.
+		 */
+		char *typeName =
+			GetRemoteTypeName(colocationForm->distributioncolumntype);
+		char *typeSchemaName =
+			GetRemoteTypeNamespace(colocationForm->distributioncolumntype);
+
 		appendStringInfo(colocationGroupCreateCommand,
-						 "(%d, %d, %d, %s, ",
+						 "(%d, %d, %d, ",
 						 colocationForm->colocationid,
 						 colocationForm->shardcount,
-						 colocationForm->replicationfactor,
-						 RemoteTypeIdExpression(colocationForm->distributioncolumntype));
+						 colocationForm->replicationfactor);
+
+		/* Add type schema and name */
+		if (typeSchemaName != NULL && typeName != NULL)
+		{
+			/* Use quote_identifier so the schema name can be cast to regnamespace */
+			appendStringInfo(colocationGroupCreateCommand,
+							 "%s, %s, ",
+							 quote_literal_cstr(quote_identifier(typeSchemaName)),
+							 quote_literal_cstr(typeName));
+		}
+		else if (typeName != NULL)
+		{
+			/* Type is in pg_catalog or no schema qualifier needed */
+			appendStringInfo(colocationGroupCreateCommand,
+							 "NULL, %s, ",
+							 quote_literal_cstr(typeName));
+		}
+		else
+		{
+			/* InvalidOid or unknown type */
+			appendStringInfo(colocationGroupCreateCommand,
+							 "NULL, NULL, ");
+		}
 
 		/*
 		 * For collations, include the names in the VALUES section and then
@@ -5001,14 +5250,25 @@ SendColocationMetadataCommands(MetadataSyncContext *context)
 							 "NULL, NULL)");
 		}
 
+		/*
+		 * Use LEFT JOIN with pg_type to resolve the type OID at runtime.
+		 * This defers type resolution until execution on the worker, allowing
+		 * the type and its schema to be created first by dependency commands.
+		 */
 		appendStringInfo(colocationGroupCreateCommand,
 						 ") SELECT citus_internal.add_colocation_metadata("
 						 "colocationid, shardcount, replicationfactor, "
-						 "distributioncolumntype, coalesce(c.oid, 0)) "
-						 "FROM colocation_group_data d LEFT JOIN pg_collation c "
+						 "coalesce(t.oid, 0), coalesce(c.oid, 0)) "
+						 "FROM colocation_group_data d "
+						 "LEFT JOIN pg_type t ON ("
+						 "d.distributioncolumntypename = t.typname "
+						 "AND (d.distributioncolumntypeschema IS NULL OR "
+						 "t.typnamespace = (SELECT oid FROM pg_namespace WHERE "
+						 "nspname = d.distributioncolumntypeschema))) "
+						 "LEFT JOIN pg_collation c "
 						 "ON (d.distributioncolumncollationname = c.collname "
-						 "AND d.distributioncolumncollationschema::regnamespace"
-						 " = c.collnamespace)");
+						 "AND c.collnamespace = (SELECT oid FROM pg_namespace WHERE "
+						 "nspname = d.distributioncolumncollationschema))");
 
 		List *commandList = list_make1(colocationGroupCreateCommand->data);
 		SendOrCollectCommandListToActivatedNodes(context, commandList);

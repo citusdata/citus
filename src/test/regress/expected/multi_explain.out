@@ -1,14 +1,13 @@
 --
 -- MULTI_EXPLAIN
 --
--- This test file has an alternative output because of the following in PG16:
--- https://github.com/postgres/postgres/commit/1349d2790bf48a4de072931c722f39337e72055e
--- https://github.com/postgres/postgres/commit/f4c7c410ee4a7baa06f51ebb8d5333c169691dd3
--- The alternative output can be deleted when we drop support for PG15
+-- This test file has an alternative output because of the following in PG18:
+-- https://github.com/postgres/postgres/commit/161320b4b960ee4fe918959be6529ae9b106ea5a
+-- The alternative output can be deleted when we drop support for PG17
 --
 SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int >= 16 AS server_version_ge_16;
- server_version_ge_16
+SELECT substring(:'server_version', '\d+')::int >= 18 AS server_version_ge_18;
+ server_version_ge_18
 ---------------------------------------------------------------------
  t
 (1 row)
@@ -111,6 +110,7 @@ EXPLAIN (COSTS FALSE, FORMAT JSON)
       "Node Type": "Sort",
       "Parallel Aware": false,
       "Async Capable": false,
+      "Disabled": false,
       "Sort Key": ["(COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint))", "remote_scan.l_quantity"],
       "Plans": [
         {
@@ -120,6 +120,7 @@ EXPLAIN (COSTS FALSE, FORMAT JSON)
           "Parent Relationship": "Outer",
           "Parallel Aware": false,
           "Async Capable": false,
+          "Disabled": false,
           "Group Key": ["remote_scan.l_quantity"],
           "Plans": [
             {
@@ -128,6 +129,7 @@ EXPLAIN (COSTS FALSE, FORMAT JSON)
               "Custom Plan Provider": "Citus Adaptive",
               "Parallel Aware": false,
               "Async Capable": false,
+              "Disabled": false,
               "Distributed Query": {
                 "Job": {
                   "Task Count": 2,
@@ -144,6 +146,7 @@ EXPLAIN (COSTS FALSE, FORMAT JSON)
                               "Partial Mode": "Simple",
                               "Parallel Aware": false,
                               "Async Capable": false,
+                              "Disabled": false,
                               "Group Key": ["l_quantity"],
                               "Plans": [
                                 {
@@ -152,7 +155,8 @@ EXPLAIN (COSTS FALSE, FORMAT JSON)
                                   "Parallel Aware": false,
                                   "Async Capable": false,
                                   "Relation Name": "lineitem_360000",
-                                  "Alias": "lineitem"
+                                  "Alias": "lineitem",
+                                  "Disabled": false
                                 }
                               ]
                             }
@@ -477,22 +481,20 @@ EXPLAIN (COSTS FALSE)
 	JOIN orders ON l_orderkey = o_orderkey AND l_quantity < 5.0
 	ORDER BY l_quantity LIMIT 10;
 Limit
-  ->  Sort
-        Sort Key: remote_scan.l_quantity
-        ->  Custom Scan (Citus Adaptive)
-              Task Count: 2
-              Tasks Shown: One of 2
-              ->  Task
-                    Node: host=localhost port=xxxxx dbname=regression
-                    ->  Limit
-                          ->  Sort
-                                Sort Key: lineitem.l_quantity
-                                ->  Hash Join
-                                      Hash Cond: (lineitem.l_orderkey = orders.o_orderkey)
-                                      ->  Seq Scan on lineitem_360000 lineitem
-                                            Filter: (l_quantity < 5.0)
-                                      ->  Hash
-                                            ->  Seq Scan on orders_360002 orders
+  ->  Custom Scan (Citus Sorted Merge Adaptive)
+        Task Count: 2
+        Tasks Shown: One of 2
+        ->  Task
+              Node: host=localhost port=xxxxx dbname=regression
+              ->  Limit
+                    ->  Sort
+                          Sort Key: lineitem.l_quantity
+                          ->  Hash Join
+                                Hash Cond: (lineitem.l_orderkey = orders.o_orderkey)
+                                ->  Seq Scan on lineitem_360000 lineitem
+                                      Filter: (l_quantity < 5.0)
+                                ->  Hash
+                                      ->  Seq Scan on orders_360002 orders
 -- Test insert
 EXPLAIN (COSTS FALSE)
 	INSERT INTO lineitem VALUES (1,0), (2, 0), (3, 0), (4, 0);
@@ -519,20 +521,22 @@ Custom Scan (Citus Adaptive)
                     Filter: (l_partkey = 0)
 -- Test analyze (with TIMING FALSE and SUMMARY FALSE for consistent output)
 BEGIN;
+select public.explain_filter('
 EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE, BUFFERS OFF)
 	UPDATE lineitem
 	SET l_suppkey = 12
-	WHERE l_orderkey = 1 AND l_partkey = 0;
-Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
-  Task Count: 1
+	WHERE l_orderkey = 1 AND l_partkey = 0
+	');
+Custom Scan (Citus Adaptive) (actual rows=N loops=N)
+  Task Count: N
   Tasks Shown: All
   ->  Task
-        Node: host=localhost port=xxxxx dbname=regression
-        ->  Update on lineitem_360000 lineitem (actual rows=0 loops=1)
-              ->  Index Scan using lineitem_pkey_360000 on lineitem_360000 lineitem (actual rows=0 loops=1)
-                    Index Cond: (l_orderkey = 1)
-                    Filter: (l_partkey = 0)
-                    Rows Removed by Filter: 6
+        Node: host=localhost port=N dbname=regression
+        ->  Update on lineitem_360000 lineitem (actual rows=N loops=N)
+              ->  Index Scan using lineitem_pkey_360000 on lineitem_360000 lineitem (actual rows=N loops=N)
+                    Index Cond: (l_orderkey = N)
+                    Filter: (l_partkey = N)
+                    Rows Removed by Filter: N
 ROLLBACk;
 -- Test delete
 EXPLAIN (COSTS FALSE)
@@ -960,31 +964,29 @@ ORDER BY
 LIMIT
 	10;
 Limit
-  ->  Sort
-        Sort Key: remote_scan.user_lastseen DESC
-        ->  Custom Scan (Citus Adaptive)
-              Task Count: 4
-              Tasks Shown: One of 4
-              ->  Task
-                    Node: host=localhost port=xxxxx dbname=regression
-                    ->  Limit
-                          ->  Sort
-                                Sort Key: (max(users.lastseen)) DESC
-                                ->  GroupAggregate
-                                      Group Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id)
-                                      ->  Sort
-                                            Sort Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id), events.event_time
-                                            ->  Nested Loop Left Join
-                                                  ->  Limit
-                                                        ->  Sort
-                                                              Sort Key: users.lastseen DESC
-                                                              ->  Seq Scan on users_1400289 users
-                                                                    Filter: ((composite_id >= '(1,-9223372036854775808)'::user_composite_type) AND (composite_id <= '(1,9223372036854775807)'::user_composite_type))
-                                                  ->  Limit
-                                                        ->  Sort
-                                                              Sort Key: events.event_time DESC
-                                                              ->  Seq Scan on events_1400285 events
-                                                                    Filter: (composite_id = users.composite_id)
+  ->  Custom Scan (Citus Sorted Merge Adaptive)
+        Task Count: 4
+        Tasks Shown: One of 4
+        ->  Task
+              Node: host=localhost port=xxxxx dbname=regression
+              ->  Limit
+                    ->  Sort
+                          Sort Key: (max(users.lastseen)) DESC
+                          ->  GroupAggregate
+                                Group Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id)
+                                ->  Sort
+                                      Sort Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id), events.event_time
+                                      ->  Nested Loop Left Join
+                                            ->  Limit
+                                                  ->  Sort
+                                                        Sort Key: users.lastseen DESC
+                                                        ->  Seq Scan on users_1400289 users
+                                                              Filter: ((composite_id >= '(1,-9223372036854775808)'::user_composite_type) AND (composite_id <= '(1,9223372036854775807)'::user_composite_type))
+                                            ->  Limit
+                                                  ->  Sort
+                                                        Sort Key: events.event_time DESC
+                                                        ->  Seq Scan on events_1400285 events
+                                                              Filter: (composite_id = users.composite_id)
 RESET citus.subquery_pushdown;
 -- Test all tasks output
 SET citus.explain_all_tasks TO on;
@@ -1182,6 +1184,7 @@ EXPLAIN (COSTS FALSE, FORMAT JSON)
       "Partial Mode": "Simple",
       "Parallel Aware": false,
       "Async Capable": false,
+      "Disabled": false,
       "Plans": [
         {
           "Node Type": "Custom Scan",
@@ -1189,6 +1192,7 @@ EXPLAIN (COSTS FALSE, FORMAT JSON)
           "Custom Plan Provider": "Citus Adaptive",
           "Parallel Aware": false,
           "Async Capable": false,
+          "Disabled": false,
           "Distributed Query": {
             "Job": {
               "Task Count": 6,
@@ -1387,16 +1391,16 @@ Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
         Node: host=localhost port=xxxxx dbname=regression
         ->  Index Scan using lineitem_pkey_360000 on lineitem_360000 lineitem  (cost=0.28..13.60 rows=4 width=5)
               Index Cond: (l_orderkey = 5)
-EXPLAIN (ANALYZE ON, COSTS OFF, TIMING OFF, SUMMARY OFF, BUFFERS OFF) EXECUTE router_executor_query_param(5);
-Custom Scan (Citus Adaptive) (actual rows=3 loops=1)
-  Task Count: 1
-  Tuple data received from nodes: 30 bytes
+select public.explain_filter('EXPLAIN (ANALYZE ON, COSTS OFF, TIMING OFF, SUMMARY OFF, BUFFERS OFF) EXECUTE router_executor_query_param(5)');
+Custom Scan (Citus Adaptive) (actual rows=N loops=N)
+  Task Count: N
+  Tuple data received from nodes: N bytes
   Tasks Shown: All
   ->  Task
-        Tuple data received from node: 30 bytes
-        Node: host=localhost port=xxxxx dbname=regression
-        ->  Index Scan using lineitem_pkey_360000 on lineitem_360000 lineitem (actual rows=3 loops=1)
-              Index Cond: (l_orderkey = 5)
+        Tuple data received from node: N bytes
+        Node: host=localhost port=N dbname=regression
+        ->  Index Scan using lineitem_pkey_360000 on lineitem_360000 lineitem (actual rows=N loops=N)
+              Index Cond: (l_orderkey = N)
 \set VERBOSITY TERSE
 PREPARE multi_shard_query_param(int) AS UPDATE lineitem SET l_quantity = $1;
 BEGIN;
@@ -1591,7 +1595,7 @@ SELECT * FROM worker_save_query_explain_analyze('SELECT 1', :default_opts) as (a
 (1 row)
 
 SELECT explain_analyze_output FROM worker_last_saved_explain_analyze();
-     explain_analyze_output
+      explain_analyze_output
 ---------------------------------------------------------------------
  Result (actual rows=1 loops=1)+
 
@@ -1608,7 +1612,7 @@ SELECT * FROM worker_save_query_explain_analyze($Q$
 (0 rows)
 
 SELECT explain_analyze_output FROM worker_last_saved_explain_analyze();
-                      explain_analyze_output
+                       explain_analyze_output
 ---------------------------------------------------------------------
  Insert on explain_analyze_test (actual rows=0 loops=1)          +
    ->  Function Scan on generate_series i (actual rows=5 loops=1)+
@@ -1629,7 +1633,7 @@ SELECT * FROM worker_save_query_explain_analyze($Q$SELECT * FROM explain_analyze
 (4 rows)
 
 SELECT explain_analyze_output FROM worker_last_saved_explain_analyze();
-                  explain_analyze_output
+                   explain_analyze_output
 ---------------------------------------------------------------------
  Seq Scan on explain_analyze_test (actual rows=4 loops=1)+
 
@@ -1652,7 +1656,7 @@ SELECT * FROM worker_save_query_explain_analyze($Q$
 (5 rows)
 
 SELECT explain_analyze_output FROM worker_last_saved_explain_analyze();
-                      explain_analyze_output
+                       explain_analyze_output
 ---------------------------------------------------------------------
  Insert on explain_analyze_test (actual rows=5 loops=1)          +
    ->  Function Scan on generate_series i (actual rows=5 loops=1)+
@@ -1673,12 +1677,12 @@ SELECT * FROM worker_save_query_explain_analyze($Q$
 (2 rows)
 
 SELECT explain_analyze_output FROM worker_last_saved_explain_analyze();
-                     explain_analyze_output
+                      explain_analyze_output
 ---------------------------------------------------------------------
  Delete on explain_analyze_test (actual rows=2 loops=1)        +
    ->  Seq Scan on explain_analyze_test (actual rows=2 loops=1)+
-         Filter: ((a % 2) = 0)                                 +
-         Rows Removed by Filter: 2                             +
+         Filter: ((a % 2) = 0)                                    +
+         Rows Removed by Filter: 2                                +
 
 (1 row)
 
@@ -1693,12 +1697,12 @@ SELECT * FROM worker_save_query_explain_analyze($Q$
 (0 rows)
 
 SELECT explain_analyze_output FROM worker_last_saved_explain_analyze();
-                     explain_analyze_output
+                      explain_analyze_output
 ---------------------------------------------------------------------
  Delete on explain_analyze_test (actual rows=0 loops=1)        +
    ->  Seq Scan on explain_analyze_test (actual rows=2 loops=1)+
-         Filter: ((a % 2) = 0)                                 +
-         Rows Removed by Filter: 2                             +
+         Filter: ((a % 2) = 0)                                    +
+         Rows Removed by Filter: 2                                +
 
 (1 row)
 
@@ -1721,7 +1725,7 @@ SELECT * FROM worker_save_query_explain_analyze('SELECT 1', '{"format": "text", 
 (1 row)
 
 SELECT explain_analyze_output FROM worker_last_saved_explain_analyze();
-     explain_analyze_output
+      explain_analyze_output
 ---------------------------------------------------------------------
  Result (actual rows=1 loops=1)+
 
@@ -1742,8 +1746,9 @@ SELECT explain_analyze_output FROM worker_last_saved_explain_analyze();
        "Node Type": "Result",  +
        "Parallel Aware": false,+
        "Async Capable": false, +
-       "Actual Rows": 1,       +
-       "Actual Loops": 1       +
+       "Actual Rows": 1,    +
+       "Actual Loops": 1,      +
+       "Disabled": false       +
      },                        +
      "Triggers": [             +
      ]                         +
@@ -1766,7 +1771,7 @@ SELECT explain_analyze_output FROM worker_last_saved_explain_analyze();
        <Node-Type>Result</Node-Type>                     +
        <Parallel-Aware>false</Parallel-Aware>            +
        <Async-Capable>false</Async-Capable>              +
-       <Actual-Rows>1</Actual-Rows>                      +
+       <Actual-Rows>1</Actual-Rows>                   +
        <Actual-Loops>1</Actual-Loops>                    +
      </Plan>                                             +
      <Triggers>                                          +
@@ -1788,7 +1793,7 @@ SELECT explain_analyze_output FROM worker_last_saved_explain_analyze();
      Node Type: "Result"  +
      Parallel Aware: false+
      Async Capable: false +
-     Actual Rows: 1       +
+     Actual Rows: 1    +
      Actual Loops: 1      +
    Triggers:
 (1 row)
@@ -2168,108 +2173,69 @@ SELECT * FROM explain_pk ORDER BY 1;
 ROLLBACK;
 -- test EXPLAIN ANALYZE with non-text output formats
 BEGIN;
-EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT JSON, BUFFERS OFF) INSERT INTO explain_pk VALUES (1, 2), (2, 3);
-[
-  {
-    "Plan": {
-      "Node Type": "Custom Scan",
-      "Custom Plan Provider": "Citus Adaptive",
-      "Parallel Aware": false,
-      "Async Capable": false,
-      "Actual Rows": 0,
-      "Actual Loops": 1,
-      "Distributed Query": {
-        "Job": {
-          "Task Count": 2,
-          "Tasks Shown": "One of 2",
-          "Tasks": [
-            {
-              "Node": "host=localhost port=xxxxx dbname=regression",
-              "Remote Plan": [
-                [
-                  {
-                    "Plan": {
-                      "Node Type": "ModifyTable",
-                      "Operation": "Insert",
-                      "Parallel Aware": false,
-                      "Async Capable": false,
-                      "Relation Name": "explain_pk_570013",
-                      "Alias": "citus_table_alias",
-                      "Actual Rows": 0,
-                      "Actual Loops": 1,
-                      "Plans": [
-                        {
-                          "Node Type": "Result",
-                          "Parent Relationship": "Outer",
-                          "Parallel Aware": false,
-                          "Async Capable": false,
-                          "Actual Rows": 1,
-                          "Actual Loops": 1
-                        }
-                      ]
-                    },
-                    "Triggers": [
-                    ]
-                  }
-                ]
+EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT YAML, BUFFERS OFF) INSERT INTO explain_pk VALUES (1, 2), (2, 3);
+- Plan:
+    Node Type: "Custom Scan"
+    Custom Plan Provider: "Citus Adaptive"
+    Parallel Aware: false
+    Async Capable: false
+    Actual Rows: 0
+    Actual Loops: 1
+    Distributed Query:
+      Job:
+        Task Count: 2
+        Tasks Shown: "One of 2"
+        Tasks:
+          - Node: "host=localhost port=xxxxx dbname=regression"
+            Remote Plan:
+              - Plan:
+                  Node Type: "ModifyTable"
+                  Operation: "Insert"
+                  Parallel Aware: false
+                  Async Capable: false
+                  Relation Name: "explain_pk_570013"
+                  Alias: "citus_table_alias"
+                  Actual Rows: 0
+                  Actual Loops: 1
+                  Plans:
+                    - Node Type: "Result"
+                      Parent Relationship: "Outer"
+                      Parallel Aware: false
+                      Async Capable: false
+                      Actual Rows: 1
+                      Actual Loops: 1
+                Triggers:
 
-              ]
-            }
-          ]
-        }
-      }
-    },
-    "Triggers": [
-    ]
-  }
-]
+  Triggers:
 ROLLBACK;
-EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT JSON, BUFFERS OFF) SELECT * FROM explain_pk;
-[
-  {
-    "Plan": {
-      "Node Type": "Custom Scan",
-      "Custom Plan Provider": "Citus Adaptive",
-      "Parallel Aware": false,
-      "Async Capable": false,
-      "Actual Rows": 0,
-      "Actual Loops": 1,
-      "Distributed Query": {
-        "Job": {
-          "Task Count": 4,
-          "Tuple data received from nodes": "0 bytes",
-          "Tasks Shown": "One of 4",
-          "Tasks": [
-            {
-              "Tuple data received from node": "0 bytes",
-              "Node": "host=localhost port=xxxxx dbname=regression",
-              "Remote Plan": [
-                [
-                  {
-                    "Plan": {
-                      "Node Type": "Seq Scan",
-                      "Parallel Aware": false,
-                      "Async Capable": false,
-                      "Relation Name": "explain_pk_570013",
-                      "Alias": "explain_pk",
-                      "Actual Rows": 0,
-                      "Actual Loops": 1
-                    },
-                    "Triggers": [
-                    ]
-                  }
-                ]
+EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT YAML, BUFFERS OFF) SELECT * FROM explain_pk;
+- Plan:
+    Node Type: "Custom Scan"
+    Custom Plan Provider: "Citus Adaptive"
+    Parallel Aware: false
+    Async Capable: false
+    Actual Rows: 0
+    Actual Loops: 1
+    Distributed Query:
+      Job:
+        Task Count: 4
+        Tuple data received from nodes: "0 bytes"
+        Tasks Shown: "One of 4"
+        Tasks:
+          - Tuple data received from node: "0 bytes"
+            Node: "host=localhost port=xxxxx dbname=regression"
+            Remote Plan:
+              - Plan:
+                  Node Type: "Seq Scan"
+                  Parallel Aware: false
+                  Async Capable: false
+                  Relation Name: "explain_pk_570013"
+                  Alias: "explain_pk"
+                  Actual Rows: 0
+                  Actual Loops: 1
+                Triggers:
 
-              ]
-            }
-          ]
-        }
-      }
-    },
-    "Triggers": [
-    ]
-  }
-]
+  Triggers:
 BEGIN;
 EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT XML, BUFFERS OFF) INSERT INTO explain_pk VALUES (1, 2), (2, 3);
 <explain xmlns="http://www.postgresql.org/2009/explain">
@@ -3053,7 +3019,7 @@ Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
               Conflicting Tuples: 0
               ->  Seq Scan on users_table_2_570028 users_table_2 (actual rows=0 loops=1)
 -- simple test to confirm we can fetch long (>4KB) plans
-EXPLAIN (ANALYZE, COSTS OFF, TIMING OFF, SUMMARY OFF) SELECT * FROM users_table_2 WHERE value_1::text = '00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000X';
+EXPLAIN (ANALYZE, COSTS OFF, TIMING OFF, SUMMARY OFF, BUFFERS OFF) SELECT * FROM users_table_2 WHERE value_1::text = '00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000X';
 Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
   Task Count: 1
   Tuple data received from nodes: 0 bytes
@@ -3116,7 +3082,9 @@ CREATE TABLE distributed_table_1(a int, b int);
 SELECT create_distributed_table('distributed_table_1','a');
 
 INSERT INTO distributed_table_1 values (1,1);
-EXPLAIN :default_analyze_flags SELECT row_number() OVER() AS r FROM distributed_table_1;
+select public.explain_filter('
+EXPLAIN (ANALYZE on, COSTS off, TIMING off, SUMMARY off, BUFFERS off) SELECT row_number() OVER() AS r FROM distributed_table_1
+', true);
 WindowAgg (actual rows=1 loops=1)
   ->  Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
         Task Count: 2
@@ -3128,11 +3096,13 @@ CREATE TABLE distributed_table_2(a int, b int);
 SELECT create_distributed_table('distributed_table_2','a');
 
 INSERT INTO distributed_table_2 VALUES (1,1);
-EXPLAIN :default_analyze_flags
+select public.explain_filter('
+EXPLAIN (ANALYZE on, COSTS off, TIMING off, SUMMARY off, BUFFERS off)
 WITH r AS (SELECT row_number() OVER () AS r FROM distributed_table_1)
 SELECT * FROM distributed_table_2
 JOIN r ON (r = distributed_table_2.b)
-LIMIT 3;
+LIMIT 3
+', true);
 Limit (actual rows=1 loops=1)
   ->  Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
         ->  Distributed Subplan XXX_1
@@ -3280,6 +3250,7 @@ SELECT * FROM a;
       "Async Capable": false,
       "Actual Rows": 1,
       "Actual Loops": 1,
+      "Disabled": false,
       "Distributed Query": {
         "Subplans": [
           {
@@ -3294,6 +3265,7 @@ SELECT * FROM a;
                   "Async Capable": false,
                   "Actual Rows": 1,
                   "Actual Loops": 1,
+                  "Disabled": false,
                   "Distributed Query": {
                     "Job": {
                       "Task Count": 1,
@@ -3315,6 +3287,7 @@ SELECT * FROM a;
                                   "Alias": "test_subplans_570038",
                                   "Actual Rows": 1,
                                   "Actual Loops": 1,
+                                  "Disabled": false,
                                   "Plans": [
                                     {
                                       "Node Type": "Result",
@@ -3322,7 +3295,8 @@ SELECT * FROM a;
                                       "Parallel Aware": false,
                                       "Async Capable": false,
                                       "Actual Rows": 1,
-                                      "Actual Loops": 1
+                                      "Actual Loops": 1,
+                                      "Disabled": false
                                     }
                                   ]
                                 },
@@ -3361,7 +3335,8 @@ SELECT * FROM a;
                       "Function Name": "read_intermediate_result",
                       "Alias": "intermediate_result",
                       "Actual Rows": 1,
-                      "Actual Loops": 1
+                      "Actual Loops": 1,
+                      "Disabled": false
                     },
                     "Triggers": [
                     ]

@@ -43,15 +43,18 @@
 #include "executor/spi.h"
 #include "lib/stringinfo.h"
 #include "nodes/execnodes.h"
+#include "parser/parse_relation.h"
 #include "storage/fd.h"
 #include "storage/lmgr.h"
 #include "storage/procarray.h"
+#include "storage/relfilelocator.h"
 #include "storage/smgr.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
 #include "utils/rel.h"
+#include "utils/relfilenumbermap.h"
 
 #include "citus_version.h"
 #include "pg_version_constants.h"
@@ -62,19 +65,11 @@
 
 #include "distributed/listutils.h"
 
-#if PG_VERSION_NUM >= PG_VERSION_16
-#include "parser/parse_relation.h"
-#include "storage/relfilelocator.h"
-#include "utils/relfilenumbermap.h"
-#else
-#include "utils/relfilenodemap.h"
-#endif
-
 #define COLUMNAR_RELOPTION_NAMESPACE "columnar"
 #define SLOW_METADATA_ACCESS_WARNING \
-	"Metadata index %s is not available, this might mean slower read/writes " \
-	"on columnar tables. This is expected during Postgres upgrades and not " \
-	"expected otherwise."
+		"Metadata index %s is not available, this might mean slower read/writes " \
+		"on columnar tables. This is expected during Postgres upgrades and not " \
+		"expected otherwise."
 
 typedef struct
 {
@@ -125,7 +120,7 @@ static Oid ColumnarChunkGroupRelationId(void);
 static Oid ColumnarChunkIndexRelationId(void);
 static Oid ColumnarChunkGroupIndexRelationId(void);
 static Oid ColumnarNamespaceId(void);
-static uint64 LookupStorageId(RelFileLocator relfilelocator);
+static uint64 LookupStorageId(Oid relationId, RelFileLocator relfilelocator);
 static uint64 GetHighestUsedRowNumber(uint64 storageId);
 static void DeleteStorageFromColumnarMetadataTable(Oid metadataTableId,
 												   AttrNumber storageIdAtrrNumber,
@@ -606,7 +601,7 @@ ReadColumnarOptions(Oid regclass, ColumnarOptions *options)
  * of columnar.chunk.
  */
 void
-SaveStripeSkipList(RelFileLocator relfilelocator, uint64 stripe,
+SaveStripeSkipList(Oid relid, RelFileLocator relfilelocator, uint64 stripe,
 				   StripeSkipList *chunkList,
 				   TupleDesc tupleDescriptor)
 {
@@ -614,11 +609,17 @@ SaveStripeSkipList(RelFileLocator relfilelocator, uint64 stripe,
 	uint32 chunkIndex = 0;
 	uint32 columnCount = chunkList->columnCount;
 
-	uint64 storageId = LookupStorageId(relfilelocator);
+	uint64 storageId = LookupStorageId(relid, relfilelocator);
 	Oid columnarChunkOid = ColumnarChunkRelationId();
 	Relation columnarChunk = table_open(columnarChunkOid, RowExclusiveLock);
 	ModifyState *modifyState = StartModifyRelation(columnarChunk);
+	bool pushed_snapshot = false;
 
+	if (!ActiveSnapshotSet())
+	{
+		PushActiveSnapshot(GetTransactionSnapshot());
+		pushed_snapshot = true;
+	}
 	for (columnIndex = 0; columnIndex < columnCount; columnIndex++)
 	{
 		for (chunkIndex = 0; chunkIndex < chunkList->chunkCount; chunkIndex++)
@@ -649,20 +650,24 @@ SaveStripeSkipList(RelFileLocator relfilelocator, uint64 stripe,
 			{
 				values[Anum_columnar_chunk_minimum_value - 1] =
 					PointerGetDatum(DatumToBytea(chunk->minimumValue,
-												 Attr(tupleDescriptor, columnIndex)));
+												 TupleDescAttr(tupleDescriptor,
+															   columnIndex)));
 				values[Anum_columnar_chunk_maximum_value - 1] =
 					PointerGetDatum(DatumToBytea(chunk->maximumValue,
-												 Attr(tupleDescriptor, columnIndex)));
+												 TupleDescAttr(tupleDescriptor,
+															   columnIndex)));
 			}
 			else
 			{
 				nulls[Anum_columnar_chunk_minimum_value - 1] = true;
 				nulls[Anum_columnar_chunk_maximum_value - 1] = true;
 			}
-			PushActiveSnapshot(GetTransactionSnapshot());
 			InsertTupleAndEnforceConstraints(modifyState, values, nulls);
-			PopActiveSnapshot();
 		}
+	}
+	if (pushed_snapshot)
+	{
+		PopActiveSnapshot();
 	}
 
 	FinishModifyRelation(modifyState);
@@ -674,10 +679,10 @@ SaveStripeSkipList(RelFileLocator relfilelocator, uint64 stripe,
  * SaveChunkGroups saves the metadata for given chunk groups in columnar.chunk_group.
  */
 void
-SaveChunkGroups(RelFileLocator relfilelocator, uint64 stripe,
+SaveChunkGroups(Oid relid, RelFileLocator relfilelocator, uint64 stripe,
 				List *chunkGroupRowCounts)
 {
-	uint64 storageId = LookupStorageId(relfilelocator);
+	uint64 storageId = LookupStorageId(relid, relfilelocator);
 	Oid columnarChunkGroupOid = ColumnarChunkGroupRelationId();
 	Relation columnarChunkGroup = table_open(columnarChunkGroupOid, RowExclusiveLock);
 	ModifyState *modifyState = StartModifyRelation(columnarChunkGroup);
@@ -710,7 +715,7 @@ SaveChunkGroups(RelFileLocator relfilelocator, uint64 stripe,
  * ReadStripeSkipList fetches chunk metadata for a given stripe.
  */
 StripeSkipList *
-ReadStripeSkipList(RelFileLocator relfilelocator, uint64 stripe,
+ReadStripeSkipList(Relation rel, uint64 stripe,
 				   TupleDesc tupleDescriptor,
 				   uint32 chunkCount, Snapshot snapshot)
 {
@@ -719,7 +724,8 @@ ReadStripeSkipList(RelFileLocator relfilelocator, uint64 stripe,
 	uint32 columnCount = tupleDescriptor->natts;
 	ScanKeyData scanKey[2];
 
-	uint64 storageId = LookupStorageId(relfilelocator);
+	uint64 storageId = LookupStorageId(RelationPrecomputeOid(rel),
+									   rel->rd_locator);
 
 	Oid columnarChunkOid = ColumnarChunkRelationId();
 	Relation columnarChunk = table_open(columnarChunkOid, AccessShareLock);
@@ -808,9 +814,9 @@ ReadStripeSkipList(RelFileLocator relfilelocator, uint64 stripe,
 				datumArray[Anum_columnar_chunk_maximum_value - 1]);
 
 			chunk->minimumValue =
-				ByteaToDatum(minValue, Attr(tupleDescriptor, columnIndex));
+				ByteaToDatum(minValue, TupleDescAttr(tupleDescriptor, columnIndex));
 			chunk->maximumValue =
-				ByteaToDatum(maxValue, Attr(tupleDescriptor, columnIndex));
+				ByteaToDatum(maxValue, TupleDescAttr(tupleDescriptor, columnIndex));
 
 			chunk->hasMinMax = true;
 		}
@@ -1263,9 +1269,10 @@ InsertEmptyStripeMetadataRow(uint64 storageId, uint64 stripeId, uint32 columnCou
  * of the given relfilenode.
  */
 List *
-StripesForRelfilelocator(RelFileLocator relfilelocator)
+StripesForRelfilelocator(Relation rel)
 {
-	uint64 storageId = LookupStorageId(relfilelocator);
+	uint64 storageId = LookupStorageId(RelationPrecomputeOid(rel),
+									   rel->rd_locator);
 
 	/*
 	 * PG18 requires snapshot to be active or registered before it's used
@@ -1294,15 +1301,32 @@ StripesForRelfilelocator(RelFileLocator relfilelocator)
  * returns 0.
  */
 uint64
-GetHighestUsedAddress(RelFileLocator relfilelocator)
+GetHighestUsedAddress(Relation rel)
 {
-	uint64 storageId = LookupStorageId(relfilelocator);
+	uint64 storageId = LookupStorageId(RelationPrecomputeOid(rel),
+									   rel->rd_locator);
 
 	uint64 highestUsedAddress = 0;
 	uint64 highestUsedId = 0;
 	GetHighestUsedAddressAndId(storageId, &highestUsedAddress, &highestUsedId);
 
 	return highestUsedAddress;
+}
+
+
+/*
+ * In case if relid hasn't been defined yet, we should use RelidByRelfilenumber
+ * to get correct relid value.
+ *
+ * Now it is basically used for temp rels, because since PG18(it was backpatched
+ * through PG13) RelidByRelfilenumber skip temp relations and we should use
+ * alternative ways to get relid value in case of temp objects.
+ */
+Oid
+ColumnarRelationId(Oid relid, RelFileLocator relfilelocator)
+{
+	return OidIsValid(relid) ? relid : RelidByRelfilenumber(relfilelocator.spcOid,
+															relfilelocator.relNumber);
 }
 
 
@@ -1581,7 +1605,7 @@ BuildStripeMetadata(Relation columnarStripes, HeapTuple heapTuple)
  * metadata tables.
  */
 void
-DeleteMetadataRows(RelFileLocator relfilelocator)
+DeleteMetadataRows(Relation rel)
 {
 	/*
 	 * During a restore for binary upgrade, metadata tables and indexes may or
@@ -1592,7 +1616,8 @@ DeleteMetadataRows(RelFileLocator relfilelocator)
 		return;
 	}
 
-	uint64 storageId = LookupStorageId(relfilelocator);
+	uint64 storageId = LookupStorageId(RelationPrecomputeOid(rel),
+									   rel->rd_locator);
 
 	DeleteStorageFromColumnarMetadataTable(ColumnarStripeRelationId(),
 										   Anum_columnar_stripe_storageid,
@@ -1757,10 +1782,8 @@ create_estate_for_relation(Relation rel)
 	rte->rellockmode = AccessShareLock;
 
 /* Prepare permission info on PG 16+ */
-#if PG_VERSION_NUM >= PG_VERSION_16
 	List *perminfos = NIL;
 	addRTEPermissionInfo(&perminfos, rte);
-#endif
 
 /* Initialize the range table, with the right signature for each PG version */
 #if PG_VERSION_NUM >= PG_VERSION_18
@@ -1772,20 +1795,13 @@ create_estate_for_relation(Relation rel)
 		perminfos,
 		NULL  /* unpruned_relids: not used by columnar */
 		);
-#elif PG_VERSION_NUM >= PG_VERSION_16
+#else
 
 	/* PG 16–17: three-arg signature (permInfos) */
 	ExecInitRangeTable(
 		estate,
 		list_make1(rte),
 		perminfos
-		);
-#else
-
-	/* PG 15: two-arg signature */
-	ExecInitRangeTable(
-		estate,
-		list_make1(rte)
 		);
 #endif
 
@@ -1991,13 +2007,11 @@ ColumnarNamespaceId(void)
  * false if the relation doesn't have a meta page yet.
  */
 static uint64
-LookupStorageId(RelFileLocator relfilelocator)
+LookupStorageId(Oid relid, RelFileLocator relfilelocator)
 {
-	Oid relationId = RelidByRelfilenumber(RelationTablespace_compat(relfilelocator),
-										  RelationPhysicalIdentifierNumber_compat(
-											  relfilelocator));
+	relid = ColumnarRelationId(relid, relfilelocator);
 
-	Relation relation = relation_open(relationId, AccessShareLock);
+	Relation relation = relation_open(relid, AccessShareLock);
 	uint64 storageId = ColumnarStorageGetStorageId(relation, false);
 	table_close(relation, AccessShareLock);
 

@@ -16,12 +16,14 @@
 
 #include "postgres.h"
 
+#include "fmgr.h"
 #include "libpq-fe.h"
 #include "miscadmin.h"
 
 #include "access/xact.h"
 #include "utils/builtins.h"
 #include "utils/memutils.h"
+#include "utils/uuid.h"
 
 #include "distributed/connection_management.h"
 #include "distributed/jsonbutils.h"
@@ -35,6 +37,10 @@
 #include "distributed/transaction_recovery.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_transaction.h"
+
+
+PG_FUNCTION_INFO_V1(citus_server_id);
+
 
 static void SendBareCommandListToMetadataNodesInternal(List *commandList,
 													   TargetWorkerSet targetWorkerSet);
@@ -168,6 +174,48 @@ SendCommandToRemoteNodesWithMetadata(const char *command)
 
 
 /*
+ * SendCommandToRemoteWorkersWithMetadata sends a command to remote workers in
+ * parallel. Commands are committed on the nodes when the local transaction
+ * commits.
+ */
+void
+SendCommandToRemoteWorkersWithMetadata(const char *command)
+{
+	SendCommandToRemoteWorkersWithMetadataParams(command, CurrentUserName(),
+												 0, NULL, NULL);
+}
+
+
+/*
+ * SendCommandToCoordinator sends a command to coordinator by opening a super
+ * user connection. * Command is committed on the coordinator when the local
+ * transaction commits. The connection is made as the extension owner to ensure
+ * write access to the Citus metadata tables.
+ *
+ * Since we prevent to open superuser connections for metadata tables, it is
+ * discouraged to use it. Consider using it only for locking metadata tables
+ * on the coordinator before creating distributed tables or before propagating
+ * pg_dist_object tuples for dependent objects.
+ */
+void
+SendCommandToCoordinatorViaSuperUser(const char *command)
+{
+	SendCommandToCoordinatorParams(command, CitusExtensionOwnerName(), 0, NULL, NULL);
+}
+
+
+/*
+ * SendCommandToCoordinator sends a command to coordinator.
+ * Command is committed on the coordinator when the local transaction commits.
+ */
+void
+SendCommandToCoordinator(const char *command)
+{
+	SendCommandToCoordinatorParams(command, CurrentUserName(), 0, NULL, NULL);
+}
+
+
+/*
  * SendCommandToRemoteNodesWithMetadataViaSuperUser sends a command to remote
  * nodes in parallel by opening a super user connection. Commands are committed
  * on the nodes when the local transaction commits. The connection are made as
@@ -223,6 +271,50 @@ SendCommandToRemoteMetadataNodesParams(const char *command,
 
 
 /*
+ * SendCommandToRemoteWorkersWithMetadataParams is a wrapper around
+ * SendCommandToWorkersParamsInternal() that can be used to send commands
+ * to remote metadata workers.
+ */
+void
+SendCommandToRemoteWorkersWithMetadataParams(const char *command,
+											 const char *user, int parameterCount,
+											 const Oid *parameterTypes,
+											 const char *const *parameterValues)
+{
+	/* use METADATA_NODES so that ErrorIfAnyMetadataNodeOutOfSync checks local node as well */
+	List *workerNodeList = TargetWorkerSetNodeList(METADATA_NODES,
+												   RowShareLock);
+
+	ErrorIfAnyMetadataNodeOutOfSync(workerNodeList);
+
+	SendCommandToWorkersParamsInternal(REMOTE_NON_COORDINATOR_METADATA_NODES, command,
+									   user,
+									   parameterCount, parameterTypes, parameterValues);
+}
+
+
+/*
+ * SendCommandToCoordinatorParams is a wrapper around SendCommandToWorkersParamsInternal()
+ * that can be used to send commands to coordinator.
+ */
+void
+SendCommandToCoordinatorParams(const char *command,
+							   const char *user, int parameterCount,
+							   const Oid *parameterTypes,
+							   const char *const *parameterValues)
+{
+	/* use METADATA_NODES so that ErrorIfAnyMetadataNodeOutOfSync checks local node as well */
+	List *workerNodeList = TargetWorkerSetNodeList(METADATA_NODES,
+												   RowShareLock);
+
+	ErrorIfAnyMetadataNodeOutOfSync(workerNodeList);
+
+	SendCommandToWorkersParamsInternal(ONLY_COORDINATOR_NODE, command, user,
+									   parameterCount, parameterTypes, parameterValues);
+}
+
+
+/*
  * TargetWorkerSetNodeList returns a list of WorkerNode's that satisfies the
  * TargetWorkerSet.
  */
@@ -244,6 +336,16 @@ TargetWorkerSetNodeList(TargetWorkerSet targetWorkerSet, LOCKMODE lockMode)
 	{
 		workerNodeList = ActivePrimaryNonCoordinatorNodeList(lockMode);
 	}
+	else if (targetWorkerSet == REMOTE_NON_COORDINATOR_METADATA_NODES)
+	{
+		workerNodeList = ActivePrimaryRemoteNonCoordinatorNodeList(lockMode);
+	}
+	else if (targetWorkerSet == ONLY_COORDINATOR_NODE)
+	{
+		/* call this first like other functions returning a node list */
+		EnsureModificationsCanRun();
+		workerNodeList = list_make1(CoordinatorNodeIfAddedAsWorkerOrError());
+	}
 	else
 	{
 		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
@@ -257,7 +359,8 @@ TargetWorkerSetNodeList(TargetWorkerSet targetWorkerSet, LOCKMODE lockMode)
 	{
 		if ((targetWorkerSet == NON_COORDINATOR_METADATA_NODES ||
 			 targetWorkerSet == REMOTE_METADATA_NODES ||
-			 targetWorkerSet == METADATA_NODES) &&
+			 targetWorkerSet == METADATA_NODES ||
+			 targetWorkerSet == REMOTE_NON_COORDINATOR_METADATA_NODES) &&
 			!workerNode->hasMetadata)
 		{
 			continue;
@@ -634,8 +737,9 @@ SendMetadataCommandListToWorkerListInCoordinatedTransaction(List *workerNodeList
  * false.
  */
 bool
-SendOptionalCommandListToWorkerOutsideTransactionWithConnection(
-	MultiConnection *workerConnection, List *commandList)
+SendOptionalCommandListToWorkerOutsideTransactionWithConnection(MultiConnection *
+																workerConnection, List *
+																commandList)
 {
 	if (PQstatus(workerConnection->pgConn) != CONNECTION_OK)
 	{
@@ -834,4 +938,37 @@ IsWorkerTheCurrentNode(WorkerNode *workerNode)
 	char *currentServerId = text_to_cstring(currentServerIdTextP);
 
 	return strcmp(workerServerId, currentServerId) == 0;
+}
+
+
+/*
+ * citus_server_id returns a random UUID value as server identifier. This is
+ * modeled after PostgreSQL's pg_random_uuid().
+ */
+Datum
+citus_server_id(PG_FUNCTION_ARGS)
+{
+	uint8 *buf = (uint8 *) palloc(UUID_LEN);
+
+	/*
+	 * If pg_strong_random() fails, fall-back to using random(). In previous
+	 * versions of postgres we don't have pg_strong_random(), so use it by
+	 * default in that case.
+	 */
+	if (!pg_strong_random((char *) buf, UUID_LEN))
+	{
+		for (int bufIdx = 0; bufIdx < UUID_LEN; bufIdx++)
+		{
+			buf[bufIdx] = (uint8) (random() & 0xFF);
+		}
+	}
+
+	/*
+	 * Set magic numbers for a "version 4" (pseudorandom) UUID, see
+	 * http://tools.ietf.org/html/rfc4122#section-4.4
+	 */
+	buf[6] = (buf[6] & 0x0f) | 0x40;    /* "version" field */
+	buf[8] = (buf[8] & 0x3f) | 0x80;    /* "variant" field */
+
+	PG_RETURN_UUID_P((pg_uuid_t *) buf);
 }

@@ -175,16 +175,17 @@ Datum
 truncate_local_data_after_distributing_table(PG_FUNCTION_ARGS)
 {
 	CheckCitusVersion(ERROR);
-	EnsureCoordinator();
 
 	Oid relationId = PG_GETARG_OID(0);
 
 	EnsureLocalTableCanBeTruncated(relationId);
 
+	EnsureCoordinatorUnlessTenantSchema(relationId);
+
 	TruncateStmt *truncateStmt = makeNode(TruncateStmt);
 
 	char *relationName = generate_qualified_relation_name(relationId);
-	List *names = stringToQualifiedNameList_compat(relationName);
+	List *names = stringToQualifiedNameList(relationName, NULL);
 	truncateStmt->relations = list_make1(makeRangeVarFromNameList(names));
 	truncateStmt->restart_seqs = false;
 	truncateStmt->behavior = DROP_CASCADE;

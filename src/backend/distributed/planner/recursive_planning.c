@@ -161,7 +161,8 @@ static void RecursivelyPlanNonColocatedSubqueriesInWhere(Query *query,
 														 RecursivePlanningContext *
 														 recursivePlanningContext);
 static bool RecursivelyPlanRecurringTupleOuterJoinWalker(Node *node, Query *query,
-														 RecursivePlanningContext *context,
+														 RecursivePlanningContext *
+														 context,
 														 bool chainedJoin);
 static void RecursivelyPlanDistributedJoinNode(Node *node, Query *query,
 											   RecursivePlanningContext *context);
@@ -207,8 +208,8 @@ static bool CanPushdownRecurringOuterJoinOnOuterRTE(RangeTblEntry *rte);
 static bool CanPushdownRecurringOuterJoinOnInnerVar(Var *innervar, RangeTblEntry *rte);
 static bool CanPushdownRecurringOuterJoin(JoinExpr *joinExpr, Query *query);
 #if PG_VERSION_NUM < PG_VERSION_17
-static bool hasPseudoconstantQuals(
-	RelationRestrictionContext *relationRestrictionContext);
+static bool hasPseudoconstantQuals(RelationRestrictionContext *
+								   relationRestrictionContext);
 #endif
 
 /*
@@ -261,7 +262,6 @@ GenerateSubplansForSubqueriesAndCTEs(uint64 planId, Query *originalQuery,
 	 */
 	context.allDistributionKeysInQueryAreEqual =
 		AllDistributionKeysInQueryAreEqual(originalQuery, plannerRestrictionContext);
-
 	DeferredErrorMessage *error = RecursivelyPlanSubqueriesAndCTEs(originalQuery,
 																   &context);
 	if (error != NULL)
@@ -513,7 +513,6 @@ ShouldRecursivelyPlanOuterJoins(Query *query, RecursivePlanningContext *context)
 	if (!EnableOuterJoinsWithPseudoconstantQualsPrePG17 && !hasOuterJoin)
 	{
 		/*
-		 * PG15 commit d1ef5631e620f9a5b6480a32bb70124c857af4f1
 		 * PG16 commit 695f5deb7902865901eb2d50a70523af655c3a00
 		 * disallows replacing joins with scans in queries with pseudoconstant quals.
 		 * This commit prevents the set_join_pathlist_hook from being called
@@ -529,9 +528,9 @@ ShouldRecursivelyPlanOuterJoins(Query *query, RecursivePlanningContext *context)
 			FindNodeMatchingCheckFunction((Node *) query->jointree, IsOuterJoinExpr))
 		{
 			ereport(ERROR, (errmsg("Distributed queries with outer joins and "
-								   "pseudoconstant quals are not supported in PG15 and PG16."),
+								   "pseudoconstant quals are not supported in PG16."),
 							errdetail(
-								"PG15 and PG16 disallow replacing joins with scans when the"
+								"PG16 disallows replacing joins with scans when the"
 								" query has pseudoconstant quals"),
 							errhint("Consider upgrading your PG version to PG17+")));
 		}
@@ -974,7 +973,6 @@ RecursivelyPlanDistributedJoinNode(Node *node, Query *query,
 		List *requiredAttributes =
 			RequiredAttrNumbersForRelation(distributedRte, restrictionContext);
 
-#if PG_VERSION_NUM >= PG_VERSION_16
 		RTEPermissionInfo *perminfo = NULL;
 		if (distributedRte->perminfoindex)
 		{
@@ -983,10 +981,6 @@ RecursivelyPlanDistributedJoinNode(Node *node, Query *query,
 
 		ReplaceRTERelationWithRteSubquery(distributedRte, requiredAttributes,
 										  recursivePlanningContext, perminfo);
-#else
-		ReplaceRTERelationWithRteSubquery(distributedRte, requiredAttributes,
-										  recursivePlanningContext, NULL);
-#endif
 	}
 	else if (distributedRte->rtekind == RTE_SUBQUERY)
 	{
@@ -1123,14 +1117,10 @@ ExtractSublinkWalker(Node *node, List **sublinkList)
 static bool
 ShouldRecursivelyPlanSublinks(Query *query)
 {
-	if (FindNodeMatchingCheckFunctionInRangeTableList(query->rtable,
-													  IsDistributedTableRTE))
-	{
-		/* there is a distributed table in the FROM clause */
-		return false;
-	}
-
-	return true;
+	bool hasDistributedTable = (FindNodeMatchingCheckFunctionInRangeTableList(
+									query->rtable,
+									IsDistributedTableRTE));
+	return !hasDistributedTable;
 }
 
 
@@ -1853,14 +1843,30 @@ ReplaceRTERelationWithRteSubquery(RangeTblEntry *rangeTableEntry,
 								  RecursivePlanningContext *context,
 								  RTEPermissionInfo *perminfo)
 {
+	List *restrictionList =
+		GetRestrictInfoListForRelation(rangeTableEntry,
+									   context->plannerRestrictionContext);
+
+	/*
+	 * The parent query's WHERE clause still references these columns through
+	 * the outer subquery's positional target list.  If they are not in
+	 * requiredAttrNumbers the subquery projects them as NULL, causing the
+	 * outer WHERE to evaluate incorrectly (e.g. NOT (col IS DISTINCT FROM 0)
+	 * becomes NOT (NULL IS DISTINCT FROM 0) which is always FALSE).
+	 */
+	List *restrictionVars = pull_var_clause_default((Node *) restrictionList);
+	Var *restrictionVar = NULL;
+	foreach_declared_ptr(restrictionVar, restrictionVars)
+	{
+		requiredAttrNumbers = list_append_unique_int(requiredAttrNumbers,
+													 restrictionVar->varattno);
+	}
+
 	Query *subquery = WrapRteRelationIntoSubquery(rangeTableEntry, requiredAttrNumbers,
 												  perminfo);
 	List *outerQueryTargetList = CreateAllTargetListForRelation(rangeTableEntry->relid,
 																requiredAttrNumbers);
 
-	List *restrictionList =
-		GetRestrictInfoListForRelation(rangeTableEntry,
-									   context->plannerRestrictionContext);
 	List *copyRestrictionList = copyObject(restrictionList);
 	Expr *andedBoundExpressions = make_ands_explicit(copyRestrictionList);
 	subquery->jointree->quals = (Node *) andedBoundExpressions;
@@ -1879,9 +1885,7 @@ ReplaceRTERelationWithRteSubquery(RangeTblEntry *rangeTableEntry,
 
 	/* replace the function with the constructed subquery */
 	rangeTableEntry->rtekind = RTE_SUBQUERY;
-#if PG_VERSION_NUM >= PG_VERSION_16
 	rangeTableEntry->perminfoindex = 0;
-#endif
 	rangeTableEntry->subquery = subquery;
 
 	/*
@@ -1954,13 +1958,10 @@ CreateOuterSubquery(RangeTblEntry *rangeTableEntry, List *outerSubqueryTargetLis
 	innerSubqueryRTE->eref->colnames = innerSubqueryColNames;
 	outerSubquery->rtable = list_make1(innerSubqueryRTE);
 
-#if PG_VERSION_NUM >= PG_VERSION_16
-
 	/* sanity check */
 	Assert(innerSubqueryRTE->rtekind == RTE_SUBQUERY &&
 		   innerSubqueryRTE->perminfoindex == 0);
 	outerSubquery->rteperminfos = NIL;
-#endif
 
 
 	/* set the FROM expression to the subquery */
@@ -2136,13 +2137,10 @@ TransformFunctionRTE(RangeTblEntry *rangeTblEntry)
 	/* set the FROM expression to the subquery */
 	subquery->rtable = list_make1(newRangeTableEntry);
 
-#if PG_VERSION_NUM >= PG_VERSION_16
-
 	/* sanity check */
 	Assert(newRangeTableEntry->rtekind == RTE_FUNCTION &&
 		   newRangeTableEntry->perminfoindex == 0);
 	subquery->rteperminfos = NIL;
-#endif
 
 	newRangeTableRef->rtindex = 1;
 	subquery->jointree = makeFromExpr(list_make1(newRangeTableRef), NULL);
@@ -2197,6 +2195,7 @@ TransformFunctionRTE(RangeTblEntry *rangeTblEntry)
 			subquery->targetList = lappend(subquery->targetList, targetEntry);
 		}
 	}
+
 	/*
 	 * If tupleDesc is NULL we have 2 different cases:
 	 *
@@ -2246,6 +2245,7 @@ TransformFunctionRTE(RangeTblEntry *rangeTblEntry)
 				columnType = list_nth_oid(rangeTblFunction->funccoltypes,
 										  targetColumnIndex);
 			}
+
 			/* use the types in the function definition otherwise */
 			else
 			{
@@ -2464,9 +2464,7 @@ BuildEmptyResultQuery(List *targetEntryList, char *resultId)
 	valuesQuery->canSetTag = true;
 	valuesQuery->commandType = CMD_SELECT;
 	valuesQuery->rtable = list_make1(valuesRangeTable);
-	#if PG_VERSION_NUM >= PG_VERSION_16
 	valuesQuery->rteperminfos = NIL;
-	#endif
 	valuesQuery->jointree = valuesJoinTree;
 	valuesQuery->targetList = valueTargetList;
 
@@ -2483,9 +2481,7 @@ BuildEmptyResultQuery(List *targetEntryList, char *resultId)
 	resultQuery->commandType = CMD_SELECT;
 	resultQuery->canSetTag = true;
 	resultQuery->rtable = list_make1(emptyRangeTable);
-#if PG_VERSION_NUM >= PG_VERSION_16
 	resultQuery->rteperminfos = NIL;
-#endif
 	RangeTblRef *rangeTableRef = makeNode(RangeTblRef);
 	rangeTableRef->rtindex = 1;
 
@@ -2635,9 +2631,7 @@ BuildReadIntermediateResultsQuery(List *targetEntryList, List *columnAliasList,
 	Query *resultQuery = makeNode(Query);
 	resultQuery->commandType = CMD_SELECT;
 	resultQuery->rtable = list_make1(rangeTableEntry);
-#if PG_VERSION_NUM >= PG_VERSION_16
 	resultQuery->rteperminfos = NIL;
-#endif
 	resultQuery->jointree = joinTree;
 	resultQuery->targetList = targetList;
 
@@ -2785,8 +2779,8 @@ CanPushdownRecurringOuterJoinOnInnerVar(Var *innerVar, RangeTblEntry *rte)
 	}
 
 	/* Check if the inner variable is part of the distribution column */
-	if (cacheEntry->partitionColumn && innerVar->varattno ==
-		cacheEntry->partitionColumn->varattno)
+	if (cacheEntry->partitionColumn &&
+		innerVar->varattno == cacheEntry->partitionColumn->varattno)
 	{
 		return true;
 	}
@@ -2926,8 +2920,8 @@ CanPushdownRecurringOuterJoinExtended(JoinExpr *joinExpr, Query *query,
 	if (JoinTreeContainsLateral(joinExpr->rarg, query->rtable) || JoinTreeContainsLateral(
 			joinExpr->larg, query->rtable))
 	{
-		ereport(DEBUG5, (errmsg(
-							 "Lateral join is not supported for pushdown in this path.")));
+		ereport(DEBUG5, (errmsg("Lateral join is not supported for pushdown "
+								"in this path.")));
 		return false;
 	}
 
@@ -2988,6 +2982,7 @@ CanPushdownRecurringOuterJoinExtended(JoinExpr *joinExpr, Query *query,
 				return true;
 			}
 		}
+
 		/* the inner table is a subquery, extract the base relation referred in the qual */
 		else if (rte && rte->rtekind == RTE_SUBQUERY)
 		{

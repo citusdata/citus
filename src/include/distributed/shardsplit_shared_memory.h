@@ -74,7 +74,8 @@ void StoreShardSplitSharedMemoryHandle(dsm_handle dsmHandle);
 /* Functions for creating and accessing shared memory segments consisting shard split information */
 extern ShardSplitInfoSMHeader * CreateSharedMemoryForShardSplitInfo(int
 																	shardSplitInfoCount,
-																	dsm_handle *dsmHandle);
+																	dsm_handle *
+																	dsmHandle);
 extern void ReleaseSharedMemoryOfShardSplitInfo(void);
 
 extern ShardSplitInfoSMHeader *  GetShardSplitInfoSMHeader(void);

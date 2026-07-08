@@ -88,10 +88,6 @@
 #include "distributed/worker_manager.h"
 #include "distributed/worker_protocol.h"
 
-#if PG_VERSION_NUM < PG_VERSION_16
-#include "utils/relfilenodemap.h"
-#endif
-
 
 /* user configuration */
 int ReadFromSecondaries = USE_SECONDARY_NODES_NEVER;
@@ -339,6 +335,7 @@ static Oid DistAuthinfoRelationId(void);
 static Oid DistAuthinfoIndexId(void);
 static Oid DistPoolinfoRelationId(void);
 static Oid DistPoolinfoIndexId(void);
+static int ParseVersionComponent(const char *version, char **endPtr);
 
 /* exports for SQL callable functions */
 PG_FUNCTION_INFO_V1(citus_dist_partition_cache_invalidate);
@@ -2410,7 +2407,7 @@ CheckAvailableVersion(int elevel)
 
 	char *availableVersion = AvailableExtensionVersion();
 
-	if (!MajorVersionsCompatible(availableVersion, CITUS_EXTENSIONVERSION))
+	if (!MinorVersionsCompatibleRelaxed(availableVersion, CITUS_EXTENSIONVERSION))
 	{
 		ereport(elevel, (errmsg("loaded Citus library version differs from latest "
 								"available extension version"),
@@ -2440,7 +2437,7 @@ CheckInstalledVersion(int elevel)
 
 	char *installedVersion = InstalledExtensionVersion();
 
-	if (!MajorVersionsCompatible(installedVersion, CITUS_EXTENSIONVERSION))
+	if (!MinorVersionsCompatibleRelaxed(installedVersion, CITUS_EXTENSIONVERSION))
 	{
 		ereport(elevel, (errmsg("loaded Citus library version differs from installed "
 								"extension version"),
@@ -2476,45 +2473,51 @@ InstalledAndAvailableVersionsSame()
 
 
 /*
- * MajorVersionsCompatible checks whether both versions are compatible. They
- * are if major and minor version numbers match, the schema version is
- * ignored.  Returns true if compatible, false otherwise.
+ * ParseVersionComponent parses the integer at the current position and
+ * advances endPtr past the parsed digits to the next character.
+ */
+static int
+ParseVersionComponent(const char *version, char **endPtr)
+{
+	errno = 0;
+	long int val = strtol(version, endPtr, 10);
+
+	if (errno == ERANGE || val > INT_MAX || val < INT_MIN)
+	{
+		ereport(ERROR, (errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
+						errmsg("Invalid integer in version string")));
+	}
+	return (int) val;
+}
+
+
+/*
+ * MinorVersionsCompatibleRelaxed checks if two versions have the same major
+ * version and their minor versions differ by at most 1. The schema version
+ * (after '-') is ignored. Returns true if compatible, false otherwise.
+ *
+ * Version format expected: "major.minor-schema" (e.g., "13.1-2")
  */
 bool
-MajorVersionsCompatible(char *leftVersion, char *rightVersion)
+MinorVersionsCompatibleRelaxed(char *leftVersion, char *rightVersion)
 {
-	const char schemaVersionSeparator = '-';
+	char *leftSep;
+	char *rightSep;
 
-	char *leftSeperatorPosition = strchr(leftVersion, schemaVersionSeparator);
-	char *rightSeperatorPosition = strchr(rightVersion, schemaVersionSeparator);
-	int leftComparisionLimit = 0;
-	int rightComparisionLimit = 0;
+	int leftMajor = ParseVersionComponent(leftVersion, &leftSep);
+	int rightMajor = ParseVersionComponent(rightVersion, &rightSep);
 
-	if (leftSeperatorPosition != NULL)
-	{
-		leftComparisionLimit = leftSeperatorPosition - leftVersion;
-	}
-	else
-	{
-		leftComparisionLimit = strlen(leftVersion);
-	}
-
-	if (rightSeperatorPosition != NULL)
-	{
-		rightComparisionLimit = rightSeperatorPosition - rightVersion;
-	}
-	else
-	{
-		rightComparisionLimit = strlen(leftVersion);
-	}
-
-	/* we can error out early if hypens are not in the same position */
-	if (leftComparisionLimit != rightComparisionLimit)
+	if (leftMajor != rightMajor)
 	{
 		return false;
 	}
 
-	return strncmp(leftVersion, rightVersion, leftComparisionLimit) == 0;
+	int leftMinor = (*leftSep == '.') ? ParseVersionComponent(leftSep + 1, &leftSep) : 0;
+	int rightMinor = (*rightSep == '.') ? ParseVersionComponent(rightSep + 1, &rightSep) :
+					 0;
+
+	int diff = leftMinor - rightMinor;
+	return diff >= -1 && diff <= 1;
 }
 
 

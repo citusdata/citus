@@ -168,6 +168,75 @@ SELECT
     WHERE logicalrelid = 'single_node.single_shard_conversion_test_2'::regclass
 );
 
+create table test_a_tbl_1(text_col text collate "C" unique);
+create table test_a_tbl_2(text_col text collate "en-x-icu" unique);
+
+select create_distributed_table('test_a_tbl_1', 'text_col');
+select create_distributed_table('test_a_tbl_2', 'text_col');
+
+-- make sure we assign them to different colocation groups
+select count(*) = 2 as colocationids_different from (
+	select distinct(colocationid)
+	from pg_dist_partition
+	join pg_class on (logicalrelid = pg_class.oid)
+	join pg_namespace on (relnamespace = pg_namespace.oid)
+	join pg_dist_colocation using (colocationid)
+	where pg_namespace.nspname = 'single_node'
+		and pg_class.relname in ('test_a_tbl_1', 'test_a_tbl_2')
+) q;
+
+DROP TABLE test_a_tbl_1, test_a_tbl_2;
+
+create table test_d_tbl_1(text_col text collate "C" unique);
+create table test_d_tbl_2(text_col text collate "en-x-icu" unique);
+
+select create_distributed_table('test_d_tbl_1', 'text_col', shard_count=>4);
+select create_distributed_table('test_d_tbl_2', 'text_col', shard_count=>6);
+select alter_distributed_table('test_d_tbl_2', shard_count=>4);
+
+-- make sure we assign them to different colocation groups
+select count(*) = 2 as colocationids_different from (
+	select distinct(colocationid)
+	from pg_dist_partition
+	join pg_class on (logicalrelid = pg_class.oid)
+	join pg_namespace on (relnamespace = pg_namespace.oid)
+	join pg_dist_colocation using (colocationid)
+	where pg_namespace.nspname = 'single_node'
+		and pg_class.relname in ('test_d_tbl_1', 'test_d_tbl_2')
+) q;
+
+DROP TABLE test_d_tbl_1, test_d_tbl_2;
+
+create table test_b_tbl_1(text_col text collate "C" unique);
+create table test_b_tbl_2(text_col text collate "en-x-icu" unique);
+
+select create_distributed_table('test_b_tbl_1', 'text_col');
+
+-- errors
+select create_distributed_table('test_b_tbl_2', 'text_col', colocate_with => 'test_b_tbl_1');
+
+DROP TABLE test_b_tbl_1, test_b_tbl_2;
+
+create table test_c_tbl_1(text_col text collate "C" unique);
+create table test_c_tbl_2(text_col text collate "en-x-icu" unique);
+
+select create_distributed_table('test_c_tbl_1', 'text_col');
+select create_distributed_table('test_c_tbl_2', 'text_col', colocate_with => 'none');
+
+-- errors
+select alter_distributed_table('test_c_tbl_2', colocate_with=>'test_c_tbl_1');
+
+create table test_c_tbl_3(int_col int, text_col text collate "C");
+create table test_c_tbl_4(text_col text collate "en-x-icu");
+
+select create_distributed_table('test_c_tbl_3', 'int_col');
+select create_distributed_table('test_c_tbl_4', 'text_col', colocate_with => 'none');
+
+-- errors
+select alter_distributed_table('test_c_tbl_3', colocate_with=>'test_c_tbl_4', distribution_column:='text_col');
+
+DROP TABLE test_c_tbl_1, test_c_tbl_2, test_c_tbl_3, test_c_tbl_4;
+
 SET client_min_messages TO WARNING;
 DROP TABLE failover_to_local, single_node_nullkey_c1, single_node_nullkey_c2, ref_table_conversion_test, single_shard_conversion_test_1, single_shard_conversion_test_2;
 DROP SCHEMA tenant_1 CASCADE;

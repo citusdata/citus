@@ -1,0 +1,81 @@
+name: setup_cassert_pg
+description: >-
+  Build an --enable-cassert PostgreSQL via pgenv (with -DUSE_VALGRIND dropped) and build & install
+  the citus extension against it. Mirrors the devcontainer developer flow on a bare runner so the
+  nightly cassert suites exercise PG-core asserts and Citus's own Assert().
+inputs:
+  pg_full:
+    description: "Full PG version pgenv should build, e.g. 16.14 / 17.10 / 18.4 / 19beta1"
+    required: true
+outputs:
+  pgenv_bindir:
+    description: "bindir of the freshly built cassert PG (version-specific pgenv prefix)"
+    value: ${{ steps.build_citus.outputs.bindir }}
+runs:
+  using: composite
+  steps:
+    - name: Install build dependencies
+      shell: bash
+      run: |
+        set -euo pipefail
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends \
+          bison flex gcc make perl pkg-config \
+          libreadline-dev zlib1g-dev libssl-dev libxml2-dev libxslt1-dev \
+          uuid-dev libicu-dev liblz4-dev libzstd-dev libcurl4-gnutls-dev \
+          libipc-run-perl python3 python3-pip pipenv
+
+    - name: Restore pgenv (cassert PG) cache
+      id: cache
+      uses: actions/cache@v4
+      with:
+        path: ~/.pgenv
+        # Bust the cache when the PG version OR the pgenv cassert config changes.
+        key: pgenv-cassert-${{ runner.os }}-${{ inputs.pg_full }}-${{ hashFiles('.devcontainer/pgenv/config/default.conf') }}
+
+    - name: Build cassert PostgreSQL (USE_VALGRIND dropped)
+      if: steps.cache.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [ ! -d "$HOME/.pgenv" ]; then
+          git clone --branch v1.3.2 --depth 1 https://github.com/theory/pgenv.git "$HOME/.pgenv"
+        fi
+        mkdir -p "$HOME/.pgenv/config"
+        # Single source of truth: take the devcontainer cassert config and rewrite the CFLAGS line.
+        # This removes both -DUSE_VALGRIND and -ggdb while pinning the decided flags, and keeps
+        # --enable-debug --enable-cassert --enable-tap-tests + ssl/xml/xslt/uuid=e2fs/icu/lz4.
+        cp .devcontainer/pgenv/config/default.conf "$HOME/.pgenv/config/default.conf"
+        sed -i "s|'CFLAGS=[^']*'|'CFLAGS=-Og -g3 -fno-omit-frame-pointer'|" \
+          "$HOME/.pgenv/config/default.conf"
+        echo "----- effective pgenv default.conf -----"
+        cat "$HOME/.pgenv/config/default.conf"
+        export PATH="$HOME/.pgenv/bin:$PATH"
+        MAKEFLAGS="-j $(nproc)" pgenv build "${{ inputs.pg_full }}"
+
+    - name: Build & install citus against cassert PG
+      id: build_citus
+      shell: bash
+      run: |
+        set -euo pipefail
+        export PATH="$HOME/.pgenv/bin:$HOME/.pgenv/pgsql/bin:$PATH"
+        pgenv switch "${{ inputs.pg_full }}"
+        PG_CONFIG="$HOME/.pgenv/pgsql/bin/pg_config"
+        BINDIR="$("$PG_CONFIG" --bindir)"
+        echo "Using PG_CONFIG=$PG_CONFIG (bindir=$BINDIR)"
+        # Guard: assertions are the entire point of this nightly. If the inherited devcontainer
+        # config ever loses --enable-cassert, fail loudly instead of silently running asserts-off.
+        "$PG_CONFIG" --configure | grep -q -- '--enable-cassert' \
+          || { echo "FATAL: built PG is not --enable-cassert; refusing to run nightly without asserts"; exit 1; }
+        echo "bindir=$BINDIR" >> "$GITHUB_OUTPUT"
+        # Persist for subsequent workflow steps: pgenv bin must shadow any system PG.
+        echo "$HOME/.pgenv/bin"       >> "$GITHUB_PATH"
+        echo "$HOME/.pgenv/pgsql/bin" >> "$GITHUB_PATH"
+        echo "PG_CONFIG=$PG_CONFIG"   >> "$GITHUB_ENV"
+        # psycopg (failure + citus-upgrade harnesses) loads libpq from the pgenv prefix, not system.
+        echo "LD_LIBRARY_PATH=$("$PG_CONFIG" --libdir):${LD_LIBRARY_PATH:-}" >> "$GITHUB_ENV"
+        # configure bakes bindir/libdir into Makefile.global, so `make check-*` auto-uses this PG.
+        ./configure PG_CONFIG="$PG_CONFIG" --without-pg-version-check
+        make -j"$(nproc)" all
+        # Installs into the $HOME pgenv prefix for this version -> no sudo, no clobber across versions.
+        make install

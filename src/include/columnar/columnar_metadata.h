@@ -14,14 +14,10 @@
 
 #include "postgres.h"
 
+#include "storage/relfilelocator.h"
+
 #include "pg_version_compat.h"
 #include "pg_version_constants.h"
-
-#if PG_VERSION_NUM >= PG_VERSION_16
-#include "storage/relfilelocator.h"
-#else
-#include "storage/relfilenode.h"
-#endif
 
 
 /*
@@ -61,7 +57,7 @@ typedef struct EmptyStripeReservation
 	uint64 stripeFirstRowNumber;
 } EmptyStripeReservation;
 
-extern List * StripesForRelfilelocator(RelFileLocator relfilelocator);
+extern List * StripesForRelfilelocator(Relation rel);
 extern void ColumnarStorageUpdateIfNeeded(Relation rel, bool isUpgrade);
 extern List * ExtractColumnarRelOptions(List *inOptions, List **outColumnarOptions);
 extern void SetColumnarRelOptions(RangeVar *rv, List *reloptions);

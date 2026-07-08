@@ -29,6 +29,7 @@
 #include "catalog/pg_constraint.h"
 #include "catalog/pg_extension.h"
 #include "catalog/pg_namespace.h"
+#include "catalog/pg_proc_d.h"
 #include "catalog/pg_type.h"
 #include "commands/extension.h"
 #include "commands/sequence.h"
@@ -81,10 +82,6 @@
 #include "distributed/worker_manager.h"
 #include "distributed/worker_protocol.h"
 
-#if PG_VERSION_NUM >= PG_VERSION_16
-#include "catalog/pg_proc_d.h"
-#endif
-
 #define DISK_SPACE_FIELDS 2
 
 /* Local functions forward declarations */
@@ -127,11 +124,11 @@ static bool SetFieldText(int attno, Datum values[], bool isnull[], bool replace[
 static bool SetFieldNull(int attno, Datum values[], bool isnull[], bool replace[]);
 
 #define InitFieldValue(attno, values, isnull, initValue) \
-	(void) SetFieldValue((attno), (values), (isnull), NULL, (initValue))
+		(void) SetFieldValue((attno), (values), (isnull), NULL, (initValue))
 #define InitFieldText(attno, values, isnull, initValue) \
-	(void) SetFieldText((attno), (values), (isnull), NULL, (initValue))
+		(void) SetFieldText((attno), (values), (isnull), NULL, (initValue))
 #define InitFieldNull(attno, values, isnull) \
-	(void) SetFieldNull((attno), (values), (isnull), NULL)
+		(void) SetFieldNull((attno), (values), (isnull), NULL)
 
 /* exports for SQL callable functions */
 PG_FUNCTION_INFO_V1(citus_local_disk_space_stats);
@@ -823,8 +820,8 @@ GenerateSizeQueryOnMultiplePlacements(List *shardIntervalList,
 	/* SELECT SUM(worker_partitioned_...) FROM VALUES (...) */
 	char *subqueryForPartitionedShards =
 		GenerateSizeQueryForRelationNameList(partitionedShardNames,
-											 GetWorkerPartitionedSizeUDFNameBySizeQueryType(
-												 sizeQueryType));
+											 GetWorkerPartitionedSizeUDFNameBySizeQueryType
+												 (sizeQueryType));
 
 	/* SELECT SUM(pg_..._size) FROM VALUES (...) */
 	char *subqueryForNonPartitionedShards =
@@ -1453,13 +1450,13 @@ IsActiveShardPlacement(ShardPlacement *shardPlacement)
 
 
 /*
- * IsRemoteShardPlacement returns true if the shard placement is on a remote
- * node.
+ * IsNonCoordShardPlacement returns true if the shard placement is on a node
+ * other than coordinator.
  */
 bool
-IsRemoteShardPlacement(ShardPlacement *shardPlacement)
+IsNonCoordShardPlacement(ShardPlacement *shardPlacement)
 {
-	return shardPlacement->groupId != GetLocalGroupId();
+	return shardPlacement->groupId != COORDINATOR_GROUP_ID;
 }
 
 
@@ -1719,6 +1716,52 @@ AllShardPlacementsOnNodeGroup(int32 groupId)
 
 
 /*
+ * LookupGroupPlacementByPlacementId finds the shard placement for
+ * given placementId from the catalog and returns GroupShardPlacement
+ * for it.
+ */
+GroupShardPlacement *
+LookupGroupPlacementByPlacementId(int64 placementId, bool missingOk)
+{
+	ScanKeyData scanKey[1];
+	int scanKeyCount = 1;
+	bool indexOK = true;
+
+	Relation pgPlacement = table_open(DistPlacementRelationId(), AccessShareLock);
+
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_placement_placementid,
+				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(placementId));
+
+	SysScanDesc scanDescriptor = systable_beginscan(pgPlacement,
+													DistPlacementPlacementidIndexId(),
+													indexOK,
+													NULL, scanKeyCount, scanKey);
+
+	HeapTuple heapTuple = systable_getnext(scanDescriptor);
+	if (!HeapTupleIsValid(heapTuple))
+	{
+		if (!missingOk)
+		{
+			ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+							errmsg("could not find any shard placement "
+								   "with id " INT64_FORMAT,
+								   placementId)));
+		}
+
+		return NULL;
+	}
+
+	GroupShardPlacement *placement =
+		TupleToGroupShardPlacement(RelationGetDescr(pgPlacement), heapTuple);
+
+	systable_endscan(scanDescriptor);
+	table_close(pgPlacement, NoLock);
+
+	return placement;
+}
+
+
+/*
  * TupleToGroupShardPlacement takes in a heap tuple from pg_dist_placement,
  * and converts this tuple to in-memory struct. The function assumes the
  * caller already has locks on the tuple, and doesn't perform any locking.
@@ -1860,7 +1903,7 @@ InsertShardPlacementRowGlobally(uint64 shardId, uint64 placementId,
 
 	char *insertPlacementCommand =
 		AddPlacementMetadataCommand(shardId, placementId, shardLength, groupId);
-	SendCommandToWorkersWithMetadata(insertPlacementCommand);
+	SendCommandToRemoteNodesWithMetadata(insertPlacementCommand);
 
 	return LoadShardPlacement(shardId, placementId);
 }
@@ -1885,7 +1928,7 @@ InsertShardPlacementRow(uint64 shardId, uint64 placementId,
 
 	if (placementId == INVALID_PLACEMENT_ID)
 	{
-		placementId = master_get_new_placementid(NULL);
+		placementId = GetNextPlacementId();
 	}
 	values[Anum_pg_dist_placement_placementid - 1] = Int64GetDatum(placementId);
 	values[Anum_pg_dist_placement_shardid - 1] = Int64GetDatum(shardId);
@@ -2095,7 +2138,7 @@ DeleteShardPlacementRowGlobally(uint64 placementId)
 
 	char *deletePlacementCommand =
 		DeletePlacementMetadataCommand(placementId);
-	SendCommandToWorkersWithMetadata(deletePlacementCommand);
+	SendCommandToRemoteNodesWithMetadata(deletePlacementCommand);
 }
 
 
@@ -2371,7 +2414,7 @@ UpdateNoneDistTableMetadataGlobally(Oid relationId, char replicationModel,
 											   replicationModel,
 											   colocationId,
 											   autoConverted);
-		SendCommandToWorkersWithMetadata(metadataCommand);
+		SendCommandToRemoteNodesWithMetadata(metadataCommand);
 	}
 }
 
@@ -4266,10 +4309,9 @@ CancelTasksForJob(int64 jobid)
 				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(jobid));
 
 	const bool indexOK = true;
-	SysScanDesc scanDescriptor = systable_beginscan(pgDistBackgroundTasks,
-													DistBackgroundTaskJobIdTaskIdIndexId(),
-													indexOK, NULL,
-													lengthof(scanKey), scanKey);
+	SysScanDesc scanDescriptor = systable_beginscan(
+		pgDistBackgroundTasks, DistBackgroundTaskJobIdTaskIdIndexId(),
+		indexOK, NULL, lengthof(scanKey), scanKey);
 
 	List *runningTaskPids = NIL;
 	HeapTuple taskTuple = NULL;

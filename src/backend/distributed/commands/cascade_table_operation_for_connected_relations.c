@@ -522,7 +522,7 @@ ExecuteCascadeOperationForRelationIdList(List *relationIdList,
  * with the flag InTableTypeConversionFunctionCall set to true.
  */
 void
-ExecuteAndLogUtilityCommandListInTableTypeConversionViaSPI(List *utilityCommandList)
+ExecuteAndLogUtilityCommandListInTableTypeConversionViaSPI(List *utilityCmdList)
 {
 	bool oldValue = InTableTypeConversionFunctionCall;
 	InTableTypeConversionFunctionCall = true;
@@ -531,7 +531,7 @@ ExecuteAndLogUtilityCommandListInTableTypeConversionViaSPI(List *utilityCommandL
 	PG_TRY();
 	{
 		char *utilityCommand = NULL;
-		foreach_declared_ptr(utilityCommand, utilityCommandList)
+		foreach_declared_ptr(utilityCommand, utilityCmdList)
 		{
 			/*
 			 * CREATE MATERIALIZED VIEW commands need to be parsed/transformed,
@@ -566,10 +566,10 @@ ExecuteAndLogUtilityCommandListInTableTypeConversionViaSPI(List *utilityCommandL
  * ExecuteAndLogUtilityCommand function for each of them.
  */
 void
-ExecuteAndLogUtilityCommandList(List *utilityCommandList)
+ExecuteAndLogUtilityCommandList(List *utilityCmdList)
 {
 	char *utilityCommand = NULL;
-	foreach_declared_ptr(utilityCommand, utilityCommandList)
+	foreach_declared_ptr(utilityCommand, utilityCmdList)
 	{
 		ExecuteAndLogUtilityCommand(utilityCommand);
 	}

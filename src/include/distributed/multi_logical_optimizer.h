@@ -28,6 +28,10 @@
 #define JSON_CAT_AGGREGATE_NAME "json_cat_agg"
 #define WORKER_PARTIAL_AGGREGATE_NAME "worker_partial_agg"
 #define COORD_COMBINE_AGGREGATE_NAME "coord_combine_agg"
+
+#define WORKER_BINARY_PARTIAL_AGGREGATE_NAME "worker_binary_partial_agg"
+#define COORD_BINARY_COMBINE_AGGREGATE_NAME "coord_binary_combine_agg"
+
 #define WORKER_COLUMN_FORMAT "worker_column_%d"
 
 /* Definitions related to count(distinct) approximations */

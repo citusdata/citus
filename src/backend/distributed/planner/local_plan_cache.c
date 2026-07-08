@@ -239,6 +239,13 @@ GetCachedLocalPlan(Task *task, DistributedPlan *distributedPlan)
 	{
 		return NULL;
 	}
+
+	if (list_length(distributedPlan->workerJob->taskList) != 1)
+	{
+		/* we only support plan caching for single shard queries */
+		return NULL;
+	}
+
 	List *cachedPlanList = distributedPlan->workerJob->localPlannedStatements;
 	LocalPlannedStatement *localPlannedStatement = NULL;
 

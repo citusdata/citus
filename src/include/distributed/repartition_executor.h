@@ -20,12 +20,12 @@ extern List * GenerateTaskListWithColocatedIntermediateResults(Oid targetRelatio
 															   Query *
 															   modifyQueryViaCoordinatorOrRepartition,
 															   char *resultIdPrefix);
-extern List * GenerateTaskListWithRedistributedResults(
-	Query *modifyQueryViaCoordinatorOrRepartition,
-	CitusTableCacheEntry *
-	targetRelation,
-	List **redistributedResults,
-	bool useBinaryFormat);
+extern List * GenerateTaskListWithRedistributedResults(Query *
+													   modifyQueryViaCoordinatorOrRepartition,
+													   CitusTableCacheEntry *
+													   targetRelation,
+													   List **redistributedResults,
+													   bool useBinaryFormat);
 extern bool IsSupportedRedistributionTarget(Oid targetRelationId);
 extern bool IsRedistributablePlan(Plan *selectPlan);
 extern bool HasMergeNotMatchedBySource(Query *query);

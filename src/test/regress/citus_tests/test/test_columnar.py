@@ -22,22 +22,18 @@ def test_freezing(coord):
             for _ in range(0, 10_000):
                 cur.execute("UPDATE test_row SET i = i + 1")
 
-    frozen_age = coord.sql_value(
-        """
+    frozen_age = coord.sql_value("""
         select age(relfrozenxid)
         from pg_class where relname='test_columnar_freeze';
-    """
-    )
+    """)
 
     assert frozen_age > 70_000, "columnar table was frozen"
     coord.sql("VACUUM FREEZE test_columnar_freeze")
 
-    frozen_age = coord.sql_value(
-        """
+    frozen_age = coord.sql_value("""
         select age(relfrozenxid)
         from pg_class where relname='test_columnar_freeze';
-    """
-    )
+    """)
     assert frozen_age < 70_000, "columnar table was not frozen"
 
     coord.sql("DROP EXTENSION citus_columnar CASCADE")
@@ -71,7 +67,12 @@ def test_recovery(coord):
     # test crashing while having an open transaction
     with pytest.raises(
         psycopg.OperationalError,
-        match="server closed the connection unexpectedly|consuming input failed: EOF detected",
+        match=(
+            "server closed the connection unexpectedly|"
+            "consuming input failed: EOF detected|"
+            "SSL SYSCALL error: EOF detected|"
+            "SSL error: unexpected eof while reading"
+        ),
     ):
         with coord.transaction() as cur:
             cur.execute(
@@ -88,7 +89,12 @@ def test_recovery(coord):
     # test crashing while having a prepared transaction
     with pytest.raises(
         psycopg.OperationalError,
-        match="server closed the connection unexpectedly|consuming input failed: EOF detected",
+        match=(
+            "server closed the connection unexpectedly|"
+            "consuming input failed: EOF detected|"
+            "consuming input failed: SSL SYSCALL error: EOF detected|"
+            "SSL error: unexpected eof while reading"
+        ),
     ):
         with coord.transaction() as cur:
             cur.execute(

@@ -148,7 +148,9 @@ CREATE FUNCTION sql_subquery_test(int, int) RETURNS bigint AS $$
 	    users_table.value_1 < $2;
 $$ LANGUAGE SQL;
 
--- should error out
+-- this fails pg <18
+-- succeeds in pg18 because of pg18 commit 0dca5d68d
+-- -> Change SQL-language functions to use the plan cache
 SELECT sql_subquery_test(1,1);
 
 

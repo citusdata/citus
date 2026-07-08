@@ -2064,8 +2064,7 @@ CopyShardsToNode(WorkerNode *sourceNode, WorkerNode *targetNode, List *shardInte
 
 	ExecuteTaskListOutsideTransaction(ROW_MODIFY_NONE, copyTaskList,
 									  MaxAdaptiveExecutorPoolSize,
-									  NULL /* jobIdList (ignored by API implementation) */
-									  );
+									  NULL /* jobIdList (ignored by API impl.) */);
 }
 
 

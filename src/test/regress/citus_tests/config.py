@@ -49,7 +49,7 @@ CITUS_ARBITRARY_TEST_DIR = "./tmp_citus_test"
 
 MASTER = "master"
 # This should be updated when citus version changes
-MASTER_VERSION = "14.0"
+MASTER_VERSION = "15.0"
 
 HOME = expanduser("~")
 
@@ -194,6 +194,7 @@ class CitusUpgradeConfig(CitusBaseClusterConfig):
         self.new_settings = {"citus.enable_version_checks": "false"}
         self.user = SUPER_USER_NAME
         self.mixed_mode = arguments["--mixed"]
+        self.minor_upgrade = arguments.get("--minor-upgrade", False)
         self.fixed_port = 57635
 
 

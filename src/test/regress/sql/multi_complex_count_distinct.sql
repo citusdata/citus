@@ -1,14 +1,6 @@
 --
 -- COMPLEX_COUNT_DISTINCT
 --
--- This test file has an alternative output because of the following in PG16:
--- https://github.com/postgres/postgres/commit/1349d2790bf48a4de072931c722f39337e72055e
--- https://github.com/postgres/postgres/commit/f4c7c410ee4a7baa06f51ebb8d5333c169691dd3
--- The alternative output can be deleted when we drop support for PG15
---
-SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int >= 16 AS server_version_ge_16;
-
 SET citus.next_shard_id TO 240000;
 SET citus.shard_count TO 8;
 SET citus.shard_replication_factor TO 1;

@@ -7,8 +7,8 @@ test: isolation_add_node_vs_reference_table_operations
 test: isolation_create_table_vs_add_remove_node
 test: isolation_master_update_node
 test: isolation_shouldhaveshards
-
 test: isolation_extension_commands
+test: isolation_schema_based_sharding_from_any_node
 
 # tests that change node metadata should precede
 # isolation_cluster_management such that tests

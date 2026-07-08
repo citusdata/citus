@@ -290,7 +290,9 @@ GetDefElemActionString(DefElemAction action)
 		}
 
 		default:
+		{
 			return "";
+		}
 	}
 }
 

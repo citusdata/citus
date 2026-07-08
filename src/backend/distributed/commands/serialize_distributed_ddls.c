@@ -237,7 +237,9 @@ AcquireCitusAdvisoryObjectClassLockGetOid(ObjectClass objectClass,
 		}
 
 		default:
+		{
 			elog(ERROR, "unsupported object class: %d", objectClass);
+		}
 	}
 }
 
@@ -270,6 +272,8 @@ AcquireCitusAdvisoryObjectClassLockCheckPrivileges(ObjectClass objectClass, Oid 
 		}
 
 		default:
+		{
 			elog(ERROR, "unsupported object class: %d", objectClass);
+		}
 	}
 }

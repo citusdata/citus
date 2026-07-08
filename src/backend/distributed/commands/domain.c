@@ -64,8 +64,8 @@ CreateDomainStmt *
 RecreateDomainStmt(Oid domainOid)
 {
 	CreateDomainStmt *stmt = makeNode(CreateDomainStmt);
-	stmt->domainname = stringToQualifiedNameList_compat(format_type_be_qualified(
-															domainOid));
+	stmt->domainname = stringToQualifiedNameList(format_type_be_qualified(domainOid),
+												 NULL);
 
 	HeapTuple tup = SearchSysCache1(TYPEOID, ObjectIdGetDatum(domainOid));
 	if (!HeapTupleIsValid(tup))

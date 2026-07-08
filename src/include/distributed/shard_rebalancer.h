@@ -30,10 +30,10 @@
 
 /* Definitions for metadata update commands */
 #define INSERT_SHARD_PLACEMENT_COMMAND "INSERT INTO pg_dist_shard_placement VALUES(" \
-	UINT64_FORMAT ", %d, " UINT64_FORMAT ", '%s', %d)"
+		UINT64_FORMAT ", %d, " UINT64_FORMAT ", '%s', %d)"
 #define DELETE_SHARD_PLACEMENT_COMMAND "DELETE FROM pg_dist_shard_placement WHERE " \
 									   "shardid=" UINT64_FORMAT \
-	" AND nodename='%s' AND nodeport=%d"
+		" AND nodename='%s' AND nodeport=%d"
 
 /*
  * Definitions for shard placement json field names. These names should match

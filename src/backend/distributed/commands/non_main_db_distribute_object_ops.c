@@ -35,13 +35,13 @@
 
 
 #define EXECUTE_COMMAND_ON_REMOTE_NODES_AS_USER \
-	"SELECT citus_internal.execute_command_on_remote_nodes_as_user(%s, %s)"
+		"SELECT citus_internal.execute_command_on_remote_nodes_as_user(%s, %s)"
 #define START_MANAGEMENT_TRANSACTION \
-	"SELECT citus_internal.start_management_transaction('%lu')"
+		"SELECT citus_internal.start_management_transaction('%lu')"
 #define MARK_OBJECT_DISTRIBUTED \
-	"SELECT citus_internal.mark_object_distributed(%d, %s, %d, %s)"
+		"SELECT citus_internal.mark_object_distributed(%d, %s, %d, %s)"
 #define UNMARK_OBJECT_DISTRIBUTED \
-	"SELECT pg_catalog.citus_unmark_object_distributed(%d, %d, %d, %s)"
+		"SELECT pg_catalog.citus_unmark_object_distributed(%d, %d, %d, %s)"
 
 
 /*

@@ -44,6 +44,20 @@ CREATE SCHEMA sc2;
 CREATE STATISTICS sc2."neW'Stat" ON a,b FROM test_stats3;
 SELECT create_distributed_table ('test_stats3','a');
 
+-- test creating custom stats with expressions and distributing it.
+CREATE TABLE sc2.test_stats_expr (
+	a int,
+	b int,
+	c float8
+);
+CREATE STATISTICS s_expr ON (a + b / 2) FROM sc2.test_stats_expr;
+
+-- succeeds since we replicate it into the shards.
+SELECT create_distributed_table('sc2.test_stats_expr', 'a');
+
+-- add expression stats on the distributed table should work.
+CREATE STATISTICS s_expr_post ON (a - (b * 2)), round(c) FROM sc2.test_stats_expr;
+
 -- test dropping statistics
 CREATE TABLE test_stats4 (
     a int,

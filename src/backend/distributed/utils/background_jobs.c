@@ -88,26 +88,26 @@ static shm_mq_result ConsumeTaskWorkerOutput(shm_mq_handle *responseq, StringInf
 											 bool *hadError);
 static void UpdateDependingTasks(BackgroundTask *task);
 static int64 CalculateBackoffDelay(int retryCount);
-static bool NewExecutorExceedsCitusLimit(
-	QueueMonitorExecutionContext *queueMonitorExecutionContext);
+static bool NewExecutorExceedsCitusLimit(QueueMonitorExecutionContext *
+										 queueMonitorExecutionContext);
 static bool NewExecutorExceedsPgMaxWorkers(BackgroundWorkerHandle *handle,
 										   QueueMonitorExecutionContext *
 										   queueMonitorExecutionContext);
 static bool AssignRunnableTaskToNewExecutor(BackgroundTask *runnableTask,
 											QueueMonitorExecutionContext *
 											queueMonitorExecutionContext);
-static void AssignRunnableTasks(
-	QueueMonitorExecutionContext *queueMonitorExecutionContext);
+static void AssignRunnableTasks(QueueMonitorExecutionContext *
+								queueMonitorExecutionContext);
 static List * GetRunningTaskEntries(HTAB *currentExecutors);
-static shm_mq_result ReadFromExecutorQueue(
-	BackgroundExecutorHashEntry *backgroundExecutorHashEntry,
-	bool *hadError);
-static void CheckAndResetLastWorkerAllocationFailure(
-	QueueMonitorExecutionContext *queueMonitorExecutionContext);
-static TaskExecutionStatus TaskConcurrentCancelCheck(
-	TaskExecutionContext *taskExecutionContext);
-static TaskExecutionStatus ConsumeExecutorQueue(
-	TaskExecutionContext *taskExecutionContext);
+static shm_mq_result ReadFromExecutorQueue(BackgroundExecutorHashEntry *
+										   backgroundExecutorHashEntry,
+										   bool *hadError);
+static void CheckAndResetLastWorkerAllocationFailure(QueueMonitorExecutionContext *
+													 queueMonitorExecutionContext);
+static TaskExecutionStatus TaskConcurrentCancelCheck(TaskExecutionContext *
+													 taskExecutionContext);
+static TaskExecutionStatus ConsumeExecutorQueue(TaskExecutionContext *
+												taskExecutionContext);
 static void TaskHadError(TaskExecutionContext *taskExecutionContext);
 static void TaskEnded(TaskExecutionContext *taskExecutionContext);
 static void TerminateAllTaskExecutors(HTAB *currentExecutors);
@@ -537,7 +537,8 @@ NewExecutorExceedsPgMaxWorkers(BackgroundWorkerHandle *handle,
  */
 static bool
 AssignRunnableTaskToNewExecutor(BackgroundTask *runnableTask,
-								QueueMonitorExecutionContext *queueMonitorExecutionContext)
+								QueueMonitorExecutionContext *
+								queueMonitorExecutionContext)
 {
 	Assert(runnableTask && runnableTask->status == BACKGROUND_TASK_STATUS_RUNNABLE);
 
@@ -649,8 +650,8 @@ GetRunningTaskEntries(HTAB *currentExecutors)
  * It also resets the failure timestamp.
  */
 static void
-CheckAndResetLastWorkerAllocationFailure(
-	QueueMonitorExecutionContext *queueMonitorExecutionContext)
+CheckAndResetLastWorkerAllocationFailure(QueueMonitorExecutionContext *
+										 queueMonitorExecutionContext)
 {
 	if (queueMonitorExecutionContext->backgroundWorkerFailedStartTime > 0)
 	{

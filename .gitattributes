@@ -25,7 +25,6 @@ configure				-whitespace
 
 # except these exceptions...
 src/backend/distributed/utils/citus_outfuncs.c -citus-style
-src/backend/distributed/deparser/ruleutils_15.c -citus-style
 src/backend/distributed/deparser/ruleutils_16.c -citus-style
 src/backend/distributed/deparser/ruleutils_17.c -citus-style
 src/backend/distributed/deparser/ruleutils_18.c -citus-style

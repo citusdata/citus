@@ -106,11 +106,13 @@ extern List * DDLTaskList(Oid relationId, const char *commandString);
 extern List * NontransactionalNodeDDLTaskList(TargetWorkerSet targets, List *commands,
 											  bool warnForPartialFailure);
 extern List * NodeDDLTaskList(TargetWorkerSet targets, List *commands);
+extern void SetLocalEnableDDLPropagation(bool state);
 extern bool AlterTableInProgress(void);
 extern bool DropSchemaOrDBInProgress(void);
 extern void UndistributeDisconnectedCitusLocalTables(void);
 extern void NotifyUtilityHookConstraintDropped(void);
 extern void ResetConstraintDropped(void);
 extern void ExecuteDistributedDDLJob(DDLJob *ddlJob);
+extern bool IsDroppedOrGenerated(Form_pg_attribute attr);
 
 #endif /* MULTI_UTILITY_H */

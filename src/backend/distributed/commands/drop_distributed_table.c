@@ -27,9 +27,9 @@
 
 
 /* local function forward declarations */
-static void MasterRemoveDistributedTableMetadataFromWorkers(Oid relationId,
-															char *schemaName,
-															char *tableName);
+static void MasterRemoveDistributedTableMetadataFromRemoteNodes(Oid relationId,
+																char *schemaName,
+																char *tableName);
 
 
 /* exports for SQL callable functions */
@@ -86,7 +86,11 @@ master_remove_partition_metadata(PG_FUNCTION_ARGS)
 		PG_RETURN_VOID();
 	}
 
-	EnsureCoordinator();
+	/*
+	 * Today we support DROP from workers only if the table is a
+	 * distributed-schema table, but it's okay to not ensure this here.
+	 */
+	EnsurePropagationToCoordinator();
 
 	CheckTableSchemaNameForDrop(relationId, &schemaName, &tableName);
 
@@ -137,14 +141,15 @@ master_remove_distributed_table_metadata_from_workers(PG_FUNCTION_ARGS)
 
 	CheckTableSchemaNameForDrop(relationId, &schemaName, &tableName);
 
-	MasterRemoveDistributedTableMetadataFromWorkers(relationId, schemaName, tableName);
+	MasterRemoveDistributedTableMetadataFromRemoteNodes(relationId, schemaName,
+														tableName);
 
 	PG_RETURN_VOID();
 }
 
 
 /*
- * MasterRemoveDistributedTableMetadataFromWorkers drops the table and removes
+ * MasterRemoveDistributedTableMetadataFromRemoteNodes drops the table and removes
  * all the metadata belonging the distributed table in the worker nodes
  * with metadata. The function doesn't drop the tables that are
  * the shards on the workers.
@@ -158,8 +163,8 @@ master_remove_distributed_table_metadata_from_workers(PG_FUNCTION_ARGS)
  * which CALLED_AS_TRIGGER does not cover.
  */
 static void
-MasterRemoveDistributedTableMetadataFromWorkers(Oid relationId, char *schemaName,
-												char *tableName)
+MasterRemoveDistributedTableMetadataFromRemoteNodes(Oid relationId, char *schemaName,
+													char *tableName)
 {
 	/*
 	 * The SQL_DROP trigger calls this function even for tables that are
@@ -172,7 +177,11 @@ MasterRemoveDistributedTableMetadataFromWorkers(Oid relationId, char *schemaName
 		return;
 	}
 
-	EnsureCoordinator();
+	/*
+	 * Today we support DROP from workers only if the table is a
+	 * distributed-schema table, but it's okay to not ensure this here.
+	 */
+	EnsurePropagationToCoordinator();
 
 	if (!ShouldSyncTableMetadataViaCatalog(relationId))
 	{
@@ -182,7 +191,7 @@ MasterRemoveDistributedTableMetadataFromWorkers(Oid relationId, char *schemaName
 	if (PartitionTable(relationId))
 	{
 		/*
-		 * MasterRemoveDistributedTableMetadataFromWorkers is only called from drop trigger.
+		 * MasterRemoveDistributedTableMetadataFromRemoteNodes is only called from drop trigger.
 		 * When parent is dropped in a drop trigger, we remove all the corresponding
 		 * partitions via the parent, mostly for performance reasons.
 		 */
@@ -191,7 +200,7 @@ MasterRemoveDistributedTableMetadataFromWorkers(Oid relationId, char *schemaName
 
 	/* drop the distributed table metadata on the workers */
 	char *deleteDistributionCommand = DistributionDeleteCommand(schemaName, tableName);
-	SendCommandToWorkersWithMetadata(deleteDistributionCommand);
+	SendCommandToRemoteNodesWithMetadata(deleteDistributionCommand);
 }
 
 

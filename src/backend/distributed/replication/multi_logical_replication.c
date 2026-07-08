@@ -131,8 +131,8 @@ static void ExecuteRemainingPostLoadTableCommands(List *logicalRepTargetList);
 static char * escape_param_str(const char *str);
 static XLogRecPtr GetRemoteLSN(MultiConnection *connection, char *command);
 static void WaitForMiliseconds(long timeout);
-static XLogRecPtr GetSubscriptionPosition(
-	GroupedLogicalRepTargets *groupedLogicalRepTargets);
+static XLogRecPtr GetSubscriptionPosition(GroupedLogicalRepTargets *
+										  groupedLogicalRepTargets);
 
 static HTAB * CreateShardMovePublicationInfoHash(WorkerNode *targetNode,
 												 List *shardIntervals);
@@ -1189,9 +1189,6 @@ PublicationName(LogicalRepType type, uint32_t nodeId, Oid ownerId)
 /*
  * ReplicationSlotNameForNodeAndOwnerForOperation returns the name of the
  * replication slot for the given node, table owner and operation id.
- *
- * Note that PG15 introduced a new ReplicationSlotName function that caused name conflicts
- * and we renamed this function.
  */
 char *
 ReplicationSlotNameForNodeAndOwnerForOperation(LogicalRepType type, uint32_t nodeId,
@@ -1515,7 +1512,6 @@ CreateSubscriptions(MultiConnection *sourceConnection,
 		appendStringInfo(createSubscriptionCommand,
 						 "CREATE SUBSCRIPTION %s CONNECTION %s PUBLICATION %s "
 						 "WITH (citus_use_authinfo=true, create_slot=false, "
-#if PG_VERSION_NUM >= PG_VERSION_16
 
 		                 /*
 		                  * password_required specifies whether connections to the publisher
@@ -1529,9 +1525,6 @@ CreateSubscriptions(MultiConnection *sourceConnection,
 		                  * it will be ignored anyway
 		                  */
 						 "copy_data=false, enabled=false, slot_name=%s, password_required=false",
-#else
-						 "copy_data=false, enabled=false, slot_name=%s",
-#endif
 						 quote_identifier(target->subscriptionName),
 						 quote_literal_cstr(conninfo->data),
 						 quote_identifier(target->publication->name),

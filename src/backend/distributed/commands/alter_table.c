@@ -77,9 +77,9 @@
 #define ALTER_TABLE_SET_ACCESS_METHOD 'm'
 
 #define UNDISTRIBUTE_TABLE_CASCADE_HINT \
-	"Use cascade option to undistribute all the relations involved in " \
-	"a foreign key relationship with %s by executing SELECT " \
-	"undistribute_table($$%s$$, cascade_via_foreign_keys=>true)"
+		"Use cascade option to undistribute all the relations involved in " \
+		"a foreign key relationship with %s by executing SELECT " \
+		"undistribute_table($$%s$$, cascade_via_foreign_keys=>true)"
 
 
 typedef TableConversionReturn *(*TableConversionFunction)(struct
@@ -185,8 +185,8 @@ typedef struct TableConversionState
 
 
 static TableConversionReturn * AlterDistributedTable(TableConversionParameters *params);
-static TableConversionReturn * AlterTableSetAccessMethod(
-	TableConversionParameters *params);
+static TableConversionReturn * AlterTableSetAccessMethod(TableConversionParameters *
+														 params);
 static TableConversionReturn * ConvertTable(TableConversionState *con);
 static TableConversionReturn * ConvertTableInternal(TableConversionState *con);
 static bool SwitchToSequentialAndLocalExecutionIfShardNameTooLong(char *relationName,
@@ -215,8 +215,8 @@ static char * CreateWorkerChangeSequenceDependencyCommand(char *qualifiedSequece
 static void ErrorIfMatViewSizeExceedsTheLimit(Oid matViewOid);
 static char * CreateMaterializedViewDDLCommand(Oid matViewOid);
 static char * GetAccessMethodForMatViewIfExists(Oid viewOid);
-static bool WillRecreateForeignKeyToReferenceTable(Oid relationId,
-												   CascadeToColocatedOption cascadeOption);
+static bool WillRecreateFKeyToReferenceTable(Oid relationId,
+											 CascadeToColocatedOption cascadeOption);
 static void WarningsForDroppingForeignKeysWithDistributedTables(Oid relationId);
 static void ErrorIfUnsupportedCascadeObjects(Oid relationId);
 static List * WrapTableDDLCommands(List *commandStrings);
@@ -505,8 +505,9 @@ UndistributeTable(TableConversionParameters *params)
 	if (!params->bypassTenantCheck && IsTenantSchema(schemaId) &&
 		IsCitusTableType(params->relationId, SINGLE_SHARD_DISTRIBUTED))
 	{
-		EnsureUndistributeTenantTableSafe(params->relationId,
-										  TenantOperationNames[TENANT_UNDISTRIBUTE_TABLE]);
+		EnsureUndistributeTenantTableSafe(
+			params->relationId,
+			TenantOperationNames[TENANT_UNDISTRIBUTE_TABLE]);
 	}
 
 	if (!params->cascadeViaForeignKeys)
@@ -577,7 +578,7 @@ AlterDistributedTable(TableConversionParameters *params)
 	TableConversionState *con = CreateTableConversion(params);
 	CheckAlterDistributedTableConversionParameters(con);
 
-	if (WillRecreateForeignKeyToReferenceTable(con->relationId, con->cascadeToColocated))
+	if (WillRecreateFKeyToReferenceTable(con->relationId, con->cascadeToColocated))
 	{
 		ereport(DEBUG1, (errmsg("setting multi shard modify mode to sequential")));
 		SetLocalMultiShardModifyModeToSequential();
@@ -1353,6 +1354,7 @@ CreateTableConversion(TableConversionParameters *params)
 	}
 
 
+	Oid relam = relation->rd_rel->relam;
 	relation_close(relation, NoLock);
 	con->distributionKey =
 		BuildDistributionKeyFromColumnName(con->relationId, con->distributionColumn,
@@ -1362,11 +1364,11 @@ CreateTableConversion(TableConversionParameters *params)
 	if (!PartitionedTable(con->relationId) && !IsForeignTable(con->relationId))
 	{
 		HeapTuple amTuple = SearchSysCache1(AMOID, ObjectIdGetDatum(
-												relation->rd_rel->relam));
+												relam));
 		if (!HeapTupleIsValid(amTuple))
 		{
 			ereport(ERROR, (errmsg("cache lookup failed for access method %d",
-								   relation->rd_rel->relam)));
+								   relam)));
 		}
 		Form_pg_am amForm = (Form_pg_am) GETSTRUCT(amTuple);
 		con->originalAccessMethod = NameStr(amForm->amname);
@@ -1524,7 +1526,9 @@ CreateCitusTableLike(TableConversionState *con)
 				.colocateWithTableName = quote_qualified_identifier(con->schemaName,
 																	con->relationName)
 			};
-			CreateSingleShardTable(con->newRelationId, colocationParam);
+			bool allowFromWorkers = false;
+			CreateSingleShardTable(con->newRelationId, colocationParam,
+								   allowFromWorkers);
 		}
 		else
 		{
@@ -1927,14 +1931,10 @@ GetNonGeneratedStoredColumnNameList(Oid relationId)
 	for (int columnIndex = 0; columnIndex < tupleDescriptor->natts; columnIndex++)
 	{
 		Form_pg_attribute currentColumn = TupleDescAttr(tupleDescriptor, columnIndex);
-		if (currentColumn->attisdropped)
-		{
-			/* skip dropped columns */
-			continue;
-		}
 
-		if (currentColumn->attgenerated == ATTRIBUTE_GENERATED_STORED)
+		if (IsDroppedOrGenerated(currentColumn))
 		{
+			/* skip dropped or generated columns */
 			continue;
 		}
 
@@ -2114,7 +2114,7 @@ CheckAlterDistributedTableConversionParameters(TableConversionState *con)
 		{
 			ereport(ERROR, (errmsg("cannot colocate with %s and change distribution "
 								   "column to %s because data type of column %s is "
-								   "different then the distribution column of the %s",
+								   "different than the distribution column of the %s",
 								   con->colocateWith, con->distributionColumn,
 								   con->distributionColumn, con->colocateWith)));
 		}
@@ -2122,6 +2122,23 @@ CheckAlterDistributedTableConversionParameters(TableConversionState *con)
 				 colocateWithPartKey->vartype != con->originalDistributionKey->vartype)
 		{
 			ereport(ERROR, (errmsg("cannot colocate with %s because data type of its "
+								   "distribution column is different than %s",
+								   con->colocateWith, con->relationName)));
+		}
+		else if (con->distributionColumn &&
+				 colocateWithPartKey->varcollid != con->distributionKey->varcollid)
+		{
+			ereport(ERROR, (errmsg("cannot colocate with %s and change distribution "
+								   "column to %s because collation of column %s is "
+								   "different than the distribution column of the %s",
+								   con->colocateWith, con->distributionColumn,
+								   con->distributionColumn, con->colocateWith)));
+		}
+		else if (!con->distributionColumn &&
+				 colocateWithPartKey->varcollid != con->originalDistributionKey->varcollid
+				 )
+		{
+			ereport(ERROR, (errmsg("cannot colocate with %s because collation of its "
 								   "distribution column is different than %s",
 								   con->colocateWith, con->relationName)));
 		}
@@ -2197,13 +2214,13 @@ GetAccessMethodForMatViewIfExists(Oid viewOid)
 
 
 /*
- * WillRecreateForeignKeyToReferenceTable checks if the table of relationId has any foreign
+ * WillRecreateFKeyToReferenceTable checks if the table of relationId has any foreign
  * key to a reference table, if conversion will be cascaded to colocated table this function
  * also checks if any of the colocated tables have a foreign key to a reference table too
  */
 bool
-WillRecreateForeignKeyToReferenceTable(Oid relationId,
-									   CascadeToColocatedOption cascadeOption)
+WillRecreateFKeyToReferenceTable(Oid relationId,
+								 CascadeToColocatedOption cascadeOption)
 {
 	if (cascadeOption == CASCADE_TO_COLOCATED_NO ||
 		cascadeOption == CASCADE_TO_COLOCATED_UNSPECIFIED)
