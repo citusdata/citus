@@ -5,17 +5,20 @@
 
 #include "distributed/argutils.h"
 #include "distributed/clonenode_utils.h"
+#include "distributed/coordinator_protocol.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/remote_commands.h"
 #include "distributed/shard_rebalancer.h"
+#include "distributed/worker_transaction.h"
 
 
 static void BlockAllWritesToWorkerNode(WorkerNode *workerNode);
 static bool GetNodeIsInRecoveryStatus(WorkerNode *workerNode);
 static void PromoteCloneNode(WorkerNode *cloneWorkerNode);
 static void EnsureSingleNodePromotion(WorkerNode *primaryNode);
+static void AdjustCloneSequenceRangesForNewGroup(WorkerNode *cloneNode);
 
 PG_FUNCTION_INFO_V1(citus_promote_clone_and_rebalance);
 
@@ -196,6 +199,16 @@ citus_promote_clone_and_rebalance(PG_FUNCTION_ARGS)
 	 * since the rebalancing algorithm depends on the latest metadata.
 	 */
 	SyncNodeMetadataToNodes();
+
+	/*
+	 * Re-range the promoted clone's distributed-table sequences to its new
+	 * group-id window. The clone is a physical replica, so its sequence objects
+	 * still carry the source primary's (groupId << 48) range; the classical
+	 * activation path does the equivalent re-ranging per group id. This must run
+	 * after SyncNodeMetadataToNodes() so the clone's local group id is already
+	 * corrected and visible over the reused metadata connection.
+	 */
+	AdjustCloneSequenceRangesForNewGroup(cloneNode);
 
 	/* Step 5: Split Shards Between Primary and Clone */
 	SplitShardsBetweenPrimaryAndClone(primaryNode, cloneNode, PG_GETARG_NAME_OR_NULL(1))
@@ -421,4 +434,91 @@ EnsureSingleNodePromotion(WorkerNode *primaryNode)
 		AcquirePlacementColocationLock(distributedTableId, ExclusiveLock, "promote clone")
 		;
 	}
+}
+
+
+/*
+ * AdjustCloneSequenceRangesForNewGroup re-ranges the promoted clone's
+ * sequence-backed columns for the same table surface that classical
+ * add/activate-node flow syncs to metadata workers (i.e. tables where
+ * ShouldSyncTableMetadata(relationId) is true).
+ *
+ * A clone is a physical streaming replica of its source primary, so its
+ * sequence objects are byte-for-byte copies that still carve out the source
+ * primary's (groupId << 48) value window. The classical activation path
+ * re-ranges sequences per group id (via AlterSequenceMinMax) so each group emits
+ * globally-unique values; the clone path must do the same once its group id is
+ * corrected.
+ *
+ * The command list is built on the coordinator (reusing the existing per-table
+ * sequence command builders) and sent to the clone over the metadata connection
+ * via SendMetadataCommandListToWorkerListInCoordinatedTransaction. That path
+ * reuses the same connection SyncNodeMetadataToNodes() used to update
+ * pg_dist_local_group, so the corrected local group id is visible when
+ * AlterSequenceMinMax() runs on the clone. Therefore this MUST be called after
+ * SyncNodeMetadataToNodes().
+ */
+static void
+AdjustCloneSequenceRangesForNewGroup(WorkerNode *cloneNode)
+{
+	List *ddlCommandList = NIL;
+
+	List *citusTableIdList = AllCitusTableIds();
+	Oid relationId = InvalidOid;
+	foreach_declared_oid(relationId, citusTableIdList)
+	{
+		if (!ShouldSyncTableMetadata(relationId))
+		{
+			continue;
+		}
+
+		ddlCommandList = list_concat(ddlCommandList,
+									 SequenceRangeAdjustCommandList(relationId));
+		ddlCommandList = list_concat(ddlCommandList,
+									 IdentitySequenceDependencyCommandList(relationId));
+	}
+
+	if (ddlCommandList == NIL)
+	{
+		/* no sequence-backed Citus-table columns to re-range */
+		return;
+	}
+
+	/*
+	 * SendMetadataCommandListToWorkerListInCoordinatedTransaction expects plain
+	 * command strings, so unwrap each TableDDLCommand.
+	 */
+	List *commandList = NIL;
+	TableDDLCommand *ddlCommand = NULL;
+	foreach_declared_ptr(ddlCommand, ddlCommandList)
+	{
+		commandList = lappend(commandList, GetTableDDLCommand(ddlCommand));
+	}
+
+	/*
+	 * Re-fetch the clone node so its hasMetadata/metadataSynced flags reflect
+	 * the post-activation, post-sync catalog state. The cloneNode passed in was
+	 * loaded at the start of promotion (before ActivateCloneNodeAsPrimary and
+	 * SyncNodeMetadataToNodes), so its in-memory metadata flags are still those
+	 * of an inactive clone and would trip the metadata-node sanity checks in the
+	 * send path.
+	 */
+	WorkerNode *freshCloneNode = FindNodeAnyClusterByNodeId(cloneNode->nodeId);
+	if (freshCloneNode == NULL)
+	{
+		ereport(ERROR, (errmsg("could not find promoted clone node with ID %d "
+							   "while re-ranging its sequences",
+							   cloneNode->nodeId)));
+	}
+
+	SendMetadataCommandListToWorkerListInCoordinatedTransaction(
+		list_make1(freshCloneNode),
+		CurrentUserName(),
+		commandList);
+
+	ereport(NOTICE, (errmsg(
+						 "re-ranged %d sequence(s) on promoted clone %s:%d (ID %d) for new group %d",
+						 list_length(commandList), freshCloneNode->workerName,
+						 freshCloneNode->workerPort, freshCloneNode->nodeId,
+						 freshCloneNode->groupId)));
 }
