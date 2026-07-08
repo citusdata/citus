@@ -205,6 +205,7 @@ extern bool IsTableWithDistKeyRTE(Node *node);
 extern bool IsCitusExtraDataContainerRelation(RangeTblEntry *rte);
 extern bool ContainsReadIntermediateResultFunction(Node *node);
 extern bool ContainsReadIntermediateResultArrayFunction(Node *node);
+extern bool IsReadIntermediateResultFunction(Node *node);
 extern char * FindIntermediateResultIdIfExists(RangeTblEntry *rte);
 extern MultiNode * ParentNode(MultiNode *multiNode);
 extern MultiNode * ChildNode(MultiUnaryNode *multiNode);
