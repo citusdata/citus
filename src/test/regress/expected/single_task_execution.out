@@ -391,6 +391,134 @@ EXPLAIN (COSTS OFF) UPDATE kv SET value = 'x' WHERE key = 1;
 (8 rows)
 
 -- ============================================================
+-- PART 6: local-execution state must be preserved (read-your-writes)
+-- Guard: when STE runs a task remotely against the local node it must set
+-- LOCAL_EXECUTION_DISABLED, exactly like the adaptive executor. Otherwise a
+-- local write followed by a forced-remote access in the same transaction
+-- would silently return a stale value (read-your-writes violation) or
+-- self-deadlock. With the guard in place, the REQUIRED -> DISABLED transition
+-- raises the same protective error the adaptive executor raises.
+-- ============================================================
+SET citus.enable_single_task_execution TO on;
+CREATE TABLE local_kv (key int PRIMARY KEY, val text);
+SELECT citus_add_local_table_to_metadata('local_kv');
+ citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO local_kv VALUES (1, 'orig');
+-- read case: must raise the protective error (NOT silently return 'orig')
+BEGIN;
+  UPDATE local_kv SET val = 'TX1' WHERE key = 1;
+  SET LOCAL citus.enable_local_execution TO off;
+  SELECT val FROM local_kv WHERE key = 1;
+ERROR:  cannot switch local execution status from local execution required to local execution disabled since it can cause visibility problems in the current transaction
+ROLLBACK;
+-- write-after-write variant: must error, not self-deadlock
+BEGIN;
+  UPDATE local_kv SET val = 'TX1' WHERE key = 1;
+  SET LOCAL citus.enable_local_execution TO off;
+  UPDATE local_kv SET val = 'TX2' WHERE key = 1;
+ERROR:  cannot switch local execution status from local execution required to local execution disabled since it can cause visibility problems in the current transaction
+ROLLBACK;
+-- positive parity: local write then local read in same txn sees fresh value
+BEGIN;
+  UPDATE local_kv SET val = 'TX1' WHERE key = 1;
+  SELECT val FROM local_kv WHERE key = 1;
+ val
+---------------------------------------------------------------------
+ TX1
+(1 row)
+
+ROLLBACK;
+DROP TABLE local_kv;
+-- ============================================================
+-- PART 7: eligibility exclusions - reference tables and multi-replica
+-- distributed tables must stay on the full adaptive executor. STE only uses
+-- the first placement, so choosing it for these would skip replica writes /
+-- 2PC-to-all-placements. Confirm modifications plan as "Citus Adaptive".
+-- ============================================================
+SET citus.enable_single_task_execution TO on;
+CREATE TABLE ref_kv (key int PRIMARY KEY, val text);
+SELECT create_reference_table('ref_kv');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO ref_kv VALUES (1, 'orig');
+SET citus.shard_replication_factor TO 2;
+CREATE TABLE rep2 (key int PRIMARY KEY, val text);
+SELECT create_distributed_table('rep2', 'key');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SET citus.shard_replication_factor TO 1;
+INSERT INTO rep2 VALUES (1, 'orig');
+-- reference-table modification must NOT use Single Task (writes all placements)
+EXPLAIN (COSTS OFF) UPDATE ref_kv SET val = 'r2' WHERE key = 1;
+                                    QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)
+   Task Count: 1
+   Tasks Shown: All
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Update on ref_kv_99900009 ref_kv
+               ->  Index Scan using ref_kv_pkey_99900009 on ref_kv_99900009 ref_kv
+                     Index Cond: (key = 1)
+(8 rows)
+
+-- multi-replica distributed modification must NOT use Single Task
+EXPLAIN (COSTS OFF) UPDATE rep2 SET val = 'x2' WHERE key = 1;
+                                 QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)
+   Task Count: 1
+   Tasks Shown: All
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Update on rep2_99900010 rep2
+               ->  Index Scan using rep2_pkey_99900010 on rep2_99900010 rep2
+                     Index Cond: (key = 1)
+(8 rows)
+
+DROP TABLE ref_kv, rep2;
+-- ============================================================
+-- PART 8: multi-node modification uses 2PC. Two single-shard writes to keys
+-- on different shards within one transaction must commit atomically. STE
+-- participates in the coordinated transaction / 2PC just like the adaptive
+-- executor.
+-- ============================================================
+SET citus.enable_single_task_execution TO on;
+-- atomic commit across shards
+BEGIN;
+  UPDATE kv SET value = 'tpc_a' WHERE key = 1;
+  UPDATE kv SET value = 'tpc_b' WHERE key = 2;
+COMMIT;
+SELECT key, value FROM kv WHERE key IN (1, 2) ORDER BY key;
+ key | value
+---------------------------------------------------------------------
+   1 | tpc_a
+   2 | tpc_b
+(2 rows)
+
+-- atomic rollback across shards
+BEGIN;
+  UPDATE kv SET value = 'rb_a' WHERE key = 1;
+  UPDATE kv SET value = 'rb_b' WHERE key = 2;
+ROLLBACK;
+SELECT key, value FROM kv WHERE key IN (1, 2) ORDER BY key;
+ key | value
+---------------------------------------------------------------------
+   1 | tpc_a
+   2 | tpc_b
+(2 rows)
+
+-- ============================================================
 -- Cleanup
 -- ============================================================
 SET citus.enable_single_task_execution TO on;

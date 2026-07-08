@@ -185,6 +185,13 @@
 
 #define SLOW_START_DISABLED 0
 
+/*
+ * Default number of columns to allocate result buffers for when the exact
+ * column count is not known upfront (a task may contain multiple queries).
+ * Buffers are reallocated if a result turns out to have more columns.
+ */
+#define DEFAULT_COLUMN_COUNT 16
+
 
 /*
  * DistributedExecution represents the execution of a distributed query
@@ -1494,6 +1501,15 @@ SingleTaskExecutorStart(CitusScanState *scanState)
 	/* split into local and remote tasks */
 	List *localTaskList = NIL;
 	List *remoteTaskList = NIL;
+
+	/*
+	 * Local execution is always supported on the STE path. The adaptive
+	 * executor only disables it for EXPLAIN ANALYZE (which uses multiple
+	 * queries per task, unsupported by local execution), but STE never runs
+	 * EXPLAIN ANALYZE: CitusExecOneTaskScan() routes those to
+	 * EagerAdaptiveExecutor() before SingleTaskExecutorStart() is reached.
+	 */
+	Assert(!RequestedForExplainAnalyze(scanState));
 	bool localExecutionSupported = true;
 
 	if (localExecutionSupported && ShouldExecuteTasksLocally(taskList))
@@ -1557,8 +1573,32 @@ SingleTaskExecutorStart(CitusScanState *scanState)
 	/* build placement access list for connection reuse tracking */
 	List *placementAccessList = PlacementAccessListForTask(task, taskPlacement);
 
+	/* determine whether the target placement is on the local node */
+	bool poolToLocalNode = false;
+	WorkerNode *workerNode = FindWorkerNode(nodeName, nodePort);
+	if (workerNode != NULL)
+	{
+		poolToLocalNode = (workerNode->groupId == GetLocalGroupId());
+	}
+
 	/* try to reuse a connection from the current transaction */
 	int connectionFlags = 0;
+	if (xactProperties.useRemoteTransactionBlocks == TRANSACTION_BLOCKS_DISALLOWED)
+	{
+		connectionFlags |= OUTSIDE_TRANSACTION;
+	}
+
+	/*
+	 * When we need to establish a new connection, enforce
+	 * citus.max_shared_pool_size by waiting for a shared connection slot.
+	 * Unlike the adaptive executor, STE needs exactly one connection and has
+	 * no parallelism to trade off, so we always wait for a slot rather than
+	 * treating the connection as optional. This performs the same shared-pool
+	 * accounting the adaptive executor does via
+	 * AdaptiveConnectionManagementFlag(), so STE cannot oversubscribe workers
+	 * past the configured limit.
+	 */
+	int newConnectionFlags = connectionFlags | WAIT_FOR_CONNECTION;
 	MultiConnection *connection = NULL;
 
 	if (xactProperties.useRemoteTransactionBlocks != TRANSACTION_BLOCKS_DISALLOWED)
@@ -1570,7 +1610,7 @@ SingleTaskExecutorStart(CitusScanState *scanState)
 	if (connection == NULL)
 	{
 		connection = GetNodeUserDatabaseConnection(
-			connectionFlags, nodeName, nodePort, NULL, NULL);
+			newConnectionFlags, nodeName, nodePort, NULL, NULL);
 
 		if (PQstatus(connection->pgConn) != CONNECTION_OK)
 		{
@@ -1580,7 +1620,16 @@ SingleTaskExecutorStart(CitusScanState *scanState)
 
 	/*
 	 * Detect remotely closed/terminated cached connections before
-	 * attempting to use them.
+	 * attempting to use them. STE does not have the adaptive executor's
+	 * connection state machine (which marks a connection LOST and retries),
+	 * so we probe a reused connection here and reconnect if it is dead.
+	 *
+	 * We use a raw MSG_PEEK on the socket rather than the WL_SOCKET_CLOSED
+	 * wait-event mechanism because the latter is gated by
+	 * WaitEventSetCanReportClosed(), which is false on platforms without
+	 * EPOLLRDHUP/POLLRDHUP (e.g. macOS). The adaptive executor can afford to
+	 * skip the proactive check there because its state machine retries; STE
+	 * cannot, so the portable recv() probe is preferred.
 	 */
 	if (connection->remoteTransaction.transactionState == REMOTE_TRANS_NOT_STARTED)
 	{
@@ -1599,6 +1648,14 @@ SingleTaskExecutorStart(CitusScanState *scanState)
 			}
 			else if (peekRc > 0)
 			{
+				/*
+				 * There are unsolicited bytes on the socket before we have
+				 * sent anything. On a healthy idle connection there should be
+				 * nothing to read, so this indicates an async error/close
+				 * (e.g. the backend was terminated). Drain via PQconsumeInput
+				 * (with a no-op notice receiver so we do not emit the async
+				 * message) and recycle the connection.
+				 */
 				PQsetNoticeReceiver(connection->pgConn,
 									OneTaskNoOpNoticeReceiver, NULL);
 				PQconsumeInput(connection->pgConn);
@@ -1616,7 +1673,7 @@ SingleTaskExecutorStart(CitusScanState *scanState)
 			CloseConnection(connection);
 
 			connection = GetNodeUserDatabaseConnection(
-				connectionFlags, nodeName, nodePort, NULL, NULL);
+				newConnectionFlags, nodeName, nodePort, NULL, NULL);
 
 			if (PQstatus(connection->pgConn) != CONNECTION_OK)
 			{
@@ -1673,6 +1730,21 @@ SingleTaskExecutorStart(CitusScanState *scanState)
 						nodeName, nodePort)));
 	}
 
+	if (poolToLocalNode)
+	{
+		/*
+		 * We started remote execution against the local node, so we cannot
+		 * switch back to local execution later in this transaction as that
+		 * would cause self-deadlocks and break read-your-own-writes
+		 * consistency. This mirrors the adaptive executor's guard in
+		 * StartPlacementExecutionOnSession(). If a prior statement in this
+		 * transaction already required local execution, this errors out (via
+		 * the REQUIRED -> DISABLED transition guard), matching the adaptive
+		 * executor's protective behavior.
+		 */
+		SetLocalExecutionStatus(LOCAL_EXECUTION_DISABLED);
+	}
+
 	/* set up result decoding */
 	if (tupleDescriptor != NULL)
 	{
@@ -1687,7 +1759,7 @@ SingleTaskExecutorStart(CitusScanState *scanState)
 	}
 
 	ste->columnCount = (tupleDescriptor != NULL) ?
-					   tupleDescriptor->natts : 16;
+					   tupleDescriptor->natts : DEFAULT_COLUMN_COUNT;
 	ste->columnArray = palloc0(ste->columnCount * sizeof(void *));
 
 	if (EnableBinaryProtocol && binaryResults)
@@ -2235,9 +2307,9 @@ CreateDistributedExecution(RowModifyLevel modLevel, List *taskList,
 
 	/*
 	 * Since task can have multiple queries, we are not sure how many columns we should
-	 * allocate for. We start with 16, and reallocate when we need more.
+	 * allocate for. We start with DEFAULT_COLUMN_COUNT, and reallocate when we need more.
 	 */
-	execution->allocatedColumnCount = 16;
+	execution->allocatedColumnCount = DEFAULT_COLUMN_COUNT;
 	execution->columnArray = palloc0(execution->allocatedColumnCount * sizeof(void *));
 	if (EnableBinaryProtocol)
 	{
