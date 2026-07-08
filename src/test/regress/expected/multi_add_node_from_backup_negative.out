@@ -119,6 +119,7 @@ NOTICE:  Clone localhost:xxxxx is now caught up with primary localhost:xxxxx.
 NOTICE:  Attempting to promote clone localhost:xxxxx via pg_promote().
 NOTICE:  Clone node localhost:xxxxx (ID 4) has been successfully promoted.
 NOTICE:  Updating metadata for promoted clone localhost:xxxxx (ID 4)
+NOTICE:  re-ranged 6 sequence(s) on promoted clone localhost:xxxxx (ID 4) for new group 4
 ERROR:  could not find rebalance strategy with name invalid_strategy
 SELECT * from pg_dist_node ORDER by nodeid;
  nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive |  noderole   | nodecluster | metadatasynced | shouldhaveshards | nodeisclone | nodeprimarynodeid
@@ -228,6 +229,7 @@ NOTICE:  Clone localhost:xxxxx is now caught up with primary localhost:xxxxx.
 NOTICE:  Attempting to promote clone localhost:xxxxx via pg_promote().
 NOTICE:  Clone node localhost:xxxxx (ID 6) has been successfully promoted.
 NOTICE:  Updating metadata for promoted clone localhost:xxxxx (ID 6)
+NOTICE:  re-ranged 6 sequence(s) on promoted clone localhost:xxxxx (ID 6) for new group 6
 NOTICE:  adjusting shard placements for primary localhost:xxxxx and clone localhost:xxxxx
 NOTICE:  processing 13 shards for primary node GroupID 5
 LOG:  inserting DELETE shard record for shard public.backup_test2_102091 from clone node GroupID 6
