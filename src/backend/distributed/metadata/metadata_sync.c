@@ -115,6 +115,7 @@ static bool ShouldSyncTableMetadataInternal(bool hashDistributed,
 static bool SyncNodeMetadataSnapshotToNode(WorkerNode *workerNode, bool raiseOnError);
 static void DropMetadataSnapshotOnNode(WorkerNode *workerNode);
 static void FetchSequenceState(Oid sequenceId, int64 *lastValue, bool *isCalled);
+static void AppendSequenceRangeAdjustCommand(Oid sequenceId, List **commandList);
 static char * CreateSequenceDependencyCommand(Oid relationId, Oid sequenceId,
 											  char *columnName);
 static GrantStmt * GenerateGrantStmtForRights(ObjectType objectType,
@@ -2008,28 +2009,78 @@ IdentitySequenceDependencyCommandList(Oid targetRelationId)
 			missingOk
 			);
 
-		char *qualifiedSequenceName = generate_qualified_relation_name(sequenceId);
-
-		/* prevent concurrent updates to the sequence until the end of the transaction */
-		LockRelationOid(sequenceId, RowExclusiveLock);
-
-		int64 lastValue = 0;
-		bool isCalled = false;
-		FetchSequenceState(sequenceId, &lastValue, &isCalled);
-
-		StringInfo stringInfo = makeStringInfo();
-		appendStringInfo(stringInfo,
-						 WORKER_ADJUST_IDENTITY_COLUMN_SEQ_SETTINGS,
-						 quote_literal_cstr(qualifiedSequenceName),
-						 lastValue, isCalled ? "true" : "false");
-
-		commandList = lappend(commandList,
-							  makeTableDDLCommandString(stringInfo->data));
+		AppendSequenceRangeAdjustCommand(sequenceId, &commandList);
 	}
 
 	relation_close(relation, NoLock);
 
 	return commandList;
+}
+
+
+/*
+ * SequenceRangeAdjustCommandList generates a list of commands to
+ * execute WORKER_ADJUST_IDENTITY_COLUMN_SEQ_SETTINGS for each nextval/serial
+ * sequence that the given relation depends on, so that those sequences' min/max
+ * values are re-ranged to the target node's local group-id window (producing
+ * globally-unique values across groups).
+ *
+ * This mirrors IdentitySequenceDependencyCommandList but covers sequence-backed
+ * default columns (serial, bigint DEFAULT nextval(...)) rather than identity
+ * columns. The worker side of the reused UDF runs AlterSequenceMinMax(), the
+ * same routine the classical activation path invokes via
+ * AdjustDependentSeqRangesOnLocalWorker(). It is used by the clone-promotion
+ * path to re-range the promoted clone's sequences to its newly-allocated group
+ * id, which the physical-replica clone would otherwise inherit from its source
+ * primary.
+ */
+List *
+SequenceRangeAdjustCommandList(Oid relationId)
+{
+	List *commandList = NIL;
+
+	List *seqInfoList = NIL;
+	GetDependentSequencesWithRelation(relationId, &seqInfoList, 0, DEPENDENCY_AUTO);
+
+	SequenceInfo *seqInfo = NULL;
+	foreach_declared_ptr(seqInfo, seqInfoList)
+	{
+		AppendSequenceRangeAdjustCommand(seqInfo->sequenceOid, &commandList);
+	}
+
+	return commandList;
+}
+
+
+/*
+ * AppendSequenceRangeAdjustCommand appends a WORKER_ADJUST_IDENTITY_COLUMN_SEQ_SETTINGS
+ * command for the given sequence to commandList. The command re-ranges the
+ * sequence's min/max values to the target node's local group-id window on
+ * workers (and sets last_value/is_called on the coordinator).
+ *
+ * It is shared by IdentitySequenceDependencyCommandList and
+ * SequenceRangeAdjustCommandList so the two stay in sync.
+ */
+static void
+AppendSequenceRangeAdjustCommand(Oid sequenceId, List **commandList)
+{
+	char *qualifiedSequenceName = generate_qualified_relation_name(sequenceId);
+
+	/* prevent concurrent updates to the sequence until the end of the transaction */
+	LockRelationOid(sequenceId, RowExclusiveLock);
+
+	int64 lastValue = 0;
+	bool isCalled = false;
+	FetchSequenceState(sequenceId, &lastValue, &isCalled);
+
+	StringInfo stringInfo = makeStringInfo();
+	appendStringInfo(stringInfo,
+					 WORKER_ADJUST_IDENTITY_COLUMN_SEQ_SETTINGS,
+					 quote_literal_cstr(qualifiedSequenceName),
+					 lastValue, isCalled ? "true" : "false");
+
+	*commandList = lappend(*commandList,
+						   makeTableDDLCommandString(stringInfo->data));
 }
 
 
