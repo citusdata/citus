@@ -766,7 +766,7 @@ TransferShards(int64 shardId, char *sourceNodeName,
  * but the metadata is not aware of this replication, this function updates the
  * metadata to reflect the new shard distribution.
  *
- * The function handles three types of shards:
+ * The function handles four types of shards:
  *
  * 1. Shards moving to clone node (cloneShardList):
  *    - Updates shard placement metadata to move placements from primary to clone
@@ -780,6 +780,12 @@ TransferShards(int64 shardId, char *sourceNodeName,
  * 3. Reference tables:
  *    - Inserts new placement records on the clone node
  *    - Data is already present on clone, so only metadata update is needed
+ *
+ * 4. Citus local tables (only when the primary is the coordinator):
+ *    - Their single shard lives only on the coordinator, so its metadata
+ *      placement is left unchanged (still on the coordinator)
+ *    - A coordinator clone carries a byte-for-byte copy of that shard data, so
+ *      cleanup records are added to drop the orphaned copy from the clone node
  *
  * This function does not perform any actual data movement; it only updates the
  * shard placement metadata and schedules cleanup operations for later execution.
@@ -903,6 +909,36 @@ AdjustShardsForPrimaryCloneNodeSplit(WorkerNode *primaryNode,
 		 */
 		InsertCleanupRecordsForShardPlacementsOnNode(colocatedShardList,
 													 primaryGroupId);
+	}
+
+	/*
+	 * Citus local tables live only on the coordinator (group 0). When the
+	 * source primary is the coordinator, the physical clone carries byte-for-byte
+	 * copies of their shard data, yet their placement metadata correctly stays on
+	 * the coordinator -- the split above only relocates distributed shards, and
+	 * reference tables are handled below. Those physical copies on the clone are
+	 * therefore untracked, so schedule dropping them from the clone group. The
+	 * Citus local shell table (and its sequences) remain, exactly as on any other
+	 * worker.
+	 */
+	if (primaryGroupId == COORDINATOR_GROUP_ID)
+	{
+		List *citusLocalTableIdList = CitusTableTypeIdList(CITUS_LOCAL_TABLE);
+		Oid citusLocalTableId = InvalidOid;
+		foreach_declared_oid(citusLocalTableId, citusLocalTableIdList)
+		{
+			List *localShardIntervalList = LoadShardIntervalList(citusLocalTableId);
+			InsertCleanupRecordsForShardPlacementsOnNode(localShardIntervalList,
+														 cloneGroupId);
+		}
+
+		if (citusLocalTableIdList != NIL)
+		{
+			ereport(NOTICE, (errmsg(
+								 "scheduling cleanup of %d Citus local table shard copy(ies) "
+								 "orphaned on clone node GroupID %d",
+								 list_length(citusLocalTableIdList), cloneGroupId)));
+		}
 	}
 
 	/*
