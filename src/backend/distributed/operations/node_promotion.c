@@ -495,6 +495,23 @@ AdjustCloneSequenceRangesForNewGroup(WorkerNode *cloneNode)
 		commandList = lappend(commandList, GetTableDDLCommand(ddlCommand));
 	}
 
+	int reRangedSequenceCount = list_length(commandList);
+
+	/*
+	 * Disable DDL propagation on the clone before running these commands. The
+	 * identity-sequence re-range command uses the legacy
+	 * worker_adjust_identity_column_seq_ranges() UDF (returned by
+	 * IdentitySequenceDependencyCommandList() when called from the coordinator),
+	 * which runs an ALTER SEQUENCE without disabling DDL propagation itself.
+	 * Since the clone's sequences are already marked distributed by this point
+	 * (this runs after SyncNodeMetadataToNodes()), that ALTER would otherwise
+	 * trip the "Altering a distributed sequence is currently not supported"
+	 * guard in PreprocessAlterSequenceStmt. This mirrors how the classical
+	 * metadata-sync path (CreateTableMetadataOnRemoteNodes) disables propagation
+	 * on remote nodes before running such commands.
+	 */
+	commandList = lcons(pstrdup(DISABLE_DDL_PROPAGATION), commandList);
+
 	/*
 	 * Re-fetch the clone node so its hasMetadata/metadataSynced flags reflect
 	 * the post-activation, post-sync catalog state. The cloneNode passed in was
@@ -518,7 +535,7 @@ AdjustCloneSequenceRangesForNewGroup(WorkerNode *cloneNode)
 
 	ereport(NOTICE, (errmsg(
 						 "re-ranged %d sequence(s) on promoted clone %s:%d (ID %d) for new group %d",
-						 list_length(commandList), freshCloneNode->workerName,
+						 reRangedSequenceCount, freshCloneNode->workerName,
 						 freshCloneNode->workerPort, freshCloneNode->nodeId,
 						 freshCloneNode->groupId)));
 }
