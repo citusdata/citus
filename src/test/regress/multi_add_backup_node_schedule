@@ -1,2 +1,3 @@
 test: multi_add_node_from_backup
 test: multi_add_node_from_backup_negative
+test: multi_add_node_from_backup_sequences
