@@ -1531,7 +1531,10 @@ RegisterCitusConfigVariables(void)
 					 "analysis before execution) and that target a single task "
 					 "on a single shard skip coordinated (2PC) transactions. "
 					 "Multi-statement procedures gracefully fall back to the "
-					 "normal coordinated transaction path."),
+					 "normal coordinated transaction path. The optimization "
+					 "applies to PLpgSQL procedures only; SQL-language and C "
+					 "procedures never set the single-statement flag and are "
+					 "never eligible."),
 		&EnableProcedureTransactionSkip,
 		false,
 		PGC_USERSET,

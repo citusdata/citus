@@ -13,14 +13,21 @@
  * executes and set the ProcedureBodyIsSingleStatement flag.
  *
  * The analysis recursively walks the PLpgSQL statement tree counting
- * SQL-producing statements (EXECSQL, PERFORM, DYNEXECUTE) and detecting
- * disqualifying statements (COMMIT, ROLLBACK). If the body contains
- * exactly one SQL statement and no COMMIT/ROLLBACK, the flag is set to
- * true, allowing the executor to skip 2PC.
+ * SQL-producing statements (EXECSQL, PERFORM, DYNEXECUTE, and CALL) and
+ * detecting disqualifying statements (COMMIT, ROLLBACK, and every loop
+ * statement type — LOOP/WHILE/FOR variants — since a statement inside a
+ * loop may execute more than once). Container statements are recursed
+ * into: a BLOCK contributes the sum of its body and exception-handler
+ * actions (both may run), whereas an IF or CASE contributes the maximum
+ * SQL count across its branches (then/ELSIF/else, or WHEN/else) because
+ * only one branch executes at runtime. If the body contains exactly one
+ * SQL statement and no disqualifier, the flag is set to true, allowing the
+ * executor to skip 2PC.
  *
- * For multi-statement procedures, the flag remains false and the normal
- * coordinated transaction path is used — no ERROR is raised, no partial
- * commits occur.
+ * For multi-statement or disqualified procedures, the flag remains false
+ * and the normal coordinated transaction path is used — no ERROR is
+ * raised, no partial commits occur. The decision is made before any
+ * statement in the body executes.
  *
  * Copyright (c) Citus Data, Inc.
  *
@@ -51,10 +58,12 @@ static PLpgSQL_plugin citus_plpgsql_plugin;
  * WalkStatementList recursively walks a list of PLpgSQL statements,
  * counting SQL-producing statements and detecting disqualifiers.
  *
- * Returns the total count of SQL statements found so far. Sets
- * *disqualified to true if a COMMIT or ROLLBACK is found at any
- * nesting level. Short-circuits as soon as the result is determined
- * (count > 1 or disqualified).
+ * Returns the total count of SQL statements found so far. Sibling
+ * statements accumulate (sum), but the branches of an IF/CASE contribute
+ * only their maximum (one branch runs at runtime). Sets *disqualified to
+ * true if a COMMIT, ROLLBACK, or any loop statement (LOOP/WHILE/FOR
+ * variants) is found at any nesting level. Short-circuits as soon as the
+ * result is determined (count > 1 or disqualified).
  */
 static int
 WalkStatementList(List *stmts, bool *disqualified)
@@ -124,45 +133,92 @@ WalkStatementList(List *stmts, bool *disqualified)
 
 			case PLPGSQL_STMT_IF:
 			{
+				/*
+				 * Only one branch of an IF executes at runtime, so this IF
+				 * contributes the MAXIMUM SQL count across its then, ELSIF,
+				 * and else branches rather than their sum. Taking the max
+				 * keeps a procedure whose branches each hold a single SQL
+				 * statement eligible for the skip, while still rejecting a
+				 * branch that by itself holds two or more statements. A
+				 * disqualifier (loop/COMMIT/ROLLBACK) in ANY branch still
+				 * disqualifies the whole body via *disqualified, regardless
+				 * of the max count.
+				 */
 				PLpgSQL_stmt_if *if_stmt = (PLpgSQL_stmt_if *) stmt;
-				count += WalkStatementList(if_stmt->then_body, disqualified);
-				if (*disqualified || count > 1)
+				int branchMax = WalkStatementList(if_stmt->then_body, disqualified);
+				if (*disqualified)
 				{
 					return count;
 				}
 
-				/* Walk ELSIF branches */
+				/* Walk ELSIF branches, tracking the maximum */
 				ListCell *elsif_lc;
 				foreach(elsif_lc, if_stmt->elsif_list)
 				{
 					PLpgSQL_if_elsif *elsif =
 						(PLpgSQL_if_elsif *) lfirst(elsif_lc);
-					count += WalkStatementList(elsif->stmts, disqualified);
-					if (*disqualified || count > 1)
+					int elsifCount = WalkStatementList(elsif->stmts, disqualified);
+					if (*disqualified)
 					{
 						return count;
 					}
+					if (elsifCount > branchMax)
+					{
+						branchMax = elsifCount;
+					}
 				}
 
-				count += WalkStatementList(if_stmt->else_body, disqualified);
+				int elseCount = WalkStatementList(if_stmt->else_body, disqualified);
+				if (*disqualified)
+				{
+					return count;
+				}
+				if (elseCount > branchMax)
+				{
+					branchMax = elseCount;
+				}
+
+				count += branchMax;
 				break;
 			}
 
 			case PLPGSQL_STMT_CASE:
 			{
+				/*
+				 * As with IF, only one CASE branch executes, so contribute
+				 * the maximum across all WHEN branches and the else branch
+				 * rather than their sum. Disqualifiers in any branch still
+				 * propagate via *disqualified.
+				 */
 				PLpgSQL_stmt_case *case_stmt = (PLpgSQL_stmt_case *) stmt;
+				int branchMax = 0;
 				ListCell *when_lc;
 				foreach(when_lc, case_stmt->case_when_list)
 				{
 					PLpgSQL_case_when *when =
 						(PLpgSQL_case_when *) lfirst(when_lc);
-					count += WalkStatementList(when->stmts, disqualified);
-					if (*disqualified || count > 1)
+					int whenCount = WalkStatementList(when->stmts, disqualified);
+					if (*disqualified)
 					{
 						return count;
 					}
+					if (whenCount > branchMax)
+					{
+						branchMax = whenCount;
+					}
 				}
-				count += WalkStatementList(case_stmt->else_stmts, disqualified);
+
+				int elseCount = WalkStatementList(case_stmt->else_stmts, disqualified);
+				if (*disqualified)
+				{
+					return count;
+				}
+				if (elseCount > branchMax)
+				{
+					branchMax = elseCount;
+				}
+
+				count += branchMax;
 				break;
 			}
 
@@ -172,6 +228,14 @@ WalkStatementList(List *stmts, bool *disqualified)
 			 * a coordinated transaction each iteration auto-commits, so a
 			 * failure mid-loop would leave prior iterations committed —
 			 * exactly the partial-commit scenario we want to prevent.
+			 *
+			 * We deliberately do NOT relax this for loops whose body happens
+			 * to contain zero SQL statements (e.g. a pure arithmetic
+			 * accumulator loop followed by a single write). Detecting that
+			 * safely would require proving a loop body is SQL-free at every
+			 * nesting depth, the pattern is rare, and the conservative
+			 * baseline only costs a missed optimization, never correctness.
+			 * Left as a possible future enhancement.
 			 */
 			case PLPGSQL_STMT_LOOP:
 			case PLPGSQL_STMT_WHILE:
@@ -189,9 +253,20 @@ WalkStatementList(List *stmts, bool *disqualified)
 			 * Non-SQL, non-container statements (ASSIGN, RETURN, RAISE,
 			 * GETDIAG, EXIT, OPEN, FETCH, CLOSE, ASSERT, RETURN_NEXT,
 			 * RETURN_QUERY): do not count, do not recurse.
+			 *
+			 * Some of these carry a SQL query (OPEN cursor, FETCH,
+			 * RETURN QUERY, RETURN NEXT), but they are intentionally left
+			 * uncounted here: a distributed *write* is always expressed as
+			 * EXECSQL/PERFORM/DYNEXECUTE/CALL, and any read that opens a
+			 * coordinated transaction is caught downstream by the
+			 * executor's InCoordinatedTransaction() gate before a skip is
+			 * allowed. Omitting them is therefore safe and deliberate, not
+			 * an oversight.
 			 */
 			default:
+			{
 				break;
+			}
 		}
 	}
 
@@ -224,12 +299,12 @@ citus_func_beg(PLpgSQL_execstate *estate, PLpgSQL_function *func)
 
 		if (ProcedureBodyIsSingleStatement)
 		{
-			ereport(DEBUG4, (errmsg("procedure body analysis: single-statement "
+			ereport(DEBUG2, (errmsg("procedure body analysis: single-statement "
 									"procedure detected, eligible for 2PC skip")));
 		}
 		else
 		{
-			ereport(DEBUG4, (errmsg("procedure body analysis: multi-statement "
+			ereport(DEBUG2, (errmsg("procedure body analysis: multi-statement "
 									"or disqualified procedure detected "
 									"(sql_count=%d, disqualified=%s), "
 									"using coordinated transaction",
@@ -322,7 +397,15 @@ InstallProcedureBodyAnalysisPlugin(void)
 	PLpgSQL_plugin **plugin_ptr =
 		(PLpgSQL_plugin **) find_rendezvous_variable("PLpgSQL_plugin");
 
-	/* save any previously installed plugin for chaining */
+	/*
+	 * The PLpgSQL_plugin rendezvous variable holds a single slot. We chain
+	 * to whatever plugin was installed before Citus's _PG_init() ran, so a
+	 * plugin loaded earlier keeps working. Note the inherent limitation of
+	 * this single-slot mechanism: an extension whose _PG_init() runs *after*
+	 * Citus would overwrite this pointer and disable Citus's callbacks
+	 * (Citus would then no longer be chained). This is a standard PLpgSQL
+	 * plugin constraint, not specific to this optimization.
+	 */
 	prev_plpgsql_plugin = *plugin_ptr;
 
 	/* set up our plugin callbacks */
