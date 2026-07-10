@@ -36,8 +36,9 @@
 
 #include "postgres.h"
 
-#include "catalog/pg_proc.h"
 #include "plpgsql.h"
+
+#include "catalog/pg_proc.h"
 #include "utils/elog.h"
 
 #include "distributed/procedure_body_analysis.h"
