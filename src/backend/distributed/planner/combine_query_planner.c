@@ -22,6 +22,7 @@
 
 #include "distributed/citus_ruleutils.h"
 #include "distributed/combine_query_planner.h"
+#include "distributed/distributed_planner.h"
 #include "distributed/insert_select_planner.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
@@ -153,6 +154,22 @@ CreateCitusCustomScanPath(PlannerInfo *root, RelOptInfo *relOptInfo,
 	 */
 	path->custom_path.path.rows = 100000;
 	path->remoteScan = remoteScan;
+
+	/*
+	 * When sorted merge is active (decided at planning time and baked into the
+	 * DistributedPlan), declare that this CustomScan produces sorted output by
+	 * setting pathkeys to match the combine query's required sort order.
+	 *
+	 * This causes PostgreSQL's create_ordered_paths() to recognize the
+	 * CustomScan output as already sorted and skip adding a Sort node above
+	 * it. The executor fulfills this contract by merging per-task stores in
+	 * sort order into the final tuplestore.
+	 */
+	DistributedPlan *distPlan = GetDistributedPlan(remoteScan);
+	if (distPlan->useSortedMerge && root->sort_pathkeys != NIL)
+	{
+		path->custom_path.path.pathkeys = root->sort_pathkeys;
+	}
 
 	return (Path *) path;
 }

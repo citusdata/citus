@@ -2,7 +2,6 @@ test: multi_test_helpers multi_test_helpers_superuser
 test: multi_cluster_management
 test: citus_cluster_changes_block
 test: create_role_propagation
-test: pg16
 test: multi_create_fdw
 test: multi_test_catalog_views
 test: replicated_table_disable_node
@@ -69,7 +68,6 @@ test: pg14
 test: pg15
 test: pg15_jsonpath detect_conn_close
 test: pg17 pg17_json
-test: pg18
 test: drop_column_partitioned_table
 test: tableam
 
@@ -80,10 +78,11 @@ test: multi_deparse_shard_query multi_distributed_transaction_id intermediate_re
 test: multi_explain
 test: hyperscale_tutorial partitioned_intermediate_results distributed_intermediate_results multi_real_time_transaction
 test: multi_basic_queries cross_join multi_complex_expressions multi_subquery multi_subquery_complex_queries multi_subquery_behavioral_analytics
+test: issue_8468
 test: multi_subquery_complex_reference_clause multi_subquery_window_functions multi_view multi_sql_function multi_prepare_sql
 test: sql_procedure multi_function_in_join row_types materialized_view
 test: sql_procedure_no_transaction_block
-test: multi_subquery_in_where_reference_clause adaptive_executor propagate_set_commands geqo
+test: multi_subquery_in_where_reference_clause adaptive_executor adaptive_executor_batching propagate_set_commands geqo
 test: forcedelegation_functions system_queries
 # this should be run alone as it gets too many clients
 test: join_pushdown
@@ -94,6 +93,7 @@ test: multi_reference_table multi_select_for_update relation_access_tracking pg1
 test: custom_aggregate_support aggregate_support tdigest_aggregate_support
 test: multi_average_expression multi_working_columns multi_having_pushdown having_subquery
 test: multi_array_agg multi_limit_clause multi_orderby_limit_pushdown
+test: multi_orderby_pushdown
 test: multi_jsonb_agg multi_jsonb_object_agg multi_json_agg multi_json_object_agg bool_agg ch_bench_having chbenchmark_all_queries expression_reference_join anonymous_columns
 test: ch_bench_subquery_repartition
 test: subscripting_op
@@ -140,5 +140,4 @@ test: ensure_no_shared_connection_leak
 test: check_mx
 
 test: generated_identity
-test: drop_database
 test: check_cluster_state

@@ -162,6 +162,7 @@ static MapMergeJob * BuildMapMergeJob(Query *jobQuery, List *dependentJobList,
 									  Var *partitionKey, PartitionType partitionType,
 									  Oid baseRelationId,
 									  BoundaryNodeJobType boundaryNodeJobType);
+static bool UseSortedMerge(MultiTreeRoot *multiTree, Job *workerJob);
 static uint32 HashPartitionCount(void);
 
 /* Local functions forward declarations for task list creation and helper functions */
@@ -242,7 +243,7 @@ static bool QueryTreeHasImproperForDeparseNodes(Node *inputNode, void *context);
 static Node * AdjustImproperForDeparseNodes(Node *inputNode, void *context);
 static bool IsImproperForDeparseRelabelTypeNode(Node *inputNode);
 static bool IsImproperForDeparseCoerceViaIONode(Node *inputNode);
-static CollateExpr * RelabelTypeToCollateExpr(RelabelType *relabelType);
+static Node * RelabelTypeToCollateExpr(RelabelType *relabelType);
 
 
 /*
@@ -269,6 +270,9 @@ CreatePhysicalDistributedPlan(MultiTreeRoot *multiTree,
 	distributedPlan->combineQuery = combineQuery;
 	distributedPlan->modLevel = ROW_MODIFY_READONLY;
 	distributedPlan->expectResults = true;
+
+	/* check sorted merge eligibility and populate merge-key metadata */
+	distributedPlan->useSortedMerge = UseSortedMerge(multiTree, workerJob);
 
 	return distributedPlan;
 }
@@ -2036,6 +2040,58 @@ BuildMapMergeJob(Query *jobQuery, List *dependentJobList, Var *partitionKey,
 
 
 /*
+ * UseSortedMerge checks whether the logical optimizer tagged the
+ * worker extended op node as eligible for a coordinator-side sorted merge.
+ *
+ * This is a plan-time decision: the executor reads only the plan flag,
+ * never the GUC.
+ *
+ * We directly walk the tree structure rather than using FindNodesOfType,
+ * which would traverse into subquery subtrees and could find unrelated
+ * MultiExtendedOp nodes. After MultiLogicalPlanOptimize the tree is:
+ *   MultiTreeRoot -> MasterExtendedOp -> MultiCollect -> WorkerExtendedOp
+ */
+static bool
+UseSortedMerge(MultiTreeRoot *multiTree, Job *workerJob)
+{
+	MultiNode *masterChild = ChildNode((MultiUnaryNode *) multiTree);
+	if (!CitusIsA(masterChild, MultiExtendedOp))
+	{
+		return false;
+	}
+
+	MultiNode *collectNode = ChildNode((MultiUnaryNode *) masterChild);
+	if (!CitusIsA(collectNode, MultiCollect))
+	{
+		return false;
+	}
+
+	MultiNode *workerNode = ChildNode((MultiUnaryNode *) collectNode);
+	if (!CitusIsA(workerNode, MultiExtendedOp))
+	{
+		return false;
+	}
+
+	MultiExtendedOp *workerExtOp = (MultiExtendedOp *) workerNode;
+	if (!workerExtOp->sortedMergeEligible)
+	{
+		return false;
+	}
+
+	/*
+	 * Sanity gate: if the job query has no sort clause, fall back to the
+	 * regular (non-merging) execution path.
+	 */
+	if (workerJob->jobQuery->sortClause == NIL)
+	{
+		return false;
+	}
+
+	return true;
+}
+
+
+/*
  * HashPartitionCount returns the number of partition files we create for a hash
  * partition task. The function follows Hadoop's method for picking the number
  * of reduce tasks: 0.95 or 1.75 * node count * max reduces per node. We choose
@@ -2875,10 +2931,14 @@ SqlTaskList(Job *job)
 
 
 /*
- * RelabelTypeToCollateExpr converts RelabelType's into CollationExpr's.
- * With that, we will be able to pushdown COLLATE's.
+ * RelabelTypeToCollateExpr converts RelabelType nodes for deparsing.
+ * When the RelabelType only changes collation, it produces a CollateExpr.
+ * When it also changes the type (resulttype != argType), the CollateExpr
+ * is wrapped in a new RelabelType with DEFAULT_COLLATION_OID to preserve
+ * the type cast while avoiding re-detection by
+ * IsImproperForDeparseRelabelTypeNode.
  */
-static CollateExpr *
+static Node *
 RelabelTypeToCollateExpr(RelabelType *relabelType)
 {
 	Assert(OidIsValid(relabelType->resultcollid));
@@ -2888,7 +2948,23 @@ RelabelTypeToCollateExpr(RelabelType *relabelType)
 	collateExpr->collOid = relabelType->resultcollid;
 	collateExpr->location = relabelType->location;
 
-	return collateExpr;
+	Oid argType = exprType((Node *) relabelType->arg);
+	if (relabelType->resulttype != argType)
+	{
+		RelabelType *castRelabel = makeNode(RelabelType);
+		castRelabel->arg = (Expr *) collateExpr;
+		castRelabel->resulttype = relabelType->resulttype;
+		castRelabel->resulttypmod = relabelType->resulttypmod;
+
+		/* DEFAULT_COLLATION_OID prevents re-detection by IsImproperForDeparseRelabelTypeNode */
+		castRelabel->resultcollid = DEFAULT_COLLATION_OID;
+		castRelabel->relabelformat = relabelType->relabelformat;
+		castRelabel->location = relabelType->location;
+
+		return (Node *) castRelabel;
+	}
+
+	return (Node *) collateExpr;
 }
 
 

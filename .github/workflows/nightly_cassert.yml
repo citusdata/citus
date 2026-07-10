@@ -1,0 +1,216 @@
+name: Nightly cassert
+run-name: Nightly cassert (${{ github.ref_name }})
+
+# Full-suite Citus run against an --enable-cassert PostgreSQL build (PG 16/17/18).
+# Purpose: surface PG-core asserts and Citus's own Assert() that the normal PGDG-image PR
+# pipeline cannot catch. First runs are EXPECTED to be RED across all majors as pre-existing
+# asserts surface -- that is the intended signal, not a regression gate.
+#
+# The version matrix lives in the `params` job below (single source of truth, mirroring
+# build_and_test.yml). The `pg19-support` branch adapts this by adding the 19beta1 row + the
+# 18->19 upgrade pair, the same way 19 support is layered onto the other test suites.
+
+on:
+  schedule:
+    - cron: '0 3 * * *'          # 03:00 UTC daily
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write                  # required by the failure-issue job
+
+concurrency:
+  group: nightly-cassert-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  # ---- version matrix: single source of truth (mirrors build_and_test.yml's params job) ----
+  # FUTURE SEAM: when the-process/versions.yml becomes the org-wide SSOT, replace these literal
+  # outputs with a step that fetches/parses that file, so the nightly DERIVES versions instead of
+  # restating them. Until then this job is the one place to bump the cassert matrix.
+  params:
+    name: Initialize parameters
+    runs-on: ubuntu-latest
+    outputs:
+      pg_versions: '[{ "major": "16", "full": "16.13" }, { "major": "17", "full": "17.9" }, { "major": "18", "full": "18.3" }]'
+      pg_upgrade_pairs: '[{ "old": "16", "old_full": "16.13", "new": "17", "new_full": "17.9" }, { "old": "17", "old_full": "17.9", "new": "18", "new_full": "18.3" }]'
+      citus_upgrade_pg: '[{ "major": "16", "full": "16.13" }, { "major": "17", "full": "17.9" }]'
+      citus_old_version: "v14.0.1"  # 14.0-1 chains to MASTER (15.0); 14.1 has no path to 15.0 yet
+    steps:
+      - name: Set up parameters
+        run: echo 'noop'
+
+  # ---- regular suites: one job per (major x suite-group) ----
+  test:
+    needs: params
+    name: cassert PG${{ matrix.pg.major }} - ${{ matrix.group }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        pg: ${{ fromJson(needs.params.outputs.pg_versions) }}
+        group: [ regress, isolation, columnar, failure, tap ]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup_cassert_pg
+        with:
+          pg_full: ${{ matrix.pg.full }}
+      - name: Install failure-suite python env (mitmproxy fork)
+        if: ${{ matrix.group == 'failure' }}
+        shell: bash
+        run: ( cd src/test/regress && pipenv install --deploy )
+      - name: Run ${{ matrix.group }}
+        shell: bash
+        timeout-minutes: 90
+        run: |
+          set -euo pipefail
+          case "${{ matrix.group }}" in
+            regress)
+              make -C src/test/regress \
+                check-multi check-multi-1 check-multi-1-create-citus check-multi-mx \
+                check-split check-operations check-follower-cluster \
+                check-vanilla check-enterprise ;;
+            isolation)
+              make -C src/test/regress \
+                check-isolation check-enterprise-isolation check-columnar-isolation ;;
+            columnar)
+              make -C src/test/regress check-columnar ;;
+            failure)
+              ( cd src/test/regress && pipenv run make check-failure check-enterprise-failure ) ;;
+            tap)
+              make -C src/test/regress check-tap ;;
+          esac
+      - uses: ./.github/actions/save_logs_and_results
+        if: always()
+        with:
+          folder: cassert_${{ matrix.pg.major }}_${{ matrix.group }}
+
+  # ---- pg-upgrade: needs TWO cassert majors per job (citus installed into both prefixes) ----
+  pg-upgrade:
+    needs: params
+    name: cassert PG${{ matrix.old }}-PG${{ matrix.new }} - pg-upgrade
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJson(needs.params.outputs.pg_upgrade_pairs) }}
+    steps:
+      - uses: actions/checkout@v5
+      # Build BOTH majors via pgenv; each call also builds+installs citus into that version's prefix.
+      # The cache for each version overlays additively into ~/.pgenv, so both prefixes coexist.
+      - uses: ./.github/actions/setup_cassert_pg
+        with:
+          pg_full: ${{ matrix.old_full }}
+      - uses: ./.github/actions/setup_cassert_pg
+        with:
+          pg_full: ${{ matrix.new_full }}
+      - name: check-pg-upgrade (with and without columnar)
+        shell: bash
+        timeout-minutes: 90
+        run: |
+          set -euo pipefail
+          OLD="$HOME/.pgenv/pgsql-${{ matrix.old_full }}/bin"
+          NEW="$HOME/.pgenv/pgsql-${{ matrix.new_full }}/bin"
+          make -C src/test/regress check-pg-upgrade \
+            old-bindir="$OLD" new-bindir="$NEW" test-with-columnar=false
+          make -C src/test/regress check-pg-upgrade \
+            old-bindir="$OLD" new-bindir="$NEW" test-with-columnar=true
+      - name: Copy pg_upgrade logs for newData dir
+        if: failure()
+        shell: bash
+        run: |
+          mkdir -p /tmp/pg_upgrade_newData_logs
+          if ls src/test/regress/tmp_upgrade/newData/*.log 1> /dev/null 2>&1; then
+            cp src/test/regress/tmp_upgrade/newData/*.log /tmp/pg_upgrade_newData_logs
+          fi
+      - uses: ./.github/actions/save_logs_and_results
+        if: always()
+        with:
+          folder: cassert_${{ matrix.old }}_${{ matrix.new }}_pg_upgrade
+
+  # ---- citus-upgrade: build the old citus from a git tag against the cassert PG (local variant) ----
+  citus-upgrade:
+    needs: params
+    name: cassert PG${{ matrix.pg.major }} - citus-upgrade
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        pg: ${{ fromJson(needs.params.outputs.citus_upgrade_pg) }}
+    env:
+      # Old Citus built from the git tag against the cassert PG, then upgraded to HEAD.
+      citus_old_version: ${{ needs.params.outputs.citus_old_version }}
+      CI: ""   # local variant builds the old-version tarball; CI=true would demand prebuilt tars
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0          # tags needed to build the old citus version
+      - uses: ./.github/actions/setup_cassert_pg
+        with:
+          pg_full: ${{ matrix.pg.full }}
+      - name: Install python env for upgrade harness
+        shell: bash
+        run: ( cd src/test/regress && pipenv install --deploy )
+      - name: check-citus-upgrade-local (+ mixed)
+        shell: bash
+        timeout-minutes: 90
+        run: |
+          set -euo pipefail
+          BIN="$HOME/.pgenv/pgsql/bin"
+          ( cd src/test/regress && pipenv run make -C . check-citus-upgrade-local \
+              bindir="$BIN" citus-old-version="${citus_old_version}" )
+          ( cd src/test/regress && pipenv run make -C . check-citus-upgrade-mixed-local \
+              bindir="$BIN" citus-old-version="${citus_old_version}" )
+      - uses: ./.github/actions/save_logs_and_results
+        if: always()
+        with:
+          folder: cassert_${{ matrix.pg.major }}_citus_upgrade
+
+  # ---- failure notification: open/append a dated GitHub issue if anything failed ----
+  notify:
+    name: Open issue on failure
+    needs: [ test, pg-upgrade, citus-upgrade ]
+    if: failure()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const day = new Date().toISOString().slice(0, 10);
+            const title = `Nightly cassert failures (${day})`;
+            const label = 'nightly-cassert';
+            const url = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const body = [
+              'Nightly full-cassert run failed.',
+              '',
+              `Run: ${url}`,
+              '',
+              'First runs are EXPECTED red as pre-existing PG-core and Citus asserts surface.',
+              'This is the intended signal, not a regression gate.',
+            ].join('\n');
+            const found = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: label,
+            });
+            const existing = found.data.find(i => i.title === title);
+            if (existing) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing.number,
+                body,
+              });
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                body,
+                labels: [label],
+              });
+            }
