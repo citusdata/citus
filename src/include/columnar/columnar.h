@@ -19,6 +19,7 @@
 #include "nodes/parsenodes.h"
 #include "storage/bufpage.h"
 #include "storage/lockdefs.h"
+#include "storage/relfilelocator.h"
 #include "utils/relcache.h"
 #include "utils/snapmgr.h"
 
@@ -26,12 +27,6 @@
 
 #include "columnar/columnar_compression.h"
 #include "columnar/columnar_metadata.h"
-
-#if PG_VERSION_NUM >= PG_VERSION_16
-#include "storage/relfilelocator.h"
-#else
-#include "storage/relfilenode.h"
-#endif
 
 #define COLUMNAR_AM_NAME "columnar"
 #define COLUMNAR_MODULE_NAME "citus_columnar"
@@ -63,6 +58,14 @@
 
 /*global variables for citus_columnar fake version Y */
 #define CITUS_COLUMNAR_INTERNAL_VERSION "11.1-0"
+
+/*
+ * We can't rely on RelidByRelfilenumber for temp tables since PG18(it was backpatched
+ * through PG13), so we can use this macro to define relid within relation in case of
+ * temp relations. Otherwise RelidByRelfilenumber should be used.
+ */
+#define RelationPrecomputeOid(a) (RelationUsesLocalBuffers(a) ? RelationGetRelid(a) : \
+								  InvalidOid)
 
 /*
  * ColumnarOptions holds the option values to be used when reading or writing
@@ -232,7 +235,7 @@ extern void columnar_init_gucs(void);
 extern CompressionType ParseCompressionType(const char *compressionTypeString);
 
 /* Function declarations for writing to a columnar table */
-extern ColumnarWriteState * ColumnarBeginWrite(RelFileLocator relfilelocator,
+extern ColumnarWriteState * ColumnarBeginWrite(Relation rel,
 											   ColumnarOptions options,
 											   TupleDesc tupleDescriptor);
 extern uint64 ColumnarWriteRow(ColumnarWriteState *state, Datum *columnValues,
@@ -287,21 +290,21 @@ extern PGDLLEXPORT bool ReadColumnarOptions(Oid regclass, ColumnarOptions *optio
 extern PGDLLEXPORT bool IsColumnarTableAmTable(Oid relationId);
 
 /* columnar_metadata_tables.c */
-extern void DeleteMetadataRows(RelFileLocator relfilelocator);
+extern void DeleteMetadataRows(Relation rel);
 extern uint64 ColumnarMetadataNewStorageId(void);
-extern uint64 GetHighestUsedAddress(RelFileLocator relfilelocator);
+extern uint64 GetHighestUsedAddress(Relation rel);
 extern EmptyStripeReservation * ReserveEmptyStripe(Relation rel, uint64 columnCount,
 												   uint64 chunkGroupRowCount,
 												   uint64 stripeRowCount);
 extern StripeMetadata * CompleteStripeReservation(Relation rel, uint64 stripeId,
 												  uint64 sizeBytes, uint64 rowCount,
 												  uint64 chunkCount);
-extern void SaveStripeSkipList(RelFileLocator relfilelocator, uint64 stripe,
+extern void SaveStripeSkipList(Oid relid, RelFileLocator relfilelocator, uint64 stripe,
 							   StripeSkipList *stripeSkipList,
 							   TupleDesc tupleDescriptor);
-extern void SaveChunkGroups(RelFileLocator relfilelocator, uint64 stripe,
+extern void SaveChunkGroups(Oid relid, RelFileLocator relfilelocator, uint64 stripe,
 							List *chunkGroupRowCounts);
-extern StripeSkipList * ReadStripeSkipList(RelFileLocator relfilelocator, uint64 stripe,
+extern StripeSkipList * ReadStripeSkipList(Relation rel, uint64 stripe,
 										   TupleDesc tupleDescriptor,
 										   uint32 chunkCount,
 										   Snapshot snapshot);
@@ -317,6 +320,7 @@ extern uint64 StripeGetHighestRowNumber(StripeMetadata *stripeMetadata);
 extern StripeMetadata * FindStripeWithHighestRowNumber(Relation relation,
 													   Snapshot snapshot);
 extern Datum columnar_relation_storageid(PG_FUNCTION_ARGS);
+extern Oid ColumnarRelationId(Oid relid, RelFileLocator relfilelocator);
 
 
 /* write_state_management.c */

@@ -13,7 +13,7 @@ SELECT * FROM citus_mx_test_schema.nation_hash ORDER BY n_nationkey LIMIT 4;
 -- test cursors
 SET search_path TO public;
 BEGIN;
-DECLARE test_cursor CURSOR FOR
+DECLARE test_cursor SCROLL CURSOR FOR
     SELECT *
         FROM nation_hash
         WHERE n_nationkey = 1;
@@ -25,7 +25,7 @@ END;
 -- test with search_path is set
 SET search_path TO citus_mx_test_schema;
 BEGIN;
-DECLARE test_cursor CURSOR FOR
+DECLARE test_cursor SCROLL CURSOR FOR
     SELECT *
         FROM nation_hash
         WHERE n_nationkey = 1;
@@ -321,6 +321,8 @@ SELECT table_schema AS "Shards' Schema"
     GROUP BY table_schema;
 
 -- Show that altering distributed schema is not allowed on worker nodes
+-- when the coordinator is not in the metadata.
+SELECT COUNT(*)=0 FROM pg_dist_node WHERE groupid = 0; -- verify that the coordinator is not in the metadata
 ALTER SCHEMA mx_old_schema RENAME TO temp_mx_old_schema;
 \c - - - :master_port
 

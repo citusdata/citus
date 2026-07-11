@@ -23,14 +23,6 @@
 #define ACLCHECK_OBJECT_TABLE OBJECT_TABLE
 
 #define ExplainPropertyLong(qlabel, value, es) \
-	ExplainPropertyInteger(qlabel, NULL, value, es)
-
-
-/* tuple-descriptor attributes moved in PostgreSQL 18: */
-#if PG_VERSION_NUM >= PG_VERSION_18
-#define Attr(tupdesc, colno) TupleDescAttr((tupdesc), (colno))
-#else
-#define Attr(tupdesc, colno) (&((tupdesc)->attrs[(colno)]))
-#endif
+		ExplainPropertyInteger(qlabel, NULL, value, es)
 
 #endif /* COLUMNAR_COMPAT_H */

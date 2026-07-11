@@ -66,7 +66,8 @@ static HTAB * ExecutePlanIntoColocatedIntermediateResults(Oid targetRelationId,
 														  List *insertTargetList,
 														  PlannedStmt *selectPlan,
 														  EState *executorState,
-														  char *intermediateResultIdPrefix);
+														  char *
+														  intermediateResultIdPrefix);
 static int PartitionColumnIndexFromColumnList(Oid relationId, List *columnNameList);
 static void WrapTaskListForProjection(List *taskList, List *projectedTargetEntries);
 
@@ -180,20 +181,23 @@ NonPushableInsertSelectExecScan(CustomScanState *node)
 																	  targetRelation,
 																	  binaryFormat);
 
-			if (list_length(distSelectTaskList) <= 1)
+			if (!distSelectPlan->disableTrackingQueryCounters)
 			{
-				/*
-				 * Probably we will never get here for a repartitioned
-				 * INSERT..SELECT because when the source is a single shard
-				 * table, we should most probably choose to use
-				 * MODIFY_WITH_SELECT_VIA_COORDINATOR, but we still keep this
-				 * here.
-				 */
-				IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_SINGLE_SHARD);
-			}
-			else
-			{
-				IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_MULTI_SHARD);
+				if (list_length(distSelectTaskList) <= 1)
+				{
+					/*
+					 * Probably we will never get here for a repartitioned
+					 * INSERT..SELECT because when the source is a single shard
+					 * table, we should most probably choose to use
+					 * MODIFY_WITH_SELECT_VIA_COORDINATOR, but we still keep this
+					 * here.
+					 */
+					IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_SINGLE_SHARD);
+				}
+				else
+				{
+					IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_MULTI_SHARD);
+				}
 			}
 
 			/*
@@ -216,13 +220,23 @@ NonPushableInsertSelectExecScan(CustomScanState *node)
 															   taskList, tupleDest,
 															   hasReturning);
 
-			if (list_length(taskList) <= 1)
+			if (!distributedPlan->disableTrackingQueryCounters)
 			{
-				IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_SINGLE_SHARD);
-			}
-			else
-			{
-				IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_MULTI_SHARD);
+				if (list_length(taskList) <= 1)
+				{
+					/*
+					 * Probably we will never get here for a repartitioned
+					 * INSERT..SELECT because when the source is a single shard
+					 * table, we should most probably choose to use
+					 * MODIFY_WITH_SELECT_VIA_COORDINATOR, but we still keep this
+					 * here.
+					 */
+					IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_SINGLE_SHARD);
+				}
+				else
+				{
+					IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_MULTI_SHARD);
+				}
 			}
 
 			executorState->es_processed = rowsInserted;
@@ -300,13 +314,23 @@ NonPushableInsertSelectExecScan(CustomScanState *node)
 				}
 			}
 
-			if (list_length(prunedTaskList) <= 1)
+			if (!distributedPlan->disableTrackingQueryCounters)
 			{
-				IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_SINGLE_SHARD);
-			}
-			else
-			{
-				IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_MULTI_SHARD);
+				if (list_length(prunedTaskList) <= 1)
+				{
+					/*
+					 * Probably we will never get here for a repartitioned
+					 * INSERT..SELECT because when the source is a single shard
+					 * table, we should most probably choose to use
+					 * MODIFY_WITH_SELECT_VIA_COORDINATOR, but we still keep this
+					 * here.
+					 */
+					IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_SINGLE_SHARD);
+				}
+				else
+				{
+					IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_MULTI_SHARD);
+				}
 			}
 		}
 		else

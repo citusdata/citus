@@ -117,8 +117,14 @@ DEPS = {
     "multi_add_node_from_backup_negative": TestDeps(
         None, ["multi_add_node_from_backup"], worker_count=5, repeatable=False
     ),
+    "multi_add_node_from_backup_coordinator": TestDeps(
+        None, ["multi_add_node_from_backup_negative"], worker_count=5, repeatable=False
+    ),
     "multi_add_node_from_backup_sync_replica": TestDeps(
         None, repeatable=False, worker_count=5
+    ),
+    "multi_add_node_from_backup_sequences": TestDeps(
+        None, ["multi_add_node_from_backup_negative"], worker_count=5, repeatable=False
     ),
     "single_node": TestDeps(None, ["multi_test_helpers"]),
     "single_node_truncate": TestDeps(None),
@@ -127,6 +133,7 @@ DEPS = {
     ),
     "multi_extension": TestDeps(None, repeatable=False),
     "multi_test_helpers": TestDeps(None),
+    "multi_test_catalog_views": TestDeps(None),
     "multi_insert_select": TestDeps("base_schedule"),
     "multi_partitioning": TestDeps("base_schedule"),
     "multi_mx_create_table": TestDeps(
@@ -164,6 +171,9 @@ DEPS = {
     "multi_mx_schema_support": TestDeps(None, ["multi_mx_copy_data"]),
     "multi_simple_queries": TestDeps("base_schedule"),
     "create_single_shard_table": TestDeps("minimal_schedule"),
+    "isolation_schema_based_sharding_from_any_node": TestDeps(
+        None, ["isolation_setup"]
+    ),
     "isolation_extension_commands": TestDeps(
         None, ["isolation_setup", "isolation_add_remove_node"]
     ),
@@ -185,6 +195,14 @@ DEPS = {
         ["multi_cluster_management", "remove_coordinator_from_metadata"],
         # because it queries node group id and it changes as we add / remove nodes
         repeatable=False,
+    ),
+    "multi_mx_metadata": TestDeps(
+        None,
+        [
+            "multi_cluster_management",
+            "remove_coordinator_from_metadata",
+            "multi_test_catalog_views",
+        ],
     ),
     "multi_mx_add_coordinator": TestDeps(
         None,
@@ -216,6 +234,7 @@ DEPS = {
         repeatable=False,
     ),
     "multi_prepare_plsql": TestDeps("base_schedule"),
+    "multi_utility_statements": TestDeps("base_schedule"),
     "pg15": TestDeps("base_schedule"),
     "foreign_key_to_reference_shard_rebalance": TestDeps(
         "minimal_schedule", ["remove_coordinator_from_metadata"]
@@ -232,7 +251,6 @@ DEPS = {
             "multi_sequence_default",
             "alter_database_propagation",
             "alter_role_propagation",
-            "grant_on_schema_propagation",
             "multi_test_catalog_views",
             "multi_drop_extension",
         ],
@@ -262,7 +280,19 @@ DEPS = {
     "multi_subquery_in_where_reference_clause": TestDeps(
         "minimal_schedule", ["multi_behavioral_analytics_create_table"]
     ),
+    "adaptive_executor_batching": TestDeps(
+        "minimal_schedule", ["multi_behavioral_analytics_create_table"]
+    ),
     "subquery_in_where": TestDeps(
+        "minimal_schedule", ["multi_behavioral_analytics_create_table"]
+    ),
+    "subquery_in_targetlist": TestDeps(
+        "minimal_schedule", ["multi_behavioral_analytics_create_table"]
+    ),
+    "window_functions": TestDeps(
+        "minimal_schedule", ["multi_behavioral_analytics_create_table"]
+    ),
+    "multi_subquery_window_functions": TestDeps(
         "minimal_schedule", ["multi_behavioral_analytics_create_table"]
     ),
 }

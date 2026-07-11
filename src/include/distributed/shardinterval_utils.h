@@ -38,7 +38,8 @@ typedef struct SortShardIntervalContext
 
 extern ShardInterval ** SortShardIntervalArray(ShardInterval **shardIntervalArray, int
 											   shardCount, Oid collation,
-											   FmgrInfo *shardIntervalSortCompareFunction);
+											   FmgrInfo *
+											   shardIntervalSortCompareFunction);
 extern int CompareShardIntervals(const void *leftElement, const void *rightElement,
 								 SortShardIntervalContext *sortContext);
 extern int CompareShardIntervalsById(const void *leftElement, const void *rightElement);

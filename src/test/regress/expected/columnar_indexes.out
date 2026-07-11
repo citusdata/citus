@@ -176,12 +176,15 @@ SELECT pg_total_relation_size('columnar_table_b_idx') * 5 <
 (1 row)
 
 -- can't use index scan due to partial index boundaries
-EXPLAIN (COSTS OFF) SELECT b FROM columnar_table WHERE b = 30000;
-         QUERY PLAN
+SELECT NOT jsonb_path_exists(
+         columnar_test_helpers._plan_json('SELECT b FROM columnar_table WHERE b = 30000'),
+         -- Regex matches any index-based scan: "Index Scan", "Index Only Scan", "Bitmap Index Scan".
+         '$[*].Plan.** ? (@."Node Type" like_regex "^(Index|Bitmap Index).*Scan$")'
+       ) AS uses_no_index_scan; -- expect: t
+ uses_no_index_scan
 ---------------------------------------------------------------------
- Seq Scan on columnar_table
-   Filter: (b = 30000)
-(2 rows)
+ t
+(1 row)
 
 -- can use index scan
 EXPLAIN (COSTS OFF) SELECT b FROM columnar_table WHERE b = 30001;
@@ -553,9 +556,6 @@ create table events (event_id bigserial, event_time timestamptz default now(), p
 BEGIN;
   -- this wouldn't flush any data
   insert into events (payload) select 'hello-'||s from generate_series(1, 10) s;
-  SHOW server_version \gset
-  SELECT substring(:'server_version', '\d+')::int >= 16 AS server_version_ge_16
-  \gset
   -- Since table is large enough, normally postgres would prefer using
   -- parallel workers when building the index.
   --
@@ -567,11 +567,7 @@ BEGIN;
   -- by postgres and throws an error. For this reason, here we don't expect
   -- following commnad to fail since we prevent using parallel workers for
   -- columnar tables.
-  \if :server_version_ge_16
   SET LOCAL debug_parallel_query = regress;
-  \else
-  SET LOCAL force_parallel_mode = regress;
-  \endif
   SET LOCAL min_parallel_table_scan_size = 1;
   SET LOCAL parallel_tuple_cost = 0;
   SET LOCAL max_parallel_workers = 4;

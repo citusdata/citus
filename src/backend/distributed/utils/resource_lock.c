@@ -26,6 +26,7 @@
 #include "utils/lsyscache.h"
 #include "utils/varlena.h"
 
+#include "distributed/argutils.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/commands.h"
 #include "distributed/coordinator_protocol.h"
@@ -50,7 +51,7 @@
 #include "distributed/worker_transaction.h"
 
 #define LOCK_RELATION_IF_EXISTS \
-	"SELECT pg_catalog.lock_relation_if_exists(%s, %s);"
+		"SELECT pg_catalog.lock_relation_if_exists(%s, %s);"
 
 /* static definition and declarations */
 struct LockModeToStringType
@@ -90,7 +91,6 @@ typedef struct LockRelationRecord
 
 
 /* local function forward declarations */
-static LOCKMODE IntToLockMode(int mode);
 static void LockReferencedReferenceShardResources(uint64 shardId, LOCKMODE lockMode);
 static bool AnyTableReplicated(List *shardIntervalList,
 							   List **replicatedShardIntervalList);
@@ -108,6 +108,7 @@ static void SetLocktagForShardDistributionMetadata(int64 shardId, LOCKTAG *tag);
 PG_FUNCTION_INFO_V1(lock_shard_metadata);
 PG_FUNCTION_INFO_V1(lock_shard_resources);
 PG_FUNCTION_INFO_V1(lock_relation_if_exists);
+PG_FUNCTION_INFO_V1(citus_internal_lock_colocation_id);
 
 /* Config variable managed via guc.c */
 bool EnableAcquiringUnsafeLockFromWorkers = false;
@@ -267,6 +268,26 @@ lock_shard_resources(PG_FUNCTION_ARGS)
 
 
 /*
+ * citus_internal_lock_colocation_id calls LockColocationId.
+ */
+Datum
+citus_internal_lock_colocation_id(PG_FUNCTION_ARGS)
+{
+	CheckCitusVersion(ERROR);
+
+	PG_ENSURE_ARGNOTNULL(0, "colocation_id");
+	int32 colocationId = PG_GETARG_INT32(0);
+
+	PG_ENSURE_ARGNOTNULL(1, "lock_mode");
+	LOCKMODE lockMode = IntToLockMode(PG_GETARG_INT32(1));
+
+	LockColocationId(colocationId, lockMode);
+
+	PG_RETURN_VOID();
+}
+
+
+/*
  * LockShardListResourcesOnFirstWorker acquires the resource locks for the specified
  * shards on the first worker. Acquiring a lock with or without metadata does not
  * matter for us. So, worker does not have to be an MX node, acquiring the lock
@@ -405,7 +426,17 @@ LockShardListMetadataOnWorkers(LOCKMODE lockmode, List *shardIntervalList)
 
 	appendStringInfo(lockCommand, "])");
 
-	SendCommandToWorkersWithMetadata(lockCommand->data);
+	/*
+	 * Disable idle_in_transaction_session_timeout on metadata workers before
+	 * acquiring locks. In block_writes mode, these connections stay open for
+	 * the entire shard copy which can take hours for large shards. Without
+	 * this, the timeout would kill the connection and fail the move.
+	 * SET LOCAL scopes the change to this transaction only.
+	 */
+	List *commandList = list_make2(
+		"SET LOCAL idle_in_transaction_session_timeout = 0",
+		lockCommand->data);
+	SendCommandListToWorkersWithMetadata(commandList);
 }
 
 
@@ -413,7 +444,7 @@ LockShardListMetadataOnWorkers(LOCKMODE lockmode, List *shardIntervalList)
  * IntToLockMode verifies whether the specified integer is an accepted lock mode
  * and returns it as a LOCKMODE enum.
  */
-static LOCKMODE
+LOCKMODE
 IntToLockMode(int mode)
 {
 	if (mode == ExclusiveLock)
@@ -466,6 +497,19 @@ UnlockColocationId(int colocationId, LOCKMODE lockMode)
 
 	SET_LOCKTAG_REBALANCE_COLOCATION(tag, (int64) colocationId);
 	LockRelease(&tag, lockMode, sessionLock);
+}
+
+
+/*
+ * LockColocationIdCommand returns a command to acquire a co-location id lock.
+ */
+char *
+LockColocationIdCommand(int colocationId, LOCKMODE lockMode)
+{
+	StringInfo lockCommand = makeStringInfo();
+	appendStringInfo(lockCommand, "SELECT citus_internal.lock_colocation_id(%d, %d)",
+					 colocationId, lockMode);
+	return lockCommand->data;
 }
 
 

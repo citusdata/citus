@@ -1011,7 +1011,7 @@ SELECT create_distributed_table('different_type_table', 'a');
 SELECT alter_distributed_table('dist_table', colocate_with := 'different_type_table');
 ERROR:  cannot colocate with different_type_table because data type of its distribution column is different than dist_table
 SELECT alter_distributed_table('dist_table', distribution_column := 'a', colocate_with := 'different_type_table');
-ERROR:  cannot colocate with different_type_table and change distribution column to a because data type of column a is different then the distribution column of the different_type_table
+ERROR:  cannot colocate with different_type_table and change distribution column to a because data type of column a is different than the distribution column of the different_type_table
 -- test shard_count := 0
 SELECT alter_distributed_table('dist_table', shard_count := 0);
 ERROR:  shard_count cannot be 0

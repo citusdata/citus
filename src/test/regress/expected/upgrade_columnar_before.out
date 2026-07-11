@@ -337,12 +337,12 @@ SELECT count(*) FROM less_common_data_types_table WHERE dist_key = 1 AND col1 = 
 set columnar.enable_custom_scan to 'off';
 set enable_seqscan to off;
 set seq_page_cost TO 10000000;
-EXPLAIN (costs off, timing off, summary off, analyze on, BUFFERS OFF)
+EXPLAIN (costs off, timing off, summary off, analyze off, BUFFERS OFF)
 	SELECT count(*) FROM less_common_data_types_table WHERE dist_key = 1 AND col1 = ARRAY[1];
-                                                 QUERY PLAN
+                                     QUERY PLAN
 ---------------------------------------------------------------------
- Aggregate (actual rows=1 loops=1)
-   ->  Index Scan using non_unique_index_on_columnar on less_common_data_types_table (actual rows=1 loops=1)
+ Aggregate
+   ->  Index Scan using non_unique_index_on_columnar on less_common_data_types_table
          Index Cond: ((dist_key = 1) AND (col1 = '{1}'::integer[]))
 (3 rows)
 

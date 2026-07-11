@@ -116,24 +116,15 @@ PlannedStmt *
 GeneratePlaceHolderPlannedStmt(Query *parse)
 {
 	PlannedStmt *result = makeNode(PlannedStmt);
-#if PG_VERSION_NUM >= PG_VERSION_16
 	SeqScan *scanNode = makeNode(SeqScan);
 	Plan *plan = &(scanNode->scan.plan);
-#else
-	Scan *scanNode = makeNode(Scan);
-	Plan *plan = &scanNode->plan;
-#endif
 
 	FastPathRestrictionContext fprCtxt PG_USED_FOR_ASSERTS_ONLY = { 0 };
 
 	Assert(FastPathRouterQuery(parse, &fprCtxt));
 
 	/* there is only a single relation rte */
-#if PG_VERSION_NUM >= PG_VERSION_16
 	scanNode->scan.scanrelid = 1;
-#else
-	scanNode->scanrelid = 1;
-#endif
 
 	plan->targetlist =
 		copyObject(FetchStatementTargetList((Node *) parse));
@@ -149,9 +140,7 @@ GeneratePlaceHolderPlannedStmt(Query *parse)
 	result->stmt_len = parse->stmt_len;
 
 	result->rtable = copyObject(parse->rtable);
-#if PG_VERSION_NUM >= PG_VERSION_16
 	result->permInfos = copyObject(parse->rteperminfos);
-#endif
 	result->planTree = (Plan *) plan;
 	result->hasReturning = (parse->returningList != NIL);
 
@@ -273,8 +262,16 @@ FastPathRouterQuery(Query *query, FastPathRestrictionContext *fastPathContext)
 		return true;
 	}
 
-	/* make sure that the only range table in FROM clause */
-	if (list_length(query->rtable) != 1)
+	int numFromRels = list_length(query->rtable);
+
+	/* make sure that there is only one range table in FROM clause */
+	if ((numFromRels != 1)
+#if PG_VERSION_NUM >= PG_VERSION_18
+
+	    /* with a PG18+ twist for GROUP rte - if present make sure there's two range tables */
+		&& (!query->hasGroupRTE || numFromRels != 2)
+#endif
+		)
 	{
 		return false;
 	}

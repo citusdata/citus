@@ -43,6 +43,7 @@ int MaxWorkerNodesTracked = 2048;    /* determines worker node hash table size *
 
 /* Local functions forward declarations */
 static bool NodeIsPrimaryWorker(WorkerNode *node);
+static bool NodeIsRemotePrimaryWorker(WorkerNode *node);
 static bool NodeIsReadableWorker(WorkerNode *node);
 
 
@@ -169,6 +170,20 @@ ActivePrimaryNonCoordinatorNodeList(LOCKMODE lockMode)
 
 
 /*
+ * ActivePrimaryRemoteNonCoordinatorNodeList returns a list of all active primary worker nodes
+ * in workerNodeHash except the local one. lockMode specifies which lock to use on pg_dist_node,
+ * this is necessary when the caller wouldn't want nodes to be added concurrent to their use of
+ * this list. This method excludes coordinator even if it is added as a worker to cluster.
+ */
+List *
+ActivePrimaryRemoteNonCoordinatorNodeList(LOCKMODE lockMode)
+{
+	EnsureModificationsCanRun();
+	return FilterActiveNodeListFunc(lockMode, NodeIsRemotePrimaryWorker);
+}
+
+
+/*
  * ActivePrimaryNodeList returns a list of all active primary nodes in
  * workerNodeHash.
  */
@@ -199,6 +214,16 @@ static bool
 NodeIsPrimaryWorker(WorkerNode *node)
 {
 	return !NodeIsCoordinator(node) && NodeIsPrimary(node);
+}
+
+
+/*
+ * NodeIsPrimaryAndRemote returns true if the node is a remote primary worker node.
+ */
+static bool
+NodeIsRemotePrimaryWorker(WorkerNode *node)
+{
+	return !NodeIsCoordinator(node) && NodeIsPrimaryAndRemote(node);
 }
 
 

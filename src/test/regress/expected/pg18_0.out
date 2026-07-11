@@ -8,12 +8,12 @@ SELECT substring(:'server_version', '\d+')::int >= 18 AS server_version_ge_18
 -- behavior is same among PG versions, error message differs
 -- relevant PG18 commit: 3eea4dc2c7, 38883916e
 CREATE STATISTICS tst ON a FROM (VALUES (x)) AS foo;
-ERROR:  only a single relation is allowed in CREATE STATISTICS
+ERROR:  CREATE STATISTICS only supports relation names in the FROM clause
 CREATE FUNCTION tftest(int) returns table(a int, b int) as $$
 SELECT $1, $1+i FROM generate_series(1,5) g(i);
 $$ LANGUAGE sql IMMUTABLE STRICT;
 CREATE STATISTICS alt_stat2 ON a FROM tftest(1);
-ERROR:  only a single relation is allowed in CREATE STATISTICS
+ERROR:  CREATE STATISTICS only supports relation names in the FROM clause
 DROP FUNCTION tftest;
 \if :server_version_ge_18
 \else

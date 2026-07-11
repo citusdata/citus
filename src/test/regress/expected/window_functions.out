@@ -1292,6 +1292,7 @@ ORDER BY user_id, avg(value_1) DESC;
        6 | 1.00000000000000000000 |    5
 (32 rows)
 
+select public.explain_filter('
 EXPLAIN (COSTS FALSE)
 SELECT
 	user_id,
@@ -1300,8 +1301,9 @@ SELECT
 FROM
 	users_table
 GROUP BY user_id, value_2
-ORDER BY user_id, avg(value_1) DESC;
-                                                      QUERY PLAN
+ORDER BY user_id, avg(value_1) DESC
+', true);
+                                                    explain_filter
 ---------------------------------------------------------------------
  Sort
    Sort Key: remote_scan.user_id, remote_scan.avg DESC
@@ -1364,6 +1366,7 @@ ORDER BY user_id, avg(value_1) DESC;
 (32 rows)
 
 -- limit is not pushed down to worker !!
+select public.explain_filter('
 EXPLAIN (COSTS FALSE)
 SELECT
 	user_id,
@@ -1373,8 +1376,9 @@ FROM
 	users_table
 GROUP BY user_id, value_2
 ORDER BY user_id, avg(value_1) DESC
-LIMIT 5;
-                                                               QUERY PLAN
+LIMIT 5
+', true);
+                                                             explain_filter
 ---------------------------------------------------------------------
  Limit
    ->  Sort
@@ -1395,6 +1399,7 @@ LIMIT 5;
                                                    ->  Seq Scan on users_table_1400256 users_table
 (17 rows)
 
+select public.explain_filter('
 EXPLAIN (COSTS FALSE)
 SELECT
 	user_id,
@@ -1404,8 +1409,9 @@ FROM
 	users_table
 GROUP BY user_id, value_2
 ORDER BY user_id, avg(value_1) DESC
-LIMIT 5;
-                                                               QUERY PLAN
+LIMIT 5
+', true);
+                                                             explain_filter
 ---------------------------------------------------------------------
  Limit
    ->  Sort
@@ -1426,6 +1432,7 @@ LIMIT 5;
                                                    ->  Seq Scan on users_table_1400256 users_table
 (17 rows)
 
+select public.explain_filter('
 EXPLAIN (COSTS FALSE)
 SELECT
 	user_id,
@@ -1435,8 +1442,9 @@ FROM
 	users_table
 GROUP BY user_id, value_2
 ORDER BY user_id, avg(value_1) DESC
-LIMIT 5;
-                                                    QUERY PLAN
+LIMIT 5
+', true);
+                                                  explain_filter
 ---------------------------------------------------------------------
  Limit
    ->  Sort
@@ -1457,6 +1465,7 @@ LIMIT 5;
                                                    ->  Seq Scan on users_table_1400256 users_table
 (17 rows)
 
+select public.explain_filter('
 EXPLAIN (COSTS FALSE)
 SELECT
 	user_id,
@@ -1466,8 +1475,9 @@ FROM
 	users_table
 GROUP BY user_id, value_2
 ORDER BY user_id, avg(value_1) DESC
-LIMIT 5;
-                                              QUERY PLAN
+LIMIT 5
+', true);
+                                            explain_filter
 ---------------------------------------------------------------------
  Limit
    ->  Sort
@@ -1489,10 +1499,12 @@ LIMIT 5;
 (17 rows)
 
 -- Grouping can be pushed down with aggregates even when window function can't
+select public.explain_filter('
 EXPLAIN (COSTS FALSE)
 SELECT user_id, count(value_1), stddev(value_1), count(user_id) OVER (PARTITION BY random())
-FROM users_table GROUP BY user_id HAVING avg(value_1) > 2 LIMIT 1;
-                                   QUERY PLAN
+FROM users_table GROUP BY user_id HAVING avg(value_1) > 2 LIMIT 1
+', true);
+                                 explain_filter
 ---------------------------------------------------------------------
  Limit
    ->  WindowAgg
@@ -1534,6 +1546,7 @@ SELECT create_distributed_table('daily_uniques', 'user_id');
 
 (1 row)
 
+select public.explain_filter('
 EXPLAIN (COSTS FALSE) SELECT
   user_id,
   sum(value_2) AS commits,
@@ -1547,8 +1560,9 @@ GROUP BY user_id
 HAVING
   sum(value_2) > 0
 ORDER BY commits DESC
-LIMIT 10;
-                                                   QUERY PLAN
+LIMIT 10
+', true);
+                                                 explain_filter
 ---------------------------------------------------------------------
  Limit
    ->  Sort

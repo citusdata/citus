@@ -838,12 +838,7 @@ DROP TABLE mx_testing_schema.mx_test_table;
 DROP TABLE mx_ref;
 DROP TABLE dist_table_1, dist_table_2;
 
-SET client_min_messages TO ERROR;
-SET citus.enable_ddl_propagation TO off; -- for enterprise
 CREATE USER non_super_metadata_user;
-SET citus.enable_ddl_propagation TO on;
-RESET client_min_messages;
-SELECT run_command_on_workers('CREATE USER non_super_metadata_user');
 GRANT EXECUTE ON FUNCTION start_metadata_sync_to_node(text,int) TO non_super_metadata_user;
 GRANT EXECUTE ON FUNCTION stop_metadata_sync_to_node(text,int,bool) TO non_super_metadata_user;
 GRANT ALL ON pg_dist_node TO non_super_metadata_user;
@@ -877,6 +872,10 @@ SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 
 RESET citus.shard_count;
 RESET citus.shard_replication_factor;
+
+-- Remove the secondary nodes added during the test
+SELECT 1 FROM master_remove_node('localhost', 8888);
+SELECT 1 FROM master_remove_node('localhost', 8889);
 
 ALTER SEQUENCE pg_catalog.pg_dist_groupid_seq RESTART :last_group_id;
 ALTER SEQUENCE pg_catalog.pg_dist_node_nodeid_seq RESTART :last_node_id;

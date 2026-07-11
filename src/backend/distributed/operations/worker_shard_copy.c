@@ -19,6 +19,7 @@
 #include "utils/lsyscache.h"
 
 #include "distributed/commands/multi_copy.h"
+#include "distributed/commands/utility_hook.h"
 #include "distributed/connection_management.h"
 #include "distributed/local_executor.h"
 #include "distributed/local_multi_copy.h"
@@ -384,7 +385,7 @@ CopyableColumnNamesFromTupleDesc(TupleDesc tupDesc)
 	for (int i = 0; i < tupDesc->natts; i++)
 	{
 		Form_pg_attribute att = TupleDescAttr(tupDesc, i);
-		if (att->attgenerated || att->attisdropped)
+		if (IsDroppedOrGenerated(att))
 		{
 			continue;
 		}
@@ -471,8 +472,8 @@ WriteLocalTuple(TupleTableSlot *slot, ShardCopyDestReceiver *copyDest)
 	SetLocalExecutionStatus(LOCAL_EXECUTION_REQUIRED);
 
 	bool isBinaryCopy = localCopyOutState->binary;
-	bool shouldAddBinaryHeaders = (isBinaryCopy && localCopyOutState->fe_msgbuf->len ==
-								   0);
+	bool shouldAddBinaryHeaders = (isBinaryCopy &&
+								   localCopyOutState->fe_msgbuf->len == 0);
 	if (shouldAddBinaryHeaders)
 	{
 		AppendCopyBinaryHeaders(localCopyOutState);

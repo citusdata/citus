@@ -57,6 +57,7 @@
 #include "distributed/citus_depended_object.h"
 #include "distributed/citus_nodefuncs.h"
 #include "distributed/citus_safe_lib.h"
+#include "distributed/cluster_changes_block.h"
 #include "distributed/combine_query_planner.h"
 #include "distributed/commands.h"
 #include "distributed/commands/multi_copy.h"
@@ -104,7 +105,6 @@
 #include "distributed/shardsplit_shared_memory.h"
 #include "distributed/shared_connection_stats.h"
 #include "distributed/shared_library_init.h"
-#include "distributed/statistics_collection.h"
 #include "distributed/stats/query_stats.h"
 #include "distributed/stats/stat_counters.h"
 #include "distributed/stats/stat_tenants.h"
@@ -119,7 +119,11 @@
 #include "distributed/worker_shard_visibility.h"
 
 /* marks shared object as one loadable by the postgres version compiled against */
+#if PG_VERSION_NUM >= PG_VERSION_18
+PG_MODULE_MAGIC_EXT(.name = "citus", .version = "15.0devel");
+#else
 PG_MODULE_MAGIC;
+#endif
 
 ColumnarSupportsIndexAM_type extern_ColumnarSupportsIndexAM = NULL;
 CompressionTypeStr_type extern_CompressionTypeStr = NULL;
@@ -132,15 +136,15 @@ ReadColumnarOptions_type extern_ReadColumnarOptions = NULL;
  * module.
  */
 #define DEFINE_COLUMNAR_PASSTHROUGH_FUNC(funcname) \
-	static PGFunction CppConcat(extern_, funcname); \
-	PG_FUNCTION_INFO_V1(funcname); \
-	Datum funcname(PG_FUNCTION_ARGS) \
-	{ \
-		return CppConcat(extern_, funcname)(fcinfo); \
-	}
+		static PGFunction CppConcat(extern_, funcname); \
+		PG_FUNCTION_INFO_V1(funcname); \
+		Datum funcname(PG_FUNCTION_ARGS) \
+		{ \
+			return CppConcat(extern_, funcname)(fcinfo); \
+		}
 #define INIT_COLUMNAR_SYMBOL(typename, funcname) \
-	CppConcat(extern_, funcname) = \
-		(typename) (void *) lookup_external_function(handle, # funcname)
+		CppConcat(extern_, funcname) = \
+			(typename) (void *) lookup_external_function(handle, # funcname)
 
 #define CDC_DECODER_DYNAMIC_LIB_PATH "$libdir/citus_decoders:$libdir"
 
@@ -161,6 +165,7 @@ static char *MitmfifoEmptyString = "";
 static bool DeprecatedDeferShardDeleteOnMove = true;
 static bool DeprecatedDeferShardDeleteOnSplit = true;
 static bool DeprecatedReplicateReferenceTablesOnActivate = false;
+static bool DeprecatedEnableStatisticsCollection = false;
 
 /* deprecated GUC value that should not be used anywhere outside this file */
 static int ReplicationModel = REPLICATION_MODEL_STREAMING;
@@ -210,8 +215,6 @@ static bool NodeConninfoGucCheckHook(char **newval, void **extra, GucSource sour
 static void NodeConninfoGucAssignHook(const char *newval, void *extra);
 static const char * MaxSharedPoolSizeGucShowHook(void);
 static const char * LocalPoolSizeGucShowHook(void);
-static bool StatisticsCollectionGucCheckHook(bool *newval, void **extra, GucSource
-											 source);
 static bool WarnIfLocalExecutionDisabled(bool *newval, void **extra, GucSource source);
 static void CitusAuthHook(Port *port, int status);
 static bool IsSuperuser(char *userName);
@@ -508,6 +511,7 @@ _PG_init(void)
 
 	InitializeMaintenanceDaemon();
 	InitializeMaintenanceDaemonForMainDb();
+	InitializeClusterChangesBlock();
 
 	/* initialize coordinated transaction management */
 	InitializeTransactionManagement();
@@ -647,6 +651,7 @@ citus_shmem_request(void)
 	RequestAddinShmemSpace(MaintenanceDaemonShmemSize());
 	RequestAddinShmemSpace(CitusQueryStatsSharedMemSize());
 	RequestAddinShmemSpace(LogicalClockShmemSize());
+	RequestAddinShmemSpace(ClusterChangesBlockShmemSize());
 	RequestNamedLWLockTranche(STATS_SHARED_MEM_NAME, 1);
 	RequestAddinShmemSpace(StatCountersShmemSize());
 	RequestNamedLWLockTranche(SAVED_BACKEND_STATS_HASH_LOCK_TRANCHE_NAME, 1);
@@ -978,6 +983,22 @@ RegisterCitusConfigVariables(void)
 		NULL,
 		&AllModificationsCommutative,
 		false,
+		PGC_USERSET,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		"citus.allow_aggregate_worker_combine_on_internal_types",
+		gettext_noop("Enables aggregate worker partial aggregates on aggregates that "
+					 "have internal type for the aggregate partial state storage."),
+		gettext_noop(
+			"This setting allows the use of pushdown of custom aggregates that have "
+			"an STYPE that is internal. This is typically okay to do, but if a custom aggregate "
+			"persists OID information or any node specific data into the state, this can cause "
+			"weirdness when combining in the coordinator, so this is left as an option to turn off "
+			"in those cases worker combine functions on internal types."),
+		&AllowAggregateWorkerCombineOnInternalTypes,
+		true,
 		PGC_USERSET,
 		GUC_STANDARD,
 		NULL, NULL, NULL);
@@ -1498,6 +1519,25 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
+		"citus.enable_procedure_transaction_skip",
+		gettext_noop("Skip coordinated transactions for single-statement, "
+					 "single-shard procedure calls."),
+		gettext_noop("When enabled, CALL statements that execute exactly one "
+					 "distributed write targeting a single task on a single "
+					 "shard with a single placement skip coordinated (2PC) "
+					 "transactions. Only applies to non-nested procedure calls "
+					 "outside of explicit transaction blocks. "
+					 "WARNING: this is intended for single-statement procedures "
+					 "only. If a procedure issues a second distributed statement, "
+					 "it will raise an ERROR, but the first statement will have "
+					 "already been committed and cannot be rolled back."),
+		&EnableProcedureTransactionSkip,
+		false,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
 		"citus.enable_recurring_outer_join_pushdown",
 		gettext_noop("Enables outer join pushdown for recurring relations."),
 		gettext_noop("When enabled, Citus will try to push down outer joins "
@@ -1568,6 +1608,19 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
+		"citus.enable_sorted_merge",
+		gettext_noop("Enables sorted merge of worker results for ORDER BY queries."),
+		gettext_noop("When enabled during planning, Citus pushes ORDER BY to workers "
+					 "and merges the pre-sorted results on the coordinator using a "
+					 "binary heap, eliminating the Sort node in the combine query. "
+					 "This is an experimental feature."),
+		&EnableSortedMerge,
+		true,
+		PGC_SUSET,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
 		"citus.enable_stat_counters",
 		gettext_noop("Enables the collection of statistic counters for Citus."),
 		gettext_noop("When enabled, Citus maintains a set of statistic "
@@ -1583,21 +1636,13 @@ RegisterCitusConfigVariables(void)
 
 	DefineCustomBoolVariable(
 		"citus.enable_statistics_collection",
-		gettext_noop("Enables sending basic usage statistics to Citus."),
-		gettext_noop("Citus uploads daily anonymous usage reports containing "
-					 "rounded node count, shard size, distributed table count, "
-					 "and operating system name. This configuration value controls "
-					 "whether these reports are sent."),
-		&EnableStatisticsCollection,
-#if defined(HAVE_LIBCURL) && defined(ENABLE_CITUS_STATISTICS_COLLECTION)
-		true,
-#else
+		gettext_noop("Deprecated."),
+		NULL,
+		&DeprecatedEnableStatisticsCollection,
 		false,
-#endif
 		PGC_SIGHUP,
 		GUC_SUPERUSER_ONLY,
-		&StatisticsCollectionGucCheckHook,
-		NULL, NULL);
+		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
 		"citus.enable_unique_job_ids",
@@ -1665,6 +1710,38 @@ RegisterCitusConfigVariables(void)
 		true,
 		PGC_USERSET,
 		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
+		NULL, NULL, NULL);
+
+	DefineCustomIntVariable(
+		"citus.executor_batch_size",
+		gettext_noop("Maximum number of rows per batch in the adaptive executor."),
+		gettext_noop("When set to 0 (the default), the batch size is automatically "
+					 "calculated from work_mem and the estimated tuple size. This is a "
+					 "soft limit because a full result chunk from a worker is always "
+					 "processed atomically, so the actual number of rows per batch can "
+					 "exceed the estimate by the value of citus.executor_chunk_size. "
+					 "A non-zero value overrides the automatic calculation with a fixed "
+					 "row count. Small values (e.g. 1) can cause extreme overhead and"
+					 " should only be used for testing."),
+		&ExecutorBatchSize,
+		0, 0, INT_MAX,
+		PGC_USERSET,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomIntVariable(
+		"citus.executor_chunk_size",
+		gettext_noop("Chunk size in rows for libpq chunked row mode."),
+		gettext_noop(
+			"Controls the number of rows per chunk passed to PQsetChunkedRowsMode "
+			"when fetching rows from workers. Larger values reduce per-result "
+			"overhead but increase memory usage per fetch. Only effective "
+			"on PostgreSQL 17 and later. A value of 1 is equivalent to "
+			"single-row mode."),
+		&ExecutorChunkSize,
+		8192, 1, INT_MAX,
+		PGC_USERSET,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
@@ -2236,7 +2313,20 @@ RegisterCitusConfigVariables(void)
 					 "instead be generated by incrementing from the value of "
 					 "this GUC and this will be reflected in the GUC. This is "
 					 "mainly useful to ensure consistent placement IDs when running "
-					 "tests in parallel."),
+					 "tests in parallel."
+					 "Note that the function consuming the next placement id always "
+					 "connects to the coordinator to get the next value, if the "
+					 "session is not connected to the coordinator. So this GUC "
+					 "is only effective on the coordinator when creating new "
+					 "shards."
+					 "And also note that if the citus internal connection that "
+					 "is used to connect to coordinator to retrieve the next "
+					 "placement id changes, then the value this GUC was set to "
+					 "would be ineffective too. For this reason, when testing a "
+					 "command that creates shards via a worker node, it's "
+					 "recommended to directly alter "
+					 "pg_dist_placement_placementid_seq at the system level on "
+					 "the coordinator."),
 		&NextPlacementId,
 		0, 0, INT_MAX,
 		PGC_USERSET,
@@ -2251,7 +2341,19 @@ RegisterCitusConfigVariables(void)
 					 "instead be generated by incrementing from the value of "
 					 "this GUC and this will be reflected in the GUC. This is "
 					 "mainly useful to ensure consistent shard IDs when running "
-					 "tests in parallel."),
+					 "tests in parallel."
+					 "Note that the function consuming the next shard id always "
+					 "connects to the coordinator to get the next value, if the "
+					 "session is not connected to the coordinator. So this GUC "
+					 "is only effective on the coordinator when creating new "
+					 "shards."
+					 "And also note that if the citus internal connection that "
+					 "is used to connect to coordinator to retrieve the next "
+					 "shard id changes, then the value this GUC was set to "
+					 "would be ineffective too. For this reason, when testing a "
+					 "command that creates shards via a worker node, it's "
+					 "recommended to directly alter pg_dist_shardid_seq at the "
+					 "system level on the coordinator."),
 		&NextShardId,
 		0, 0, INT_MAX,
 		PGC_USERSET,
@@ -2510,8 +2612,8 @@ RegisterCitusConfigVariables(void)
 		NULL,
 		&SkipAdvisoryLockPermissionChecks,
 		false,
-		GUC_SUPERUSER_ONLY,
-		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
+		PGC_SUSET,
+		GUC_SUPERUSER_ONLY | GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -2803,7 +2905,7 @@ static void
 OverridePostgresConfigProperties(void)
 {
 	int gucCount = 0;
-	struct config_generic **guc_vars = get_guc_variables_compat(&gucCount);
+	struct config_generic **guc_vars = get_guc_variables(&gucCount);
 
 	for (int gucIndex = 0; gucIndex < gucCount; gucIndex++)
 	{
@@ -2982,7 +3084,7 @@ ShowShardsForAppNamePrefixesCheckHook(char **newval, void **extra, GucSource sou
 		}
 
 		char *prefixAscii = pstrdup(appNamePrefix);
-		pg_clean_ascii_compat(prefixAscii, 0);
+		pg_clean_ascii(prefixAscii, 0);
 
 		if (strcmp(prefixAscii, appNamePrefix) != 0)
 		{
@@ -3083,6 +3185,9 @@ NodeConninfoGucCheckHook(char **newval, void **extra, GucSource source)
 		"sslcompression",
 		"sslcrl",
 		"sslkey",
+#if PG_VERSION_NUM >= PG_VERSION_18
+		"sslkeylogfile",
+#endif
 		"sslmode",
 #if PG_VERSION_NUM >= PG_VERSION_17
 		"sslnegotiation",
@@ -3202,28 +3307,6 @@ LocalPoolSizeGucShowHook(void)
 	appendStringInfo(newvalue, "%d", GetLocalSharedPoolSize());
 
 	return (const char *) newvalue->data;
-}
-
-
-static bool
-StatisticsCollectionGucCheckHook(bool *newval, void **extra, GucSource source)
-{
-#ifdef HAVE_LIBCURL
-	return true;
-#else
-
-	/* if libcurl is not installed, only accept false */
-	if (*newval)
-	{
-		GUC_check_errcode(ERRCODE_FEATURE_NOT_SUPPORTED);
-		GUC_check_errdetail("Citus was compiled without libcurl support.");
-		return false;
-	}
-	else
-	{
-		return true;
-	}
-#endif
 }
 
 

@@ -222,3 +222,41 @@ ALTER TABLE sensors_2020_01_01 DROP CONSTRAINT fkey_from_child_to_child;
 \c - postgres - :master_port
 DROP SCHEMA "blocking shard Move Fkeys Indexes" CASCADE;
 DROP ROLE mx_rebalancer_blocking_role_ent;
+
+-- Test: block_writes shard move succeeds even when workers have a low
+-- idle_in_transaction_session_timeout. LockShardListMetadataOnWorkers opens
+-- coordinated transactions on ALL metadata workers before the data copy.
+-- Workers not involved in the copy sit idle-in-transaction for the entire
+-- duration. Without the SET LOCAL override, the timeout would kill those
+-- connections and fail the move.
+SET citus.next_shard_id TO 8980000;
+SET citus.shard_count TO 4;
+SET citus.shard_replication_factor TO 1;
+
+CREATE SCHEMA blocking_move_idle_timeout;
+SET search_path TO blocking_move_idle_timeout;
+
+-- set a very low idle_in_transaction_session_timeout on all nodes
+SELECT 1 FROM run_command_on_all_nodes(
+    'ALTER SYSTEM SET idle_in_transaction_session_timeout = ''1s''');
+SELECT 1 FROM run_command_on_all_nodes('SELECT pg_reload_conf()');
+-- allow the reload to take effect
+SELECT pg_sleep(0.5);
+
+CREATE TABLE test_move(id int PRIMARY KEY, val text);
+SELECT create_distributed_table('test_move', 'id');
+INSERT INTO test_move SELECT i, 'val_' || i FROM generate_series(1, 100) i;
+
+-- move a shard using block_writes; should succeed despite the 1s timeout
+SELECT citus_move_shard_placement(8980000, 'localhost', :worker_1_port, 'localhost', :worker_2_port, shard_transfer_mode:='block_writes');
+SELECT public.wait_for_resource_cleanup();
+
+-- verify data integrity after move
+SELECT count(*) FROM test_move;
+
+-- cleanup: restore idle_in_transaction_session_timeout
+SELECT 1 FROM run_command_on_all_nodes(
+    'ALTER SYSTEM RESET idle_in_transaction_session_timeout');
+SELECT 1 FROM run_command_on_all_nodes('SELECT pg_reload_conf()');
+
+DROP SCHEMA blocking_move_idle_timeout CASCADE;

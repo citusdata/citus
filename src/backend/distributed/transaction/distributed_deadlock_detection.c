@@ -395,8 +395,8 @@ AssociateDistributedTransactionWithBackendProc(TransactionNode *transactionNode)
 		DistributedTransactionId *currentTransactionId =
 			&currentBackendData.transactionId;
 
-		if (currentTransactionId->transactionNumber !=
-			transactionNode->transactionId.transactionNumber)
+		if (currentTransactionId->transactionNumber != transactionNode->transactionId.
+			transactionNumber)
 		{
 			continue;
 		}

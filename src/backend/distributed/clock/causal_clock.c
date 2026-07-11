@@ -44,17 +44,17 @@
 #include "distributed/remote_commands.h"
 
 #define SAVE_AND_PERSIST(c) \
-	do { \
-		Oid savedUserId = InvalidOid; \
-		int savedSecurityContext = 0; \
-		LogicalClockShmem->clusterClockValue = *(c); \
-		GetUserIdAndSecContext(&savedUserId, &savedSecurityContext); \
-		SetUserIdAndSecContext(CitusExtensionOwner(), SECURITY_LOCAL_USERID_CHANGE); \
-		DirectFunctionCall2(setval_oid, \
-							ObjectIdGetDatum(DistClockLogicalSequenceId()), \
-							Int64GetDatum((c)->logical)); \
-		SetUserIdAndSecContext(savedUserId, savedSecurityContext); \
-	} while (0)
+		do { \
+			Oid savedUserId = InvalidOid; \
+			int savedSecurityContext = 0; \
+			LogicalClockShmem->clusterClockValue = *(c); \
+			GetUserIdAndSecContext(&savedUserId, &savedSecurityContext); \
+			SetUserIdAndSecContext(CitusExtensionOwner(), SECURITY_LOCAL_USERID_CHANGE); \
+			DirectFunctionCall2(setval_oid, \
+								ObjectIdGetDatum(DistClockLogicalSequenceId()), \
+								Int64GetDatum((c)->logical)); \
+			SetUserIdAndSecContext(savedUserId, savedSecurityContext); \
+		} while (0)
 
 PG_FUNCTION_INFO_V1(citus_get_node_clock);
 PG_FUNCTION_INFO_V1(citus_internal_adjust_local_clock_to_remote);

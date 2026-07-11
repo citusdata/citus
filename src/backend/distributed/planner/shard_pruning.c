@@ -1215,7 +1215,9 @@ AddPartitionKeyRestrictionToInstance(ClauseWalkerContext *context, OpExpr *opCla
 			}
 
 			default:
+			{
 				Assert(false);
+			}
 		}
 	}
 

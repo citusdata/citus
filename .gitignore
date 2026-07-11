@@ -40,6 +40,8 @@ lib*.pc
 /compile_commands.json
 /src/backend/distributed/cdc/build-cdc-*/*
 /src/test/cdc/tmp_check/*
+/src/test/tap/tmp_check/*
+/src/test/tap/log/*
 
 
 # temporary files vim creates

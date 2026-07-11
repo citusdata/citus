@@ -1,0 +1,796 @@
+Parsed test spec with 3 sessions
+
+starting permutation: coord-create-table-ref coord-create-reference-table-ref coord-remove-worker-57638 coord-begin coord-add-worker-57638 worker-57637-start worker-57637-shard-replication-factor worker-57637-create-table-sc1-t2 coord-commit coord-query-ref-placements coord-query-sc1-t2-placement worker-57637-shard-replication-factor worker-57637-create-table-sc1-t1 worker-57637-stop coord-query-ref-placements coord-query-sc1-t1-placement
+step coord-create-table-ref: CREATE TABLE ref (id int PRIMARY KEY);
+step coord-create-reference-table-ref: SELECT create_reference_table('ref');
+create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+step coord-remove-worker-57638: SELECT 1 FROM citus_remove_node('localhost', 57638);
+?column?
+---------------------------------------------------------------------
+       1
+(1 row)
+
+step coord-begin: BEGIN;
+step coord-add-worker-57638: SELECT 1 FROM citus_add_node('localhost', 57638);
+?column?
+---------------------------------------------------------------------
+       1
+(1 row)
+
+step worker-57637-start: SELECT start_session_level_connection_to_node('localhost', 57637);
+start_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step worker-57637-shard-replication-factor: SELECT run_commands_on_session_level_connection_to_node('SET citus.shard_replication_factor TO 1');
+run_commands_on_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step worker-57637-create-table-sc1-t2: SELECT run_commands_on_session_level_connection_to_node('CREATE TABLE sc1.t2 (a int)'); <waiting ...>
+step coord-commit: COMMIT;
+step worker-57637-create-table-sc1-t2: <... completed>
+run_commands_on_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step coord-query-ref-placements: SELECT nodeport, success, result FROM run_command_on_placements('ref', 'SELECT count(*) FROM %s') ORDER BY nodeport;
+nodeport|success|result
+---------------------------------------------------------------------
+   57636|t      |     0
+   57637|t      |     0
+(2 rows)
+
+step coord-query-sc1-t2-placement: SELECT nodeport, success, result FROM run_command_on_placements('sc1.t2', 'SELECT count(*) FROM %s') ORDER BY nodeport;
+nodeport|success|result
+---------------------------------------------------------------------
+   57638|t      |     0
+(1 row)
+
+step worker-57637-shard-replication-factor: SELECT run_commands_on_session_level_connection_to_node('SET citus.shard_replication_factor TO 1');
+run_commands_on_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step worker-57637-create-table-sc1-t1: SELECT run_commands_on_session_level_connection_to_node('CREATE TABLE sc1.t1 (a int)');
+run_commands_on_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step worker-57637-stop: SELECT stop_session_level_connection_to_node();
+stop_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step coord-query-ref-placements: SELECT nodeport, success, result FROM run_command_on_placements('ref', 'SELECT count(*) FROM %s') ORDER BY nodeport;
+nodeport|success|result
+---------------------------------------------------------------------
+   57636|t      |     0
+   57637|t      |     0
+   57638|t      |     0
+(3 rows)
+
+step coord-query-sc1-t1-placement: SELECT nodeport, success, result FROM run_command_on_placements('sc1.t1', 'SELECT count(*) FROM %s') ORDER BY nodeport;
+nodeport|success|result
+---------------------------------------------------------------------
+   57638|t      |     0
+(1 row)
+
+?column?
+---------------------------------------------------------------------
+t
+(1 row)
+
+
+starting permutation: coord-shard-replication-factor coord-create-table-sc1-t1 coord-query-sc1-t1-placement coord-begin coord-move-shard-sc1-t1 worker-57637-start worker-57637-shard-replication-factor worker-57637-create-table-sc1-t2 coord-commit worker-57637-stop coord-query-sc1-t1-placement
+step coord-shard-replication-factor: SET citus.shard_replication_factor TO 1;
+step coord-create-table-sc1-t1: CREATE TABLE sc1.t1 (a int);
+step coord-query-sc1-t1-placement: SELECT nodeport, success, result FROM run_command_on_placements('sc1.t1', 'SELECT count(*) FROM %s') ORDER BY nodeport;
+nodeport|success|result
+---------------------------------------------------------------------
+   57638|t      |     0
+(1 row)
+
+step coord-begin: BEGIN;
+step coord-move-shard-sc1-t1:
+ SELECT citus_move_shard_placement(
+  s.shardid,
+  src.nodename, src.nodeport,
+  dst.nodename, dst.nodeport,
+  'block_writes'
+ )
+ FROM pg_dist_shard s
+ JOIN pg_dist_shard_placement src USING (shardid)
+ CROSS JOIN (
+  SELECT nodename, nodeport
+  FROM pg_dist_node
+  WHERE noderole = 'primary' AND isactive AND shouldhaveshards AND
+     (nodename, nodeport) NOT IN (
+    SELECT p.nodename, p.nodeport
+    FROM pg_dist_shard_placement p
+    JOIN pg_dist_shard ps USING (shardid)
+    WHERE ps.logicalrelid = 'sc1.t1'::regclass
+     )
+     ORDER BY nodeport
+  LIMIT 1
+ ) dst
+ WHERE s.logicalrelid = 'sc1.t1'::regclass;
+
+citus_move_shard_placement
+---------------------------------------------------------------------
+
+(1 row)
+
+step worker-57637-start: SELECT start_session_level_connection_to_node('localhost', 57637);
+start_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step worker-57637-shard-replication-factor: SELECT run_commands_on_session_level_connection_to_node('SET citus.shard_replication_factor TO 1');
+run_commands_on_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step worker-57637-create-table-sc1-t2: SELECT run_commands_on_session_level_connection_to_node('CREATE TABLE sc1.t2 (a int)');
+ERROR:  could not acquire the lock required to colocate distributed table sc1.t1
+step coord-commit: COMMIT;
+step worker-57637-stop: SELECT stop_session_level_connection_to_node();
+stop_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step coord-query-sc1-t1-placement: SELECT nodeport, success, result FROM run_command_on_placements('sc1.t1', 'SELECT count(*) FROM %s') ORDER BY nodeport;
+nodeport|success|result
+---------------------------------------------------------------------
+   57637|t      |     0
+(1 row)
+
+?column?
+---------------------------------------------------------------------
+t
+(1 row)
+
+
+starting permutation: coord-shard-replication-factor coord-create-table-sc1-t1 worker-57638-start worker-57638-begin worker-57638-drop-table-sc1-t1 worker-57637-start worker-57637-shard-replication-factor worker-57637-create-table-sc1-t2 worker-57638-commit worker-57638-stop worker-57637-stop coord-show-tables-in-schema-sc1
+step coord-shard-replication-factor: SET citus.shard_replication_factor TO 1;
+step coord-create-table-sc1-t1: CREATE TABLE sc1.t1 (a int);
+step worker-57638-start: SELECT start_session_level_connection_to_node('localhost', 57638);
+start_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step worker-57638-begin: SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+run_commands_on_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step worker-57638-drop-table-sc1-t1: SELECT run_commands_on_session_level_connection_to_node('DROP TABLE sc1.t1');
+run_commands_on_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step worker-57637-start: SELECT start_session_level_connection_to_node('localhost', 57637);
+start_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step worker-57637-shard-replication-factor: SELECT run_commands_on_session_level_connection_to_node('SET citus.shard_replication_factor TO 1');
+run_commands_on_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step worker-57637-create-table-sc1-t2: SELECT run_commands_on_session_level_connection_to_node('CREATE TABLE sc1.t2 (a int)'); <waiting ...>
+step worker-57638-commit: SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+run_commands_on_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step worker-57637-create-table-sc1-t2: <... completed>
+run_commands_on_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step worker-57638-stop: SELECT stop_session_level_connection_to_node();
+stop_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step worker-57637-stop: SELECT stop_session_level_connection_to_node();
+stop_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step coord-show-tables-in-schema-sc1:
+ SELECT nodeport, success, result
+ FROM run_command_on_all_nodes($$
+  SELECT array_agg(tablename ORDER BY tablename) FROM pg_tables WHERE schemaname = 'sc1' AND tablename IN ('t1', 't2', 't1_renamed')
+ $$)
+ JOIN pg_dist_node USING (nodeid)
+ ORDER BY nodeport;
+
+nodeport|success|result
+---------------------------------------------------------------------
+   57636|t      |{t2}
+   57637|t      |{t2}
+   57638|t      |{t2}
+(3 rows)
+
+?column?
+---------------------------------------------------------------------
+t
+(1 row)
+
+
+starting permutation: coord-shard-replication-factor coord-create-table-sc1-t1 coord-query-sc1-t1-placement worker-57637-start worker-57637-shard-replication-factor worker-57637-begin worker-57637-create-table-sc1-t2 coord-move-shard-sc1-t1 worker-57637-commit worker-57637-stop coord-query-sc1-t1-placement
+step coord-shard-replication-factor: SET citus.shard_replication_factor TO 1;
+step coord-create-table-sc1-t1: CREATE TABLE sc1.t1 (a int);
+step coord-query-sc1-t1-placement: SELECT nodeport, success, result FROM run_command_on_placements('sc1.t1', 'SELECT count(*) FROM %s') ORDER BY nodeport;
+nodeport|success|result
+---------------------------------------------------------------------
+   57638|t      |     0
+(1 row)
+
+step worker-57637-start: SELECT start_session_level_connection_to_node('localhost', 57637);
+start_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step worker-57637-shard-replication-factor: SELECT run_commands_on_session_level_connection_to_node('SET citus.shard_replication_factor TO 1');
+run_commands_on_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step worker-57637-begin: SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+run_commands_on_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step worker-57637-create-table-sc1-t2: SELECT run_commands_on_session_level_connection_to_node('CREATE TABLE sc1.t2 (a int)');
+run_commands_on_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step coord-move-shard-sc1-t1:
+ SELECT citus_move_shard_placement(
+  s.shardid,
+  src.nodename, src.nodeport,
+  dst.nodename, dst.nodeport,
+  'block_writes'
+ )
+ FROM pg_dist_shard s
+ JOIN pg_dist_shard_placement src USING (shardid)
+ CROSS JOIN (
+  SELECT nodename, nodeport
+  FROM pg_dist_node
+  WHERE noderole = 'primary' AND isactive AND shouldhaveshards AND
+     (nodename, nodeport) NOT IN (
+    SELECT p.nodename, p.nodeport
+    FROM pg_dist_shard_placement p
+    JOIN pg_dist_shard ps USING (shardid)
+    WHERE ps.logicalrelid = 'sc1.t1'::regclass
+     )
+     ORDER BY nodeport
+  LIMIT 1
+ ) dst
+ WHERE s.logicalrelid = 'sc1.t1'::regclass;
+
+ERROR:  could not acquire the lock required to move sc1.t1
+step worker-57637-commit: SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+run_commands_on_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step worker-57637-stop: SELECT stop_session_level_connection_to_node();
+stop_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step coord-query-sc1-t1-placement: SELECT nodeport, success, result FROM run_command_on_placements('sc1.t1', 'SELECT count(*) FROM %s') ORDER BY nodeport;
+nodeport|success|result
+---------------------------------------------------------------------
+   57638|t      |     0
+(1 row)
+
+?column?
+---------------------------------------------------------------------
+t
+(1 row)
+
+
+starting permutation: coord-shard-replication-factor coord-create-table-sc1-t1 worker-57637-start worker-57637-shard-replication-factor worker-57638-start worker-57637-begin worker-57637-create-table-sc1-t2 worker-57638-drop-table-sc1-t1 worker-57637-commit worker-57638-stop worker-57637-stop coord-show-tables-in-schema-sc1
+step coord-shard-replication-factor: SET citus.shard_replication_factor TO 1;
+step coord-create-table-sc1-t1: CREATE TABLE sc1.t1 (a int);
+step worker-57637-start: SELECT start_session_level_connection_to_node('localhost', 57637);
+start_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step worker-57637-shard-replication-factor: SELECT run_commands_on_session_level_connection_to_node('SET citus.shard_replication_factor TO 1');
+run_commands_on_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step worker-57638-start: SELECT start_session_level_connection_to_node('localhost', 57638);
+start_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step worker-57637-begin: SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+run_commands_on_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step worker-57637-create-table-sc1-t2: SELECT run_commands_on_session_level_connection_to_node('CREATE TABLE sc1.t2 (a int)');
+run_commands_on_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step worker-57638-drop-table-sc1-t1: SELECT run_commands_on_session_level_connection_to_node('DROP TABLE sc1.t1'); <waiting ...>
+step worker-57637-commit: SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+run_commands_on_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step worker-57638-drop-table-sc1-t1: <... completed>
+run_commands_on_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step worker-57638-stop: SELECT stop_session_level_connection_to_node();
+stop_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step worker-57637-stop: SELECT stop_session_level_connection_to_node();
+stop_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step coord-show-tables-in-schema-sc1:
+ SELECT nodeport, success, result
+ FROM run_command_on_all_nodes($$
+  SELECT array_agg(tablename ORDER BY tablename) FROM pg_tables WHERE schemaname = 'sc1' AND tablename IN ('t1', 't2', 't1_renamed')
+ $$)
+ JOIN pg_dist_node USING (nodeid)
+ ORDER BY nodeport;
+
+nodeport|success|result
+---------------------------------------------------------------------
+   57636|t      |{t2}
+   57637|t      |{t2}
+   57638|t      |{t2}
+(3 rows)
+
+?column?
+---------------------------------------------------------------------
+t
+(1 row)
+
+
+starting permutation: worker-57637-start worker-57637-shard-replication-factor worker-57637-begin worker-57637-create-table-sc1-t1 worker-57638-start worker-57638-shard-replication-factor worker-57638-create-table-sc1-t2 worker-57637-commit worker-57637-stop worker-57638-commit worker-57638-stop coord-show-tables-in-schema-sc1
+step worker-57637-start: SELECT start_session_level_connection_to_node('localhost', 57637);
+start_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step worker-57637-shard-replication-factor: SELECT run_commands_on_session_level_connection_to_node('SET citus.shard_replication_factor TO 1');
+run_commands_on_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step worker-57637-begin: SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+run_commands_on_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step worker-57637-create-table-sc1-t1: SELECT run_commands_on_session_level_connection_to_node('CREATE TABLE sc1.t1 (a int)');
+run_commands_on_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step worker-57638-start: SELECT start_session_level_connection_to_node('localhost', 57638);
+start_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step worker-57638-shard-replication-factor: SELECT run_commands_on_session_level_connection_to_node('SET citus.shard_replication_factor TO 1');
+run_commands_on_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step worker-57638-create-table-sc1-t2: SELECT run_commands_on_session_level_connection_to_node('CREATE TABLE sc1.t2 (a int)');
+run_commands_on_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step worker-57637-commit: SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+run_commands_on_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step worker-57637-stop: SELECT stop_session_level_connection_to_node();
+stop_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step worker-57638-commit: SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+run_commands_on_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step worker-57638-stop: SELECT stop_session_level_connection_to_node();
+stop_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step coord-show-tables-in-schema-sc1:
+ SELECT nodeport, success, result
+ FROM run_command_on_all_nodes($$
+  SELECT array_agg(tablename ORDER BY tablename) FROM pg_tables WHERE schemaname = 'sc1' AND tablename IN ('t1', 't2', 't1_renamed')
+ $$)
+ JOIN pg_dist_node USING (nodeid)
+ ORDER BY nodeport;
+
+nodeport|success|result
+---------------------------------------------------------------------
+   57636|t      |{t1,t2}
+   57637|t      |{t1,t2}
+   57638|t      |{t1,t2}
+(3 rows)
+
+?column?
+---------------------------------------------------------------------
+t
+(1 row)
+
+
+starting permutation: coord-remove-worker-57638 coord-create-table-ref coord-create-reference-table-ref coord-add-worker-57638 worker-57637-start worker-57637-begin worker-57637-shard-replication-factor worker-57637-create-table-sc1-t1 coord-begin coord-shard-replication-factor coord-create-table-sc1-t2 worker-57637-commit worker-57637-stop coord-commit coord-query-ref-placements coord-query-sc1-t1-placement coord-query-sc1-t2-placement
+step coord-remove-worker-57638: SELECT 1 FROM citus_remove_node('localhost', 57638);
+?column?
+---------------------------------------------------------------------
+       1
+(1 row)
+
+step coord-create-table-ref: CREATE TABLE ref (id int PRIMARY KEY);
+step coord-create-reference-table-ref: SELECT create_reference_table('ref');
+create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+step coord-add-worker-57638: SELECT 1 FROM citus_add_node('localhost', 57638);
+?column?
+---------------------------------------------------------------------
+       1
+(1 row)
+
+step worker-57637-start: SELECT start_session_level_connection_to_node('localhost', 57637);
+start_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step worker-57637-begin: SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+run_commands_on_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step worker-57637-shard-replication-factor: SELECT run_commands_on_session_level_connection_to_node('SET citus.shard_replication_factor TO 1');
+run_commands_on_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step worker-57637-create-table-sc1-t1: SELECT run_commands_on_session_level_connection_to_node('CREATE TABLE sc1.t1 (a int)');
+run_commands_on_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step coord-begin: BEGIN;
+step coord-shard-replication-factor: SET citus.shard_replication_factor TO 1;
+step coord-create-table-sc1-t2: CREATE TABLE sc1.t2 (a int);
+step worker-57637-commit: SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+run_commands_on_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step worker-57637-stop: SELECT stop_session_level_connection_to_node();
+stop_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step coord-commit: COMMIT;
+step coord-query-ref-placements: SELECT nodeport, success, result FROM run_command_on_placements('ref', 'SELECT count(*) FROM %s') ORDER BY nodeport;
+nodeport|success|result
+---------------------------------------------------------------------
+   57636|t      |     0
+   57637|t      |     0
+   57638|t      |     0
+(3 rows)
+
+step coord-query-sc1-t1-placement: SELECT nodeport, success, result FROM run_command_on_placements('sc1.t1', 'SELECT count(*) FROM %s') ORDER BY nodeport;
+nodeport|success|result
+---------------------------------------------------------------------
+   57638|t      |     0
+(1 row)
+
+step coord-query-sc1-t2-placement: SELECT nodeport, success, result FROM run_command_on_placements('sc1.t2', 'SELECT count(*) FROM %s') ORDER BY nodeport;
+nodeport|success|result
+---------------------------------------------------------------------
+   57638|t      |     0
+(1 row)
+
+?column?
+---------------------------------------------------------------------
+t
+(1 row)
+
+
+starting permutation: worker-57637-start worker-57637-shard-replication-factor worker-57637-begin worker-57637-create-table-sc1-t1 worker-57638-start worker-57638-shard-replication-factor worker-57638-create-table-sc1-t1 worker-57637-commit worker-57637-stop worker-57638-stop coord-show-tables-in-schema-sc1
+step worker-57637-start: SELECT start_session_level_connection_to_node('localhost', 57637);
+start_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step worker-57637-shard-replication-factor: SELECT run_commands_on_session_level_connection_to_node('SET citus.shard_replication_factor TO 1');
+run_commands_on_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step worker-57637-begin: SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+run_commands_on_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step worker-57637-create-table-sc1-t1: SELECT run_commands_on_session_level_connection_to_node('CREATE TABLE sc1.t1 (a int)');
+run_commands_on_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step worker-57638-start: SELECT start_session_level_connection_to_node('localhost', 57638);
+start_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step worker-57638-shard-replication-factor: SELECT run_commands_on_session_level_connection_to_node('SET citus.shard_replication_factor TO 1');
+run_commands_on_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step worker-57638-create-table-sc1-t1: SELECT run_commands_on_session_level_connection_to_node('CREATE TABLE sc1.t1 (a int)'); <waiting ...>
+step worker-57637-commit: SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+run_commands_on_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step worker-57638-create-table-sc1-t1: <... completed>
+ERROR:  duplicate key value violates unique constraint "pg_type_typname_nsp_index"
+step worker-57637-stop: SELECT stop_session_level_connection_to_node();
+stop_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step worker-57638-stop: SELECT stop_session_level_connection_to_node();
+stop_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step coord-show-tables-in-schema-sc1:
+ SELECT nodeport, success, result
+ FROM run_command_on_all_nodes($$
+  SELECT array_agg(tablename ORDER BY tablename) FROM pg_tables WHERE schemaname = 'sc1' AND tablename IN ('t1', 't2', 't1_renamed')
+ $$)
+ JOIN pg_dist_node USING (nodeid)
+ ORDER BY nodeport;
+
+nodeport|success|result
+---------------------------------------------------------------------
+   57636|t      |{t1}
+   57637|t      |{t1}
+   57638|t      |{t1}
+(3 rows)
+
+?column?
+---------------------------------------------------------------------
+t
+(1 row)
+
+
+starting permutation: coord-shard-replication-factor coord-create-table-sc1-t1 worker-57637-start worker-57637-begin worker-57637-drop-table-sc1-t1 worker-57638-start worker-57638-drop-table-sc1-t1 worker-57637-commit worker-57637-stop worker-57638-stop coord-show-tables-in-schema-sc1
+step coord-shard-replication-factor: SET citus.shard_replication_factor TO 1;
+step coord-create-table-sc1-t1: CREATE TABLE sc1.t1 (a int);
+step worker-57637-start: SELECT start_session_level_connection_to_node('localhost', 57637);
+start_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step worker-57637-begin: SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+run_commands_on_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step worker-57637-drop-table-sc1-t1: SELECT run_commands_on_session_level_connection_to_node('DROP TABLE sc1.t1');
+run_commands_on_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step worker-57638-start: SELECT start_session_level_connection_to_node('localhost', 57638);
+start_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step worker-57638-drop-table-sc1-t1: SELECT run_commands_on_session_level_connection_to_node('DROP TABLE sc1.t1'); <waiting ...>
+step worker-57637-commit: SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+run_commands_on_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step worker-57638-drop-table-sc1-t1: <... completed>
+ERROR:  table "t1" does not exist
+step worker-57637-stop: SELECT stop_session_level_connection_to_node();
+stop_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step worker-57638-stop: SELECT stop_session_level_connection_to_node();
+stop_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step coord-show-tables-in-schema-sc1:
+ SELECT nodeport, success, result
+ FROM run_command_on_all_nodes($$
+  SELECT array_agg(tablename ORDER BY tablename) FROM pg_tables WHERE schemaname = 'sc1' AND tablename IN ('t1', 't2', 't1_renamed')
+ $$)
+ JOIN pg_dist_node USING (nodeid)
+ ORDER BY nodeport;
+
+nodeport|success|result
+---------------------------------------------------------------------
+   57636|t      |
+   57637|t      |
+   57638|t      |
+(3 rows)
+
+?column?
+---------------------------------------------------------------------
+t
+(1 row)
+
+
+starting permutation: coord-shard-replication-factor coord-create-table-sc1-t1 worker-57637-start worker-57637-begin worker-57637-alter-table-rename-sc1-t1 worker-57638-start worker-57638-alter-table-rename-sc1-t1 worker-57637-commit worker-57637-stop worker-57638-stop coord-show-tables-in-schema-sc1
+step coord-shard-replication-factor: SET citus.shard_replication_factor TO 1;
+step coord-create-table-sc1-t1: CREATE TABLE sc1.t1 (a int);
+step worker-57637-start: SELECT start_session_level_connection_to_node('localhost', 57637);
+start_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step worker-57637-begin: SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+run_commands_on_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step worker-57637-alter-table-rename-sc1-t1: SELECT run_commands_on_session_level_connection_to_node('ALTER TABLE sc1.t1 RENAME TO t1_renamed');
+run_commands_on_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step worker-57638-start: SELECT start_session_level_connection_to_node('localhost', 57638);
+start_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step worker-57638-alter-table-rename-sc1-t1: SELECT run_commands_on_session_level_connection_to_node('ALTER TABLE sc1.t1 RENAME TO t1_renamed'); <waiting ...>
+step worker-57637-commit: SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+run_commands_on_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step worker-57638-alter-table-rename-sc1-t1: <... completed>
+ERROR:  relation "sc1.t1" does not exist
+step worker-57637-stop: SELECT stop_session_level_connection_to_node();
+stop_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step worker-57638-stop: SELECT stop_session_level_connection_to_node();
+stop_session_level_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step coord-show-tables-in-schema-sc1:
+ SELECT nodeport, success, result
+ FROM run_command_on_all_nodes($$
+  SELECT array_agg(tablename ORDER BY tablename) FROM pg_tables WHERE schemaname = 'sc1' AND tablename IN ('t1', 't2', 't1_renamed')
+ $$)
+ JOIN pg_dist_node USING (nodeid)
+ ORDER BY nodeport;
+
+nodeport|success|result
+---------------------------------------------------------------------
+   57636|t      |{t1_renamed}
+   57637|t      |{t1_renamed}
+   57638|t      |{t1_renamed}
+(3 rows)
+
+?column?
+---------------------------------------------------------------------
+t
+(1 row)
+

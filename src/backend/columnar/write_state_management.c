@@ -146,9 +146,7 @@ columnar_init_write_state(Relation relation, TupleDesc tupdesc,
 	}
 
 	WriteStateMapEntry *hashEntry = hash_search(WriteStateMap,
-												&RelationPhysicalIdentifierNumber_compat(
-													RelationPhysicalIdentifier_compat(
-														relation)),
+												&(relation->rd_locator.relNumber),
 												HASH_ENTER, &found);
 	if (!found)
 	{
@@ -191,8 +189,7 @@ columnar_init_write_state(Relation relation, TupleDesc tupdesc,
 	ReadColumnarOptions(tupSlotRelationId, &columnarOptions);
 
 	SubXidWriteState *stackEntry = palloc0(sizeof(SubXidWriteState));
-	stackEntry->writeState = ColumnarBeginWrite(RelationPhysicalIdentifier_compat(
-													relation),
+	stackEntry->writeState = ColumnarBeginWrite(relation,
 												columnarOptions,
 												tupdesc);
 	stackEntry->subXid = currentSubXid;

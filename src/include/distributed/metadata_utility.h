@@ -40,7 +40,7 @@
 #define WORKER_PARTITIONED_TABLE_SIZE_FUNCTION "worker_partitioned_table_size(%s)"
 #define WORKER_PARTITIONED_RELATION_SIZE_FUNCTION "worker_partitioned_relation_size(%s)"
 #define WORKER_PARTITIONED_RELATION_TOTAL_SIZE_FUNCTION \
-	"worker_partitioned_relation_total_size(%s)"
+		"worker_partitioned_relation_total_size(%s)"
 
 #define SHARD_SIZES_COLUMN_COUNT (2)
 
@@ -302,12 +302,12 @@ typedef struct BackgroundTask
 } BackgroundTask;
 
 #define SET_NULLABLE_FIELD(ptr, field, value) \
-	(ptr)->__nullable_storage.field = (value); \
-	(ptr)->field = &((ptr)->__nullable_storage.field)
+		(ptr)->__nullable_storage.field = (value); \
+		(ptr)->field = &((ptr)->__nullable_storage.field)
 
 #define UNSET_NULLABLE_FIELD(ptr, field) \
-	(ptr)->field = NULL; \
-	memset_struct_0((ptr)->__nullable_storage.field)
+		(ptr)->field = NULL; \
+		memset_struct_0((ptr)->__nullable_storage.field)
 
 /* Size functions */
 extern Datum citus_table_size(PG_FUNCTION_ARGS);
@@ -325,7 +325,7 @@ extern ShardInterval * CopyShardInterval(ShardInterval *srcInterval);
 extern uint64 ShardLength(uint64 shardId);
 extern bool NodeGroupHasShardPlacements(int32 groupId);
 extern bool IsActiveShardPlacement(ShardPlacement *ShardPlacement);
-extern bool IsRemoteShardPlacement(ShardPlacement *shardPlacement);
+extern bool IsNonCoordShardPlacement(ShardPlacement *shardPlacement);
 extern bool IsPlacementOnWorkerNode(ShardPlacement *placement, WorkerNode *workerNode);
 extern List * FilterShardPlacementList(List *shardPlacementList, bool (*filter)(
 										   ShardPlacement *));
@@ -338,6 +338,8 @@ extern ShardPlacement * ActiveShardPlacement(uint64 shardId, bool missingOk);
 extern WorkerNode * ActiveShardPlacementWorkerNode(uint64 shardId);
 extern List * BuildShardPlacementList(int64 shardId);
 extern List * AllShardPlacementsOnNodeGroup(int32 groupId);
+extern GroupShardPlacement * LookupGroupPlacementByPlacementId(int64 placementId,
+															   bool missingOk);
 extern List * GroupShardPlacementsForTableOnGroup(Oid relationId, int32 groupId);
 extern void LookupTaskPlacementHostAndPort(ShardPlacement *taskPlacement, char **nodeName,
 										   int *nodePort);
@@ -376,13 +378,14 @@ extern void DeleteShardRow(uint64 shardId);
 extern void UpdatePlacementGroupId(uint64 placementId, int groupId);
 extern void DeleteShardPlacementRowGlobally(uint64 placementId);
 extern void DeleteShardPlacementRow(uint64 placementId);
-extern void CreateSingleShardTable(Oid relationId, ColocationParam colocationParam);
+extern void CreateSingleShardTable(Oid relationId, ColocationParam colocationParam,
+								   bool allowFromWorkersIfPostgresTable);
 extern void CreateDistributedTable(Oid relationId, char *distributionColumnName,
 								   char distributionMethod, int shardCount,
 								   bool shardCountIsStrict, char *colocateWithTableName);
 extern void CreateReferenceTable(Oid relationId);
 extern void CreateTruncateTrigger(Oid relationId);
-extern uint64 CopyFromLocalTableIntoDistTable(Oid localTableId, Oid distributedTableId);
+extern List * CopyablePlainColumnNameListFromTupleDesc(TupleDesc tupleDescriptor);
 extern void EnsureUndistributeTenantTableSafe(Oid relationId, const char *operationName);
 extern TableConversionReturn * UndistributeTable(TableConversionParameters *params);
 extern void UndistributeTables(List *relationIdList);

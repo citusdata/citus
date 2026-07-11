@@ -15,7 +15,7 @@ ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 150000;
 
 -- Prepare the environment
 SET citus.shard_replication_factor TO 1;
-SET citus.shard_count TO 5;
+SET citus.shard_count TO 11;
 
 -- Create test tables
 CREATE TABLE mx_table (col_1 int, col_2 text, col_3 BIGSERIAL);
@@ -79,8 +79,10 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.mx_tabl
 \d mx_test_index
 
 -- citus_drop_all_shards
-SELECT citus_drop_all_shards('mx_table'::regclass, 'public', 'mx_table');
-SELECT count(*) FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement WHERE logicalrelid='mx_table'::regclass;
+BEGIN;
+    SELECT citus_drop_all_shards('mx_table'::regclass, 'public', 'mx_table');
+    SELECT count(*) FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement WHERE logicalrelid='mx_table'::regclass;
+ROLLBACK;
 
 -- master_add_inactive_node
 
@@ -142,9 +144,11 @@ DROP TABLE mx_table;
 SELECT count(*) FROM mx_table;
 
 -- master_drop_distributed_table_metadata
-SELECT master_remove_distributed_table_metadata_from_workers('mx_table'::regclass, 'public', 'mx_table');
-SELECT master_remove_partition_metadata('mx_table'::regclass, 'public', 'mx_table');
-SELECT count(*) FROM mx_table;
+BEGIN;
+    SELECT master_remove_distributed_table_metadata_from_workers('mx_table'::regclass, 'public', 'mx_table');
+    SELECT master_remove_partition_metadata('mx_table'::regclass, 'public', 'mx_table');
+    SELECT count(*) FROM mx_table;
+ROLLBACK;
 
 -- citus_copy_shard_placement
 SELECT logicalrelid, shardid AS testshardid, nodename, nodeport
@@ -184,4 +188,10 @@ DROP TABLE mx_table;
 DROP TABLE mx_table_2;
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART :last_colocation_id;
 
+-- Restore metadata sync to worker_2 to avoid affecting subsequent tests
+SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
+
 RESET citus.shard_replication_factor;
+
+-- start metadata sync to node again to make the test re-runnable
+SELECT start_metadata_sync_to_node('localhost', :worker_2_port);

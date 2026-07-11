@@ -176,12 +176,6 @@ AppendAlterTableCmdConstraint(StringInfo buf, Constraint *constraint,
 
 	appendStringInfo(buf, "%s ", quote_identifier(constraint->conname));
 
-	/* postgres version >= PG15
-	 * UNIQUE [ NULLS [ NOT ] DISTINCT ] ( column_name [, ... ] ) [ INCLUDE ( column_name [, ...]) ]
-	 * postgres version < PG15
-	 * UNIQUE ( column_name [, ... ] ) [ INCLUDE ( column_name [, ...]) ]
-	 * PRIMARY KEY ( column_name [, ... ] ) [ INCLUDE ( column_name [, ...]) ]
-	 */
 	if (constraint->contype == CONSTR_PRIMARY || constraint->contype == CONSTR_UNIQUE)
 	{
 		if (constraint->contype == CONSTR_PRIMARY)
@@ -536,8 +530,10 @@ GeneratedWhenStr(char generatedWhen)
 		}
 
 		default:
+		{
 			ereport(ERROR, (errmsg("unrecognized generated_when: %d",
 								   generatedWhen)));
+		}
 	}
 }
 
@@ -649,13 +645,18 @@ AppendAlterTableCmdAddColumn(StringInfo buf, AlterTableCmd *alterTableCmd,
 		}
 		else if (constraint->contype == CONSTR_GENERATED)
 		{
-			char attgenerated = 's';
-			appendStringInfo(buf, " GENERATED %s AS (%s) STORED",
+			char attgenerated = ATTRIBUTE_GENERATED_STORED;
+#if PG_VERSION_NUM >= PG_VERSION_18
+			attgenerated = constraint->generated_kind;
+#endif
+			appendStringInfo(buf, " GENERATED %s AS (%s) %s",
 							 GeneratedWhenStr(constraint->generated_when),
 							 DeparseRawExprForColumnDefault(relationId, typeOid, typmod,
 															columnDefinition->colname,
 															attgenerated,
-															constraint->raw_expr));
+															constraint->raw_expr),
+							 (attgenerated == ATTRIBUTE_GENERATED_STORED ? "STORED" :
+							  "VIRTUAL"));
 		}
 		else if (constraint->contype == CONSTR_CHECK ||
 				 constraint->contype == CONSTR_PRIMARY ||

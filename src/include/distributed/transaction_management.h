@@ -117,6 +117,7 @@ extern bool SelectOpensTransactionBlock;
  * block.
  */
 extern bool FunctionOpensTransactionBlock;
+extern bool EnableProcedureTransactionSkip;
 
 /* state needed to prevent new connections during modifying transactions */
 extern XactModificationType XactModificationLevel;
@@ -137,6 +138,12 @@ extern int StoredProcedureLevel;
 
 /* number of nested DO block levels we are currently in */
 extern int DoBlockLevel;
+
+/*
+ * Tracks non-coordinated statement executions within the current stored
+ * procedure. At most one statement may skip coordination per CALL.
+ */
+extern int ProcedureNonCoordinatedExecutionCount;
 
 /* SET LOCAL statements active in the current (sub-)transaction. */
 extern StringInfo activeSetStmts;

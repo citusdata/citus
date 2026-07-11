@@ -5,3 +5,4 @@ test: upgrade_pg_dist_cleanup_after
 test: upgrade_basic_after
 test: upgrade_basic_after_non_mixed
 test: upgrade_post_11_after
+test: upgrade_post_14_after

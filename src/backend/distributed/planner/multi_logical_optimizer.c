@@ -50,6 +50,7 @@
 #include "distributed/function_utils.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/multi_executor.h"
 #include "distributed/multi_logical_optimizer.h"
 #include "distributed/multi_logical_planner.h"
 #include "distributed/multi_physical_planner.h"
@@ -64,6 +65,7 @@
 int LimitClauseRowFetchCount = -1; /* number of rows to fetch from each task */
 double CountDistinctErrorRate = 0.0; /* precision of count(distinct) approximate */
 int CoordinatorAggregationStrategy = COORDINATOR_AGGREGATION_ROW_GATHER;
+bool AllowAggregateWorkerCombineOnInternalTypes = true;
 
 /* Constant used throughout file */
 static const uint32 masterTableId = 1; /* first range table reference on the master node */
@@ -72,6 +74,8 @@ typedef struct MasterAggregateWalkerContext
 {
 	const ExtendedOpNodeProperties *extendedOpNodeProperties;
 	AttrNumber columnId;
+	List *groupByTargetEntryList;
+	bool haveNonVarGrouping;
 } MasterAggregateWalkerContext;
 
 typedef struct WorkerAggregateWalkerContext
@@ -79,6 +83,8 @@ typedef struct WorkerAggregateWalkerContext
 	const ExtendedOpNodeProperties *extendedOpNodeProperties;
 	List *expressionList;
 	bool createGroupByClause;
+	List *groupByTargetEntryList;
+	bool haveNonVarGrouping;
 } WorkerAggregateWalkerContext;
 
 
@@ -137,6 +143,7 @@ typedef struct QueryOrderByLimit
 {
 	Node *workerLimitCount;
 	List *workerSortClauseList;
+	bool sortedMergeEligible;
 	Index *nextSortGroupRefIndex; /* see QueryGroupClause */
 } QueryOrderByLimit;
 
@@ -226,11 +233,14 @@ static MultiExtendedOp * WorkerExtendedOpNode(MultiExtendedOp *originalOpNode,
 static void ProcessTargetListForWorkerQuery(List *targetEntryList,
 											ExtendedOpNodeProperties *
 											extendedOpNodeProperties,
+											List *groupClauseList,
 											QueryTargetList *queryTargetList,
 											QueryGroupClause *queryGroupClause);
 static void ProcessHavingClauseForWorkerQuery(Node *havingQual,
 											  ExtendedOpNodeProperties *
 											  extendedOpNodeProperties,
+											  List *groupClauseList,
+											  List *targetEntryList,
 											  Node **workerHavingQual,
 											  QueryTargetList *queryTargetList,
 											  QueryGroupClause *queryGroupClause);
@@ -271,13 +281,17 @@ static void AppendTargetEntryToGroupClause(TargetEntry *targetEntry,
 static bool WorkerAggregateWalker(Node *node,
 								  WorkerAggregateWalkerContext *walkerContext);
 static List * WorkerAggregateExpressionList(Aggref *originalAggregate,
-											WorkerAggregateWalkerContext *walkerContextry);
+											WorkerAggregateWalkerContext *
+											walkerContextry);
 static AggregateType GetAggregateType(Aggref *aggregatExpression);
 static Oid AggregateArgumentType(Aggref *aggregate);
 static Expr * FirstAggregateArgument(Aggref *aggregate);
 static bool AggregateEnabledCustom(Aggref *aggregateExpression);
 static Oid CitusFunctionOidWithSignature(char *functionName, int numargs, Oid *argtypes);
 static Oid WorkerPartialAggOid(void);
+static Oid WorkerBinaryPartialAggOid(void);
+static Oid CoordBinaryCombineAggOid(void);
+static bool IsAggTransTypeBinarySerializable(Form_pg_aggregate aggForm);
 static Oid CoordCombineAggOid(void);
 static Oid AggregateFunctionOid(const char *functionName, Oid inputType);
 static Oid TypeOid(Oid schemaId, const char *typeName);
@@ -293,18 +307,19 @@ static Const * MakeIntegerConst(int32 integerValue);
 /* Local functions forward declarations for aggregate expression checks */
 static bool HasNonDistributableAggregates(MultiNode *logicalPlanNode);
 static bool CanPushDownExpression(Node *expression,
-								  const ExtendedOpNodeProperties *extendedOpNodeProperties);
-static DeferredErrorMessage * DeferErrorIfHasNonDistributableAggregates(
-	MultiNode *logicalPlanNode);
-static DeferredErrorMessage * DeferErrorIfUnsupportedArrayAggregate(
-	Aggref *arrayAggregateExpression);
+								  const ExtendedOpNodeProperties *
+								  extendedOpNodeProperties);
+static DeferredErrorMessage * DeferErrorIfHasNonDistributableAggregates(MultiNode *
+																		logicalPlanNode);
+static DeferredErrorMessage * DeferErrorIfUnsupportedArrayAggregate(Aggref *
+																	arrayAggregateExpression);
 static DeferredErrorMessage * DeferErrorIfUnsupportedJsonAggregate(AggregateType type,
 																   Aggref *
 																   aggregateExpression);
-static DeferredErrorMessage * DeferErrorIfUnsupportedAggregateDistinct(
-	Aggref *aggregateExpression,
-	MultiNode *
-	logicalPlanNode);
+static DeferredErrorMessage * DeferErrorIfUnsupportedAggregateDistinct(Aggref *
+																	   aggregateExpression,
+																	   MultiNode *
+																	   logicalPlanNode);
 static Var * AggregateDistinctColumn(Aggref *aggregateExpression);
 static bool TablePartitioningSupportsDistinct(List *tableNodeList,
 											  MultiExtendedOp *opNode,
@@ -316,16 +331,18 @@ static Node * WorkerLimitCount(Node *limitCount, Node *limitOffset, OrderByLimit
 							   orderByLimitReference);
 static List * WorkerSortClauseList(Node *limitCount,
 								   List *groupClauseList, List *sortClauseList,
-								   OrderByLimitReference orderByLimitReference);
+								   OrderByLimitReference orderByLimitReference,
+								   bool *sortedMergeEligible);
 static bool CanPushDownLimitApproximate(List *sortClauseList, List *targetList);
+static bool HaveNonVarGrouping(List *groupByTargetEntryList);
 static bool HasOrderByAggregate(List *sortClauseList, List *targetList);
 static bool HasOrderByNonCommutativeAggregate(List *sortClauseList, List *targetList);
 static bool HasOrderByComplexExpression(List *sortClauseList, List *targetList);
 static bool HasOrderByHllType(List *sortClauseList, List *targetList);
-static bool ShouldProcessDistinctOrderAndLimitForWorker(
-	ExtendedOpNodeProperties *extendedOpNodeProperties,
-	bool pushingDownOriginalGrouping,
-	Node *havingQual);
+static bool ShouldProcessDistinctOrderAndLimitForWorker(ExtendedOpNodeProperties *
+														extendedOpNodeProperties,
+														bool pushingDownOriginalGrouping,
+														Node *havingQual);
 static bool IsIndexInRange(const List *list, int index);
 
 /*
@@ -1418,9 +1435,22 @@ MasterExtendedOpNode(MultiExtendedOp *originalOpNode,
 	List *newGroupClauseList = NIL;
 	Node *originalHavingQual = originalOpNode->havingQual;
 	Node *newHavingQual = NULL;
+
+	/*
+	 * Build GROUP BY target entry list for the master-side mutator so it
+	 * can recognize GROUP BY subexpressions and map them to a single
+	 * worker output column instead of recursing into their children.
+	 * This must match what WorkerAggregateWalker does on the worker side.
+	 */
+	List *groupByTargetEntryList = GroupTargetEntryList(
+		originalOpNode->groupClauseList, targetEntryList);
+	bool haveNonVarGrouping = HaveNonVarGrouping(groupByTargetEntryList);
+
 	MasterAggregateWalkerContext walkerContext = {
 		.extendedOpNodeProperties = extendedOpNodeProperties,
 		.columnId = 1,
+		.groupByTargetEntryList = groupByTargetEntryList,
+		.haveNonVarGrouping = haveNonVarGrouping,
 	};
 
 	/* iterate over original target entries */
@@ -1567,6 +1597,34 @@ MasterAggregateMutator(Node *originalNode, MasterAggregateWalkerContext *walkerC
 	}
 	else
 	{
+		/*
+		 * If the current node matches a non-Var GROUP BY expression, map it
+		 * to a single worker output column reference.  The worker emits this
+		 * expression intact, so the master must consume exactly one column
+		 * for it rather than recursing into its children.
+		 */
+		if (walkerContext->haveNonVarGrouping)
+		{
+			TargetEntry *groupByTargetEntry = NULL;
+			foreach_declared_ptr(groupByTargetEntry,
+								 walkerContext->groupByTargetEntryList)
+			{
+				if (equal(originalNode, groupByTargetEntry->expr))
+				{
+					Oid nodeType = exprType(originalNode);
+					int32 nodeTypmod = exprTypmod(originalNode);
+					Oid nodeColl = exprCollation(originalNode);
+					Var *column = makeVar(masterTableId,
+										  walkerContext->columnId,
+										  nodeType, nodeTypmod,
+										  nodeColl, 0);
+					walkerContext->columnId++;
+					newNode = (Node *) column;
+					return newNode;
+				}
+			}
+		}
+
 		newNode = expression_tree_mutator(originalNode, MasterAggregateMutator,
 										  (void *) walkerContext);
 	}
@@ -2113,6 +2171,7 @@ MasterAggregateExpression(Aggref *originalAggregate,
 			SearchSysCache1(AGGFNOID, ObjectIdGetDatum(originalAggregate->aggfnoid));
 		Form_pg_aggregate aggform;
 		Oid combine;
+		bool useBinaryCoordinatorCombine = false;
 
 		if (!HeapTupleIsValid(aggTuple))
 		{
@@ -2124,13 +2183,17 @@ MasterAggregateExpression(Aggref *originalAggregate,
 		{
 			aggform = (Form_pg_aggregate) GETSTRUCT(aggTuple);
 			combine = aggform->aggcombinefn;
+			useBinaryCoordinatorCombine = aggform->aggtranstype != InvalidOid &&
+										  IsAggTransTypeBinarySerializable(aggform);
 			ReleaseSysCache(aggTuple);
 		}
 
 		if (combine != InvalidOid)
 		{
-			Oid coordCombineId = CoordCombineAggOid();
-			Oid workerReturnType = CSTRINGOID;
+			Oid coordCombineId =
+				useBinaryCoordinatorCombine ? CoordBinaryCombineAggOid()
+											: CoordCombineAggOid();
+			Oid workerReturnType = useBinaryCoordinatorCombine ? BYTEAOID : CSTRINGOID;
 			int32 workerReturnTypeMod = -1;
 			Oid workerCollationId = InvalidOid;
 			Oid resultType = exprType((Node *) originalAggregate);
@@ -2157,7 +2220,7 @@ MasterAggregateExpression(Aggref *originalAggregate,
 			newMasterAggregate->aggkind = AGGKIND_NORMAL;
 			newMasterAggregate->aggfilter = NULL;
 			newMasterAggregate->aggtranstype = INTERNALOID;
-			newMasterAggregate->aggargtypes = list_make3_oid(OIDOID, CSTRINGOID,
+			newMasterAggregate->aggargtypes = list_make3_oid(OIDOID, workerReturnType,
 															 resultType);
 			newMasterAggregate->aggsplit = AGGSPLIT_SIMPLE;
 
@@ -2191,11 +2254,10 @@ MasterAggregateExpression(Aggref *originalAggregate,
 		newMasterAggregate->aggfilter = NULL;
 
 		/*
-		 * If return type aggregate is anyelement, its actual return type is
-		 * determined on the type of its argument. So we replace it with the
-		 * argument type in that case.
+		 * Polymorphic aggregates determine their actual return type based on
+		 * their argument type, so replace it with the worker return type.
 		 */
-		if (masterReturnType == ANYELEMENTOID)
+		if (IsPolymorphicTypeFamily1(masterReturnType))
 		{
 			newMasterAggregate->aggtype = workerReturnType;
 
@@ -2397,9 +2459,12 @@ WorkerExtendedOpNode(MultiExtendedOp *originalOpNode,
 
 	/* process each part of the query in order to generate the worker query's parts */
 	ProcessTargetListForWorkerQuery(originalTargetEntryList, extendedOpNodeProperties,
+									originalGroupClauseList,
 									&queryTargetList, &queryGroupClause);
 
 	ProcessHavingClauseForWorkerQuery(originalHavingQual, extendedOpNodeProperties,
+									  originalGroupClauseList,
+									  originalTargetEntryList,
 									  &queryHavingQual, &queryTargetList,
 									  &queryGroupClause);
 
@@ -2487,6 +2552,8 @@ WorkerExtendedOpNode(MultiExtendedOp *originalOpNode,
 	 */
 	workerExtendedOpNode->limitOption = originalOpNode->limitOption;
 
+	workerExtendedOpNode->sortedMergeEligible = queryOrderByLimit.sortedMergeEligible;
+
 	return workerExtendedOpNode;
 }
 
@@ -2512,17 +2579,30 @@ WorkerExtendedOpNode(MultiExtendedOp *originalOpNode,
  * list of worker extended operator. This approach guarantees the distinctness
  * in the worker queries.
  *
- *     inputs: targetEntryList, extendedOpNodeProperties
+ *     inputs: targetEntryList, extendedOpNodeProperties, groupClauseList
  *     outputs: queryTargetList, queryGroupClause
  */
 static void
 ProcessTargetListForWorkerQuery(List *targetEntryList,
 								ExtendedOpNodeProperties *extendedOpNodeProperties,
+								List *groupClauseList,
 								QueryTargetList *queryTargetList,
 								QueryGroupClause *queryGroupClause)
 {
+	/*
+	 * Build the list of GROUP BY target entries and check whether any are
+	 * non-Var expressions.  WorkerAggregateWalker needs this so it can
+	 * recognize GROUP BY subexpressions inside complex target entries and
+	 * emit them intact instead of decomposing them into bare Var references.
+	 */
+	List *groupByTargetEntryList = GroupTargetEntryList(
+		groupClauseList, targetEntryList);
+	bool haveNonVarGrouping = HaveNonVarGrouping(groupByTargetEntryList);
+
 	WorkerAggregateWalkerContext workerAggContext = {
 		.extendedOpNodeProperties = extendedOpNodeProperties,
+		.groupByTargetEntryList = groupByTargetEntryList,
+		.haveNonVarGrouping = haveNonVarGrouping,
 	};
 
 	/* iterate over original target entries */
@@ -2568,12 +2648,14 @@ ProcessTargetListForWorkerQuery(List *targetEntryList,
  * having clause is safe to pushdown to the workers, workerHavingQual is set to
  * be the original having clause.
  *
- *     inputs: originalHavingQual, extendedOpNodeProperties
+ *     inputs: originalHavingQual, extendedOpNodeProperties, groupClauseList, targetEntryList
  *     outputs: workerHavingQual, queryTargetList, queryGroupClause
  */
 static void
 ProcessHavingClauseForWorkerQuery(Node *originalHavingQual,
 								  ExtendedOpNodeProperties *extendedOpNodeProperties,
+								  List *groupClauseList,
+								  List *targetEntryList,
 								  Node **workerHavingQual,
 								  QueryTargetList *queryTargetList,
 								  QueryGroupClause *queryGroupClause)
@@ -2609,8 +2691,12 @@ ProcessHavingClauseForWorkerQuery(Node *originalHavingQual,
 		 * If the GROUP BY or PARTITION BY is not on the distribution column
 		 * then we need to combine the aggregates in the HAVING across shards.
 		 */
+		List *groupByTargetEntryList = GroupTargetEntryList(
+			groupClauseList, targetEntryList);
 		WorkerAggregateWalkerContext workerAggContext = {
 			.extendedOpNodeProperties = extendedOpNodeProperties,
+			.groupByTargetEntryList = groupByTargetEntryList,
+			.haveNonVarGrouping = HaveNonVarGrouping(groupByTargetEntryList),
 		};
 
 		WorkerAggregateWalker(originalHavingQual, &workerAggContext);
@@ -2783,7 +2869,8 @@ ProcessLimitOrderByForWorkerQuery(OrderByLimitReference orderByLimitReference,
 		WorkerSortClauseList(originalLimitCount,
 							 groupClauseList,
 							 sortClauseList,
-							 orderByLimitReference);
+							 orderByLimitReference,
+							 &queryOrderByLimit->sortedMergeEligible);
 }
 
 
@@ -3037,6 +3124,29 @@ WorkerAggregateWalker(Node *node, WorkerAggregateWalkerContext *walkerContext)
 	}
 	else
 	{
+		/*
+		 * If the GROUP BY contains non-Var expressions, check whether the
+		 * current node matches one of them.  If so, emit it as-is rather
+		 * than descending into its children.  Without this, a GROUP BY
+		 * expression like f(col) would be decomposed into the bare col
+		 * Var, which then fails on the worker because col is not in the
+		 * GROUP BY clause.
+		 */
+		if (walkerContext->haveNonVarGrouping)
+		{
+			TargetEntry *groupByTargetEntry = NULL;
+			foreach_declared_ptr(groupByTargetEntry,
+								 walkerContext->groupByTargetEntryList)
+			{
+				if (equal(node, groupByTargetEntry->expr))
+				{
+					walkerContext->expressionList =
+						lappend(walkerContext->expressionList, node);
+					return false;
+				}
+			}
+		}
+
 		walkerResult = expression_tree_walker(node, WorkerAggregateWalker,
 											  (void *) walkerContext);
 	}
@@ -3274,6 +3384,7 @@ WorkerAggregateExpressionList(Aggref *originalAggregate,
 			SearchSysCache1(AGGFNOID, ObjectIdGetDatum(originalAggregate->aggfnoid));
 		Form_pg_aggregate aggform;
 		Oid combine;
+		bool useBinaryWorkerAggregate = false;
 
 		if (!HeapTupleIsValid(aggTuple))
 		{
@@ -3285,13 +3396,14 @@ WorkerAggregateExpressionList(Aggref *originalAggregate,
 		{
 			aggform = (Form_pg_aggregate) GETSTRUCT(aggTuple);
 			combine = aggform->aggcombinefn;
+			useBinaryWorkerAggregate = (OidIsValid(aggform->aggtranstype) &&
+										IsAggTransTypeBinarySerializable(aggform));
+
 			ReleaseSysCache(aggTuple);
 		}
 
 		if (combine != InvalidOid)
 		{
-			Oid workerPartialId = WorkerPartialAggOid();
-
 			Const *aggOidParam = makeConst(REGPROCEDUREOID, -1, InvalidOid, sizeof(Oid),
 										   ObjectIdGetDatum(originalAggregate->aggfnoid),
 										   false, true);
@@ -3339,8 +3451,18 @@ WorkerAggregateExpressionList(Aggref *originalAggregate,
 
 			/* worker_partial_agg(agg, arg) or worker_partial_agg(agg, ROW(...args)) */
 			Aggref *newWorkerAggregate = copyObject(originalAggregate);
-			newWorkerAggregate->aggfnoid = workerPartialId;
-			newWorkerAggregate->aggtype = CSTRINGOID;
+
+			if (useBinaryWorkerAggregate)
+			{
+				newWorkerAggregate->aggfnoid = WorkerBinaryPartialAggOid();
+				newWorkerAggregate->aggtype = BYTEAOID;
+			}
+			else
+			{
+				newWorkerAggregate->aggfnoid = WorkerPartialAggOid();
+				newWorkerAggregate->aggtype = CSTRINGOID;
+			}
+
 			newWorkerAggregate->args = newWorkerAggregateArgs;
 			newWorkerAggregate->aggkind = AGGKIND_NORMAL;
 			newWorkerAggregate->aggtranstype = INTERNALOID;
@@ -3547,10 +3669,127 @@ AggregateEnabledCustom(Aggref *aggregateExpression)
 
 	bool supportsSafeCombine = typeform->typtype != TYPTYPE_PSEUDO;
 
+	if (AllowAggregateWorkerCombineOnInternalTypes &&
+		typeform->oid == INTERNALOID && !supportsSafeCombine)
+	{
+		/* check if the type supports a SERIALFUNC/DESERIALFUNC - if it does
+		 * then we can leverage that for safe transfer of the state across the wire.
+		 */
+		if (aggform->aggserialfn != InvalidOid && aggform->aggdeserialfn != InvalidOid)
+		{
+			supportsSafeCombine = true;
+		}
+	}
+
 	ReleaseSysCache(aggTuple);
 	ReleaseSysCache(typeTuple);
 
 	return supportsSafeCombine;
+}
+
+
+/*
+ * AggregateArgMatchLevel and AggregateArgumentMatchLevel()
+ *
+ * Citus needs to resolve an aggregate function OID by (name, argument type)
+ * when planning distributed aggregates. In the multi-shard path we run the
+ * aggregate on each shard (worker tasks) and then build a coordinator-side
+ * “combine” aggregate over the per-shard results. To construct that master
+ * aggregate expression, we must find the correct underlying Postgres aggregate
+ * implementation (OID).
+ *
+ * Postgres defines many aggregates using polymorphic pseudo-types rather than
+ * concrete types. For example, min/max are defined for:
+ *   - anyarray       	               (e.g., int[], text[])
+ *   - anyenum                         (e.g., a user-defined enum type)
+ *   - anyelement                      (e.g., int4, text, numeric)
+ *   - record                          (e.g., a named composite/row type)
+ * so an “exact type only” lookup can miss the right candidate and fail with
+ * "no matching oid for function".
+ *
+ * AggregateArgMatchLevel is a ranking of how well a candidate aggregate
+ * declaration matches the input type. AggregateArgumentMatchLevel() computes
+ * that rank for a pair of types:
+ *
+ *   declaredArgType: the aggregate's declared argument type taken from a
+ *     pg_proc candidate (e.g., ANYARRAYOID, ANYELEMENTOID, RECORDOID, or a
+ *     concrete type OID).
+ *
+ *   inputType: the actual argument type of the user query expression for which
+ *     we are resolving the aggregate (e.g., INT4OID for int, the array type OID
+ *     for int[], or a rowtype OID for a composite type column).
+ *
+ * The OID resolution logic scans candidate aggregates and selects the best
+ * match (highest rank), preferring:
+ *   1) AGG_MATCH_EXACT:
+ *        declaredArgType == inputType
+ *        Example: min(int4) with inputType = INT4OID.
+ *
+ *   2) AGG_MATCH_ARRAY_POLY:
+ *        declaredArgType is ANYARRAY and inputType is an
+ *        array type.
+ *        Example: min(int[]) matches min(anyarray).
+ *
+ *   3) AGG_MATCH_GENERAL_POLY:
+ *        declaredArgType is ANYELEMENT/ANYENUM and is compatible
+ *        with inputType.
+ *        Example: min(mood_enum) matches min(anyenum), or min(text) matches a
+ *        polymorphic min(anyelement).
+ *
+ *   4) AGG_MATCH_RECORD:
+ *        declaredArgType is RECORD and inputType is a rowtype/composite.
+ *        Example: min(product_rating) matches min(record).
+ *
+ * This makes aggregate OID resolution robust across PG versions and additional
+ * polymorphic signatures introduced in PG18 (notably for min/max).
+ */
+typedef enum AggregateArgMatchLevel
+{
+	AGG_MATCH_NONE = 0,
+	AGG_MATCH_RECORD = 1,
+	AGG_MATCH_GENERAL_POLY = 2,
+	AGG_MATCH_ARRAY_POLY = 3,
+	AGG_MATCH_EXACT = 4
+} AggregateArgMatchLevel;
+
+static AggregateArgMatchLevel
+AggregateArgumentMatchLevel(Oid declaredArgType, Oid inputType)
+{
+	if (declaredArgType == inputType)
+	{
+		return AGG_MATCH_EXACT;
+	}
+
+	bool inputIsArray = (inputType == ANYARRAYOID) || type_is_array(inputType);
+	bool inputIsEnum = (inputType == ANYENUMOID) || type_is_enum(inputType);
+
+	switch (declaredArgType)
+	{
+		case ANYARRAYOID:
+		{
+			return inputIsArray ? AGG_MATCH_ARRAY_POLY : AGG_MATCH_NONE;
+		}
+
+		case ANYELEMENTOID:
+		{
+			return AGG_MATCH_GENERAL_POLY;
+		}
+
+		case ANYENUMOID:
+		{
+			return inputIsEnum ? AGG_MATCH_GENERAL_POLY : AGG_MATCH_NONE;
+		}
+
+		case RECORDOID:
+		{
+			return type_is_rowtype(inputType) ? AGG_MATCH_RECORD : AGG_MATCH_NONE;
+		}
+
+		default:
+		{
+			return AGG_MATCH_NONE;
+		}
+	}
 }
 
 
@@ -3563,6 +3802,7 @@ static Oid
 AggregateFunctionOid(const char *functionName, Oid inputType)
 {
 	Oid functionOid = InvalidOid;
+	AggregateArgMatchLevel bestMatch = AGG_MATCH_NONE;
 	ScanKeyData scanKey[1];
 	int scanKeyCount = 1;
 
@@ -3584,12 +3824,19 @@ AggregateFunctionOid(const char *functionName, Oid inputType)
 
 		if (argumentCount == 1)
 		{
-			/* check if input type and found value type match */
-			if (procForm->proargtypes.values[0] == inputType ||
-				procForm->proargtypes.values[0] == ANYELEMENTOID)
+			Oid declaredArgType = procForm->proargtypes.values[0];
+			AggregateArgMatchLevel matchLevel =
+				AggregateArgumentMatchLevel(declaredArgType, inputType);
+
+			if (matchLevel > bestMatch)
 			{
+				bestMatch = matchLevel;
 				functionOid = procForm->oid;
-				break;
+
+				if (bestMatch == AGG_MATCH_EXACT)
+				{
+					break;
+				}
 			}
 		}
 		Assert(argumentCount <= 1);
@@ -3666,6 +3913,39 @@ CoordCombineAggOid()
 
 
 /*
+ * WorkerBinaryPartialAggOid looks up oid of pg_catalog.worker_binary_partial_agg
+ */
+static Oid
+WorkerBinaryPartialAggOid()
+{
+	Oid argtypes[] = {
+		OIDOID,
+		ANYELEMENTOID,
+	};
+
+	return CitusFunctionOidWithSignature(WORKER_BINARY_PARTIAL_AGGREGATE_NAME, 2, argtypes
+										 );
+}
+
+
+/*
+ * CoordBinaryCombineAggOid looks up oid of pg_catalog.coord_binary_combine_agg
+ */
+static Oid
+CoordBinaryCombineAggOid()
+{
+	Oid argtypes[] = {
+		OIDOID,
+		BYTEAOID,
+		ANYELEMENTOID,
+	};
+
+	return CitusFunctionOidWithSignature(COORD_BINARY_COMBINE_AGGREGATE_NAME, 3, argtypes)
+	;
+}
+
+
+/*
  * TypeOid looks for a type that has the given name and schema, and returns the
  * corresponding type's oid.
  */
@@ -3677,6 +3957,37 @@ TypeOid(Oid schemaId, const char *typeName)
 								  ObjectIdGetDatum(schemaId));
 
 	return typeOid;
+}
+
+
+static bool
+IsAggTransTypeBinarySerializable(Form_pg_aggregate aggForm)
+{
+	Oid transitionType = aggForm->aggtranstype;
+
+	if (AllowAggregateWorkerCombineOnInternalTypes &&
+		transitionType == INTERNALOID)
+	{
+		/* For aggregates with internal transition types, we apply the binary serialization
+		 * check on the output value of the SERIALFUNC. If a serialfunc exists, Postgres
+		 * requires that the serialfunc return a bytea - which will be binary serializable
+		 */
+		return (aggForm->aggserialfn != InvalidOid);
+	}
+
+	HeapTuple typeTuple = SearchSysCache1(TYPEOID, ObjectIdGetDatum(transitionType));
+	if (!HeapTupleIsValid(typeTuple))
+	{
+		elog(ERROR, "citus cache lookup failed for transition type %u", transitionType);
+	}
+
+	Form_pg_type typeForm = (Form_pg_type) GETSTRUCT(typeTuple);
+	bool isBinaryCoercible = typeForm->typsend != InvalidOid &&
+							 typeForm->typreceive != InvalidOid;
+
+	ReleaseSysCache(typeTuple);
+
+	return isBinaryCoercible;
 }
 
 
@@ -4375,6 +4686,25 @@ SubqueryMultiTableList(MultiNode *multiNode)
 
 
 /*
+ * HaveNonVarGrouping returns true if any GROUP BY expression in the given
+ * target entry list is not a simple Var (column reference).
+ */
+static bool
+HaveNonVarGrouping(List *groupByTargetEntryList)
+{
+	TargetEntry *gte = NULL;
+	foreach_declared_ptr(gte, groupByTargetEntryList)
+	{
+		if (!IsA(gte->expr, Var))
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+
+/*
  * GroupTargetEntryList walks over group clauses in the given list, finds
  * matching target entries and return them in a new list.
  */
@@ -4834,12 +5164,38 @@ WorkerLimitCount(Node *limitCount, Node *limitOffset, OrderByLimitReference
  * checks if we need to add any sorting and grouping clauses to the sort list we
  * push down for the limit. If we do, the function adds these clauses and
  * returns them. Otherwise, the function returns null.
+ *
+ * When citus.enable_sorted_merge is enabled, we also push down the sort
+ * clause to workers even without a LIMIT, for queries where the sort
+ * is safe to push (no aggregates in ORDER BY, no non-pushable window
+ * functions, and either no GROUP BY or GROUP BY on partition column).
+ * This enables the coordinator to merge pre-sorted worker results.
  */
 static List *
 WorkerSortClauseList(Node *limitCount, List *groupClauseList, List *sortClauseList,
-					 OrderByLimitReference orderByLimitReference)
+					 OrderByLimitReference orderByLimitReference,
+					 bool *sortedMergeEligible)
 {
 	List *workerSortClauseList = NIL;
+
+	*sortedMergeEligible = false;
+
+	/*
+	 * When sorted merge is enabled, push the sort clause to workers even
+	 * without a LIMIT. The coordinator will merge the sorted streams
+	 * instead of doing a full re-sort.
+	 */
+	if (EnableSortedMerge && sortClauseList != NIL &&
+		orderByLimitReference.onlyPushableWindowFunctions &&
+		!orderByLimitReference.hasOrderByAggregate)
+	{
+		if (orderByLimitReference.groupClauseIsEmpty ||
+			orderByLimitReference.groupedByDisjointPartitionColumn)
+		{
+			*sortedMergeEligible = true;
+			return copyObject(sortClauseList);
+		}
+	}
 
 	/* if no limit node and no hasDistinctOn, no need to push down sort clauses */
 	if (limitCount == NULL && !orderByLimitReference.hasDistinctOn)
@@ -5061,10 +5417,10 @@ HasOrderByHllType(List *sortClauseList, List *targetList)
  * neither should ProcessLimitOrderByForWorkerQuery.
  */
 static bool
-ShouldProcessDistinctOrderAndLimitForWorker(
-	ExtendedOpNodeProperties *extendedOpNodeProperties,
-	bool pushingDownOriginalGrouping,
-	Node *havingQual)
+ShouldProcessDistinctOrderAndLimitForWorker(ExtendedOpNodeProperties *
+											extendedOpNodeProperties,
+											bool pushingDownOriginalGrouping,
+											Node *havingQual)
 {
 	if (extendedOpNodeProperties->pullUpIntermediateRows)
 	{

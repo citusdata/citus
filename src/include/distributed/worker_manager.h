@@ -72,6 +72,7 @@ extern WorkerNode * WorkerGetRoundRobinCandidateNode(List *workerNodeList,
 extern uint32 ActivePrimaryNonCoordinatorNodeCount(void);
 extern uint32 ActiveReadableNodeCount(void);
 extern List * ActivePrimaryNonCoordinatorNodeList(LOCKMODE lockMode);
+extern List * ActivePrimaryRemoteNonCoordinatorNodeList(LOCKMODE lockMode);
 extern List * ActivePrimaryNodeList(LOCKMODE lockMode);
 extern List * ActivePrimaryRemoteNodeList(LOCKMODE lockMode);
 extern bool CoordinatorAddedAsWorkerNode(void);
@@ -91,8 +92,10 @@ extern WorkerNode * ModifiableWorkerNode(const char *nodeName, int32 nodePort);
 extern List * ReadDistNode(bool includeNodesFromOtherClusters);
 extern void EnsureCoordinator(void);
 extern void EnsurePropagationToCoordinator(void);
+extern void EnsureCoordinatorUnlessTenantSchema(Oid relationId);
 extern void EnsureCoordinatorIsInMetadata(void);
 extern void InsertCoordinatorIfClusterEmpty(void);
+extern void LockPgDistNodeOnCoordinatorViaSuperUser(LOCKMODE lockMode);
 extern uint32 GroupForNode(char *nodeName, int32 nodePort);
 extern WorkerNode * PrimaryNodeForGroup(int32 groupId, bool *groupContainsNodes);
 extern bool NodeIsPrimaryAndRemote(WorkerNode *worker);

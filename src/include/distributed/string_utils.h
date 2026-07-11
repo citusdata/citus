@@ -16,6 +16,6 @@
 extern char * ConvertIntToString(int val);
 
 #define StringStartsWith(str, prefix) \
-	(strncmp(str, prefix, strlen(prefix)) == 0)
+		(strncmp(str, prefix, strlen(prefix)) == 0)
 
 #endif /* CITUS_STRING_UTILS_H */

@@ -266,16 +266,8 @@ create table events (event_id bigserial, event_time timestamptz default now(), p
 create index on events (event_id);
 insert into events (payload) select 'hello-'||s from generate_series(1,10) s;
 
-SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int >= 16 AS server_version_ge_16
-\gset
-
 BEGIN;
-  \if :server_version_ge_16
   SET LOCAL debug_parallel_query = regress;
-  \else
-  SET LOCAL force_parallel_mode = regress;
-  \endif
   SET LOCAL min_parallel_table_scan_size = 1;
   SET LOCAL parallel_tuple_cost = 0;
   SET LOCAL max_parallel_workers = 4;

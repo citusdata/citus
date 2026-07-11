@@ -61,8 +61,12 @@ static void CreateFixPartitionShardIndexNames(Oid parentRelationId,
 static List * WorkerFixPartitionShardIndexNamesCommandList(uint64 parentShardId,
 														   List *indexIdList,
 														   Oid partitionRelationId);
-static List * WorkerFixPartitionShardIndexNamesCommandListForParentShardIndex(
-	char *qualifiedParentShardIndexName, Oid parentIndexId, Oid partitionRelationId);
+static List * WorkerFixPartitionShardIndexNamesCommandListForParentShardIndex(char *
+																			  qualifiedParentShardIndexName,
+																			  Oid
+																			  parentIndexId,
+																			  Oid
+																			  partitionRelationId);
 static List * WorkerFixPartitionShardIndexNamesCommandListForPartitionIndex(Oid
 																			partitionIndexId,
 																			char *
@@ -331,11 +335,12 @@ FixPartitionShardIndexNames(Oid relationId, Oid parentIndexOid)
 	}
 	else
 	{
+		char *relname = pstrdup(RelationGetRelationName(relation));
 		relation_close(relation, NoLock);
 		ereport(ERROR, (errmsg("Fixing shard index names is only applicable to "
 							   "partitioned tables or partitions, "
 							   "and \"%s\" is neither",
-							   RelationGetRelationName(relation))));
+							   relname)));
 	}
 
 	CreateFixPartitionShardIndexNames(parentRelationId,
@@ -652,8 +657,10 @@ WorkerFixPartitionShardIndexNamesCommandList(uint64 parentShardId,
  * given partition. Otherwise, all the partitions are included.
  */
 static List *
-WorkerFixPartitionShardIndexNamesCommandListForParentShardIndex(
-	char *qualifiedParentShardIndexName, Oid parentIndexId, Oid partitionRelationId)
+WorkerFixPartitionShardIndexNamesCommandListForParentShardIndex(char *
+																qualifiedParentShardIndexName,
+																Oid parentIndexId, Oid
+																partitionRelationId)
 {
 	List *commandList = NIL;
 

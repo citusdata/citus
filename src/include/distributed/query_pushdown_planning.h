@@ -22,11 +22,13 @@
 /* Config variables managed via guc.c */
 extern bool SubqueryPushdown;
 extern int ValuesMaterializationThreshold;
+extern bool AllowAggregateWorkerCombineOnInternalTypes;
 
 
 extern bool CanPushdownSubquery(Query *subqueryTree, bool outerMostQueryHasLimit);
 extern bool ShouldUseSubqueryPushDown(Query *originalQuery, Query *rewrittenQuery,
-									  PlannerRestrictionContext *plannerRestrictionContext);
+									  PlannerRestrictionContext *
+									  plannerRestrictionContext);
 extern bool JoinTreeContainsSubquery(Query *query);
 extern bool IsNodeSubquery(Node *node);
 extern bool HasEmptyJoinTree(Query *query);
@@ -37,18 +39,18 @@ extern MultiNode * SubqueryMultiNodeTree(Query *originalQuery,
 										 Query *queryTree,
 										 PlannerRestrictionContext *
 										 plannerRestrictionContext);
-extern DeferredErrorMessage * DeferErrorIfUnsupportedSubqueryPushdown(
-	Query *originalQuery,
-	PlannerRestrictionContext
-	*
-	plannerRestrictionContext,
-	bool plannerPhase);
+extern DeferredErrorMessage * DeferErrorIfUnsupportedSubqueryPushdown(Query *
+																	  originalQuery,
+																	  PlannerRestrictionContext
+																	  *
+																	  plannerRestrictionContext,
+																	  bool plannerPhase);
 extern DeferredErrorMessage * DeferErrorIfCannotPushdownSubquery(Query *subqueryTree,
 																 bool
 																 outerMostQueryHasLimit);
 extern DeferredErrorMessage * DeferErrorIfUnsupportedUnionQuery(Query *queryTree);
 extern bool IsJsonTableRTE(RangeTblEntry *rte);
 extern bool IsOuterJoinExpr(Node *node);
-
+extern void FlattenGroupExprs(Query *query);
 
 #endif /* QUERY_PUSHDOWN_PLANNING_H */

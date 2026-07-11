@@ -106,6 +106,7 @@ select create_distributed_function('psum(int,int)');
 select create_distributed_function('psum_strict(int,int)');
 
 -- generate test data
+SET citus.next_shard_id TO 83674000;
 create table aggdata (id int, key int, val int, valf float8);
 select create_distributed_table('aggdata', 'id');
 insert into aggdata (id, key, val, valf) values (1, 1, 2, 11.2), (2, 1, NULL, 2.1), (3, 2, 2, 3.22), (4, 2, 3, 4.23), (5, 2, 5, 5.25), (6, 3, 4, 63.4), (7, 5, NULL, 75), (8, 6, NULL, NULL), (9, 6, NULL, 96), (10, 7, 8, 1078), (11, 9, 0, 1.19);
@@ -138,6 +139,49 @@ select regr_avgx(valf,val)::numeric(10,5), regr_avgy(valf,val)::numeric(10,5) fr
 select regr_r2(valf,val)::numeric(10,5) from aggdata;
 select regr_slope(valf,val)::numeric(10,5), regr_intercept(valf,val)::numeric(10,5) from aggdata;
 select covar_pop(valf,val)::numeric(10,5), covar_samp(valf,val)::numeric(10,5) from aggdata;
+
+-- explain works on a distributed table
+set citus.explain_analyze_sort_method to 'taskId';
+EXPLAIN (ANALYZE ON, COSTS OFF, SUMMARY OFF, TIMING OFF, BUFFERS OFF) SELECT key, sum2_strict(val) from aggdata group by key order by key;
+
+
+-- aggregates with internal stype works.
+CREATE AGGREGATE internalsum(int8) (
+    sfunc = int8_avg_accum,
+    stype = internal,
+    finalfunc = numeric_poly_sum,
+    combinefunc = int8_avg_combine,
+    serialfunc = int8_avg_serialize,
+    deserialfunc = int8_avg_deserialize
+);
+
+CREATE AGGREGATE internalsum_noserial(int8) (
+    sfunc = int8_avg_accum,
+    stype = internal,
+    finalfunc = numeric_poly_sum,
+    combinefunc = int8_avg_combine
+);
+
+SELECT key, internalsum(val), sum(val) from aggdata group by key order by key;
+
+-- see that the explain is pushed to the shards.
+EXPLAIN (ANALYZE ON, COSTS OFF, SUMMARY OFF, TIMING OFF, BUFFERS OFF) SELECT key, internalsum(val) from aggdata group by key order by key;
+
+-- without a serialfunc always fails.
+SELECT key, internalsum_noserial(val), sum(val) from aggdata group by key order by key;
+
+-- but this works if we allow coordinator combine
+set citus.coordinator_aggregation_strategy to 'row-gather';
+SELECT key, internalsum_noserial(val), sum(val) from aggdata group by key order by key;
+set citus.coordinator_aggregation_strategy to 'disabled';
+
+-- if the GUC is unset, do not allow pushdown.
+set citus.allow_aggregate_worker_combine_on_internal_types to off;
+SELECT key, internalsum(val), sum(val) from aggdata group by key order by key;
+reset citus.allow_aggregate_worker_combine_on_internal_types;
+
+DROP AGGREGATE internalsum(int8);
+DROP AGGREGATE internalsum_noserial(int8);
 
 -- binary string aggregation
 create function binstragg_sfunc(s text, e1 text, e2 text)
@@ -675,6 +719,117 @@ create aggregate min (coord) (
 );
 
 select min((id,val)::coord) from aggdata;
+
+
+-- Non-Var GROUP BY mixed with aggregate in the SAME target entry
+
+-- GROUP BY expression combined with aggregate via concatenation
+SELECT abs(val) + sum(id) AS combined
+FROM aggdata
+GROUP BY abs(val)
+ORDER BY combined;
+
+-- GROUP BY expression used as argument alongside aggregate in a function
+SELECT coalesce(abs(val)::text, 'null') || ':' || sum(id)::text AS label
+FROM aggdata
+GROUP BY abs(val)
+ORDER BY label;
+
+-- GROUP BY expression in arithmetic with multiple aggregates
+SELECT abs(val) * count(*) + sum(id) AS calc
+FROM aggdata
+GROUP BY abs(val)
+ORDER BY calc;
+
+-- Nested function GROUP BY mixed with aggregate
+SELECT floor(abs(val)) + min(id) AS nested_mix
+FROM aggdata
+GROUP BY floor(abs(val))
+ORDER BY nested_mix;
+
+-- CASE expression in GROUP BY mixed with aggregate in same target
+SELECT case when val > 3 then 'high' else 'low' end || ':' || sum(id)::text AS bucket_total
+FROM aggdata
+GROUP BY case when val > 3 then 'high' else 'low' end
+ORDER BY bucket_total;
+
+-- DISTINCT on mixed GROUP BY expression + aggregate
+SELECT DISTINCT abs(val) + sum(id) AS combined
+FROM aggdata
+GROUP BY abs(val)
+ORDER BY combined;
+
+-- Subquery wrapping a mixed GROUP BY expression + aggregate
+SELECT combined, combined * 2 AS doubled
+FROM (
+    SELECT abs(val) + sum(id) AS combined
+    FROM aggdata
+    GROUP BY abs(val)
+) sub
+ORDER BY combined;
+
+-- GROUP BY expr appears both standalone AND mixed with aggregate in same query
+SELECT abs(val) AS av, abs(val) + sum(id) AS mixed
+FROM aggdata
+GROUP BY abs(val)
+ORDER BY av;
+
+-- Multiple non-Var GROUP BY expressions mixed with aggregate in same target
+SELECT abs(val) + key * 2 + sum(id) AS multi_group
+FROM aggdata
+GROUP BY abs(val), key * 2
+ORDER BY multi_group;
+
+-- HAVING that references a mixed GROUP BY expression + aggregate
+SELECT abs(val) + sum(id) AS combined
+FROM aggdata
+GROUP BY abs(val)
+HAVING abs(val) + sum(id) > 10
+ORDER BY combined;
+
+-- Constant in expression
+SELECT abs(val) + 1 + sum(id) - floor(valf) FROM aggdata
+GROUP BY abs(val), floor(valf)
+ORDER BY 1;
+
+-- Count(DISTINCT) (decomposed differently from the basic aggregates)
+SELECT abs(val) + count(DISTINCT id) AS combined
+FROM aggdata
+GROUP BY abs(val)
+ORDER BY combined;
+
+-- Type-casts
+SELECT val::text || ':' || sum(id)::text AS combined
+FROM aggdata
+GROUP BY val::text
+ORDER BY combined;
+
+-- ORDER BY with LIMIT
+SELECT abs(val) + sum(id) AS combined
+FROM aggdata
+GROUP BY abs(val)
+ORDER BY abs(val) DESC, sum(id) ASC
+LIMIT 5;
+
+-- EXPLAIN output showing worker queries preserve GROUP BY expressions intact
+EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF)
+SELECT abs(val) + sum(id) AS combined
+FROM aggdata
+GROUP BY abs(val)
+ORDER BY combined;
+
+EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF)
+SELECT abs(val) + sum(id) AS combined
+FROM aggdata
+GROUP BY abs(val)
+HAVING abs(val) + sum(id) > 10
+ORDER BY combined;
+
+EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF)
+SELECT abs(val) + key * 2 + sum(id) AS multi_group
+FROM aggdata
+GROUP BY abs(val), key * 2
+ORDER BY multi_group;
 
 set client_min_messages to error;
 drop schema aggregate_support cascade;

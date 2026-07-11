@@ -1,3 +1,4 @@
+CREATE EXTENSION IF NOT EXISTS citus_columnar;
 CREATE SCHEMA null_dist_key_udfs;
 SET search_path TO null_dist_key_udfs;
 
@@ -665,3 +666,4 @@ WHERE table_name = '"t b l"'::regclass AND nodeport IN (:worker_1_port, :worker_
 
 SET client_min_messages TO WARNING;
 DROP SCHEMA null_dist_key_udfs CASCADE;
+DROP EXTENSION citus_columnar;

@@ -1653,9 +1653,33 @@ SELECT * FROM multi_extension.print_extension_changes();
                                                                                                                       | view citus_stats
 (12 rows)
 
--- Test downgrade to 13.2-1 from 14.0-1
-ALTER EXTENSION citus UPDATE TO '14.0-1';
+-- Test downgrade to 13.2-1 from 13.3-1
+ALTER EXTENSION citus UPDATE TO '13.3-1';
 ALTER EXTENSION citus UPDATE TO '13.2-1';
+-- Should be empty result since upgrade+downgrade should be a no-op
+SELECT * FROM multi_extension.print_extension_changes();
+ previous_object | current_object
+---------------------------------------------------------------------
+(0 rows)
+
+-- Snapshot of state at 13.3-1
+ALTER EXTENSION citus UPDATE TO '13.3-1';
+SELECT * FROM multi_extension.print_extension_changes();
+ previous_object |                                      current_object
+---------------------------------------------------------------------
+                 | function citus_cluster_changes_block(integer) boolean
+                 | function citus_cluster_changes_block_status() record
+                 | function citus_cluster_changes_unblock() boolean
+                 | function citus_internal.acquire_placement_colocation_lock(bigint,integer) integer
+                 | function citus_internal.adjust_identity_column_seq_settings(regclass,bigint,boolean) void
+                 | function citus_internal.get_next_colocation_id() bigint
+                 | function citus_internal.lock_colocation_id(integer,integer) void
+                 | function worker_apply_sequence_command(text,regtype,bigint,boolean) void
+(8 rows)
+
+-- Test downgrade to 13.3-1 from 14.0-1
+ALTER EXTENSION citus UPDATE TO '14.0-1';
+ALTER EXTENSION citus UPDATE TO '13.3-1';
 -- Should be empty result since upgrade+downgrade should be a no-op
 SELECT * FROM multi_extension.print_extension_changes();
  previous_object | current_object
@@ -1665,16 +1689,72 @@ SELECT * FROM multi_extension.print_extension_changes();
 -- Snapshot of state at 14.0-1
 ALTER EXTENSION citus UPDATE TO '14.0-1';
 SELECT * FROM multi_extension.print_extension_changes();
+                                      previous_object                                      |                                  current_object
+---------------------------------------------------------------------
+ function citus_cluster_changes_block(integer) boolean                                     |
+ function citus_cluster_changes_block_status() record                                      |
+ function citus_cluster_changes_unblock() boolean                                          |
+ function citus_internal.acquire_placement_colocation_lock(bigint,integer) integer         |
+ function citus_internal.adjust_identity_column_seq_settings(regclass,bigint,boolean) void |
+ function citus_internal.get_next_colocation_id() bigint                                   |
+ function citus_internal.lock_colocation_id(integer,integer) void                          |
+ function worker_apply_sequence_command(text,regtype,bigint,boolean) void                  |
+                                                                                           | function coord_binary_combine_agg(oid,bytea,anyelement) anyelement
+                                                                                           | function coord_binary_combine_agg_ffunc(internal,oid,bytea,anyelement) anyelement
+                                                                                           | function coord_binary_combine_agg_sfunc(internal,oid,bytea,anyelement) internal
+                                                                                           | function fix_pre_citus14_colocation_group_collation_mismatches() void
+                                                                                           | function worker_binary_partial_agg(oid,anyelement) bytea
+                                                                                           | function worker_binary_partial_agg_ffunc(internal) bytea
+(14 rows)
+
+-- Test downgrade to 14.0-1 from 14.1-1
+ALTER EXTENSION citus UPDATE TO '14.1-1';
+ALTER EXTENSION citus UPDATE TO '14.0-1';
+-- Should be empty result since upgrade+downgrade should be a no-op
+SELECT * FROM multi_extension.print_extension_changes();
  previous_object | current_object
 ---------------------------------------------------------------------
 (0 rows)
+
+-- Snapshot of state at 14.1-1
+ALTER EXTENSION citus UPDATE TO '14.1-1';
+SELECT * FROM multi_extension.print_extension_changes();
+ previous_object |                                      current_object
+---------------------------------------------------------------------
+                 | function citus_cluster_changes_block(integer) boolean
+                 | function citus_cluster_changes_block_status() record
+                 | function citus_cluster_changes_unblock() boolean
+                 | function citus_internal.acquire_placement_colocation_lock(bigint,integer) integer
+                 | function citus_internal.adjust_identity_column_seq_settings(regclass,bigint,boolean) void
+                 | function citus_internal.get_next_colocation_id() bigint
+                 | function citus_internal.lock_colocation_id(integer,integer) void
+                 | function worker_apply_sequence_command(text,regtype,bigint,boolean) void
+(8 rows)
+
+-- Test downgrade to 14.1-1 from 15.0-1
+ALTER EXTENSION citus UPDATE TO '15.0-1';
+ALTER EXTENSION citus UPDATE TO '14.1-1';
+-- Should be empty result since upgrade+downgrade should be a no-op
+SELECT * FROM multi_extension.print_extension_changes();
+ previous_object | current_object
+---------------------------------------------------------------------
+(0 rows)
+
+-- Snapshot of state at 15.0-1
+ALTER EXTENSION citus UPDATE TO '15.0-1';
+SELECT * FROM multi_extension.print_extension_changes();
+                         previous_object                          | current_object
+---------------------------------------------------------------------
+ function worker_adjust_identity_column_seq_ranges(regclass) void |
+ function worker_apply_sequence_command(text,regtype) void        |
+(2 rows)
 
 DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;
 -- show running version
 SHOW citus.version;
  citus.version
 ---------------------------------------------------------------------
- 14.0devel
+ 15.0devel
 (1 row)
 
 -- ensure no unexpected objects were created outside pg_catalog
@@ -1709,7 +1789,7 @@ DROP EXTENSION citus;
 DROP EXTENSION citus_columnar;
 CREATE EXTENSION citus VERSION '8.0-1';
 ERROR:  specified version incompatible with loaded Citus library
-DETAIL:  Loaded library requires 14.0, but 8.0-1 was specified.
+DETAIL:  Loaded library requires 15.0, but 8.0-1 was specified.
 HINT:  If a newer library is present, restart the database and try the command again.
 -- Test non-distributed queries work even in version mismatch
 SET citus.enable_version_checks TO 'false';
@@ -1754,7 +1834,7 @@ ORDER BY 1;
 -- We should not distribute table in version mistmatch
 SELECT create_distributed_table('version_mismatch_table', 'column1');
 ERROR:  loaded Citus library version differs from installed extension version
-DETAIL:  Loaded library requires 14.0, but the installed extension version is 8.1-1.
+DETAIL:  Loaded library requires 15.0, but the installed extension version is 8.1-1.
 HINT:  Run ALTER EXTENSION citus UPDATE and try again.
 -- This function will cause fail in next ALTER EXTENSION
 CREATE OR REPLACE FUNCTION pg_catalog.relation_is_a_known_shard(regclass)
@@ -2170,6 +2250,7 @@ WHERE schemaid IN ('columnar'::regnamespace, 'columnar_internal'::regnamespace);
 (1 row)
 
 RESET citus.enable_schema_based_sharding;
+DROP EXTENSION citus_columnar;
 DROP EXTENSION citus;
 CREATE EXTENSION citus;
 DROP TABLE version_mismatch_table;

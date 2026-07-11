@@ -3,6 +3,13 @@
 --
 -- There was a failure compiling queries with shadowed subquery aliases
 -- https://github.com/citusdata/citus/issues/2642
+-- make sure coordinator is always in metadata.
+SELECT citus_set_coordinator_host('localhost');
+ citus_set_coordinator_host
+---------------------------------------------------------------------
+
+(1 row)
+
 CREATE SCHEMA multi_name_resolution;
 SET search_path TO multi_name_resolution;
 create table namenest1 (id integer primary key, user_id integer);
@@ -35,8 +42,5 @@ WHERE bar.id_deep = join_alias.id_deep;
 ---------------------------------------------------------------------
 (0 rows)
 
+SET client_min_messages TO WARNING;
 DROP SCHEMA multi_name_resolution CASCADE;
-NOTICE:  drop cascades to 3 other objects
-DETAIL:  drop cascades to table namenest1
-drop cascades to table namenest2
-drop cascades to table namenest2_2250000000010

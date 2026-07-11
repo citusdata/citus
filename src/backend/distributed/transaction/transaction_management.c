@@ -25,6 +25,7 @@
 #include "storage/fd.h"
 #include "utils/datum.h"
 #include "utils/guc.h"
+#include "utils/guc_tables.h"
 #include "utils/hsearch.h"
 #include "utils/memutils.h"
 
@@ -58,7 +59,7 @@
 #include "distributed/worker_log_messages.h"
 
 #define COMMIT_MANAGEMENT_COMMAND_2PC \
-	"SELECT citus_internal.commit_management_command_2pc()"
+		"SELECT citus_internal.commit_management_command_2pc()"
 
 
 CoordinatedTransactionState CurrentCoordinatedTransactionState = COORD_TRANS_NONE;
@@ -80,6 +81,14 @@ int StoredProcedureLevel = 0;
 
 /* number of nested DO block levels we are currently in */
 int DoBlockLevel = 0;
+
+/*
+ * Tracks the number of statements that have been executed without
+ * coordinated transaction in the current stored procedure call.
+ * Used to ensure that at most one statement can skip coordination
+ * per procedure invocation, preventing partial-commit scenarios.
+ */
+int ProcedureNonCoordinatedExecutionCount = 0;
 
 /* state needed to keep track of operations used during a transaction */
 XactModificationType XactModificationLevel = XACT_MODIFICATION_NONE;
@@ -141,6 +150,15 @@ AllowedDistributionColumn AllowedDistributionColumnValue;
 
 /* if disabled, distributed statements in a function may run as separate transactions */
 bool FunctionOpensTransactionBlock = true;
+
+/*
+ * When enabled, CALL statements that execute a single task on a single shard
+ * with a single placement can skip coordinated (2PC) transactions. This avoids
+ * the overhead of BEGIN + PREPARE TRANSACTION + COMMIT PREPARED when it is safe
+ * to do so (i.e., there is only one participant and no cross-shard coordination
+ * is needed).
+ */
+bool EnableProcedureTransactionSkip = false;
 
 /* if true, we should trigger node metadata sync on commit */
 bool NodeMetadataSyncOnCommit = false;
@@ -807,13 +825,9 @@ AdjustMaxPreparedTransactions(void)
 	 * really check if max_prepared_xacts is configured by the user explicitly,
 	 * so check if it's value is default.
 	 */
-#if PG_VERSION_NUM >= PG_VERSION_16
 	struct config_generic *gconf = find_option("max_prepared_transactions",
 											   false, false, ERROR);
 	if (gconf->source == PGC_S_DEFAULT)
-#else
-	if (max_prepared_xacts == 0)
-#endif
 	{
 		char newvalue[12];
 

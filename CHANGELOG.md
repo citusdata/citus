@@ -1,3 +1,95 @@
+### citus v14.0.0 (February 9, 2026) ###
+
+* Drops PG15 support (#8372)
+
+* Adds support for PostgreSQL 18 (#8065)
+
+* Adds support for virtual generated columns on distributed tables
+  for PostgreSQL 18 (#8346)
+
+* Propagates publish_generated_columns publication option to worker
+  nodes for distributed tables on PostgreSQL 18 (#8360)
+
+* Respects VACUUM/ANALYZE ONLY semantics for Citus tables by
+  skipping shard propagation when ONLY is specified on
+  PostgreSQL 18 (#8365)
+
+* Allows configuring sslkeylogfile connection parameter using
+  citus.node_conn_info on PostgreSQL 18 (#8437)
+
+* Fixes INSERT .. SELECT planning error with GROUP BY on
+  PostgreSQL 18 (#8256)
+
+* Fixes deparser error with named joins and whole-row references
+  on PostgreSQL 18 (#8300)
+
+* Fixes columnar temp table access failure on PostgreSQL 18 (#8309)
+
+* Fixes multi-shard MIN/MAX on composite types by blessing record
+  aggregates (#8429)
+
+* Fixes distributed MIN/MAX for array types (#8421)
+
+* Adds propagation of ENFORCED / NOT ENFORCED on CHECK
+  constraints (#8349)
+
+* Stops on-demand statistics collection for clusters and deprecates
+  citus.enable_statistics_collection GUC (#8460)
+
+* Disallows creating a distributed table or altering it to be colocated
+  with another table if distribution key collations don't
+  match (#8257)
+
+* Makes citus_create_restore_point MX-safe by blocking 2PC commit
+  decisions (#8352)
+
+* Supports binary transfer from worker to coordinator for custom
+  aggregates (#8446)
+
+* Ensures query remains safe for deparse when a modify scan needs to
+  evaluate expressions before worker query execution (#8443)
+
+* Avoids local plan cache reuse for multi-shard queries (#8371)
+
+* Tightens distributed plan check to cover distributed
+  subplans (#8388)
+
+* Improves performance by avoiding unnecessary shallow copy of target
+  list when no array or json subscripts are present (#8155)
+
+* Fixes a bug that ignores reference or schema sharded tables in worker
+  subquery task construction when no distributed tables are
+  involved (#8440)
+
+* Fixes a bug in redundant WHERE clause detection (#8162)
+
+* Fixes a bug that causes allowing UPDATE / MERGE queries that may
+  change the distribution column value (#8214)
+
+* Fixes a bug that causes an unexpected error when executing
+  repartitioned MERGE (#8201)
+
+* Fixes an assertion failure in Citus maintenance daemon that can
+  happen in very slow systems (#8158)
+
+* Removes an assertion from Postgres ruleutils that was rendered
+  meaningless by a previous Citus commit (#8136)
+
+* Fixes incorrect rejection of colocated joins when Row Level
+  Security policies use volatile functions (#8357)
+
+* Fixes metadata sync failure when distributed tables use domain
+  types defined in non-public schemas (#8363)
+
+* Fixes a crash on CREATE STATISTICS with non-table
+  expressions (#8213, #8227)
+
+* Fixes invalid input syntax for type bigint in citus_stats with
+  large tables (#8166)
+
+* Fixes an undefined behavior that could happen when computing
+  tenant score for citus_stat_tenants (#7954)
+
 ### citus v13.1.1 (Oct 1st, 2025) ###
 
 * Adds support for latest PG minors: 14.19, 15.14, 16.10 (#8142)

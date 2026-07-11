@@ -175,6 +175,77 @@ help cleaning up in the future.
 In CI sometimes a test fails randomly, we call these tests "flaky". To fix these
 flaky tests see [`src/test/regress/flaky_tests.md`](https://github.com/citusdata/citus/blob/main/src/test/regress/flaky_tests.md)
 
+## Running regression tests in mixed-version scenarios
+
+The test runner supports running regression tests in mixed-version (N/N-1) scenarios,
+where some or all nodes use an older Citus version. This is useful for verifying
+backward compatibility.
+
+### Environment variables
+
+Three environment variables control mixed-version behavior:
+
+| Variable | Description |
+|---|---|
+| `CITUSVERSION` | The Citus extension version to create (e.g. `13.2-1`). When set, `CREATE EXTENSION citus VERSION '<version>'` is used instead of the default. |
+| `CITUSLIBDIR` | Path to a directory containing the older `citus.so` library (e.g. `~/citus-libs/17/v13.2.0`). When set, the specified library is loaded instead of the currently installed one. |
+| `N1MODE` | Controls which nodes use the older version. Valid values: `all` (all nodes), `workeronly` (only worker 1), `coordinatoronly` (only the coordinator). |
+
+When `CITUSVERSION` or `CITUSLIBDIR` is set, the test runner automatically disables
+version checks (`citus.enable_version_checks=off`, `columnar.enable_version_checks=off`).
+
+### Supported scenarios
+
+| Scenario | Description | Variables |
+|---|---|---|
+| SQL version N-1 | All nodes create the Citus extension at an older version | `CITUSVERSION=13.2-1 N1MODE=all` |
+| Library version N-1 | All nodes load `citus.so` from an older release | `CITUSLIBDIR=~/citus-libs/17/v13.2.0 N1MODE=all` |
+| Worker N-1 | Only worker 1 uses the older library and extension version | `CITUSLIBDIR=~/citus-libs/18/v14.0 CITUSVERSION=14.0-1` |
+| Coordinator N-1 | Only the coordinator uses the older library and extension version | `CITUSLIBDIR=~/citus-libs/17/v13.2.0 CITUSVERSION=13.2-1 N1MODE=coordinatoronly` |
+
+### Schedule considerations
+
+Not all schedules are compatible with N-1 testing:
+
+- **`check-multi-1-create-citus`** and **`check-multi-mx`**: These schedules drop and recreate the
+   Citus extension using the default version, which is incompatible with N-1 setups.
+- **`check-vanilla`**: The test preparation steps have not yet been adapted for N-1 workflows.
+
+The `multi_1_create_citus_schedule` was split out from `multi_1_schedule` to isolate tests that
+drop/create the Citus extension, so the remaining `multi_1_schedule` tests can be reused safely
+in N-1 scenarios.
+
+### Local testing
+
+#### Prerequisites
+
+1. Install the older Citus version you want to test against (e.g. 13.2).
+2. Copy the `citus.so` from that installation to a known directory:
+   ```bash
+   mkdir -p ~/citus-libs/17/v13.2.0
+   cp /path/to/old/citus.so ~/citus-libs/17/v13.2.0/
+   ```
+3. Install the current (HEAD) version of Citus:
+   ```bash
+   make install -j9
+   ```
+
+#### Example commands
+
+```bash
+# Test with only the SQL extension version pinned to N-1 on all nodes
+CITUSVERSION=13.2-1 N1MODE=all make -C src/test/regress check-minimal
+
+# Test with both the library and extension version pinned to N-1 on worker only
+CITUSLIBDIR=~/citus-libs/18/v14.0 CITUSVERSION=14.0-1 N1MODE=workeronly make -C src/test/regress check-minimal
+
+# Run a full schedule with coordinator at N-1
+CITUSLIBDIR=~/citus-libs/18/v14.0 CITUSVERSION=14.0-1 N1MODE=coordinatoronly make -C src/test/regress check-multi-1
+
+# Run a single test using run_test.py
+CITUSLIBDIR=~/citus-libs/18/v14.0 CITUSVERSION=14.0-1 N1MODE=workeronly src/test/regress/citus_tests/run_test.py check_mx
+```
+
 # Regression test best practices
 
 * Instead of connecting to different nodes to check catalog tables, should use `run_command_on_all_nodes()` because it's faster than keep disconnecting / connecting to different nodes.

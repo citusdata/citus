@@ -1115,7 +1115,7 @@ END;
 
 -- cursor queries are router plannable
 BEGIN;
-DECLARE test_cursor CURSOR FOR
+DECLARE test_cursor SCROLL CURSOR FOR
 	SELECT *
 		FROM articles_hash
 		WHERE author_id = 1

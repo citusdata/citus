@@ -1,13 +1,12 @@
 --
 -- MULTI_EXPLAIN
 --
--- This test file has an alternative output because of the following in PG16:
--- https://github.com/postgres/postgres/commit/1349d2790bf48a4de072931c722f39337e72055e
--- https://github.com/postgres/postgres/commit/f4c7c410ee4a7baa06f51ebb8d5333c169691dd3
--- The alternative output can be deleted when we drop support for PG15
+-- This test file has an alternative output because of the following in PG18:
+-- https://github.com/postgres/postgres/commit/161320b4b960ee4fe918959be6529ae9b106ea5a
+-- The alternative output can be deleted when we drop support for PG17
 --
 SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int >= 16 AS server_version_ge_16;
+SELECT substring(:'server_version', '\d+')::int >= 18 AS server_version_ge_18;
 
 SET citus.next_shard_id TO 570000;
 
@@ -184,10 +183,12 @@ EXPLAIN (COSTS FALSE)
 
 -- Test analyze (with TIMING FALSE and SUMMARY FALSE for consistent output)
 BEGIN;
+select public.explain_filter('
 EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE, BUFFERS OFF)
 	UPDATE lineitem
 	SET l_suppkey = 12
-	WHERE l_orderkey = 1 AND l_partkey = 0;
+	WHERE l_orderkey = 1 AND l_partkey = 0
+	');
 ROLLBACk;
 
 -- Test delete
@@ -597,7 +598,7 @@ EXPLAIN (COSTS FALSE) EXECUTE real_time_executor_query;
 -- at least make sure to fail without crashing
 PREPARE router_executor_query_param(int) AS SELECT l_quantity FROM lineitem WHERE l_orderkey = $1;
 EXPLAIN EXECUTE router_executor_query_param(5);
-EXPLAIN (ANALYZE ON, COSTS OFF, TIMING OFF, SUMMARY OFF, BUFFERS OFF) EXECUTE router_executor_query_param(5);
+select public.explain_filter('EXPLAIN (ANALYZE ON, COSTS OFF, TIMING OFF, SUMMARY OFF, BUFFERS OFF) EXECUTE router_executor_query_param(5)');
 
 \set VERBOSITY TERSE
 PREPARE multi_shard_query_param(int) AS UPDATE lineitem SET l_quantity = $1;
@@ -928,10 +929,10 @@ ROLLBACK;
 
 -- test EXPLAIN ANALYZE with non-text output formats
 BEGIN;
-EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT JSON, BUFFERS OFF) INSERT INTO explain_pk VALUES (1, 2), (2, 3);
+EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT YAML, BUFFERS OFF) INSERT INTO explain_pk VALUES (1, 2), (2, 3);
 ROLLBACK;
 
-EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT JSON, BUFFERS OFF) SELECT * FROM explain_pk;
+EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT YAML, BUFFERS OFF) SELECT * FROM explain_pk;
 
 BEGIN;
 EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT XML, BUFFERS OFF) INSERT INTO explain_pk VALUES (1, 2), (2, 3);
@@ -1135,17 +1136,21 @@ CREATE TABLE distributed_table_1(a int, b int);
 SELECT create_distributed_table('distributed_table_1','a');
 INSERT INTO distributed_table_1 values (1,1);
 
-EXPLAIN :default_analyze_flags SELECT row_number() OVER() AS r FROM distributed_table_1;
+select public.explain_filter('
+EXPLAIN (ANALYZE on, COSTS off, TIMING off, SUMMARY off, BUFFERS off) SELECT row_number() OVER() AS r FROM distributed_table_1
+', true);
 
 CREATE TABLE distributed_table_2(a int, b int);
 SELECT create_distributed_table('distributed_table_2','a');
 INSERT INTO distributed_table_2 VALUES (1,1);
 
-EXPLAIN :default_analyze_flags
+select public.explain_filter('
+EXPLAIN (ANALYZE on, COSTS off, TIMING off, SUMMARY off, BUFFERS off)
 WITH r AS (SELECT row_number() OVER () AS r FROM distributed_table_1)
 SELECT * FROM distributed_table_2
 JOIN r ON (r = distributed_table_2.b)
-LIMIT 3;
+LIMIT 3
+', true);
 
 EXPLAIN :default_analyze_flags SELECT FROM (SELECT * FROM reference_table) subquery;
 

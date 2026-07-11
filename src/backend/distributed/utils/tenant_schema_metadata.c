@@ -14,8 +14,10 @@
 #include "access/genam.h"
 #include "access/htup.h"
 #include "access/table.h"
+#include "catalog/pg_namespace_d.h"
 #include "storage/lockdefs.h"
 #include "utils/fmgroids.h"
+#include "utils/lsyscache.h"
 #include "utils/relcache.h"
 
 #include "distributed/colocation_utils.h"
@@ -32,28 +34,36 @@ bool
 IsTenantSchema(Oid schemaId)
 {
 	/*
-	 * We don't allow creating tenant schemas when there is a version
-	 * mismatch. Even more, SchemaIdGetTenantColocationId() would throw an
-	 * error if the underlying pg_dist_schema metadata table has not
-	 * been created yet, which is the case in older versions. For this reason,
-	 * it's safe to assume that it cannot be a tenant schema when there is a
-	 * version mismatch.
+	 * Bail out early if there is a version mismatch between the Citus
+	 * shared library and the installed SQL extension. This prevents
+	 * querying pg_dist_schema when the catalog table may not exist
+	 * (e.g., during multi_extension tests that install versions older
+	 * than 12.0).
 	 *
-	 * But it's a bit tricky that we do the same when version checks are
-	 * disabled because then CheckCitusVersion() returns true even if there
-	 * is a version mismatch. And in that case, the tests that are trying to
-	 * create tables (in multi_extension.sql) in older versions would
-	 * fail when deciding whether we should create a tenant table or not.
+	 * When version checks are disabled (citus.enable_version_checks=off),
+	 * CheckCitusVersion() returns true unconditionally, even if there is
+	 * a real version mismatch. In that case, we need to verify that
+	 * pg_dist_schema actually exists before querying it, since the
+	 * multi_extension test installs old versions (e.g. 8.0-1) with
+	 * version checks disabled and creates tables in that state.
 	 *
-	 * The downside of doing so is that, for example, we will skip deleting
-	 * the tenant schema entry from pg_dist_schema when dropping a
-	 * tenant schema while the version checks are disabled even if there was
-	 * no version mismatch. But we're okay with that because we don't expect
-	 * users to disable version checks anyway.
+	 * On the normal path (version checks enabled, versions compatible),
+	 * this adds no overhead -- the !EnableVersionChecks branch is skipped
+	 * entirely.
 	 */
-	if (!EnableVersionChecks || !CheckCitusVersion(DEBUG4))
+	if (!CheckCitusVersion(DEBUG4))
 	{
 		return false;
+	}
+
+	if (!EnableVersionChecks)
+	{
+		Oid distSchemaOid = get_relname_relid("pg_dist_schema",
+											  PG_CATALOG_NAMESPACE);
+		if (!OidIsValid(distSchemaOid))
+		{
+			return false;
+		}
 	}
 
 	return SchemaIdGetTenantColocationId(schemaId) != INVALID_COLOCATION_ID;

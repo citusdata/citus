@@ -81,7 +81,6 @@ static bool FullCompositeFieldList(List *compositeFieldList);
 static bool HasUnsupportedJoinWalker(Node *node, void *context);
 static bool ErrorHintRequired(const char *errorHint, Query *queryTree);
 static bool HasComplexRangeTableType(Query *queryTree);
-static bool IsReadIntermediateResultFunction(Node *node);
 static bool IsReadIntermediateResultArrayFunction(Node *node);
 static bool IsCitusExtraDataContainerFunc(Node *node);
 static bool IsFunctionWithOid(Node *node, Oid funcOid);
@@ -297,8 +296,19 @@ TargetListOnPartitionColumn(Query *query, List *targetEntryList)
 bool
 FindNodeMatchingCheckFunctionInRangeTableList(List *rtable, CheckNodeFunc checker)
 {
+	int rtWalkFlags = QTW_EXAMINE_RTES_BEFORE;
+
+#if PG_VERSION_NUM >= PG_VERSION_18
+
+	/*
+	 * PG18+: Do not descend into GROUP BY expressions subqueries, they
+	 * have already been visited as recursive planning is depth-first.
+	 */
+	rtWalkFlags |= QTW_IGNORE_GROUPEXPRS;
+#endif
+
 	return range_table_walker(rtable, FindNodeMatchingCheckFunction, checker,
-							  QTW_EXAMINE_RTES_BEFORE);
+							  rtWalkFlags);
 }
 
 
@@ -745,7 +755,7 @@ ContainsReadIntermediateResultArrayFunction(Node *node)
  * IsReadIntermediateResultFunction determines whether a given node is a function call
  * to the read_intermediate_result function.
  */
-static bool
+bool
 IsReadIntermediateResultFunction(Node *node)
 {
 	return IsFunctionWithOid(node, CitusReadIntermediateResultFuncId());

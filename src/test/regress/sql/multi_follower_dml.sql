@@ -18,6 +18,22 @@ SELECT citus_add_local_table_to_metadata('citus_local_table');
 
 CREATE TABLE local (a int, b int);
 
+-- Force a distributed-table shard onto the coordinator (group 0) so we can
+-- exercise the same recovery-mode local-execution guard via a regular
+-- distributed table -- which is the scenario originally reported in #8426.
+-- We temporarily disable shouldhaveshards on the workers, create a single-
+-- shard distributed table (so the only placement lands on the coordinator),
+-- then restore shouldhaveshards on the workers.
+SELECT 1 FROM master_set_node_property('localhost', :worker_1_port, 'shouldhaveshards', false);
+SELECT 1 FROM master_set_node_property('localhost', :worker_2_port, 'shouldhaveshards', false);
+SELECT 1 FROM master_set_node_property('localhost', :master_port, 'shouldhaveshards', true);
+SET citus.shard_count TO 1;
+SET citus.shard_replication_factor TO 1;
+CREATE TABLE dist_on_coord (a int, b int);
+SELECT create_distributed_table('dist_on_coord', 'a');
+SELECT 1 FROM master_set_node_property('localhost', :worker_1_port, 'shouldhaveshards', true);
+SELECT 1 FROM master_set_node_property('localhost', :worker_2_port, 'shouldhaveshards', true);
+
 \c - - - :follower_master_port
 
 -- inserts normally do not work on a standby coordinator
@@ -152,6 +168,28 @@ INSERT INTO local SELECT i,i FROM generate_series(0,100)i;
 -- we shouldn't be able to create local tables
 CREATE TEMP TABLE local_copy_of_the_table AS SELECT * FROM the_table;
 
+-- Regression test for GitHub issue #8426.
+-- A modification routed to a placement on the local (coordinator) group
+-- on a hot standby with citus.writable_standby_coordinator=on used to
+-- crash inside the local executor when the plan was finalized. Verify
+-- the path now raises a graceful, actionable error instead of crashing,
+-- and that subsequent statements in the session still work.
+SHOW citus.writable_standby_coordinator;
+INSERT INTO citus_local_table (a, b, z) VALUES (8426, 8426, 8426);
+UPDATE citus_local_table SET z = 0 WHERE a = 8426;
+DELETE FROM citus_local_table WHERE a = 8426;
+WITH d AS (DELETE FROM citus_local_table WHERE a = 8426 RETURNING *)
+SELECT count(*) FROM d;
+-- Same crash path was originally reported on a regular distributed table
+-- whose shard happened to live on the local node. Verify dist_on_coord
+-- (single shard pinned to the coordinator) errors out gracefully too.
+INSERT INTO dist_on_coord VALUES (8426, 8426);
+UPDATE dist_on_coord SET b = 0 WHERE a = 8426;
+DELETE FROM dist_on_coord WHERE a = 8426;
+-- session is still usable after the error: a read still works
+SELECT count(*) FROM citus_local_table;
+SELECT count(*) FROM dist_on_coord;
+
 \c "port=9070 dbname=regression options='-c\ citus.use_secondary_nodes=always\ -c\ citus.cluster_name=second-cluster'"
 
 -- separate follower formations currently cannot do writes
@@ -181,4 +219,5 @@ COMMIT;
 DROP TABLE the_table;
 DROP TABLE reference_table;
 DROP TABLE citus_local_table;
+DROP TABLE dist_on_coord;
 SELECT master_remove_node('localhost', :master_port);

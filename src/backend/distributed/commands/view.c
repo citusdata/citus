@@ -101,7 +101,7 @@ PreprocessViewStmt(Node *node, const char *queryString,
 		return NIL;
 	}
 
-	EnsureCoordinator();
+	EnsurePropagationToCoordinator();
 
 	return NIL;
 }
@@ -112,7 +112,7 @@ PreprocessViewStmt(Node *node, const char *queryString,
  * propagate views.
  *
  * If view depends on any undistributable object, Citus can not distribute it. In order to
- * not to prevent users from creating local views on the coordinator WARNING message will
+ * not to prevent users from creating local views on the local node, WARNING message will
  * be sent to the customer about the case instead of erroring out. If no worker nodes exist
  * at all, view will be created locally without any WARNING message.
  *
@@ -271,7 +271,7 @@ PreprocessDropViewStmt(Node *node, const char *queryString, ProcessUtilityContex
 		return NIL;
 	}
 
-	EnsureCoordinator();
+	EnsurePropagationToCoordinator();
 	EnsureSequentialMode(OBJECT_VIEW);
 
 	/*
@@ -288,7 +288,7 @@ PreprocessDropViewStmt(Node *node, const char *queryString, ProcessUtilityContex
 								(void *) dropStmtSql,
 								ENABLE_DDL_PROPAGATION);
 
-	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+	return NodeDDLTaskList(REMOTE_NODES, commands);
 }
 
 
@@ -567,7 +567,7 @@ PreprocessAlterViewStmt(Node *node, const char *queryString, ProcessUtilityConte
 
 	QualifyTreeNode((Node *) stmt);
 
-	EnsureCoordinator();
+	EnsurePropagationToCoordinator();
 
 	/* reconstruct alter statement in a portable fashion */
 	const char *alterViewStmtSql = DeparseTreeNode((Node *) stmt);
@@ -659,7 +659,7 @@ PreprocessRenameViewStmt(Node *node, const char *queryString,
 		return NIL;
 	}
 
-	EnsureCoordinator();
+	EnsurePropagationToCoordinator();
 
 	/* fully qualify */
 	QualifyTreeNode(node);
@@ -721,7 +721,7 @@ PreprocessAlterViewSchemaStmt(Node *node, const char *queryString,
 		return NIL;
 	}
 
-	EnsureCoordinator();
+	EnsurePropagationToCoordinator();
 
 	QualifyTreeNode((Node *) stmt);
 

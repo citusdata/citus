@@ -15,20 +15,20 @@
 
 #if PG_VERSION_NUM >= PG_VERSION_18
 #define create_foreignscan_path_compat(a, b, c, d, e, f, g, h, i, j, k) \
-	create_foreignscan_path( \
-		(a),            /* root            */ \
-		(b),            /* rel             */ \
-		(c),            /* target          */ \
-		(d),            /* rows            */ \
-		0,              /* disabled_nodes  */ \
-		(e),            /* startup_cost    */ \
-		(f),            /* total_cost      */ \
-		(g),            /* pathkeys        */ \
-		(h),            /* required_outer  */ \
-		(i),            /* fdw_outerpath   */ \
-		(j),            /* fdw_restrictinfo*/ \
-		(k)             /* fdw_private     */ \
-		)
+		create_foreignscan_path( \
+			(a),        /* root            */ \
+			(b),        /* rel             */ \
+			(c),        /* target          */ \
+			(d),        /* rows            */ \
+			0,          /* disabled_nodes  */ \
+			(e),        /* startup_cost    */ \
+			(f),        /* total_cost      */ \
+			(g),        /* pathkeys        */ \
+			(h),        /* required_outer  */ \
+			(i),        /* fdw_outerpath   */ \
+			(j),        /* fdw_restrictinfo*/ \
+			(k)         /* fdw_private     */ \
+			)
 
 /* PG-18 introduced get_op_index_interpretation, old name was get_op_btree_interpretation */
 #define get_op_btree_interpretation(opno) get_op_index_interpretation(opno)
@@ -38,11 +38,11 @@
 
 #elif PG_VERSION_NUM >= PG_VERSION_17
 #define create_foreignscan_path_compat(a, b, c, d, e, f, g, h, i, j, k) \
-	create_foreignscan_path( \
-		(a), (b), (c), (d), \
-		(e), (f), \
-		(g), (h), (i), (j), (k) \
-		)
+		create_foreignscan_path( \
+			(a), (b), (c), (d), \
+			(e), (f), \
+			(g), (h), (i), (j), (k) \
+			)
 
 #endif
 
@@ -364,7 +364,9 @@ getObjectClass(const ObjectAddress *object)
 		}
 
 		case TransformRelationId:
+		{
 			return OCLASS_TRANSFORM;
+		}
 	}
 
 	/* shouldn't get here */
@@ -461,190 +463,18 @@ getStxstattarget_compat(HeapTuple tup)
 
 #endif
 
-#if PG_VERSION_NUM >= PG_VERSION_16
-
-#include "utils/guc_tables.h"
-
-#define pg_clean_ascii_compat(a, b) pg_clean_ascii(a, b)
-
-#define RelationPhysicalIdentifier_compat(a) ((a)->rd_locator)
-#define RelationTablespace_compat(a) (a.spcOid)
-#define RelationPhysicalIdentifierNumber_compat(a) (a.relNumber)
-#define RelationPhysicalIdentifierNumberPtr_compat(a) (a->relNumber)
-#define RelationPhysicalIdentifierBackend_compat(a) (a->smgr_rlocator.locator)
-
-#define float_abs(a) fabs(a)
-
-#define tuplesort_getdatum_compat(a, b, c, d, e, f) tuplesort_getdatum(a, b, c, d, e, f)
-
-static inline struct config_generic **
-get_guc_variables_compat(int *gucCount)
-{
-	return get_guc_variables(gucCount);
-}
-
-
-#define PG_FUNCNAME_MACRO __func__
-
-#define stringToQualifiedNameList_compat(a) stringToQualifiedNameList(a, NULL)
-#define typeStringToTypeName_compat(a, b) typeStringToTypeName(a, b)
-
-#define get_relids_in_jointree_compat(a, b, c) get_relids_in_jointree(a, b, c)
-
-#define object_ownercheck(a, b, c) object_ownercheck(a, b, c)
-#define object_aclcheck(a, b, c, d) object_aclcheck(a, b, c, d)
-
-#define pgstat_fetch_stat_local_beentry(a) pgstat_get_local_beentry_by_index(a)
-
-#define have_createdb_privilege() have_createdb_privilege()
-
-#else
-
-#include "miscadmin.h"
-
-#include "catalog/pg_authid.h"
-#include "catalog/pg_class_d.h"
-#include "catalog/pg_database_d.h"
-#include "catalog/pg_namespace.h"
-#include "catalog/pg_proc_d.h"
-#include "storage/relfilenode.h"
-#include "utils/guc.h"
-#include "utils/guc_tables.h"
-#include "utils/syscache.h"
-
-#define pg_clean_ascii_compat(a, b) pg_clean_ascii(a)
-
-#define RelationPhysicalIdentifier_compat(a) ((a)->rd_node)
-#define RelationTablespace_compat(a) (a.spcNode)
-#define RelationPhysicalIdentifierNumber_compat(a) (a.relNode)
-#define RelationPhysicalIdentifierNumberPtr_compat(a) (a->relNode)
-#define RelationPhysicalIdentifierBackend_compat(a) (a->smgr_rnode.node)
-typedef RelFileNode RelFileLocator;
-typedef Oid RelFileNumber;
-#define RelidByRelfilenumber(a, b) RelidByRelfilenode(a, b)
-
-#define float_abs(a) Abs(a)
-
-#define tuplesort_getdatum_compat(a, b, c, d, e, f) tuplesort_getdatum(a, b, d, e, f)
-
-static inline struct config_generic **
-get_guc_variables_compat(int *gucCount)
-{
-	*gucCount = GetNumConfigOptions();
-	return get_guc_variables();
-}
-
-
-#define stringToQualifiedNameList_compat(a) stringToQualifiedNameList(a)
-#define typeStringToTypeName_compat(a, b) typeStringToTypeName(a)
-
-#define get_relids_in_jointree_compat(a, b, c) get_relids_in_jointree(a, b)
-
-static inline bool
-object_ownercheck(Oid classid, Oid objectid, Oid roleid)
-{
-	switch (classid)
-	{
-		case RelationRelationId:
-		{
-			return pg_class_ownercheck(objectid, roleid);
-		}
-
-		case NamespaceRelationId:
-		{
-			return pg_namespace_ownercheck(objectid, roleid);
-		}
-
-		case ProcedureRelationId:
-		{
-			return pg_proc_ownercheck(objectid, roleid);
-		}
-
-		case DatabaseRelationId:
-		{
-			return pg_database_ownercheck(objectid, roleid);
-		}
-
-		default:
-		{
-			ereport(ERROR,
-					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg("Missing classid:%d",
-																	classid)));
-		}
-	}
-}
-
-
-static inline AclResult
-object_aclcheck(Oid classid, Oid objectid, Oid roleid, AclMode mode)
-{
-	switch (classid)
-	{
-		case NamespaceRelationId:
-		{
-			return pg_namespace_aclcheck(objectid, roleid, mode);
-		}
-
-		case ProcedureRelationId:
-		{
-			return pg_proc_aclcheck(objectid, roleid, mode);
-		}
-
-		default:
-		{
-			ereport(ERROR,
-					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg("Missing classid:%d",
-																	classid)));
-		}
-	}
-}
-
-
-static inline bool
-have_createdb_privilege(void)
-{
-	bool result = false;
-	HeapTuple utup;
-
-	/* Superusers can always do everything */
-	if (superuser())
-	{
-		return true;
-	}
-
-	utup = SearchSysCache1(AUTHOID, ObjectIdGetDatum(GetUserId()));
-	if (HeapTupleIsValid(utup))
-	{
-		result = ((Form_pg_authid) GETSTRUCT(utup))->rolcreatedb;
-		ReleaseSysCache(utup);
-	}
-	return result;
-}
-
-
-typedef bool TU_UpdateIndexes;
-
-/*
- * we define RTEPermissionInfo for PG16 compatibility
- * There are some functions that need to include RTEPermissionInfo in their signature
- * for PG14/PG15 we pass a NULL argument in these functions
- */
-typedef RangeTblEntry RTEPermissionInfo;
-
-#endif
-
 #define SetListCellPtr(a, b) ((a)->ptr_value = (b))
 #define RangeTableEntryFromNSItem(a) ((a)->p_rte)
 #define fcGetArgValue(fc, n) ((fc)->args[n].value)
 #define fcGetArgNull(fc, n) ((fc)->args[n].isnull)
 #define fcSetArgExt(fc, n, val, is_null) \
-	(((fc)->args[n].isnull = (is_null)), ((fc)->args[n].value = (val)))
+		(((fc)->args[n].isnull = (is_null)), ((fc)->args[n].value = (val)))
 #define fcSetArg(fc, n, value) fcSetArgExt(fc, n, value, false)
 #define fcSetArgNull(fc, n) fcSetArgExt(fc, n, (Datum) 0, true)
 
 #define CREATE_SEQUENCE_COMMAND \
-	"CREATE %sSEQUENCE IF NOT EXISTS %s AS %s INCREMENT BY " INT64_FORMAT \
-	" MINVALUE " INT64_FORMAT " MAXVALUE " INT64_FORMAT \
-	" START WITH " INT64_FORMAT " CACHE " INT64_FORMAT " %sCYCLE"
+		"CREATE %sSEQUENCE IF NOT EXISTS %s AS %s INCREMENT BY " INT64_FORMAT \
+		" MINVALUE " INT64_FORMAT " MAXVALUE " INT64_FORMAT \
+		" START WITH " INT64_FORMAT " CACHE " INT64_FORMAT " %sCYCLE"
 
 #endif   /* PG_VERSION_COMPAT_H */

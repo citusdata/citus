@@ -150,7 +150,7 @@ SELECT count(*) FROM pg_tables WHERE tablename = 'objects_for_xacts2' and schema
 -- shard also does not exist since we create shards in a transaction
 SELECT count(*) FROM pg_tables WHERE tablename LIKE 'objects_for_xacts2_%' and schemaname = 'citus_mx_schema_for_xacts';
 
--- make sure that citus_drop_all_shards does not work from the worker nodes
+-- make sure that citus_drop_all_shards does not work from the worker nodes when the coordinator is not in the metadata
 SELECT citus_drop_all_shards('citus_mx_schema_for_xacts.objects_for_xacts'::regclass, 'citus_mx_schema_for_xacts', 'objects_for_xacts');
 
 -- Ensure pg_dist_transaction is empty for test
@@ -245,3 +245,11 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='distributed_mx
 \c - postgres - :master_port
 ALTER SYSTEM RESET citus.recover_2pc_interval;
 SELECT pg_reload_conf();
+
+SET client_min_messages TO WARNING;
+DROP SCHEMA citus_mx_schema_for_xacts CASCADE;
+DROP TABLE distributed_mx_table CASCADE;
+DROP USER no_access_mx;
+
+\c - postgres - :worker_1_port
+DROP TABLE should_commit CASCADE;

@@ -66,7 +66,8 @@ static bool InsertSelectHasRouterSelect(Query *originalQuery,
 										PlannerRestrictionContext *
 										plannerRestrictionContext);
 static Task * RouterModifyTaskForShardInterval(Query *originalQuery,
-											   CitusTableCacheEntry *targetTableCacheEntry,
+											   CitusTableCacheEntry *
+											   targetTableCacheEntry,
 											   ShardInterval *shardInterval,
 											   PlannerRestrictionContext *
 											   plannerRestrictionContext,
@@ -512,23 +513,12 @@ PrepareInsertSelectForCitusPlanner(Query *insertSelectQuery)
 
 	bool isWrapped = false;
 
-#if PG_VERSION_NUM >= PG_VERSION_18
-
-/*
- * PG18 is stricter about GroupRTE/GroupVar. For INSERT … SELECT with a GROUP BY,
- * flatten the SELECT’s targetList and havingQual so Vars point to base RTEs and
- * avoid Unrecognized range table id.
- */
-	if (selectRte->subquery->hasGroupRTE)
-	{
-		Query *selectQuery = selectRte->subquery;
-		selectQuery->targetList = (List *)
-								  flatten_group_exprs(NULL, selectQuery,
-													  (Node *) selectQuery->targetList);
-		selectQuery->havingQual =
-			flatten_group_exprs(NULL, selectQuery, selectQuery->havingQual);
-	}
-#endif
+	/*
+	 * PG18 is stricter about GroupRTE/GroupVar. For INSERT … SELECT with a GROUP BY,
+	 * flatten the SELECT’s targetList and havingQual so Vars point to base RTEs and
+	 * avoid Unrecognized range table id.
+	 */
+	FlattenGroupExprs(selectRte->subquery);
 
 	if (selectRte->subquery->setOperations != NULL)
 	{
@@ -634,8 +624,6 @@ CreateCombineQueryForRouterPlan(DistributedPlan *distPlan)
 	combineQuery->canSetTag = true;
 	combineQuery->rtable = list_make1(rangeTableEntry);
 
-#if PG_VERSION_NUM >= PG_VERSION_16
-
 	/*
 	 * This part of the code is more of a sanity check for readability,
 	 * it doesn't really do anything.
@@ -647,7 +635,6 @@ CreateCombineQueryForRouterPlan(DistributedPlan *distPlan)
 	Assert(rangeTableEntry->rtekind == RTE_FUNCTION &&
 		   rangeTableEntry->perminfoindex == 0);
 	combineQuery->rteperminfos = NIL;
-#endif
 
 	combineQuery->targetList = targetList;
 	combineQuery->jointree = joinTree;
@@ -1163,10 +1150,11 @@ ReorderInsertSelectTargetLists(Query *originalQuery, RangeTblEntry *insertRte,
 									exprTypmod((Node *) newSubqueryTargetEntry->expr),
 									exprCollation((Node *) newSubqueryTargetEntry->expr),
 									0);
-		TargetEntry *newInsertTargetEntry = makeTargetEntry((Expr *) newInsertVar,
-															originalAttrNo,
-															oldInsertTargetEntry->resname,
-															oldInsertTargetEntry->resjunk);
+		TargetEntry *newInsertTargetEntry = makeTargetEntry(
+			(Expr *) newInsertVar,
+			originalAttrNo,
+			oldInsertTargetEntry->resname,
+			oldInsertTargetEntry->resjunk);
 
 		newInsertTargetlist = lappend(newInsertTargetlist, newInsertTargetEntry);
 		resno++;
@@ -1610,13 +1598,10 @@ WrapSubquery(Query *subquery)
 
 	outerQuery->rtable = list_make1(rte_subq);
 
-#if PG_VERSION_NUM >= PG_VERSION_16
-
 	/* Ensure RTE_SUBQUERY has proper permission handling */
 	Assert(rte_subq->rtekind == RTE_SUBQUERY &&
 		   rte_subq->perminfoindex == 0);
 	outerQuery->rteperminfos = NIL;
-#endif
 
 	RangeTblRef *rtref = makeNode(RangeTblRef);
 	rtref->rtindex = 1;  /* Only one RTE, so index is 1 */

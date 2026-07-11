@@ -416,6 +416,7 @@ DEBUG:  pruning merge fetch taskId 16
 DETAIL:  Creating dependency on merge taskId 18
 DEBUG:  pruning merge fetch taskId 17
 DETAIL:  Creating dependency on merge taskId 18
+DEBUG:  sorted merge: per-task work_mem 682 kB × 6 tasks (aggregate floor 4092 kB), session work_mem 4096 kB
  o_orderkey | o_shippriority | count
 ---------------------------------------------------------------------
 (0 rows)
@@ -486,6 +487,7 @@ DEBUG:  pruning merge fetch taskId 16
 DETAIL:  Creating dependency on merge taskId 18
 DEBUG:  pruning merge fetch taskId 17
 DETAIL:  Creating dependency on merge taskId 18
+DEBUG:  sorted merge: per-task work_mem 682 kB × 6 tasks (aggregate floor 4092 kB), session work_mem 4096 kB
  o_orderkey | any_value
 ---------------------------------------------------------------------
 (0 rows)
