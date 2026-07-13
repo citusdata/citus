@@ -351,6 +351,104 @@ SELECT count(*) AS prep_on_only FROM (TABLE prep_on EXCEPT ALL TABLE prep_off) z
 DROP TABLE prep_off, prep_on;
 DEALLOCATE or_prep;
 -- ===================================================================
+-- Partitioned distributed tables: the optimization must work when the
+-- distributed table is natively (declaratively) partitioned. The parent and
+-- every partition are hash-distributed on the same key, so they pass the
+-- eligibility guard and prune exactly like a plain table; partition expansion
+-- then happens on the worker under the already-pruned per-shard qual.
+-- ===================================================================
+SET citus.shard_count TO 4;
+CREATE TABLE pt (k int, v int, ts date) PARTITION BY RANGE (ts);
+CREATE TABLE pt_2020 PARTITION OF pt FOR VALUES FROM ('2020-01-01') TO ('2021-01-01');
+CREATE TABLE pt_2021 PARTITION OF pt FOR VALUES FROM ('2021-01-01') TO ('2022-01-01');
+CREATE TABLE pt_2022 PARTITION OF pt FOR VALUES FROM ('2022-01-01') TO ('2023-01-01');
+CREATE TABLE pt_2023 PARTITION OF pt FOR VALUES FROM ('2023-01-01') TO ('2024-01-01');
+SELECT create_distributed_table('pt', 'k');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE INDEX pt_k_v ON pt (k, v);
+INSERT INTO pt SELECT k, v, DATE '2020-06-01' FROM generate_series(1,8) k, generate_series(1,12) v;
+INSERT INTO pt SELECT k, v, DATE '2021-06-01' FROM generate_series(1,8) k, generate_series(13,25) v;
+INSERT INTO pt SELECT k, v, DATE '2022-06-01' FROM generate_series(1,8) k, generate_series(26,37) v;
+INSERT INTO pt SELECT k, v, DATE '2023-06-01' FROM generate_series(1,8) k, generate_series(38,50) v;
+ANALYZE pt;
+-- a second colocated partitioned distributed table for the join case
+CREATE TABLE pt2 (k int, w int, ts date) PARTITION BY RANGE (ts);
+CREATE TABLE pt2_a PARTITION OF pt2 FOR VALUES FROM ('2020-01-01') TO ('2022-01-01');
+CREATE TABLE pt2_b PARTITION OF pt2 FOR VALUES FROM ('2022-01-01') TO ('2024-01-01');
+SELECT create_distributed_table('pt2', 'k', colocate_with => 'pt');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO pt2 SELECT k, w, DATE '2020-06-01' FROM generate_series(1,8) k, generate_series(1,25) w;
+INSERT INTO pt2 SELECT k, w, DATE '2022-06-01' FROM generate_series(1,8) k, generate_series(26,50) w;
+ANALYZE pt2;
+-- EXPLAIN before vs after on the parent. Seq scans are forced, so each shard's
+-- task scans all 4 partitions and a per-shard filter appears once per partition;
+-- the count column is therefore (matching shards x 4 partitions).
+SET enable_indexscan TO off;
+SET enable_bitmapscan TO off;
+SET citus.explain_all_tasks TO on;
+-- BEFORE: every shard/partition scan carries the full 2-arm OR (2 shards x 4 = 8)
+SET citus.enable_or_clause_arm_pruning TO off;
+SELECT f, count(*) FROM shard_filters($$
+  EXPLAIN (COSTS OFF)
+  SELECT * FROM pt WHERE (k=1 AND v=7) OR (k=2 AND v=7)
+$$) f GROUP BY f ORDER BY f;
+                     f                      | count
+---------------------------------------------------------------------
+ Filter: ((v = 7) AND ((k = 1) OR (k = 2))) |     8
+(1 row)
+
+-- AFTER: each shard keeps only its own arm, across all 4 of its partition scans
+SET citus.enable_or_clause_arm_pruning TO on;
+SELECT f, count(*) FROM shard_filters($$
+  EXPLAIN (COSTS OFF)
+  SELECT * FROM pt WHERE (k=1 AND v=7) OR (k=2 AND v=7)
+$$) f GROUP BY f ORDER BY f;
+               f               | count
+---------------------------------------------------------------------
+ Filter: ((k = 1) AND (v = 7)) |     4
+ Filter: ((k = 2) AND (v = 7)) |     4
+(2 rows)
+
+RESET enable_indexscan;
+RESET enable_bitmapscan;
+-- parity across partitioned shapes (off vs on must be identical)
+-- OR on the dist key, queried on the parent
+SELECT parity($$SELECT * FROM pt WHERE (k=1 AND v=7) OR (k=2 AND v=7) OR (k=3 AND v=7) OR (k=6 AND v=7)$$);
+  parity
+---------------------------------------------------------------------
+ parity ok
+(1 row)
+
+-- arms constrain the dist key AND the partition key (partition + shard pruning)
+SELECT parity($$SELECT * FROM pt WHERE (k=1 AND ts=DATE '2020-06-01') OR (k=2 AND ts=DATE '2021-06-01')$$);
+  parity
+---------------------------------------------------------------------
+ parity ok
+(1 row)
+
+-- OR queried directly on a child partition (itself a distributed table)
+SELECT parity($$SELECT * FROM pt_2020 WHERE (k=1 AND v=7) OR (k=2 AND v=7)$$);
+  parity
+---------------------------------------------------------------------
+ parity ok
+(1 row)
+
+-- colocated join between two partitioned distributed tables
+SELECT parity($$SELECT pt.v, pt2.w FROM pt JOIN pt2 USING (k) WHERE (pt.k=1 AND pt2.w=7) OR (pt.k=2 AND pt2.w=7)$$);
+  parity
+---------------------------------------------------------------------
+ parity ok
+(1 row)
+
+-- ===================================================================
 -- cleanup
 -- ===================================================================
 SET client_min_messages TO WARNING;
