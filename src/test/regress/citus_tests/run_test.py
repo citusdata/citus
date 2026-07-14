@@ -117,8 +117,14 @@ DEPS = {
     "multi_add_node_from_backup_negative": TestDeps(
         None, ["multi_add_node_from_backup"], worker_count=5, repeatable=False
     ),
+    "multi_add_node_from_backup_coordinator": TestDeps(
+        None, ["multi_add_node_from_backup_negative"], worker_count=5, repeatable=False
+    ),
     "multi_add_node_from_backup_sync_replica": TestDeps(
         None, repeatable=False, worker_count=5
+    ),
+    "multi_add_node_from_backup_sequences": TestDeps(
+        None, ["multi_add_node_from_backup_negative"], worker_count=5, repeatable=False
     ),
     "single_node": TestDeps(None, ["multi_test_helpers"]),
     "single_node_truncate": TestDeps(None),
