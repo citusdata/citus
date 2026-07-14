@@ -92,9 +92,6 @@ static void AddColumnarScanPath(PlannerInfo *root, RelOptInfo *rel,
 /* helper functions to be used when costing paths or altering them */
 static void RemovePathsByPredicate(RelOptInfo *rel, PathPredicate removePathPredicate);
 static bool IsNotIndexPath(Path *path);
-#if PG_VERSION_NUM >= PG_VERSION_19
-static bool IsIndexOnlyScanPath(Path *path);
-#endif
 static Cost ColumnarIndexScanAdditionalCost(PlannerInfo *root, RelOptInfo *rel,
 											Oid relationId, IndexPath *indexPath);
 static int RelationIdGetNumberOfAttributes(Oid relationId);
@@ -114,6 +111,9 @@ static void ColumnarSetRelPathlistHook(PlannerInfo *root, RelOptInfo *rel, Index
 #if PG_VERSION_NUM < PG_VERSION_19
 static void ColumnarGetRelationInfoHook(PlannerInfo *root, Oid relationObjectId,
 										bool inhparent, RelOptInfo *rel);
+#else
+static void ColumnarBuildSimpleRelHook(PlannerInfo *root, RelOptInfo *rel,
+									   RangeTblEntry *rte);
 #endif
 static Plan * ColumnarScanPath_PlanCustomPath(PlannerInfo *root,
 											  RelOptInfo *rel,
@@ -150,6 +150,8 @@ static Bitmapset * fixup_inherited_columns(Oid parentId, Oid childId, Bitmapset 
 static set_rel_pathlist_hook_type PreviousSetRelPathlistHook = NULL;
 #if PG_VERSION_NUM < PG_VERSION_19
 static get_relation_info_hook_type PreviousGetRelationInfoHook = NULL;
+#else
+static build_simple_rel_hook_type PreviousBuildSimpleRelHook = NULL;
 #endif
 
 static bool EnableColumnarCustomScan = true;
@@ -210,13 +212,8 @@ columnar_customscan_init(void)
 	PreviousGetRelationInfoHook = get_relation_info_hook;
 	get_relation_info_hook = ColumnarGetRelationInfoHook;
 #else
-
-	/*
-	 * PG19 removed get_relation_info_hook, which is where we used to disable
-	 * parallel query and index-only scans for columnar relations.  That
-	 * suppression is re-implemented in ColumnarSetRelPathlistHook for PG19;
-	 * see the version-guarded block there.
-	 */
+	PreviousBuildSimpleRelHook = build_simple_rel_hook;
+	build_simple_rel_hook = ColumnarBuildSimpleRelHook;
 #endif
 
 	/* register customscan specific GUC's */
@@ -312,32 +309,6 @@ ColumnarSetRelPathlistHook(PlannerInfo *root, RelOptInfo *rel, Index rti,
 
 	if (relation->rd_tableam == GetColumnarTableAmRoutine())
 	{
-#if PG_VERSION_NUM >= PG_VERSION_19
-
-		/*
-		 * PG19 removed get_relation_info_hook, where pre-PG19 builds disable
-		 * parallel query and index-only scans for columnar relations (columnar
-		 * scans are always serial and cannot return tuples from an index).
-		 * Re-apply both here.  set_rel_pathlist_hook runs after path
-		 * generation, so besides forbidding future parallel workers we also
-		 * drop any parallel (partial) paths and any IndexOnlyScan paths that
-		 * were already created, and clear the per-index canreturn flags so the
-		 * paths we add below are costed without index-only-scan capability.
-		 */
-		rel->rel_parallel_workers = 0;
-		rel->consider_parallel = false;
-		rel->partial_pathlist = NIL;
-
-		IndexOptInfo *indexOptInfo = NULL;
-		foreach_declared_ptr(indexOptInfo, rel->indexlist)
-		{
-			memset(indexOptInfo->canreturn, false,
-				   indexOptInfo->ncolumns * sizeof(bool));
-		}
-
-		RemovePathsByPredicate(rel, IsIndexOnlyScanPath);
-#endif
-
 		if (rte->tablesample != NULL)
 		{
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -347,8 +318,8 @@ ColumnarSetRelPathlistHook(PlannerInfo *root, RelOptInfo *rel, Index rti,
 		if (list_length(rel->partial_pathlist) != 0)
 		{
 			/*
-			 * Parallel scans on columnar tables are already discardad by
-			 * ColumnarGetRelationInfoHook but be on the safe side.
+			 * Parallel scans on columnar tables are already disabled by the
+			 * relation setup hook, but be on the safe side.
 			 */
 			elog(ERROR, "parallel scans on columnar are not supported");
 		}
@@ -394,7 +365,34 @@ ColumnarSetRelPathlistHook(PlannerInfo *root, RelOptInfo *rel, Index rti,
 }
 
 
-#if PG_VERSION_NUM < PG_VERSION_19
+#if PG_VERSION_NUM >= PG_VERSION_19
+static void
+ColumnarBuildSimpleRelHook(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
+{
+	if (PreviousBuildSimpleRelHook)
+	{
+		PreviousBuildSimpleRelHook(root, rel, rte);
+	}
+
+	if (!OidIsValid(rte->relid) || rte->rtekind != RTE_RELATION ||
+		!IsColumnarTableAmTable(rte->relid))
+	{
+		return;
+	}
+
+	/* disable parallel query */
+	rel->rel_parallel_workers = 0;
+
+	/* disable index-only scan */
+	IndexOptInfo *indexOptInfo = NULL;
+	foreach_declared_ptr(indexOptInfo, rel->indexlist)
+	{
+		memset(indexOptInfo->canreturn, false, indexOptInfo->ncolumns * sizeof(bool));
+	}
+}
+
+
+#else
 static void
 ColumnarGetRelationInfoHook(PlannerInfo *root, Oid relationObjectId,
 							bool inhparent, RelOptInfo *rel)
@@ -452,24 +450,6 @@ IsNotIndexPath(Path *path)
 {
 	return !IsA(path, IndexPath);
 }
-
-
-#if PG_VERSION_NUM >= PG_VERSION_19
-
-/*
- * IsIndexOnlyScanPath returns true if given path is an index-only scan path.
- * Index-only scans are represented as an IndexPath whose pathtype is
- * T_IndexOnlyScan; columnar cannot return tuples from an index, so these are
- * removed for columnar relations on PG19.
- */
-static bool
-IsIndexOnlyScanPath(Path *path)
-{
-	return IsA(path, IndexPath) && path->pathtype == T_IndexOnlyScan;
-}
-
-
-#endif
 
 
 /*
