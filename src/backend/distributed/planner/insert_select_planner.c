@@ -1263,6 +1263,13 @@ InsertPartitionColumnIsShardKeyIdentity(Query *query, RangeTblEntry *insertRte,
  * source shard key: every value it produces routes back into the same shard as
  * the source row it came from, so - given source and target are colocated - the
  * INSERT ... SELECT stays shard-local and can be pushed down.
+ *
+ * Today the only recognized identity is the batch pass-through
+ * unnest(array_agg(<distribution column>)), but this check is meant to be
+ * extended. Other expressions are identities of their sole argument and could
+ * be recognized here in the future, for example abs(var) when var has an
+ * unsigned type, coalesce(var) / greatest(var) with a single argument, or
+ * var || '' when var is non-NULL.
  */
 static bool
 DistributionColumnIsShardKeyIdentity(Expr *expr, Query *query)
@@ -1765,7 +1772,7 @@ SelectTargetEntryForInsertPartitionColumn(Query *query, RangeTblEntry *insertRte
  * row emitted when a sibling set-returning target in the same projection emits
  * more rows than this pass-through.
  */
-bool
+static bool
 IsInsertSelectBatchPassThroughDistributionColumn(Expr *expr, Query *query)
 {
 	Query *leafQuery = query;

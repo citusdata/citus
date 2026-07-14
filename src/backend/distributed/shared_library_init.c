@@ -1076,7 +1076,7 @@ RegisterCitusConfigVariables(void)
 		&AllowUnsafeInsertSelectPushdown,
 		false,
 		PGC_USERSET,
-		GUC_STANDARD,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
