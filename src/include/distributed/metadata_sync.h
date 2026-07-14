@@ -127,6 +127,7 @@ extern void SignalMetadataSyncDaemon(Oid database, int sig);
 extern bool ShouldInitiateMetadataSync(bool *lockFailure);
 extern List * SequenceDependencyCommandList(Oid relationId);
 extern List * IdentitySequenceDependencyCommandList(Oid targetRelationId);
+extern List * SequenceRangeAdjustCommandList(Oid relationId);
 
 extern List * DDLCommandsForSequence(Oid sequenceOid, char *ownerName);
 extern List * GetSequencesFromAttrDef(Oid attrdefOid);
