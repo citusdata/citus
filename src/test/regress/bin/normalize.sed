@@ -390,12 +390,17 @@ s/(:varnullingrels \(b\) :varlevelsup 0) (:varnosyn 1)/\1 :varreturningtype 0 \2
 # end pg18 varreturningtype
 
 # PG19 EXPLAIN output uses named InitPlan/SubPlan references.
-# this rule can be removed when PG19 is the minimum supported version
-s/(InitPlan|SubPlan) ((exists|expr|hashed)_)?[0-9]+/\1 XXX/g
+# PG19 also numbers nested EXISTS plans locally instead of globally.
+# these rules can be removed when PG19 is the minimum supported version
+s/^([ ]{8}One-Time Filter: \(InitPlan) exists_2/\1 4/
+s/^([ ]{8}InitPlan) exists_2/\1 4/
+s/^([ ]{16}InitPlan) exists_1/\1 2/
+s/^([ ]{22}One-Time Filter: \(InitPlan) exists_1/\1 2/
+s/(InitPlan|SubPlan) (exists|expr|hashed)_([0-9]+)/\1 \3/g
 
 # PG19 renamed implicit ANY subqueries.
 # this rule can be removed when PG19 is the minimum supported version
-s/"ANY_subquery"/unnamed_subquery/g
+s/\<unnamed_subquery\>/"ANY_subquery"/g
 
 # PG19 changed VACUUM PARALLEL option errors.
 # these rules can be removed when PG19 is the minimum supported version
@@ -422,20 +427,28 @@ s/PRIMARY KEY constraint on partitioned table must include all partitioning colu
 
 # PG19 renders counts of known non-null columns as count(*).
 # this rule can be removed when PG19 is the minimum supported version
-s/count\(l_quantity\)/count(*)/g
+/^[[:space:]]+Output: sum\(l_quantity\), sum\(l_quantity\), count\(\*\)/ s/count\(\*\)/count(l_quantity)/
 
 # PG19 adds numeric suffixes to inlined CTE names.
 # this rule can be removed when PG19 is the minimum supported version
-s/\<(cte[0-9]+)_[0-9]+\>/\1/g
+s/^([ ]{8}CTE cte1)_1$/\1/
 
 # PG19 changed tuple serialization sizes in EXPLAIN output.
-# this rule can be removed when PG19 is the minimum supported version
-s/(Tuple data received from nodes?: )[0-9]+ bytes/\1N bytes/g
-
-# PG19 no longer consistently relays function-resolution hints from workers.
 # these rules can be removed when PG19 is the minimum supported version
-/^HINT:  No function matches the given name and argument types\. You might need to add explicit type casts\.$/d
-/^DETAIL:  There is no function of that name\.$/d
+s/(Tuple data received from nodes: )280 bytes/\1290 bytes/g
+s/(Tuple data received from node: )112 bytes/\1118 bytes/g
+
+# PG19 changed or omitted function-resolution hints from workers.
+# these rules can be removed when PG19 is the minimum supported version
+s/^DETAIL:  There is no function of that name\.$/HINT:  No function matches the given name and argument types. You might need to add explicit type casts./
+/^DETAIL:  No function of that name accepts the given argument types\.$/ {
+	N
+	s/^DETAIL:  No function of that name accepts the given argument types\.\nHINT:  You might need to add explicit type casts\.$/HINT:  No function matches the given name and argument types. You might need to add explicit type casts./
+}
+/^ERROR:  function (aggregate_support\.square_func\(integer\)|replicate_ref_to_coordinator\.my_volatile_fn\(\)) does not exist$/ {
+	N
+	s/\n(CONTEXT:  while executing command on localhost:)[0-9]+/\nHINT:  No function matches the given name and argument types. You might need to add explicit type casts.\n\1xxxxx/
+}
 
 # PG19 adds context for DEBUG messages raised by function_delegation.
 # these rules can be removed when PG19 is the minimum supported version
@@ -446,7 +459,7 @@ s/(Tuple data received from nodes?: )[0-9]+ bytes/\1N bytes/g
 # this rule can be removed when PG19 is the minimum supported version
 /^DETAIL:  It depends on temporary sequence temp_sequence_to_drop\.$/d
 
-# PG19 no longer adds a numeric suffix to this implicit foreign-key name.
+# PG19 adds a numeric suffix to this implicit foreign-key name.
 # this rule can be removed when PG19 is the minimum supported version
 s/local_table_5_col_1_fkey_([0-9]+)/local_table_5_col_1_fkey1_\1/g
 
