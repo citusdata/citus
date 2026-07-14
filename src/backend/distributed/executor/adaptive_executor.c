@@ -1424,6 +1424,147 @@ BuildTupleFromResultRow(PGresult *result, uint32 rowIndex, uint32 columnCount,
 
 
 /*
+ * SingleTaskConnectionIsDead probes a reused connection with a non-blocking
+ * MSG_PEEK to detect a remotely closed/terminated cached connection before we
+ * send a query on it. STE has no connection state machine (which would mark the
+ * connection LOST and transparently retry), so it relies on this proactive
+ * probe.
+ *
+ * A raw recv(MSG_PEEK) is used rather than the WL_SOCKET_CLOSED wait-event
+ * mechanism because the latter is gated by WaitEventSetCanReportClosed(), which
+ * is false on platforms without EPOLLRDHUP/POLLRDHUP (e.g. macOS). The adaptive
+ * executor can afford to skip the proactive check there because its state
+ * machine retries; STE cannot, so the portable recv() probe is preferred.
+ */
+static bool
+SingleTaskConnectionIsDead(MultiConnection *connection)
+{
+	int sock = PQsocket(connection->pgConn);
+	if (sock < 0)
+	{
+		return true;
+	}
+
+	char peekBuf;
+	ssize_t peekRc = recv(sock, &peekBuf, 1, MSG_PEEK | MSG_DONTWAIT);
+
+	if (peekRc == 0)
+	{
+		/* EOF: the peer closed the connection */
+		return true;
+	}
+	else if (peekRc > 0)
+	{
+		/*
+		 * There are unsolicited bytes on the socket before we have sent
+		 * anything. On a healthy idle connection there should be nothing to
+		 * read, so this indicates an async error/close (e.g. the backend was
+		 * terminated). Drain via PQconsumeInput (with a no-op notice receiver
+		 * so we do not emit the async message) and recycle the connection.
+		 */
+		PQsetNoticeReceiver(connection->pgConn, OneTaskNoOpNoticeReceiver, NULL);
+		PQconsumeInput(connection->pgConn);
+		SetCitusNoticeReceiver(connection);
+		return true;
+	}
+	else if (errno != EAGAIN && errno != EWOULDBLOCK)
+	{
+		/* a real socket error */
+		return true;
+	}
+
+	/* EAGAIN/EWOULDBLOCK: nothing pending, the connection is alive */
+	return false;
+}
+
+
+/*
+ * AcquireLiveConnectionForSingleTask returns a live connection to the given
+ * node for the single-task executor. It first tries to reuse a connection
+ * already opened for this placement in the current transaction (used as-is,
+ * mid-transaction connections are never probed). Otherwise it acquires a
+ * connection from the pool, probing each one and discarding remotely-dead
+ * cached connections until it gets a live one.
+ *
+ * The retry loop is naturally bounded: every dead cached connection is closed
+ * (removed from the cache), so after at most citus.max_cached_conns_per_worker
+ * iterations the pool must open a fresh connection, which is either healthy or
+ * fails the PQstatus check.
+ */
+static MultiConnection *
+AcquireLiveConnectionForSingleTask(const char *nodeName, int nodePort,
+								   int connectionFlags, List *placementAccessList,
+								   bool tryInXactReuse)
+{
+	MultiConnection *connection = NULL;
+
+	if (tryInXactReuse)
+	{
+		connection = GetConnectionIfPlacementAccessedInXact(
+			connectionFlags, placementAccessList, NULL);
+	}
+
+	/*
+	 * When we need to establish a new connection, enforce
+	 * citus.max_shared_pool_size by waiting for a shared connection slot.
+	 * Unlike the adaptive executor, STE needs exactly one connection and has
+	 * no parallelism to trade off, so we always wait for a slot rather than
+	 * treating the connection as optional. This performs the same shared-pool
+	 * accounting the adaptive executor does via AdaptiveConnectionManagementFlag(),
+	 * so STE cannot oversubscribe workers past the configured limit.
+	 */
+	int newConnectionFlags = connectionFlags | WAIT_FOR_CONNECTION;
+
+	while (connection == NULL)
+	{
+		MultiConnection *candidate = GetNodeUserDatabaseConnection(
+			newConnectionFlags, nodeName, nodePort, NULL, NULL);
+
+		if (PQstatus(candidate->pgConn) != CONNECTION_OK)
+		{
+			ReportConnectionError(candidate, ERROR);
+		}
+
+		if (candidate->remoteTransaction.transactionState == REMOTE_TRANS_NOT_STARTED &&
+			SingleTaskConnectionIsDead(candidate))
+		{
+			/* remotely-dead cached connection: discard it and try the next */
+			CloseConnection(candidate);
+			continue;
+		}
+
+		connection = candidate;
+	}
+
+	return connection;
+}
+
+
+/*
+ * RecordSingleTaskModification performs the DML completion bookkeeping shared
+ * by the local-only and remote single-task paths: it advances es_processed for
+ * modifications and marks the transaction as having modified data (which, for
+ * example, prevents copying shards later in the same transaction).
+ */
+static void
+RecordSingleTaskModification(DistributedPlan *distributedPlan,
+							 EState *executorState, uint64 rowsProcessed)
+{
+	Job *job = distributedPlan->workerJob;
+
+	if (job->jobQuery->commandType != CMD_SELECT)
+	{
+		executorState->es_processed += rowsProcessed;
+	}
+
+	if (TaskListModifiesDatabase(distributedPlan->modLevel, job->taskList))
+	{
+		XactModificationLevel = XACT_MODIFICATION_DATA;
+	}
+}
+
+
+/*
  * SingleTaskExecutorStart sets up the single-task execution: creates the
  * tuplestore, handles transaction setup, acquires locks, splits local/remote
  * tasks, runs local tasks immediately, establishes the remote connection,
@@ -1525,29 +1666,22 @@ SingleTaskExecutorStart(CitusScanState *scanState)
 	}
 
 	/* execute local tasks if any (run to completion, no batching needed) */
+	uint64 localRowsProcessed = 0;
 	if (localTaskList != NIL)
 	{
-		uint64 localRowsProcessed =
+		localRowsProcessed =
 			ExecuteLocalTaskListExtended(localTaskList,
 										 executorState->es_param_list_info,
 										 distributedPlan, ste->defaultTupleDest,
 										 false);
-
-		CmdType commandType = job->jobQuery->commandType;
-		if (commandType != CMD_SELECT)
-		{
-			executorState->es_processed += localRowsProcessed;
-		}
 	}
 
 	/* set up remote execution if needed */
 	if (remoteTaskList == NIL)
 	{
-		/* local-only: mark modification level now that execution is done */
-		if (TaskListModifiesDatabase(distributedPlan->modLevel, taskList))
-		{
-			XactModificationLevel = XACT_MODIFICATION_DATA;
-		}
+		/* local-only: record modification now that execution is done */
+		RecordSingleTaskModification(distributedPlan, executorState,
+									 localRowsProcessed);
 
 		MemoryContextSwitchTo(oldContext);
 		return;
@@ -1581,108 +1715,18 @@ SingleTaskExecutorStart(CitusScanState *scanState)
 		poolToLocalNode = (workerNode->groupId == GetLocalGroupId());
 	}
 
-	/* try to reuse a connection from the current transaction */
+	/* acquire a live connection to the target node */
 	int connectionFlags = 0;
 	if (xactProperties.useRemoteTransactionBlocks == TRANSACTION_BLOCKS_DISALLOWED)
 	{
 		connectionFlags |= OUTSIDE_TRANSACTION;
 	}
 
-	/*
-	 * When we need to establish a new connection, enforce
-	 * citus.max_shared_pool_size by waiting for a shared connection slot.
-	 * Unlike the adaptive executor, STE needs exactly one connection and has
-	 * no parallelism to trade off, so we always wait for a slot rather than
-	 * treating the connection as optional. This performs the same shared-pool
-	 * accounting the adaptive executor does via
-	 * AdaptiveConnectionManagementFlag(), so STE cannot oversubscribe workers
-	 * past the configured limit.
-	 */
-	int newConnectionFlags = connectionFlags | WAIT_FOR_CONNECTION;
-	MultiConnection *connection = NULL;
-
-	if (xactProperties.useRemoteTransactionBlocks != TRANSACTION_BLOCKS_DISALLOWED)
-	{
-		connection = GetConnectionIfPlacementAccessedInXact(
-			connectionFlags, placementAccessList, NULL);
-	}
-
-	if (connection == NULL)
-	{
-		connection = GetNodeUserDatabaseConnection(
-			newConnectionFlags, nodeName, nodePort, NULL, NULL);
-
-		if (PQstatus(connection->pgConn) != CONNECTION_OK)
-		{
-			ReportConnectionError(connection, ERROR);
-		}
-	}
-
-	/*
-	 * Detect remotely closed/terminated cached connections before
-	 * attempting to use them. STE does not have the adaptive executor's
-	 * connection state machine (which marks a connection LOST and retries),
-	 * so we probe a reused connection here and reconnect if it is dead.
-	 *
-	 * We use a raw MSG_PEEK on the socket rather than the WL_SOCKET_CLOSED
-	 * wait-event mechanism because the latter is gated by
-	 * WaitEventSetCanReportClosed(), which is false on platforms without
-	 * EPOLLRDHUP/POLLRDHUP (e.g. macOS). The adaptive executor can afford to
-	 * skip the proactive check there because its state machine retries; STE
-	 * cannot, so the portable recv() probe is preferred.
-	 */
-	if (connection->remoteTransaction.transactionState == REMOTE_TRANS_NOT_STARTED)
-	{
-		bool connectionDead = false;
-		int sock = PQsocket(connection->pgConn);
-
-		if (sock >= 0)
-		{
-			char peekBuf;
-			ssize_t peekRc = recv(sock, &peekBuf, 1,
-								  MSG_PEEK | MSG_DONTWAIT);
-
-			if (peekRc == 0)
-			{
-				connectionDead = true;
-			}
-			else if (peekRc > 0)
-			{
-				/*
-				 * There are unsolicited bytes on the socket before we have
-				 * sent anything. On a healthy idle connection there should be
-				 * nothing to read, so this indicates an async error/close
-				 * (e.g. the backend was terminated). Drain via PQconsumeInput
-				 * (with a no-op notice receiver so we do not emit the async
-				 * message) and recycle the connection.
-				 */
-				PQsetNoticeReceiver(connection->pgConn,
-									OneTaskNoOpNoticeReceiver, NULL);
-				PQconsumeInput(connection->pgConn);
-				SetCitusNoticeReceiver(connection);
-				connectionDead = true;
-			}
-			else if (errno != EAGAIN && errno != EWOULDBLOCK)
-			{
-				connectionDead = true;
-			}
-		}
-
-		if (connectionDead)
-		{
-			CloseConnection(connection);
-
-			connection = GetNodeUserDatabaseConnection(
-				newConnectionFlags, nodeName, nodePort, NULL, NULL);
-
-			if (PQstatus(connection->pgConn) != CONNECTION_OK)
-			{
-				ReportConnectionError(connection, ERROR);
-			}
-
-			placementAccessList = PlacementAccessListForTask(task, taskPlacement);
-		}
-	}
+	bool tryInXactReuse =
+		(xactProperties.useRemoteTransactionBlocks != TRANSACTION_BLOCKS_DISALLOWED);
+	MultiConnection *connection =
+		AcquireLiveConnectionForSingleTask(nodeName, nodePort, connectionFlags,
+										   placementAccessList, tryInXactReuse);
 
 	ClaimConnectionExclusively(connection);
 	AssignPlacementListToConnection(placementAccessList, connection);
@@ -1714,11 +1758,15 @@ SingleTaskExecutorStart(CitusScanState *scanState)
 												binaryResults);
 	if (querySent == 0)
 	{
+		/*
+		 * Mark the connection lost and report the failure the same way the
+		 * adaptive executor does (SendNextQuery -> MULTI_CONNECTION_LOST ->
+		 * ReportConnectionError), so the error text matches.
+		 */
+		connection->connectionState = MULTI_CONNECTION_LOST;
 		UnclaimConnection(connection);
 		ste->connection = NULL;
-		ereport(ERROR,
-				(errmsg("failed to send query to %s:%d",
-						nodeName, nodePort)));
+		ReportConnectionError(connection, ERROR);
 	}
 
 	if (SetConnectionRowMode(connection) == 0)
@@ -1816,8 +1864,9 @@ SingleTaskExecutorRun(CitusScanState *scanState)
 				int sock = PQsocket(connection->pgConn);
 				if (sock == PGINVALID_SOCKET)
 				{
-					ereport(ERROR,
-							(errmsg("connection lost during single-task execution")));
+					/* connection is gone; report like the adaptive executor */
+					connection->connectionState = MULTI_CONNECTION_LOST;
+					ReportConnectionError(connection, ERROR);
 				}
 				ste->waitEventSet = CreateWaitEventSet(WaitEventSetTracker_compat, 3);
 				AddWaitEventToSet(ste->waitEventSet, WL_LATCH_SET,
@@ -1839,9 +1888,12 @@ SingleTaskExecutorRun(CitusScanState *scanState)
 			{
 				if (!PQconsumeInput(connection->pgConn))
 				{
-					ereport(ERROR,
-							(errmsg("failed to receive data during single-task execution")
-							));
+					/*
+					 * Same failure the adaptive executor handles by marking the
+					 * connection lost and reporting via ReportConnectionError.
+					 */
+					connection->connectionState = MULTI_CONNECTION_LOST;
+					ReportConnectionError(connection, ERROR);
 				}
 			}
 
@@ -1934,19 +1986,8 @@ SingleTaskExecutorRun(CitusScanState *scanState)
 	/* update es_processed for DML */
 	if (ste->fetchDone)
 	{
-		CmdType commandType = scanState->distributedPlan->workerJob->jobQuery->commandType
-		;
-		if (commandType != CMD_SELECT)
-		{
-			executorState->es_processed += ste->rowsProcessed;
-		}
-
-		/* mark the transaction as having modified data */
-		if (TaskListModifiesDatabase(scanState->distributedPlan->modLevel,
-									 scanState->distributedPlan->workerJob->taskList))
-		{
-			XactModificationLevel = XACT_MODIFICATION_DATA;
-		}
+		RecordSingleTaskModification(scanState->distributedPlan, executorState,
+									 ste->rowsProcessed);
 	}
 
 	MemoryContextSwitchTo(oldContext);

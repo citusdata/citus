@@ -237,6 +237,171 @@ ROLLBACK;
 SELECT key, value FROM kv WHERE key IN (1, 2) ORDER BY key;
 
 -- ============================================================
+-- PART 9: dead cached connection reconnect - stat counter parity.
+-- When a cached connection is remotely closed while idle, the next single-task
+-- query must detect the dead connection (via the MSG_PEEK probe), reconnect,
+-- and establish a fresh connection (connection_establishment_succeeded >= 1) to
+-- return the correct result -- matching the adaptive executor. The exact
+-- connection_reused count is not asserted: whether the dead cached connection
+-- is still pooled when the reusing query runs (reused = 1) or was already
+-- evicted (reused = 0) is timing-dependent and not the behavior under test.
+-- ============================================================
+SET citus.enable_stat_counters TO on;
+SET citus.max_cached_conns_per_worker TO 1;
+
+-- STE on: cache -> remote-close idle backend -> reuse must detect + reconnect.
+-- pg_terminate_backend() is given a timeout so it waits for the backend to
+-- actually exit; this guarantees the FATAL/close has been delivered to our
+-- cached socket before the reusing query probes it, making the MSG_PEEK
+-- detection deterministic (a bare pg_terminate_backend(pid) only signals and
+-- returns, racing the probe).
+SET citus.enable_single_task_execution TO on;
+SELECT value FROM kv WHERE key = 1;
+SELECT count(*) FROM run_command_on_workers($$
+  SELECT count(pg_terminate_backend(pid, 10000)) FROM pg_stat_activity
+  WHERE backend_type = 'client backend' AND pid <> pg_backend_pid()
+    AND application_name LIKE 'citus%' AND state = 'idle' $$) WHERE success;
+SELECT citus_stat_counters_reset(oid) FROM pg_database WHERE datname = current_database();
+SELECT value FROM kv WHERE key = 1;
+SELECT connection_establishment_succeeded >= 1 AS established_ok
+  FROM citus_stat_counters WHERE name = current_database();
+
+-- adaptive executor: same scenario, must show identical parity
+SET citus.enable_single_task_execution TO off;
+SELECT value FROM kv WHERE key = 1;
+SELECT count(*) FROM run_command_on_workers($$
+  SELECT count(pg_terminate_backend(pid, 10000)) FROM pg_stat_activity
+  WHERE backend_type = 'client backend' AND pid <> pg_backend_pid()
+    AND application_name LIKE 'citus%' AND state = 'idle' $$) WHERE success;
+SELECT citus_stat_counters_reset(oid) FROM pg_database WHERE datname = current_database();
+SELECT value FROM kv WHERE key = 1;
+SELECT connection_establishment_succeeded >= 1 AS established_ok
+  FROM citus_stat_counters WHERE name = current_database();
+
+RESET citus.max_cached_conns_per_worker;
+RESET citus.enable_stat_counters;
+
+-- ============================================================
+-- PART 10: stat-counter parity (success). A single-shard query must count
+-- query_execution_single_shard = 1 whether it runs through the single-task
+-- executor or the adaptive executor.
+-- ============================================================
+SET citus.enable_stat_counters TO on;
+
+SET citus.enable_single_task_execution TO on;
+SELECT citus_stat_counters_reset(oid) FROM pg_database WHERE datname = current_database();
+SELECT value FROM kv WHERE key = 1;
+SELECT query_execution_single_shard = 1 AS single_shard_ok
+  FROM citus_stat_counters WHERE name = current_database();
+
+SET citus.enable_single_task_execution TO off;
+SELECT citus_stat_counters_reset(oid) FROM pg_database WHERE datname = current_database();
+SELECT value FROM kv WHERE key = 1;
+SELECT query_execution_single_shard = 1 AS single_shard_ok
+  FROM citus_stat_counters WHERE name = current_database();
+
+-- connection counters with cache disabled: each of the two queries establishes
+-- a fresh connection (connection_establishment_succeeded >= 2), for both
+-- executors. We assert only the establishment count, not reused = 0: a
+-- just-closed uncached connection can occasionally still be observed as reused
+-- before teardown, which is timing-dependent.
+SET citus.max_cached_conns_per_worker TO 0;
+-- flush any connection cached by the previous block so both executors start
+-- from a clean (uncached) state
+SELECT value FROM kv WHERE key = 1;
+
+SET citus.enable_single_task_execution TO on;
+SELECT citus_stat_counters_reset(oid) FROM pg_database WHERE datname = current_database();
+SELECT value FROM kv WHERE key = 1;
+SELECT value FROM kv WHERE key = 1;
+SELECT connection_establishment_succeeded >= 2 AS established_ok
+  FROM citus_stat_counters WHERE name = current_database();
+
+SET citus.enable_single_task_execution TO off;
+SELECT citus_stat_counters_reset(oid) FROM pg_database WHERE datname = current_database();
+SELECT value FROM kv WHERE key = 1;
+SELECT value FROM kv WHERE key = 1;
+SELECT connection_establishment_succeeded >= 2 AS established_ok
+  FROM citus_stat_counters WHERE name = current_database();
+
+RESET citus.max_cached_conns_per_worker;
+RESET citus.enable_stat_counters;
+
+-- ============================================================
+-- PART 11: executor / connection GUC parity. STE must honor session GUCs the
+-- same way the adaptive executor does: statement_timeout cancels the query,
+-- SET LOCAL settings propagate to the worker, and text (non-binary) protocol
+-- returns correct results.
+-- ============================================================
+SET citus.enable_single_task_execution TO on;
+
+-- statement_timeout cancels the single-task query
+SET statement_timeout TO '2s';
+SELECT pg_sleep(10), key FROM kv WHERE key = 1;
+RESET statement_timeout;
+
+-- SET LOCAL timezone propagates to the worker (with propagate_set_commands
+-- enabled the worker must report the pushed-down value, which is portable
+-- across environments unlike the worker's ambient default timezone).
+BEGIN;
+  SET LOCAL citus.propagate_set_commands TO 'local';
+  SET LOCAL timezone TO 'Asia/Tokyo';
+  SELECT current_setting('timezone') FROM kv WHERE key = 1;
+COMMIT;
+
+-- text protocol returns correct results
+SET citus.enable_binary_protocol TO off;
+SELECT key, value FROM kv WHERE key = 42;
+RESET citus.enable_binary_protocol;
+
+-- same three with the adaptive executor
+SET citus.enable_single_task_execution TO off;
+
+SET statement_timeout TO '2s';
+SELECT pg_sleep(10), key FROM kv WHERE key = 1;
+RESET statement_timeout;
+
+BEGIN;
+  SET LOCAL citus.propagate_set_commands TO 'local';
+  SET LOCAL timezone TO 'Asia/Tokyo';
+  SELECT current_setting('timezone') FROM kv WHERE key = 1;
+COMMIT;
+
+SET citus.enable_binary_protocol TO off;
+SELECT key, value FROM kv WHERE key = 42;
+RESET citus.enable_binary_protocol;
+
+-- ============================================================
+-- PART 12: local / remote logging + enable_local_execution parity. STE splits
+-- the task into local/remote lists, so it honors log_local_commands,
+-- log_remote_commands and enable_local_execution. A citus-local table forces
+-- the single task local; enable_local_execution=off forces it remote.
+-- ============================================================
+SET citus.enable_single_task_execution TO on;
+
+CREATE TABLE ste_loc (a int primary key, b text);
+SELECT citus_add_local_table_to_metadata('ste_loc');
+INSERT INTO ste_loc VALUES (1, 'x');
+
+-- local placement => "executing the command locally"
+SET citus.log_local_commands TO on;
+SET client_min_messages TO LOG;
+SELECT * FROM ste_loc WHERE a = 1;
+RESET client_min_messages;
+RESET citus.log_local_commands;
+
+-- enable_local_execution=off => same single task runs remote (loopback)
+SET citus.enable_local_execution TO off;
+SET citus.log_remote_commands TO on;
+SET client_min_messages TO LOG;
+SELECT * FROM ste_loc WHERE a = 1;
+RESET client_min_messages;
+RESET citus.log_remote_commands;
+RESET citus.enable_local_execution;
+
+DROP TABLE ste_loc;
+
+-- ============================================================
 -- Cleanup
 -- ============================================================
 SET citus.enable_single_task_execution TO on;

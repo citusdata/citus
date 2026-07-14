@@ -370,6 +370,23 @@ CitusExecOneTaskScan(CustomScanState *node)
 
 	if (!scanState->executionStarted)
 	{
+		/*
+		 * Count the query up front, before execution, mirroring the adaptive
+		 * executor's placement in CitusExecScan (which increments right after
+		 * AdaptiveExecutorStart, before the query actually runs). Both
+		 * SingleTaskExecutorStart (connection establishment + sending the
+		 * query) and SingleTaskExecutorRun (row fetch) can fail, so counting
+		 * here ensures a fast-path query that errors during connection
+		 * establishment or remote execution is still counted exactly once,
+		 * just like the adaptive executor. The EXPLAIN ANALYZE fallback
+		 * (EagerAdaptiveExecutor) does not increment the counter itself, so it
+		 * is also counted exactly once here.
+		 */
+		if (!scanState->distributedPlan->disableTrackingQueryCounters)
+		{
+			IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_SINGLE_SHARD);
+		}
+
 		if (RequestedForExplainAnalyze(scanState))
 		{
 			EagerAdaptiveExecutor(scanState);
@@ -381,11 +398,6 @@ CitusExecOneTaskScan(CustomScanState *node)
 
 			/* fetch first batch */
 			scanState->finishedRemoteScan = SingleTaskExecutorRun(scanState);
-		}
-
-		if (!scanState->distributedPlan->disableTrackingQueryCounters)
-		{
-			IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_SINGLE_SHARD);
 		}
 
 		scanState->executionStarted = true;
