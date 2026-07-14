@@ -32,7 +32,6 @@
 #include "optimizer/planner.h"
 #include "replication/origin.h"
 #include "storage/condition_variable.h"
-#include "storage/lwlock.h"
 #include "storage/lwlocknames.h"
 #include "storage/proc.h"
 #include "storage/shmem.h"
