@@ -34,6 +34,9 @@
 #include "optimizer/paths.h"
 #include "optimizer/plancat.h"
 #include "optimizer/planner.h"
+#if PG_VERSION_NUM >= PG_VERSION_19
+#include "optimizer/pathnode.h"
+#endif
 #include "port/atomics.h"
 #include "postmaster/postmaster.h"
 #include "replication/walsender.h"
@@ -489,14 +492,7 @@ _PG_init(void)
 #if PG_VERSION_NUM < PG_VERSION_19
 	get_relation_info_hook = multi_get_relation_info_hook;
 #else
-
-	/*
-	 * TODO(PG19 Phase 2): get_relation_info_hook was removed upstream.
-	 * Re-implement the partitioned-table index stripping done by
-	 * multi_get_relation_info_hook through build_simple_rel_hook (see
-	 * the matching TODO in columnar_customscan.c). For Phase 1 (build
-	 * only) the hook is omitted. Tracked in #8608.
-	 */
+	build_simple_rel_hook = multi_build_simple_rel_hook;
 #endif
 	set_join_pathlist_hook = multi_join_restriction_hook;
 	ExecutorStart_hook = CitusExecutorStart;
