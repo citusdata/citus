@@ -23,6 +23,9 @@
 
 
 static bool IsClusterStmtVerbose_compat(ClusterStmt *clusterStmt);
+#if PG_VERSION_NUM >= PG_VERSION_19
+static bool RepackStmtHasOption(ClusterStmt *clusterStmt, const char *optionName);
+#endif
 
 /*
  * PreprocessClusterStmt first determines whether a given cluster statement involves
@@ -99,8 +102,7 @@ PreprocessClusterStmt(Node *node, const char *clusterCommand,
 			ereport(WARNING, (errmsg("not propagating %s command for partitioned "
 									 "table to worker nodes", commandName),
 							  errhint("Provide a child partition table names in order to "
-									  "%s distributed partitioned tables.", commandName)))
-			;
+									  "%s distributed partitioned tables.", commandName)));
 		}
 
 		return NIL;
@@ -112,6 +114,30 @@ PreprocessClusterStmt(Node *node, const char *clusterCommand,
 						errdetail("VERBOSE option is currently unsupported "
 								  "for distributed tables.")));
 	}
+
+#if PG_VERSION_NUM >= PG_VERSION_19
+
+	/*
+	 * PG19 REPACK adds CONCURRENTLY and ANALYZE options that CLUSTER never had.
+	 * Citus can not honour them on a distributed table: CONCURRENTLY relies on
+	 * PreventInTransactionBlock and can not be shipped through
+	 * worker_apply_shard_ddl_command, and ANALYZE has no defined per-shard
+	 * semantics yet.  Reject both here, before any shard placement is touched.
+	 */
+	if (RepackStmtHasOption(clusterStmt, "concurrently"))
+	{
+		ereport(ERROR, (errmsg("cannot run %s command", commandName),
+						errdetail("CONCURRENTLY option is currently unsupported "
+								  "for distributed tables.")));
+	}
+
+	if (RepackStmtHasOption(clusterStmt, "analyze"))
+	{
+		ereport(ERROR, (errmsg("cannot run %s command", commandName),
+						errdetail("ANALYZE option is currently unsupported "
+								  "for distributed tables.")));
+	}
+#endif
 
 	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 	ObjectAddressSet(ddlJob->targetObjectAddress, RelationRelationId, relationId);
@@ -139,3 +165,27 @@ IsClusterStmtVerbose_compat(ClusterStmt *clusterStmt)
 	}
 	return false;
 }
+
+
+#if PG_VERSION_NUM >= PG_VERSION_19
+
+/*
+ * RepackStmtHasOption returns true when the given REPACK/CLUSTER statement
+ * carries the named boolean option (for example "concurrently" or "analyze")
+ * set to true.  PG19-only: these options exist only on the RepackStmt grammar.
+ */
+static bool
+RepackStmtHasOption(ClusterStmt *clusterStmt, const char *optionName)
+{
+	DefElem *opt = NULL;
+	foreach_declared_ptr(opt, clusterStmt->params)
+	{
+		if (strcmp(opt->defname, optionName) == 0)
+		{
+			return defGetBoolean(opt);
+		}
+	}
+	return false;
+}
+
+#endif

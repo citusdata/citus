@@ -159,6 +159,63 @@ SELECT count(*) AS rows_total, sum(a) AS sum_a FROM repack_test;
 REPACK (VERBOSE) repack_test USING INDEX repack_test_a_idx;
 CLUSTER VERBOSE repack_test USING repack_test_a_idx;
 
+-- command-aware messages: the PG19-only REPACK options CONCURRENTLY and ANALYZE are
+-- rejected in preprocess, before any shard placement is touched.  CONCURRENTLY relies
+-- on PreventInTransactionBlock and can not ride worker_apply_shard_ddl_command;
+-- ANALYZE has no per-shard semantics yet.  Prove the rejection is early by snapshotting
+-- every shard's relfilenode, running the (failing) commands, and asserting nothing was
+-- rewritten.
+DROP TABLE IF EXISTS rf_before;
+CREATE TEMP TABLE rf_before AS
+    SELECT shardid, result AS relfilenode
+    FROM run_command_on_shards('repack_test',
+        $$ SELECT relfilenode FROM pg_class WHERE oid = '%s'::regclass $$);
+
+REPACK (CONCURRENTLY) repack_test USING INDEX repack_test_a_idx;
+REPACK (ANALYZE) repack_test;
+
+SELECT bool_and(after.result = b.relfilenode) AS no_shard_touched_by_rejected_options
+FROM run_command_on_shards('repack_test',
+        $$ SELECT relfilenode FROM pg_class WHERE oid = '%s'::regclass $$) after
+JOIN rf_before b USING (shardid);
+DROP TABLE IF EXISTS rf_before;
+
+-- boundary: VACUUM FULL must NOT reach the REPACK/CLUSTER path.  Core keeps dispatching
+-- it via T_VacuumStmt, so Citus' vacuum path runs it and it still succeeds (and preserves
+-- the data) on a distributed table.
+VACUUM FULL repack_test;
+SELECT count(*) AS rows_after_vacuum_full FROM repack_test;
+
+-- quoted / mixed-case relation AND index names: dispatch relabels the parse tree in place
+-- (AppendShardIdToName), so REPACK ... USING INDEX must localize BOTH the quoted relation
+-- name and the quoted index name on every shard placement.
+CREATE TABLE "Repack Quoted" (a int, b int);
+SELECT create_distributed_table('"Repack Quoted"', 'a');
+INSERT INTO "Repack Quoted" SELECT g, g % 10 FROM generate_series(1, 20) g;
+CREATE INDEX "Weird Idx!" ON "Repack Quoted" (a);
+
+DROP TABLE IF EXISTS rf_before;
+CREATE TEMP TABLE rf_before AS
+    SELECT shardid, result AS relfilenode
+    FROM run_command_on_shards('"Repack Quoted"',
+        $$ SELECT relfilenode FROM pg_class WHERE oid = '%s'::regclass $$);
+
+REPACK "Repack Quoted" USING INDEX "Weird Idx!";
+
+SELECT bool_and(after.result <> b.relfilenode) AS quoted_all_shards_rewritten
+FROM run_command_on_shards('"Repack Quoted"',
+        $$ SELECT relfilenode FROM pg_class WHERE oid = '%s'::regclass $$) after
+JOIN rf_before b USING (shardid);
+DROP TABLE IF EXISTS rf_before;
+
+-- transaction-block behaviour: a non-partitioned distributed REPACK is dispatched through
+-- the coordinated 2PC (like CLUSTER), so it commits cleanly inside BEGIN/COMMIT and leaves
+-- the data intact.
+BEGIN;
+REPACK repack_test USING INDEX repack_test_a_idx;
+COMMIT;
+SELECT count(*) AS rows_after_txn_repack FROM repack_test;
+
 -- command-aware messages: partitioned distributed tables are not propagated (CLUSTER
 -- and REPACK can not run inside a transaction block on partitioned tables), and the
 -- WARNING must name the actual command (REPACK here, mirroring the CLUSTER case in
