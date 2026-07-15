@@ -102,7 +102,8 @@ PreprocessClusterStmt(Node *node, const char *clusterCommand,
 			ereport(WARNING, (errmsg("not propagating %s command for partitioned "
 									 "table to worker nodes", commandName),
 							  errhint("Provide a child partition table names in order to "
-									  "%s distributed partitioned tables.", commandName)));
+									  "%s distributed partitioned tables.", commandName)))
+			;
 		}
 
 		return NIL;
@@ -187,5 +188,6 @@ RepackStmtHasOption(ClusterStmt *clusterStmt, const char *optionName)
 	}
 	return false;
 }
+
 
 #endif
