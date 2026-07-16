@@ -608,6 +608,11 @@ if ($majorversion >= "14") {
     }
 }
 
+if ($majorversion >= "19" && !$vanillatest) {
+    # Eager aggregation is not yet supported by Citus.
+    push(@pgOptions, "enable_eager_aggregate=off");
+}
+
 # Citus options set for the tests
 push(@pgOptions, "citus.shard_count=4");
 push(@pgOptions, "citus.max_adaptive_executor_pool_size=4");
