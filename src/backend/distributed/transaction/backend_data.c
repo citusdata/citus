@@ -545,7 +545,7 @@ BackendManagementShmemInit(void)
 
 	if (!alreadyInitialized)
 	{
-		char * trancheName pg_attribute_unused() = "Backend Management Tranche";
+		char *trancheName = "Backend Management Tranche";
 
 		NamedLWLockTranche *namedLockTranche =
 			&backendManagementShmemData->namedLockTranche;
@@ -554,9 +554,7 @@ BackendManagementShmemInit(void)
 		memset(backendManagementShmemData, 0,
 			   BackendManagementShmemSize());
 
-		namedLockTranche->trancheId = LWLockNewTrancheId();
-
-		LWLockRegisterTranche(namedLockTranche->trancheId, trancheName);
+		namedLockTranche->trancheId = LWLockNewTrancheIdCompat(trancheName);
 		LWLockInitialize(&backendManagementShmemData->lock,
 						 namedLockTranche->trancheId);
 
