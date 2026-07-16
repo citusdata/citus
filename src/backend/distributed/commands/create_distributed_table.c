@@ -704,7 +704,8 @@ EnsureColocateWithTableIsValid(Oid relationId, char distributionMethod,
 
 	Var *distributionColumn = BuildDistributionKeyFromColumnName(relationId,
 																 distributionColumnName,
-																 NoLock);
+																 AccessShareLock);
+	UnlockRelationOid(relationId, AccessShareLock);
 	EnsureTableCanBeColocatedWith(relationId, replicationModel,
 								  distributionColumn, colocateWithTableId);
 }
