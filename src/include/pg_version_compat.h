@@ -171,14 +171,35 @@ citus_pg19_standard_conforming_strings(void)
  */
 
 /*
- * PG19 replaced ClusterStmt with the unified RepackStmt (which also
- * subsumes VACUUM FULL).  Provide a typedef so type names compile.
- * Member access to ->relation / ->indexname and command discrimination
- * (CLUSTER vs REPACK vs VACUUM FULL, now sharing one node tag) is tracked
- * as follow-up work in #8613 (see cluster.c and relay_event_utility.c).
+ * PG19 replaced ClusterStmt with the unified RepackStmt, which backs both
+ * CLUSTER and the new REPACK command and shares a single node tag
+ * (T_RepackStmt).  We alias the old type/tag names so existing Citus code
+ * keeps compiling, and the member layout differs: RepackStmt->relation is a
+ * VacuumRelation* whose ->relation is the RangeVar (vs ClusterStmt->relation
+ * being the RangeVar directly), while ->indexname and ->params are shared.
+ * Those member-access differences are handled with PG_VERSION_19 guards at
+ * the call sites (cluster.c, relay_event_utility.c).
+ *
+ * VACUUM FULL is NOT a top-level RepackStmt: core dispatches it through
+ * T_VacuumStmt / ExecVacuum (REPACK_COMMAND_VACUUMFULL is only an internal
+ * ExecVacuum mode), so Citus' existing vacuum path keeps handling it.  The
+ * only node-tag collision Citus must resolve is CLUSTER vs REPACK, told apart
+ * by RepackStmt->command via ClusterStmtIsRepack() below.
  */
 typedef struct RepackStmt ClusterStmt;
 #define T_ClusterStmt T_RepackStmt
+
+/*
+ * ClusterStmtIsRepack returns true when a CLUSTER-tagged statement is actually
+ * the PG19 REPACK form (rather than CLUSTER); ClusterStmtCommandName yields the
+ * user-facing command keyword for messages.  The constant pre-PG19 values are
+ * provided by the ClusterStmtIsRepack and ClusterStmtCommandName definitions
+ * in the PG_VERSION_NUM < PG_VERSION_19 compatibility block.
+ */
+#define ClusterStmtIsRepack(clusterStmt) \
+		((clusterStmt)->command == REPACK_COMMAND_REPACK)
+#define ClusterStmtCommandName(clusterStmt) \
+		(ClusterStmtIsRepack(clusterStmt) ? "REPACK" : "CLUSTER")
 
 /*
  * PG19 added TupleDesc->firstNonCachedOffsetAttr (an offset cache populated
@@ -228,6 +249,14 @@ citus_BlessTupleDesc(TupleDesc td)
 #define pg_fallthrough
 #endif
 #endif
+
+/*
+ * Pre-PG19 a CLUSTER-tagged statement is always CLUSTER (there is no REPACK
+ * command and no command discriminator), so these mirror the PG19 helpers in
+ * the PG_VERSION_NUM >= PG_VERSION_19 block with constant values.
+ */
+#define ClusterStmtIsRepack(clusterStmt) (false)
+#define ClusterStmtCommandName(clusterStmt) "CLUSTER"
 
 /*
  * Pre-PG19 the query-level instrumentation lived in QueryDesc->totaltime.

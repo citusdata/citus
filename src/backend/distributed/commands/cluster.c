@@ -23,6 +23,9 @@
 
 
 static bool IsClusterStmtVerbose_compat(ClusterStmt *clusterStmt);
+#if PG_VERSION_NUM >= PG_VERSION_19
+static bool RepackStmtOptionEnabled(ClusterStmt *clusterStmt, const char *optionName);
+#endif
 
 /*
  * PreprocessClusterStmt first determines whether a given cluster statement involves
@@ -30,6 +33,13 @@ static bool IsClusterStmtVerbose_compat(ClusterStmt *clusterStmt);
  * creates a DDLJob to encapsulate information needed during the worker node
  * portion of DDL execution before returning that DDLJob in a List. If no
  * distributed table is involved, this function returns NIL.
+ *
+ * On PG19 the same node (RepackStmt, aliased as ClusterStmt) backs both CLUSTER
+ * and REPACK; the two are told apart by ->command (ClusterStmtIsRepack).  Citus
+ * propagates REPACK exactly like CLUSTER -- the original command text is shipped
+ * to every shard placement -- so the only command-specific behaviour here is the
+ * wording of the user-facing WARNING/ERROR messages.  VACUUM FULL never reaches
+ * this path (it stays on the T_VacuumStmt / vacuum code path).
  */
 List *
 PreprocessClusterStmt(Node *node, const char *clusterCommand,
@@ -37,14 +47,16 @@ PreprocessClusterStmt(Node *node, const char *clusterCommand,
 {
 	ClusterStmt *clusterStmt = castNode(ClusterStmt, node);
 	bool missingOK = false;
+	const char *commandName = ClusterStmtCommandName(clusterStmt);
 
 	if (clusterStmt->relation == NULL)
 	{
 		if (EnableUnsupportedFeatureMessages)
 		{
-			ereport(WARNING, (errmsg("not propagating CLUSTER command to worker nodes"),
-							  errhint("Provide a specific table in order to CLUSTER "
-									  "distributed tables.")));
+			ereport(WARNING, (errmsg("not propagating %s command to worker nodes",
+									 commandName),
+							  errhint("Provide a specific table in order to %s "
+									  "distributed tables.", commandName)));
 		}
 
 		return NIL;
@@ -87,10 +99,11 @@ PreprocessClusterStmt(Node *node, const char *clusterCommand,
 	{
 		if (EnableUnsupportedFeatureMessages)
 		{
-			ereport(WARNING, (errmsg("not propagating CLUSTER command for partitioned "
-									 "table to worker nodes"),
+			ereport(WARNING, (errmsg("not propagating %s command for partitioned "
+									 "table to worker nodes", commandName),
 							  errhint("Provide a child partition table names in order to "
-									  "CLUSTER distributed partitioned tables.")));
+									  "%s distributed partitioned tables.", commandName)))
+			;
 		}
 
 		return NIL;
@@ -98,10 +111,34 @@ PreprocessClusterStmt(Node *node, const char *clusterCommand,
 
 	if (IsClusterStmtVerbose_compat(clusterStmt))
 	{
-		ereport(ERROR, (errmsg("cannot run CLUSTER command"),
+		ereport(ERROR, (errmsg("cannot run %s command", commandName),
 						errdetail("VERBOSE option is currently unsupported "
 								  "for distributed tables.")));
 	}
+
+#if PG_VERSION_NUM >= PG_VERSION_19
+
+	/*
+	 * PG19 REPACK adds CONCURRENTLY and ANALYZE options that CLUSTER never had.
+	 * Citus can not honour them on a distributed table: CONCURRENTLY relies on
+	 * PreventInTransactionBlock and can not be shipped through
+	 * worker_apply_shard_ddl_command, and ANALYZE has no defined per-shard
+	 * semantics yet.  Reject both here, before any shard placement is touched.
+	 */
+	if (RepackStmtOptionEnabled(clusterStmt, "concurrently"))
+	{
+		ereport(ERROR, (errmsg("cannot run %s command", commandName),
+						errdetail("CONCURRENTLY option is currently unsupported "
+								  "for distributed tables.")));
+	}
+
+	if (RepackStmtOptionEnabled(clusterStmt, "analyze"))
+	{
+		ereport(ERROR, (errmsg("cannot run %s command", commandName),
+						errdetail("ANALYZE option is currently unsupported "
+								  "for distributed tables.")));
+	}
+#endif
 
 	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 	ObjectAddressSet(ddlJob->targetObjectAddress, RelationRelationId, relationId);
@@ -129,3 +166,31 @@ IsClusterStmtVerbose_compat(ClusterStmt *clusterStmt)
 	}
 	return false;
 }
+
+
+#if PG_VERSION_NUM >= PG_VERSION_19
+
+/*
+ * RepackStmtOptionEnabled returns true only when the given REPACK/CLUSTER
+ * statement carries the named boolean option (for example "concurrently"
+ * or "analyze") set to true.  An absent option, or one explicitly disabled
+ * (CONCURRENTLY off / ANALYZE false), returns false and the command runs as
+ * an ordinary REPACK without that option.  PG19-only: these options exist
+ * only on the RepackStmt grammar.
+ */
+static bool
+RepackStmtOptionEnabled(ClusterStmt *clusterStmt, const char *optionName)
+{
+	DefElem *opt = NULL;
+	foreach_declared_ptr(opt, clusterStmt->params)
+	{
+		if (strcmp(opt->defname, optionName) == 0)
+		{
+			return defGetBoolean(opt);
+		}
+	}
+	return false;
+}
+
+
+#endif
