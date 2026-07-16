@@ -229,6 +229,62 @@ JOIN rf_before b USING (shardid);
 (1 row)
 
 DROP TABLE IF EXISTS rf_before;
+-- explicit-off / explicit-false boolean options are DISABLED, not rejected: by
+-- PostgreSQL truth-value semantics CONCURRENTLY off and ANALYZE false leave the
+-- option unset, so Citus does NOT reject them -- the command proceeds as an
+-- ordinary REPACK and is dispatched to every shard placement (relfilenode
+-- changes), unlike the enabled CONCURRENTLY/ANALYZE forms rejected above.
+DROP TABLE IF EXISTS rf_before;
+NOTICE:  table "rf_before" does not exist, skipping
+CREATE TEMP TABLE rf_before AS
+    SELECT shardid, result AS relfilenode
+    FROM run_command_on_shards('repack_test',
+        $$ SELECT relfilenode FROM pg_class WHERE oid = '%s'::regclass $$);
+REPACK (CONCURRENTLY off) repack_test USING INDEX repack_test_a_idx;
+REPACK (ANALYZE false) repack_test;
+SELECT bool_and(after.result <> b.relfilenode) AS disabled_options_still_repack
+FROM run_command_on_shards('repack_test',
+        $$ SELECT relfilenode FROM pg_class WHERE oid = '%s'::regclass $$) after
+JOIN rf_before b USING (shardid);
+ disabled_options_still_repack
+---------------------------------------------------------------------
+ t
+(1 row)
+
+DROP TABLE IF EXISTS rf_before;
+-- data is preserved by the ordinary REPACKs above
+SELECT count(*) AS rows_after_disabled_option_repack FROM repack_test;
+ rows_after_disabled_option_repack
+---------------------------------------------------------------------
+                               100
+(1 row)
+
+-- transaction-block gate: an ENABLED CONCURRENTLY is rejected by Citus in
+-- preprocess, before core's PreventInTransactionBlock check or any shard
+-- dispatch, so the gate fires even inside an explicit transaction.  Snapshot
+-- every shard's relfilenode, run the (failing) command in a transaction, roll
+-- back, and assert no placement was touched.
+DROP TABLE IF EXISTS rf_before;
+NOTICE:  table "rf_before" does not exist, skipping
+CREATE TEMP TABLE rf_before AS
+    SELECT shardid, result AS relfilenode
+    FROM run_command_on_shards('repack_test',
+        $$ SELECT relfilenode FROM pg_class WHERE oid = '%s'::regclass $$);
+BEGIN;
+REPACK (CONCURRENTLY) repack_test USING INDEX repack_test_a_idx;
+ERROR:  cannot run REPACK command
+DETAIL:  CONCURRENTLY option is currently unsupported for distributed tables.
+ROLLBACK;
+SELECT bool_and(after.result = b.relfilenode) AS no_shard_touched_in_txn
+FROM run_command_on_shards('repack_test',
+        $$ SELECT relfilenode FROM pg_class WHERE oid = '%s'::regclass $$) after
+JOIN rf_before b USING (shardid);
+ no_shard_touched_in_txn
+---------------------------------------------------------------------
+ t
+(1 row)
+
+DROP TABLE IF EXISTS rf_before;
 -- boundary: VACUUM FULL must NOT reach the REPACK/CLUSTER path.  Core keeps dispatching
 -- it via T_VacuumStmt, so Citus' vacuum path runs it and it still succeeds (and preserves
 -- the data) on a distributed table.

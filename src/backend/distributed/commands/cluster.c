@@ -24,7 +24,7 @@
 
 static bool IsClusterStmtVerbose_compat(ClusterStmt *clusterStmt);
 #if PG_VERSION_NUM >= PG_VERSION_19
-static bool RepackStmtHasOption(ClusterStmt *clusterStmt, const char *optionName);
+static bool RepackStmtOptionEnabled(ClusterStmt *clusterStmt, const char *optionName);
 #endif
 
 /*
@@ -125,14 +125,14 @@ PreprocessClusterStmt(Node *node, const char *clusterCommand,
 	 * worker_apply_shard_ddl_command, and ANALYZE has no defined per-shard
 	 * semantics yet.  Reject both here, before any shard placement is touched.
 	 */
-	if (RepackStmtHasOption(clusterStmt, "concurrently"))
+	if (RepackStmtOptionEnabled(clusterStmt, "concurrently"))
 	{
 		ereport(ERROR, (errmsg("cannot run %s command", commandName),
 						errdetail("CONCURRENTLY option is currently unsupported "
 								  "for distributed tables.")));
 	}
 
-	if (RepackStmtHasOption(clusterStmt, "analyze"))
+	if (RepackStmtOptionEnabled(clusterStmt, "analyze"))
 	{
 		ereport(ERROR, (errmsg("cannot run %s command", commandName),
 						errdetail("ANALYZE option is currently unsupported "
@@ -171,12 +171,15 @@ IsClusterStmtVerbose_compat(ClusterStmt *clusterStmt)
 #if PG_VERSION_NUM >= PG_VERSION_19
 
 /*
- * RepackStmtHasOption returns true when the given REPACK/CLUSTER statement
- * carries the named boolean option (for example "concurrently" or "analyze")
- * set to true.  PG19-only: these options exist only on the RepackStmt grammar.
+ * RepackStmtOptionEnabled returns true only when the given REPACK/CLUSTER
+ * statement carries the named boolean option (for example "concurrently"
+ * or "analyze") set to true.  An absent option, or one explicitly disabled
+ * (CONCURRENTLY off / ANALYZE false), returns false and the command runs as
+ * an ordinary REPACK without that option.  PG19-only: these options exist
+ * only on the RepackStmt grammar.
  */
 static bool
-RepackStmtHasOption(ClusterStmt *clusterStmt, const char *optionName)
+RepackStmtOptionEnabled(ClusterStmt *clusterStmt, const char *optionName)
 {
 	DefElem *opt = NULL;
 	foreach_declared_ptr(opt, clusterStmt->params)

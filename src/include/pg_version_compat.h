@@ -194,8 +194,9 @@ typedef struct RepackStmt ClusterStmt;
 /*
  * ClusterStmtIsRepack returns true when a CLUSTER-tagged statement is actually
  * the PG19 REPACK form (rather than CLUSTER); ClusterStmtCommandName yields the
- * user-facing command keyword for messages.  The pre-PG19 fallbacks (constant
- * CLUSTER / false) live in the PG_VERSION_NUM < PG_VERSION_19 block below.
+ * user-facing command keyword for messages.  The constant pre-PG19 values are
+ * provided by the ClusterStmtIsRepack and ClusterStmtCommandName definitions
+ * in the PG_VERSION_NUM < PG_VERSION_19 compatibility block.
  */
 #define ClusterStmtIsRepack(clusterStmt) \
 		((clusterStmt)->command == REPACK_COMMAND_REPACK)
