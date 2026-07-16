@@ -454,7 +454,8 @@ SELECT child.relname AS partition_name,
 FROM pg_inherits
 JOIN pg_class parent ON pg_inherits.inhparent = parent.oid
 JOIN pg_class child ON pg_inherits.inhrelid = child.oid
-WHERE parent.relname = 'partitioned_table';
+WHERE parent.relname = 'partitioned_table'
+ORDER BY partition_name;
 
 -- (2) The partitions have the same identity column as the parent table;
 -- This is PG17 behavior for support for identity in partitioned tables.
@@ -470,7 +471,8 @@ SELECT child.relname AS partition_name,
 FROM pg_inherits
 JOIN pg_class parent ON pg_inherits.inhparent = parent.oid
 JOIN pg_class child ON pg_inherits.inhrelid = child.oid
-WHERE parent.relname = 'partitioned_table';
+WHERE parent.relname = 'partitioned_table'
+ORDER BY partition_name;
 \d pt_3;
 
 -- Partition pt_4 has its own identity column, which is not allowed in PG17
@@ -488,7 +490,8 @@ SELECT child.relname AS partition_name,
 FROM pg_inherits
 JOIN pg_class parent ON pg_inherits.inhparent = parent.oid
 JOIN pg_class child ON pg_inherits.inhrelid = child.oid
-WHERE parent.relname = 'partitioned_table';
+WHERE parent.relname = 'partitioned_table'
+ORDER BY partition_name;
 
 -- (2) The partititions have the same identity column as the parent table
 \d pt_1;
@@ -508,7 +511,8 @@ SELECT child.relname AS partition_name,
 FROM pg_inherits
 JOIN pg_class parent ON pg_inherits.inhparent = parent.oid
 JOIN pg_class child ON pg_inherits.inhrelid = child.oid
-WHERE parent.relname = 'partitioned_table';
+WHERE parent.relname = 'partitioned_table'
+ORDER BY partition_name;
 \d pt_3;
 
 -- Verify that the detach has propagated to the worker node
@@ -520,7 +524,8 @@ SELECT child.relname AS partition_name,
 FROM pg_inherits
 JOIN pg_class parent ON pg_inherits.inhparent = parent.oid
 JOIN pg_class child ON pg_inherits.inhrelid = child.oid
-WHERE parent.relname = 'partitioned_table';
+WHERE parent.relname = 'partitioned_table'
+ORDER BY partition_name;
 \d pt_3;
 
 \c - - - :master_port
@@ -631,7 +636,8 @@ SELECT child.relname AS partition_name,
 FROM pg_inherits
 JOIN pg_class parent ON pg_inherits.inhparent = parent.oid
 JOIN pg_class child ON pg_inherits.inhrelid = child.oid
-WHERE parent.relname = 'local_partitioned_table';
+WHERE parent.relname = 'local_partitioned_table'
+ORDER BY partition_name;
 \d lpt_1;
 \d lpt_2;
 \d lpt_3;
@@ -644,7 +650,8 @@ SELECT child.relname AS partition_name,
 FROM pg_inherits
 JOIN pg_class parent ON pg_inherits.inhparent = parent.oid
 JOIN pg_class child ON pg_inherits.inhrelid = child.oid
-WHERE parent.relname = 'local_partitioned_table';
+WHERE parent.relname = 'local_partitioned_table'
+ORDER BY partition_name;
 \d lpt_1;
 \d lpt_2;
 \d lpt_3;
@@ -660,7 +667,8 @@ SELECT child.relname AS partition_name,
 FROM pg_inherits
 JOIN pg_class parent ON pg_inherits.inhparent = parent.oid
 JOIN pg_class child ON pg_inherits.inhrelid = child.oid
-WHERE parent.relname = 'local_partitioned_table';
+WHERE parent.relname = 'local_partitioned_table'
+ORDER BY partition_name;
 \d lpt_3;
 
 \c - - - :worker_1_port
@@ -671,7 +679,8 @@ SELECT child.relname AS partition_name,
 FROM pg_inherits
 JOIN pg_class parent ON pg_inherits.inhparent = parent.oid
 JOIN pg_class child ON pg_inherits.inhrelid = child.oid
-WHERE parent.relname = 'local_partitioned_table';
+WHERE parent.relname = 'local_partitioned_table'
+ORDER BY partition_name;
 \d lpt_3;
 
 \c - - - :master_port
