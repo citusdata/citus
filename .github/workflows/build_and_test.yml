@@ -40,8 +40,8 @@ jobs:
       pg16_version: '{ "major": "16", "full": "16.14" }'
       pg17_version: '{ "major": "17", "full": "17.10" }'
       pg18_version: '{ "major": "18", "full": "18.4" }'
-      pg19_version: '{ "major": "19", "full": "19beta1" }'
-      upgrade_pg_versions: "16.14-17.10-18.4-19beta1"
+      pg19_version: '{ "major": "19", "full": "19beta2" }'
+      upgrade_pg_versions: "16.14-17.10-18.4-19beta2"
     steps:
       # Since GHA jobs need at least one step we use a noop step here.
       - name: Set up parameters
