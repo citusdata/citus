@@ -19,3 +19,6 @@ DROP FUNCTION IF EXISTS pg_catalog.worker_apply_sequence_command(text, regtype);
 #include "udfs/citus_cluster_changes_block/15.0-1.sql"
 #include "udfs/citus_cluster_changes_unblock/15.0-1.sql"
 #include "udfs/citus_cluster_changes_block_status/15.0-1.sql"
+
+-- fix citus_finish_citus_upgrade to always update last_upgrade_version
+#include "udfs/citus_finish_citus_upgrade/15.0-1.sql"
