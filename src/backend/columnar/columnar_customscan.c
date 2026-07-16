@@ -111,6 +111,9 @@ static void ColumnarSetRelPathlistHook(PlannerInfo *root, RelOptInfo *rel, Index
 #if PG_VERSION_NUM < PG_VERSION_19
 static void ColumnarGetRelationInfoHook(PlannerInfo *root, Oid relationObjectId,
 										bool inhparent, RelOptInfo *rel);
+#else
+static void ColumnarBuildSimpleRelHook(PlannerInfo *root, RelOptInfo *rel,
+									   RangeTblEntry *rte);
 #endif
 static Plan * ColumnarScanPath_PlanCustomPath(PlannerInfo *root,
 											  RelOptInfo *rel,
@@ -147,6 +150,8 @@ static Bitmapset * fixup_inherited_columns(Oid parentId, Oid childId, Bitmapset 
 static set_rel_pathlist_hook_type PreviousSetRelPathlistHook = NULL;
 #if PG_VERSION_NUM < PG_VERSION_19
 static get_relation_info_hook_type PreviousGetRelationInfoHook = NULL;
+#else
+static build_simple_rel_hook_type PreviousBuildSimpleRelHook = NULL;
 #endif
 
 static bool EnableColumnarCustomScan = true;
@@ -207,14 +212,8 @@ columnar_customscan_init(void)
 	PreviousGetRelationInfoHook = get_relation_info_hook;
 	get_relation_info_hook = ColumnarGetRelationInfoHook;
 #else
-
-	/*
-	 * TODO(PG19, #8614): get_relation_info_hook was removed upstream.
-	 * Re-implement parallel-query/index-only-scan suppression for
-	 * columnar relations through set_rel_pathlist_hook or another
-	 * mechanism. For Phase 1 (build only) the hook is omitted.
-	 * Tracked in #8608.
-	 */
+	PreviousBuildSimpleRelHook = build_simple_rel_hook;
+	build_simple_rel_hook = ColumnarBuildSimpleRelHook;
 #endif
 
 	/* register customscan specific GUC's */
@@ -319,8 +318,8 @@ ColumnarSetRelPathlistHook(PlannerInfo *root, RelOptInfo *rel, Index rti,
 		if (list_length(rel->partial_pathlist) != 0)
 		{
 			/*
-			 * Parallel scans on columnar tables are already discardad by
-			 * ColumnarGetRelationInfoHook but be on the safe side.
+			 * Parallel scans on columnar tables are already disabled by the
+			 * relation setup hook, but be on the safe side.
 			 */
 			elog(ERROR, "parallel scans on columnar are not supported");
 		}
@@ -366,7 +365,34 @@ ColumnarSetRelPathlistHook(PlannerInfo *root, RelOptInfo *rel, Index rti,
 }
 
 
-#if PG_VERSION_NUM < PG_VERSION_19
+#if PG_VERSION_NUM >= PG_VERSION_19
+static void
+ColumnarBuildSimpleRelHook(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
+{
+	if (PreviousBuildSimpleRelHook)
+	{
+		PreviousBuildSimpleRelHook(root, rel, rte);
+	}
+
+	if (!OidIsValid(rte->relid) || rte->rtekind != RTE_RELATION ||
+		!IsColumnarTableAmTable(rte->relid))
+	{
+		return;
+	}
+
+	/* disable parallel query */
+	rel->rel_parallel_workers = 0;
+
+	/* disable index-only scan */
+	IndexOptInfo *indexOptInfo = NULL;
+	foreach_declared_ptr(indexOptInfo, rel->indexlist)
+	{
+		memset(indexOptInfo->canreturn, false, indexOptInfo->ncolumns * sizeof(bool));
+	}
+}
+
+
+#else
 static void
 ColumnarGetRelationInfoHook(PlannerInfo *root, Oid relationObjectId,
 							bool inhparent, RelOptInfo *rel)
