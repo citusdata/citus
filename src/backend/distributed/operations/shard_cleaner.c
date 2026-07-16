@@ -1216,7 +1216,8 @@ CleanupRecordExists(uint64 recordId)
 				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(recordId));
 
 	/* make sure we can always see deletion after acquiring the operation ID lock */
-	Snapshot snapshot = GetLatestSnapshot();
+	PushActiveSnapshot(GetLatestSnapshot());
+	Snapshot snapshot = GetActiveSnapshot();
 
 	SysScanDesc scanDescriptor = systable_beginscan(pgDistCleanup,
 													DistCleanupPrimaryKeyIndexId(),
@@ -1228,6 +1229,7 @@ CleanupRecordExists(uint64 recordId)
 	bool recordExists = HeapTupleIsValid(heapTuple);
 
 	systable_endscan(scanDescriptor);
+	PopActiveSnapshot();
 
 	CommandCounterIncrement();
 	table_close(pgDistCleanup, NoLock);
