@@ -137,6 +137,15 @@ RESET enable_bitmapscan;
 -- basic: every arm pins the dist column
 SELECT parity($$SELECT * FROM dt WHERE (k=1 AND v=7) OR (k=2 AND v=7) OR (k=3 AND v=7) OR (k=6 AND v=7)$$);
 
+-- a large OR, modelling an ORM-generated batch read with many options: 100
+-- dist-key equality arms spread across the shards, so each shard's task keeps
+-- only its ~1/shard_count share and drops the rest. Exercises the per-arm memo
+-- at scale.
+SELECT parity(
+  'SELECT * FROM dt WHERE ' ||
+  string_agg(format('(k = %s AND v = 7)', g), ' OR ')
+) FROM generate_series(1, 100) g;
+
 -- two arms collide on the same shard (both must be kept on that shard)
 SELECT parity($$SELECT * FROM dt WHERE (k=1 AND v=7) OR (k=5 AND v=7)$$);
 

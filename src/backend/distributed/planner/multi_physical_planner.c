@@ -2827,6 +2827,10 @@ CoPartitionedTables(Oid firstRelationId, Oid secondRelationId)
  * function then joins table fragments from different range tables, and creates
  * all fragment combinations. For each created combination, the function builds
  * a SQL task, and appends this task to a task list.
+ *
+ * When EnableOrClauseArmPruning is enabled, each per-task query is a private
+ * copy of the job query, and its WHERE clause is mutated in place to drop the
+ * arms of top-level OR clauses that cannot match any row on that task's shard.
  */
 static List *
 SqlTaskList(Job *job)
@@ -3060,6 +3064,10 @@ PruneOrClausesForTaskFragments(Query *taskQuery, List *fragmentCombination,
  * this task's shard, the arm provably matches no row here and is dropped. An
  * arm that carries no constraint on the distribution column prunes to all
  * shards and is therefore always kept, so this rewrite never changes results.
+ *
+ * Dropping an arm removes any volatile or side-effect-producing function it
+ * contains from the query on that shard, so the number of times such a function
+ * is invoked per row can change.
  */
 static Node *
 PruneUnreachableOrArms(Node *qual, Oid relationId, Index rangeTableId, uint64 shardId,
@@ -3103,32 +3111,55 @@ PruneUnreachableOrArms(Node *qual, Oid relationId, Index rangeTableId, uint64 sh
 		else if (boolExpr->boolop == OR_EXPR)
 		{
 			List *keptArms = NIL;
+			bool anyDropped = false;
+			int keptCount = 0;
+			int armIndex = 0;
 			ListCell *armCell = NULL;
+
 			foreach(armCell, boolExpr->args)
 			{
 				Node *arm = (Node *) lfirst(armCell);
 				List *armShardList = ReachableShardListForArm(arm, relationId,
 															  rangeTableId,
 															  armShardHash);
+				bool reachable = ShardListContainsShardId(armShardList, shardId);
 
-				if (ShardListContainsShardId(armShardList, shardId))
+				if (reachable)
+				{
+					keptCount++;
+				}
+
+				if (!reachable && !anyDropped)
+				{
+					/*
+					 * First arm we drop: only now do we materialize the kept
+					 * list, backfilling the earlier arms, which were all kept.
+					 */
+					anyDropped = true;
+					keptArms = list_copy_head(boolExpr->args, armIndex);
+				}
+				else if (reachable && anyDropped)
 				{
 					keptArms = lappend(keptArms, arm);
 				}
+
+				armIndex++;
 			}
 
 			/*
 			 * Be a strict no-op unless we both kept at least one arm and
-			 * dropped at least one: keeping zero arms would only happen if our
-			 * pruning disagreed with the task's own shard selection.
+			 * dropped at least one: nothing dropped needs no rewrite, and
+			 * keeping zero arms would only happen if our pruning disagreed with
+			 * the task's own shard selection. Not building the list until the
+			 * first arm is dropped also avoids allocating in the common case
+			 * where every arm is retained.
 			 */
-			if (keptArms == NIL ||
-				list_length(keptArms) == list_length(boolExpr->args))
+			if (!anyDropped || keptCount == 0)
 			{
 				return qual;
 			}
 
-			if (list_length(keptArms) == 1)
+			if (keptCount == 1)
 			{
 				/* a single-argument OR is not a valid expression */
 				return (Node *) linitial(keptArms);
@@ -3162,8 +3193,7 @@ ReachableShardListForArm(Node *arm, Oid relationId, Index rangeTableId,
 {
 	if (*armShardHash == NULL)
 	{
-		HASHCTL info;
-		memset(&info, 0, sizeof(info));
+		HASHCTL info = { 0 };
 		info.keysize = sizeof(ArmShardHashKey);
 		info.entrysize = sizeof(ArmShardHashEntry);
 		info.hash = ArmShardHashFn;
@@ -3197,7 +3227,7 @@ ReachableShardListForArm(Node *arm, Oid relationId, Index rangeTableId,
 	List *armClauseList = make_ands_implicit((Expr *) arm);
 	List *shardIntervalList = PruneShards(relationId, rangeTableId, armClauseList, NULL);
 
-	entry = hash_search(*armShardHash, &lookupKey, HASH_ENTER, &found);
+	entry = hash_search(*armShardHash, &lookupKey, HASH_ENTER, NULL);
 	entry->shardIntervalList = shardIntervalList;
 
 	return shardIntervalList;
@@ -3207,7 +3237,15 @@ ReachableShardListForArm(Node *arm, Oid relationId, Index rangeTableId,
 /*
  * ArmShardHashFn hashes an ArmShardHashKey. The arm expression is hashed via
  * its canonical serialized form so that structurally identical arms (which
- * ArmShardMatchFn treats as equal) land in the same bucket.
+ * ArmShardMatchFn treats as equal) land in the same bucket, even though they
+ * are distinct pointers in each per-task copy of the job query.
+ *
+ * Cost model: nodeToString() runs on every hash probe (both HASH_FIND and
+ * HASH_ENTER), i.e. O(arm size) per probe, with the probe count proportional to
+ * (OR arms x tasks). This serialization is the price of matching arms by value
+ * across copied query trees, and is dominated by the work the cache saves:
+ * PruneShards() runs only once per distinct arm (on a miss), not once per probe,
+ * and each task already pays a full copyObject() of the job query.
  */
 static uint32
 ArmShardHashFn(const void *key, Size keysize)
