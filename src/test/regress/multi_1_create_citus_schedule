@@ -118,3 +118,11 @@ test: schema_based_sharding_from_workers_b
 # is not part of the N-1 test matrix. Move back to multi_schedule at Citus 14.
 # ----------
 test: citus_cluster_changes_block
+
+# ----------
+# allow_unsafe_insert_select_pushdown exercises the citus.allow_unsafe_insert_select_pushdown
+# GUC introduced in 13.4; not present in the N-1 (13.2-1) Citus binary, so the SET errors out
+# and the plans fall back under N-1. Run it only under check-multi-1-create-citus, which is not
+# part of the N-1 test matrix. Move back to multi_schedule at Citus 14.
+# ----------
+test: allow_unsafe_insert_select_pushdown

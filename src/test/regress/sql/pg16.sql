@@ -712,3 +712,106 @@ DROP ROLE create_role1, create_role2, create_role3;
 SET client_min_messages TO ERROR;
 DROP EXTENSION postgres_fdw CASCADE;
 DROP SCHEMA pg16 CASCADE;
+
+-- ---------------------------------------------------------------------
+-- allow_unsafe_insert_select_pushdown: PG16+-only EXPLAIN coverage.
+--
+-- These INSERT .. SELECT plans include an aggregate that induces an explicit
+-- Sort (an ORDER BY inside array_agg, or a DISTINCT aggregate). On PG16+ the
+-- Sort node carries a redundant trailing column in its Sort Key that PG15
+-- optimizes away, so the printed plan shape differs across major versions --
+-- the behavior is identical, only the Sort Key text differs. release-13.2 still
+-- supports PG15, so these plan-shape assertions live here (PG16+ only) to keep a
+-- single version-stable expected file for allow_unsafe_insert_select_pushdown;
+-- the runtime correctness of every shape below stays covered on all versions in
+-- that test.
+-- ---------------------------------------------------------------------
+SET client_min_messages TO WARNING;
+CREATE SCHEMA allow_unsafe_insert_select_pushdown_pg16;
+SET search_path = allow_unsafe_insert_select_pushdown_pg16;
+SET citus.next_shard_id TO 14100000;
+SET citus.shard_count = 4;
+SET citus.shard_replication_factor = 1;
+
+CREATE TABLE dist(text_id int, text_col text);
+CREATE TABLE res(text_id int, val int);
+SELECT create_distributed_table('dist', 'text_id');
+SELECT create_distributed_table('res', 'text_id');
+
+INSERT INTO dist SELECT g, 't' || g FROM generate_series(1, 500) g;
+
+-- a batched UDF: returns one value per input, mimicking a batched API call
+CREATE FUNCTION batch_transform(t text[]) RETURNS int[]
+LANGUAGE sql IMMUTABLE PARALLEL SAFE AS $$ SELECT array_agg(length(x)) FROM unnest(t) x $$;
+SELECT create_distributed_function('batch_transform(text[])');
+
+-- a batch UDF that emits one extra element per batch (appends a trailing 0)
+CREATE FUNCTION batch_transform_over(t text[]) RETURNS int[]
+LANGUAGE sql IMMUTABLE PARALLEL SAFE AS
+$$ SELECT (SELECT array_agg(length(x)) FROM unnest(t) x) || 0 $$;
+SELECT create_distributed_function('batch_transform_over(text[])');
+
+-- the batched benchmark shape (array_agg(text_id ORDER BY text_id)): pushed down
+-- to the shards with the GUC enabled
+SET citus.allow_unsafe_insert_select_pushdown TO on;
+SELECT public.explain_filter($$
+EXPLAIN (COSTS OFF) INSERT INTO res(text_id, val)
+SELECT id, val FROM (
+  SELECT
+    unnest(array_agg(text_id ORDER BY text_id)) id,
+    unnest(batch_transform(array_agg(text_col ORDER BY text_id))) val
+  FROM (
+    SELECT text_id, text_col, (row_number() OVER () - 1) / 100 batch FROM dist
+  ) q
+  GROUP BY batch
+) s
+$$, true);
+
+-- DISTINCT on the distribution-column array_agg: not pushed down (falls back to
+-- a coordinator merge), covered both with the GUC off and on
+SET citus.allow_unsafe_insert_select_pushdown TO off;
+SELECT public.explain_filter($$
+EXPLAIN (COSTS OFF) INSERT INTO res(text_id, val)
+SELECT id, val FROM (
+  SELECT unnest(array_agg(DISTINCT text_id)) id,
+         unnest(batch_transform(array_agg(text_col))) val
+  FROM (SELECT text_id, text_col, (row_number() OVER () - 1) / 100 b FROM dist) q
+  GROUP BY b
+) s
+$$, true);
+SET citus.allow_unsafe_insert_select_pushdown TO on;
+SELECT public.explain_filter($$
+EXPLAIN (COSTS OFF) INSERT INTO res(text_id, val)
+SELECT id, val FROM (
+  SELECT unnest(array_agg(DISTINCT text_id)) id,
+         unnest(batch_transform(array_agg(text_col))) val
+  FROM (SELECT text_id, text_col, (row_number() OVER () - 1) / 100 b FROM dist) q
+  GROUP BY b
+) s
+$$, true);
+
+-- over-emitting batch UDF, outer-subquery shape: the distribution column is a
+-- plain Var, so the IS NOT NULL filter is attached to the pushed-down SELECT
+SET citus.allow_unsafe_insert_select_pushdown TO on;
+SELECT public.explain_filter($$
+EXPLAIN (COSTS OFF) INSERT INTO res(text_id, val)
+SELECT id, val FROM (
+  SELECT unnest(array_agg(text_id ORDER BY text_id)) id,
+         unnest(batch_transform_over(array_agg(text_col ORDER BY text_id))) val
+  FROM (SELECT text_id, text_col, (row_number() OVER () - 1) / 100 batch FROM dist) q
+  GROUP BY batch
+) s
+$$, true);
+
+-- over-emitting batch UDF, flat shape: the distribution column is the bare
+-- unnest set-returning expression, wrapped in a pass-through subquery whose
+-- IS NOT NULL filter drops the NULL-padded rows
+SELECT public.explain_filter($$
+EXPLAIN (COSTS OFF) INSERT INTO res(text_id, val)
+SELECT unnest(array_agg(text_id ORDER BY text_id)),
+       unnest(batch_transform_over(array_agg(text_col ORDER BY text_id)))
+FROM dist GROUP BY text_id % 10
+$$, true);
+
+SET client_min_messages TO WARNING;
+DROP SCHEMA allow_unsafe_insert_select_pushdown_pg16 CASCADE;

@@ -80,23 +80,6 @@ FROM res JOIN dist USING (text_id);
 -- Postgres versions.
 -- ---------------------------------------------------------------------
 
--- the batched benchmark shape: bucket rows into fixed-size batches with
--- row_number()/batch_size, array_agg each batch (id and text in the same
--- order), call the batch UDF once per batch, then unnest back to one row per id.
--- This is the query the GUC is meant to push down to the shards.
-SELECT public.explain_filter($$
-EXPLAIN (COSTS OFF) INSERT INTO res(text_id, val)
-SELECT id, val FROM (
-  SELECT
-    unnest(array_agg(text_id ORDER BY text_id)) id,
-    unnest(batch_transform(array_agg(text_col ORDER BY text_id))) val
-  FROM (
-    SELECT text_id, text_col, (row_number() OVER () - 1) / 100 batch FROM dist
-  ) q
-  GROUP BY batch
-) s
-$$, true);
-
 -- branch: GROUP BY on a non-distribution column, distribution column projected
 -- as the unnest(array_agg(text_id)) batch pass-through
 SELECT public.explain_filter($$
@@ -326,7 +309,8 @@ SELECT unnest(array_agg(text_id)) FROM dist;
 -- partition keys. Such an array_agg is therefore rejected even with the GUC
 -- enabled and falls back to a coordinator merge, which re-routes each row and
 -- enforces the not-NULL partition-column invariant. ORDER BY inside array_agg
--- only reorders (never drops) elements and stays pushed down (covered above).
+-- only reorders (never drops) elements and stays pushed down (covered by the
+-- correctness cases below).
 -- ---------------------------------------------------------------------
 
 -- FILTER on the distribution-column array_agg: not pushed down
@@ -345,28 +329,6 @@ SELECT public.explain_filter($$
 EXPLAIN (COSTS OFF) INSERT INTO res(text_id, val)
 SELECT id, val FROM (
   SELECT unnest(array_agg(text_id) FILTER (WHERE text_id % 2 = 0)) id,
-         unnest(batch_transform(array_agg(text_col))) val
-  FROM (SELECT text_id, text_col, (row_number() OVER () - 1) / 100 b FROM dist) q
-  GROUP BY b
-) s
-$$, true);
-
--- DISTINCT on the distribution-column array_agg: not pushed down
-SET citus.allow_unsafe_insert_select_pushdown TO off;
-SELECT public.explain_filter($$
-EXPLAIN (COSTS OFF) INSERT INTO res(text_id, val)
-SELECT id, val FROM (
-  SELECT unnest(array_agg(DISTINCT text_id)) id,
-         unnest(batch_transform(array_agg(text_col))) val
-  FROM (SELECT text_id, text_col, (row_number() OVER () - 1) / 100 b FROM dist) q
-  GROUP BY b
-) s
-$$, true);
-SET citus.allow_unsafe_insert_select_pushdown TO on;
-SELECT public.explain_filter($$
-EXPLAIN (COSTS OFF) INSERT INTO res(text_id, val)
-SELECT id, val FROM (
-  SELECT unnest(array_agg(DISTINCT text_id)) id,
          unnest(batch_transform(array_agg(text_col))) val
   FROM (SELECT text_id, text_col, (row_number() OVER () - 1) / 100 b FROM dist) q
   GROUP BY b
@@ -440,16 +402,6 @@ SET citus.allow_unsafe_insert_select_pushdown TO on;
 
 -- outer-subquery shape: the distribution column is a plain Var, so the
 -- IS NOT NULL filter is attached to the pushed-down SELECT directly
-SELECT public.explain_filter($$
-EXPLAIN (COSTS OFF) INSERT INTO res(text_id, val)
-SELECT id, val FROM (
-  SELECT unnest(array_agg(text_id ORDER BY text_id)) id,
-         unnest(batch_transform_over(array_agg(text_col ORDER BY text_id))) val
-  FROM (SELECT text_id, text_col, (row_number() OVER () - 1) / 100 batch FROM dist) q
-  GROUP BY batch
-) s
-$$, true);
-
 TRUNCATE res;
 INSERT INTO res(text_id, val)
 SELECT id, val FROM (
@@ -467,13 +419,6 @@ FROM res;
 -- flat shape: the distribution column is the bare unnest set-returning
 -- expression, so the SELECT is wrapped in a pass-through subquery whose
 -- IS NOT NULL filter drops the NULL-padded rows
-SELECT public.explain_filter($$
-EXPLAIN (COSTS OFF) INSERT INTO res(text_id, val)
-SELECT unnest(array_agg(text_id ORDER BY text_id)),
-       unnest(batch_transform_over(array_agg(text_col ORDER BY text_id)))
-FROM dist GROUP BY text_id % 10
-$$, true);
-
 TRUNCATE res;
 INSERT INTO res(text_id, val)
 SELECT unnest(array_agg(text_id ORDER BY text_id)),
