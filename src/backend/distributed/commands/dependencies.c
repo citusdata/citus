@@ -77,11 +77,6 @@ citus_internal_distribute_object(PG_FUNCTION_ARGS)
 {
 	CheckCitusVersion(ERROR);
 
-	/*
-	 * Check for superuser before anything else so that a non-superuser gets the
-	 * "must be superuser" error even when the UDF is invoked on a worker node,
-	 * where EnsureCoordinator() would otherwise fail first.
-	 */
 	EnsureSuperUser();
 	EnsureCoordinator();
 
