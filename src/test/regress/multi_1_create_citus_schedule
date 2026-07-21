@@ -88,6 +88,7 @@ test: multi_multiuser
 test: stat_counters
 
 test: function_propagation
+test: citus_internal_distribute_object
 test: drop_database
 test: pg16
 test: pg18
