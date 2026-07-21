@@ -80,6 +80,7 @@ runs:
         echo "LD_LIBRARY_PATH=$("$PG_CONFIG" --libdir):${LD_LIBRARY_PATH:-}" >> "$GITHUB_ENV"
         # configure bakes bindir/libdir into Makefile.global, so `make check-*` auto-uses this PG.
         ./configure PG_CONFIG="$PG_CONFIG" --without-pg-version-check
+        make clean
         make -j"$(nproc)" all
         # Installs into the $HOME pgenv prefix for this version -> no sudo, no clobber across versions.
         make install
