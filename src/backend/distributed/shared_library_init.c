@@ -1075,7 +1075,17 @@ RegisterCitusConfigVariables(void)
 					 "could route rows that actually belong to a different shard. "
 					 "Colocation is still enforced, but the user takes responsibility "
 					 "for keeping batches order-preserving; otherwise results may be "
-					 "silently incorrect. This is an experimental feature and semantics "
+					 "silently incorrect. Because the relaxed checks also apply to "
+					 "nested subqueries, any grouping, window, or aggregate now runs "
+					 "per shard rather than across the whole table, so a global "
+					 "window/aggregate (e.g. count(*) OVER ()) silently becomes "
+					 "per-shard. Finally, the runtime NOT NULL filter guards only the "
+					 "distribution column, not the other projected values, so a batch "
+					 "UDF that returns fewer values than its input inserts NULLs into "
+					 "those value columns; the distribution column itself is never NULL "
+					 "here, since a NULL-padded key is dropped by that filter. The "
+					 "user must ensure the batch produces exactly one value per input "
+					 "row. This is an experimental feature and semantics "
 					 "may change in future releases."),
 		&AllowUnsafeInsertSelectPushdown,
 		false,
