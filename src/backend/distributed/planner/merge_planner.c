@@ -1167,7 +1167,7 @@ DeferErrorIfRoutableMergeNotSupported(Query *query, List *rangeTableList,
 		deferredError =
 			DeferErrorIfUnsupportedSubqueryPushdown(query,
 													plannerRestrictionContext,
-													true);
+													true, false);
 		if (deferredError)
 		{
 			ereport(DEBUG1, (errmsg("Sub-query is not pushable, try repartitioning")));

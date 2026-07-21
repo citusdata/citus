@@ -109,7 +109,17 @@ RebuildQueryStrings(Job *workerJob)
 			/* there are no restrictions to add for reference and citus local tables */
 			if (IsCitusTableType(shardInterval->relationId, DISTRIBUTED_TABLE))
 			{
-				AddPartitionKeyNotNullFilterToSelect(copiedSubquery);
+				bool distributionColumnIsShardKeyIdentity =
+					InsertPartitionColumnIsShardKeyIdentity(query, copiedInsertRte,
+															copiedSubqueryRte);
+				AddPartitionKeyNotNullFilterToSelect(copiedSubquery,
+													 distributionColumnIsShardKeyIdentity)
+				;
+				if (distributionColumnIsShardKeyIdentity)
+				{
+					AddShardKeyIdentityNotNullFilter(query, copiedInsertRte,
+													 copiedSubqueryRte);
+				}
 			}
 
 			ReorderInsertSelectTargetLists(query, copiedInsertRte, copiedSubqueryRte);

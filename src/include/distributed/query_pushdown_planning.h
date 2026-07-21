@@ -22,6 +22,7 @@
 /* Config variables managed via guc.c */
 extern bool SubqueryPushdown;
 extern int ValuesMaterializationThreshold;
+extern bool AllowUnsafeInsertSelectPushdown;
 
 
 extern bool CanPushdownSubquery(Query *subqueryTree, bool outerMostQueryHasLimit);
@@ -37,15 +38,19 @@ extern MultiNode * SubqueryMultiNodeTree(Query *originalQuery,
 										 Query *queryTree,
 										 PlannerRestrictionContext *
 										 plannerRestrictionContext);
-extern DeferredErrorMessage * DeferErrorIfUnsupportedSubqueryPushdown(
-	Query *originalQuery,
-	PlannerRestrictionContext
-	*
-	plannerRestrictionContext,
-	bool plannerPhase);
+extern DeferredErrorMessage * DeferErrorIfUnsupportedSubqueryPushdown(Query *
+																	  originalQuery,
+																	  PlannerRestrictionContext
+																	  *
+																	  plannerRestrictionContext,
+																	  bool plannerPhase,
+																	  bool
+																	  allowUnsafeShardLocalGroupingForSubqueries);
 extern DeferredErrorMessage * DeferErrorIfCannotPushdownSubquery(Query *subqueryTree,
 																 bool
-																 outerMostQueryHasLimit);
+																 outerMostQueryHasLimit,
+																 bool
+																 allowUnsafeShardLocalGrouping);
 extern DeferredErrorMessage * DeferErrorIfUnsupportedUnionQuery(Query *queryTree);
 extern bool IsJsonTableRTE(RangeTblEntry *rte);
 extern bool IsOuterJoinExpr(Node *node);
