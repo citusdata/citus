@@ -10,6 +10,8 @@
 
 #include "postgres.h"
 
+#include "miscadmin.h"
+
 #include "catalog/pg_class.h"
 #include "catalog/pg_type.h"
 #include "nodes/makefuncs.h"
@@ -26,6 +28,7 @@
 #include "parser/parsetree.h"
 #include "tcop/tcopprot.h"
 #include "utils/builtins.h"
+#include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
 
@@ -89,6 +92,16 @@ static DeferredErrorMessage * InsertPartitionColumnMatchesSelect(Query *query,
 																 subqueryRte,
 																 Oid *
 																 selectPartitionColumnTableId);
+static TargetEntry * SelectTargetEntryForInsertPartitionColumn(Query *query,
+															   RangeTblEntry *insertRte,
+															   RangeTblEntry *subqueryRte,
+															   TargetEntry **
+															   insertTargetEntry);
+static bool DistributionColumnIsShardKeyIdentity(Expr *expr, Query *query);
+static bool IsInsertSelectBatchPassThroughDistributionColumn(Expr *expr, Query *query);
+static Query * WrapSelectWithNotNullFilter(Query *selectQuery,
+										   TargetEntry *distTargetEntry);
+static Node * AppendNotNullTest(Node *existingQuals, Expr *arg);
 static DistributedPlan * CreateNonPushableInsertSelectPlan(uint64 planId, Query *parse,
 														   ParamListInfo boundParams);
 static DeferredErrorMessage * NonPushableInsertSelectSupported(Query *insertSelectQuery);
@@ -771,14 +784,16 @@ DistributedInsertSelectSupported(Query *queryTree, RangeTblEntry *insertRte,
 		/* first apply toplevel pushdown checks to SELECT query */
 		error =
 			DeferErrorIfUnsupportedSubqueryPushdown(subquery, plannerRestrictionContext,
-													true);
+													true, AllowUnsafeInsertSelectPushdown)
+		;
 		if (error)
 		{
 			return error;
 		}
 
 		/* then apply subquery pushdown checks to SELECT query */
-		error = DeferErrorIfCannotPushdownSubquery(subquery, false);
+		error = DeferErrorIfCannotPushdownSubquery(subquery, false,
+												   AllowUnsafeInsertSelectPushdown);
 		if (error)
 		{
 			return error;
@@ -821,11 +836,26 @@ DistributedInsertSelectSupported(Query *queryTree, RangeTblEntry *insertRte,
 								 "table", NULL, NULL);
 		}
 
+		/*
+		 * Ensure that INSERT's partition column comes from SELECT's partition
+		 * column. Normally this requires a plain-Var partition-column match.
+		 * With unsafe INSERT ... SELECT pushdown enabled we additionally accept a
+		 * distribution column that is a shard-key identity: a routing-preserving
+		 * projection of the source shard key whose values route back into this
+		 * shard.
+		 */
 		if (HasDistributionKey(targetRelationId))
 		{
-			/* ensure that INSERT's partition column comes from SELECT's partition column */
-			error = InsertPartitionColumnMatchesSelect(queryTree, insertRte, subqueryRte,
+			error = InsertPartitionColumnMatchesSelect(queryTree, insertRte,
+													   subqueryRte,
 													   &selectPartitionColumnTableId);
+			if (error && AllowUnsafeInsertSelectPushdown &&
+				InsertPartitionColumnIsShardKeyIdentity(queryTree, insertRte,
+														subqueryRte))
+			{
+				error = NULL;
+			}
+
 			if (error)
 			{
 				return error;
@@ -955,7 +985,16 @@ RouterModifyTaskForShardInterval(Query *originalQuery,
 		copiedSubquery);
 	if (subqueryRteListProperties->hasDistTableWithShardKey)
 	{
-		AddPartitionKeyNotNullFilterToSelect(copiedSubquery);
+		bool distributionColumnIsShardKeyIdentity =
+			InsertPartitionColumnIsShardKeyIdentity(copiedQuery, copiedInsertRte,
+													copiedSubqueryRte);
+		AddPartitionKeyNotNullFilterToSelect(copiedSubquery,
+											 distributionColumnIsShardKeyIdentity);
+		if (distributionColumnIsShardKeyIdentity)
+		{
+			AddShardKeyIdentityNotNullFilter(copiedQuery, copiedInsertRte,
+											 copiedSubqueryRte);
+		}
 	}
 
 	/* mark that we don't want the router planner to generate dummy hosts/queries */
@@ -1197,6 +1236,240 @@ ReorderInsertSelectTargetLists(Query *originalQuery, RangeTblEntry *insertRte,
 
 
 /*
+ * InsertPartitionColumnIsShardKeyIdentity returns true if the SELECT target
+ * entry that feeds the INSERT's distribution column is a shard-key identity,
+ * i.e. a routing-preserving projection of the source shard key. See
+ * DistributionColumnIsShardKeyIdentity for the recognized identity forms.
+ */
+bool
+InsertPartitionColumnIsShardKeyIdentity(Query *query, RangeTblEntry *insertRte,
+										RangeTblEntry *subqueryRte)
+{
+	TargetEntry *subqueryTargetEntry =
+		SelectTargetEntryForInsertPartitionColumn(query, insertRte, subqueryRte, NULL);
+	if (subqueryTargetEntry == NULL)
+	{
+		return false;
+	}
+
+	return DistributionColumnIsShardKeyIdentity(subqueryTargetEntry->expr,
+												subqueryRte->subquery);
+}
+
+
+/*
+ * DistributionColumnIsShardKeyIdentity returns true if the given SELECT target
+ * expression projects the INSERT's distribution column as an "identity" of the
+ * source shard key: every value it produces routes back into the same shard as
+ * the source row it came from, so - given source and target are colocated - the
+ * INSERT ... SELECT stays shard-local and can be pushed down.
+ *
+ * Today the only recognized identity is the batch pass-through
+ * unnest(array_agg(<distribution column>)), but this check is meant to be
+ * extended. Other expressions are identities of their sole argument and could
+ * be recognized here in the future, for example abs(var) when var has an
+ * unsigned type, coalesce(var) / greatest(var) with a single argument, or
+ * var || '' when var is non-NULL.
+ */
+static bool
+DistributionColumnIsShardKeyIdentity(Expr *expr, Query *query)
+{
+	/*
+	 * Batch pass-through: unnest(array_agg(<distribution column>)).
+	 * Any intermediate transformation (e.g. unnest(array_agg(dist_key
+	 * + 1)) or unnest(f(array_agg(dist_key)))) is rejected because it
+	 * could produce values that belong to a different shard.
+	 */
+	if (IsInsertSelectBatchPassThroughDistributionColumn(expr, query))
+	{
+		return true;
+	}
+
+	return false;
+}
+
+
+/*
+ * AddShardKeyIdentityNotNullFilter drops rows whose shard-key identity
+ * distribution value came out NULL, by adding a distribution-column IS NOT NULL
+ * qual to the pushed-down SELECT.
+ *
+ * A shard-key identity projection can still yield a NULL distribution value
+ * (for example when a sibling target in the same projection forces PostgreSQL to
+ * NULL-pad the distribution column). Because the identity path skips
+ * AddPartitionKeyNotNullFilterToSelect, without this filter such a NULL
+ * (mis-routed) distribution key would be inserted silently. Dropping the NULL
+ * row matches how Citus handles a NULL distribution value in a normal
+ * INSERT ... SELECT (AddPartitionKeyNotNullFilterToSelect).
+ *
+ * The main question here is whether the distribution column already surfaces as
+ * a plain Var:
+ *   - if it does, e.g. when it is projected up from an inner subquery
+ *     (SELECT dist_var, ... FROM ( SELECT ... AS dist_var, ... ) s), the qual is
+ *     attached to the pushed-down SELECT directly;
+ *   - if it does not, i.e. it is projected as a bare expression with no Var a
+ *     WHERE clause can reference (SELECT <expr> AS dist_col, ... GROUP BY ...),
+ *     the SELECT is wrapped in a pass-through subquery so the column becomes a
+ *     Var we can filter.
+ *
+ * Returns true if a filter was added.
+ */
+bool
+AddShardKeyIdentityNotNullFilter(Query *query, RangeTblEntry *insertRte,
+								 RangeTblEntry *subqueryRte)
+{
+	Query *selectQuery = subqueryRte->subquery;
+	TargetEntry *distTargetEntry =
+		SelectTargetEntryForInsertPartitionColumn(query, insertRte, subqueryRte, NULL);
+	if (distTargetEntry == NULL)
+	{
+		return false;
+	}
+
+	Expr *distExpr = (Expr *) strip_implicit_coercions((Node *) distTargetEntry->expr);
+	if (IsA(distExpr, Var))
+	{
+		/*
+		 * Outer-subquery shape: the distribution column already surfaces as a
+		 * plain Var (the unnest lives in an inner subquery), so we can attach
+		 * the qual to the pushed-down SELECT directly.
+		 */
+		selectQuery->jointree->quals =
+			AppendNotNullTest(selectQuery->jointree->quals, distExpr);
+		return true;
+	}
+
+	/*
+	 * Flat shape: the distribution column is projected as a bare set-returning
+	 * expression (e.g. unnest(array_agg(<dist col>)) directly in the SELECT
+	 * list), so there is no Var handle a WHERE clause can reference. Wrap the
+	 * SELECT in a pass-through subquery, which turns the set-returning column
+	 * into an ordinary output column, then filter that column for NULL:
+	 *
+	 *     SELECT dist_col, ...
+	 *       FROM ( <original SELECT> ) citus_insert_select_subquery
+	 *      WHERE dist_col IS NOT NULL
+	 */
+	subqueryRte->subquery = WrapSelectWithNotNullFilter(selectQuery,
+														distTargetEntry);
+	return true;
+}
+
+
+/*
+ * WrapSelectWithNotNullFilter wraps the given SELECT in a pass-through subquery
+ * and filters out rows whose distribution column (given by distTargetEntry) came
+ * out NULL:
+ *
+ *     SELECT <columns> FROM ( <selectQuery> ) citus_insert_select_subquery
+ *      WHERE <dist column> IS NOT NULL
+ *
+ * It is used when the distribution column is projected as a bare set-returning
+ * expression, so it has no Var handle a WHERE clause could reference in the
+ * original SELECT. Unlike WrapSubquery, this wrapper is a pure pass-through: it
+ * references every non-junk output column as an ordinary Var and never lifts
+ * expressions to the outer query, so the pushed-down computation keeps running
+ * on the shard.
+ */
+static Query *
+WrapSelectWithNotNullFilter(Query *selectQuery, TargetEntry *distTargetEntry)
+{
+	ParseState *pstate = make_parsestate(NULL);
+	Query *wrapperQuery = makeNode(Query);
+	wrapperQuery->commandType = CMD_SELECT;
+
+	Alias *alias = makeAlias("citus_insert_select_subquery", NIL);
+	RangeTblEntry *subqueryRte =
+		RangeTableEntryFromNSItem(
+			addRangeTableEntryForSubquery(pstate, selectQuery, alias,
+										  false /* not LATERAL */,
+										  true /* in FROM clause */));
+	wrapperQuery->rtable = list_make1(subqueryRte);
+	wrapperQuery->rteperminfos = NIL;
+
+	RangeTblRef *rangeTableRef = makeNode(RangeTblRef);
+	rangeTableRef->rtindex = 1;
+
+	List *wrapperTargetList = NIL;
+	Var *distColumnVar = NULL;
+	TargetEntry *innerTargetEntry = NULL;
+	foreach_declared_ptr(innerTargetEntry, selectQuery->targetList)
+	{
+		if (innerTargetEntry->resjunk)
+		{
+			continue;
+		}
+
+		Var *outerVar = makeVar(1 /* single subquery RTE */,
+								innerTargetEntry->resno,
+								exprType((Node *) innerTargetEntry->expr),
+								exprTypmod((Node *) innerTargetEntry->expr),
+								exprCollation((Node *) innerTargetEntry->expr),
+								0);
+
+		TargetEntry *outerTargetEntry =
+			makeTargetEntry((Expr *) outerVar,
+							list_length(wrapperTargetList) + 1,
+							innerTargetEntry->resname,
+							false);
+
+		wrapperTargetList = lappend(wrapperTargetList, outerTargetEntry);
+
+		if (innerTargetEntry == distTargetEntry)
+		{
+			/* the distribution target entry appears exactly once in the list */
+			Assert(distColumnVar == NULL);
+			distColumnVar = outerVar;
+		}
+	}
+
+	/*
+	 * distColumnVar is set only if the loop above matched the (non-resjunk)
+	 * distribution target entry in the wrapper target list. The caller only
+	 * reaches this path for the flat batch pass-through shape where that entry
+	 * is guaranteed to be present, so a NULL here is an internal error: fail
+	 * hard instead of building a NOT NULL test over a NULL Var in a release
+	 * build.
+	 */
+	if (distColumnVar == NULL)
+	{
+		ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
+						errmsg("distribution column target entry not found while "
+							   "wrapping the batch INSERT ... SELECT with a NOT "
+							   "NULL filter")));
+	}
+	wrapperQuery->targetList = wrapperTargetList;
+
+	Node *notNullQual = AppendNotNullTest(NULL, (Expr *) distColumnVar);
+	wrapperQuery->jointree = makeFromExpr(list_make1(rangeTableRef), notNullQual);
+
+	return wrapperQuery;
+}
+
+
+/*
+ * AppendNotNullTest returns existingQuals AND (arg IS NOT NULL). When
+ * existingQuals is NULL the bare NOT NULL test is returned.
+ */
+static Node *
+AppendNotNullTest(Node *existingQuals, Expr *arg)
+{
+	NullTest *nullTest = makeNode(NullTest);
+	nullTest->nulltesttype = IS_NOT_NULL;
+	nullTest->arg = (Expr *) copyObject(arg);
+	nullTest->argisrow = false;
+	nullTest->location = -1;
+
+	if (existingQuals == NULL)
+	{
+		return (Node *) nullTest;
+	}
+
+	return make_and_qual(existingQuals, (Node *) nullTest);
+}
+
+
+/*
  * InsertPartitionColumnMatchesSelect returns NULL the partition column in the
  * table targeted by INSERTed matches with the any of the SELECTed table's
  * partition column.  Returns the error description if there's no match.
@@ -1209,211 +1482,13 @@ InsertPartitionColumnMatchesSelect(Query *query, RangeTblEntry *insertRte,
 								   RangeTblEntry *subqueryRte,
 								   Oid *selectPartitionColumnTableId)
 {
-	ListCell *targetEntryCell = NULL;
-	uint32 rangeTableId = 1;
-	Oid insertRelationId = insertRte->relid;
-	Var *insertPartitionColumn = PartitionColumn(insertRelationId, rangeTableId);
 	Query *subquery = subqueryRte->subquery;
-	bool targetTableHasPartitionColumn = false;
 
-	foreach(targetEntryCell, query->targetList)
-	{
-		TargetEntry *targetEntry = (TargetEntry *) lfirst(targetEntryCell);
-		List *insertTargetEntryColumnList = pull_var_clause_default((Node *) targetEntry);
-		Var *subqueryPartitionColumn = NULL;
-
-		/*
-		 * We only consider target entries that include a single column. Note that this
-		 * is slightly different than directly checking the whether the targetEntry->expr
-		 * is a var since the var could be wrapped into an implicit/explicit casting.
-		 *
-		 * Also note that we skip the target entry if it does not contain a Var, which
-		 * corresponds to columns with DEFAULT values on the target list.
-		 */
-		if (list_length(insertTargetEntryColumnList) != 1)
-		{
-			continue;
-		}
-
-		Var *insertVar = (Var *) linitial(insertTargetEntryColumnList);
-		AttrNumber originalAttrNo = targetEntry->resno;
-
-		/* skip processing of target table non-partition columns */
-		if (originalAttrNo != insertPartitionColumn->varattno)
-		{
-			continue;
-		}
-
-		/* INSERT query includes the partition column */
-		targetTableHasPartitionColumn = true;
-
-		TargetEntry *subqueryTargetEntry = list_nth(subquery->targetList,
-													insertVar->varattno - 1);
-		Expr *selectTargetExpr = subqueryTargetEntry->expr;
-
-		RangeTblEntry *subqueryPartitionColumnRelationIdRTE = NULL;
-		List *parentQueryList = list_make2(query, subquery);
-		bool skipOuterVars = false;
-		FindReferencedTableColumn(selectTargetExpr,
-								  parentQueryList, subquery,
-								  &subqueryPartitionColumn,
-								  &subqueryPartitionColumnRelationIdRTE,
-								  skipOuterVars);
-		Oid subqueryPartitionColumnRelationId = subqueryPartitionColumnRelationIdRTE ?
-												subqueryPartitionColumnRelationIdRTE->
-												relid :
-												InvalidOid;
-
-		/*
-		 * Corresponding (i.e., in the same ordinal position as the target table's
-		 * partition column) select target entry does not directly belong a table.
-		 * Evaluate its expression type and error out properly.
-		 */
-		if (subqueryPartitionColumnRelationId == InvalidOid)
-		{
-			char *errorDetailTemplate = "Subquery contains %s in the "
-										"same position as the target table's "
-										"partition column.";
-
-			char *exprDescription = "";
-
-			switch (selectTargetExpr->type)
-			{
-				case T_Const:
-				{
-					exprDescription = "a constant value";
-					break;
-				}
-
-				case T_OpExpr:
-				{
-					exprDescription = "an operator";
-					break;
-				}
-
-				case T_FuncExpr:
-				{
-					FuncExpr *subqueryFunctionExpr = (FuncExpr *) selectTargetExpr;
-
-					switch (subqueryFunctionExpr->funcformat)
-					{
-						case COERCE_EXPLICIT_CALL:
-						{
-							exprDescription = "a function call";
-							break;
-						}
-
-						case COERCE_EXPLICIT_CAST:
-						{
-							exprDescription = "an explicit cast";
-							break;
-						}
-
-						case COERCE_IMPLICIT_CAST:
-						{
-							exprDescription = "an implicit cast";
-							break;
-						}
-
-						default:
-						{
-							exprDescription = "a function call";
-							break;
-						}
-					}
-					break;
-				}
-
-				case T_Aggref:
-				{
-					exprDescription = "an aggregation";
-					break;
-				}
-
-				case T_CaseExpr:
-				{
-					exprDescription = "a case expression";
-					break;
-				}
-
-				case T_CoalesceExpr:
-				{
-					exprDescription = "a coalesce expression";
-					break;
-				}
-
-				case T_RowExpr:
-				{
-					exprDescription = "a row expression";
-					break;
-				}
-
-				case T_MinMaxExpr:
-				{
-					exprDescription = "a min/max expression";
-					break;
-				}
-
-				case T_CoerceViaIO:
-				{
-					exprDescription = "an explicit coercion";
-					break;
-				}
-
-				default:
-				{
-					exprDescription =
-						"an expression that is not a simple column reference";
-					break;
-				}
-			}
-
-			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-								 "cannot perform distributed INSERT INTO ... SELECT "
-								 "because the partition columns in the source table "
-								 "and subquery do not match",
-								 psprintf(errorDetailTemplate, exprDescription),
-								 "Ensure the target table's partition column has a "
-								 "corresponding simple column reference to a distributed "
-								 "table's partition column in the subquery.");
-		}
-
-		/*
-		 * Insert target expression could only be non-var if the select target
-		 * entry does not have the same type (i.e., target column requires casting).
-		 */
-		if (!IsA(targetEntry->expr, Var))
-		{
-			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-								 "cannot perform distributed INSERT INTO ... SELECT "
-								 "because the partition columns in the source table "
-								 "and subquery do not match",
-								 "The data type of the target table's partition column "
-								 "should exactly match the data type of the "
-								 "corresponding simple column reference in the subquery.",
-								 NULL);
-		}
-
-		/* finally, check that the select target column is a partition column */
-		if (!IsPartitionColumn(selectTargetExpr, subquery, skipOuterVars))
-		{
-			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-								 "cannot perform distributed INSERT INTO ... SELECT "
-								 "because the partition columns in the source table "
-								 "and subquery do not match",
-								 "The target table's partition column should correspond "
-								 "to a partition column in the subquery.",
-								 NULL);
-		}
-
-		/* finally, check that the select target column is a partition column */
-		/* we can set the select relation id */
-		*selectPartitionColumnTableId = subqueryPartitionColumnRelationId;
-
-		break;
-	}
-
-	if (!targetTableHasPartitionColumn)
+	TargetEntry *insertTargetEntry = NULL;
+	TargetEntry *subqueryTargetEntry =
+		SelectTargetEntryForInsertPartitionColumn(query, insertRte, subqueryRte,
+												  &insertTargetEntry);
+	if (subqueryTargetEntry == NULL)
 	{
 		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 							 "cannot perform distributed INSERT INTO ... SELECT "
@@ -1424,7 +1499,408 @@ InsertPartitionColumnMatchesSelect(Query *query, RangeTblEntry *insertRte,
 							 NULL);
 	}
 
+	Expr *selectTargetExpr = subqueryTargetEntry->expr;
+
+	Var *subqueryPartitionColumn = NULL;
+	RangeTblEntry *subqueryPartitionColumnRelationIdRTE = NULL;
+	List *parentQueryList = list_make2(query, subquery);
+	bool skipOuterVars = false;
+	FindReferencedTableColumn(selectTargetExpr,
+							  parentQueryList, subquery,
+							  &subqueryPartitionColumn,
+							  &subqueryPartitionColumnRelationIdRTE,
+							  skipOuterVars);
+	Oid subqueryPartitionColumnRelationId = subqueryPartitionColumnRelationIdRTE ?
+											subqueryPartitionColumnRelationIdRTE->relid :
+											InvalidOid;
+
+	/*
+	 * Corresponding (i.e., in the same ordinal position as the target table's
+	 * partition column) select target entry does not directly belong a table.
+	 * Evaluate its expression type and error out properly.
+	 */
+	if (subqueryPartitionColumnRelationId == InvalidOid)
+	{
+		char *errorDetailTemplate = "Subquery contains %s in the "
+									"same position as the target table's "
+									"partition column.";
+
+		char *exprDescription = "";
+
+		switch (selectTargetExpr->type)
+		{
+			case T_Const:
+			{
+				exprDescription = "a constant value";
+				break;
+			}
+
+			case T_OpExpr:
+			{
+				exprDescription = "an operator";
+				break;
+			}
+
+			case T_FuncExpr:
+			{
+				FuncExpr *subqueryFunctionExpr = (FuncExpr *) selectTargetExpr;
+
+				switch (subqueryFunctionExpr->funcformat)
+				{
+					case COERCE_EXPLICIT_CALL:
+					{
+						exprDescription = "a function call";
+						break;
+					}
+
+					case COERCE_EXPLICIT_CAST:
+					{
+						exprDescription = "an explicit cast";
+						break;
+					}
+
+					case COERCE_IMPLICIT_CAST:
+					{
+						exprDescription = "an implicit cast";
+						break;
+					}
+
+					default:
+					{
+						exprDescription = "a function call";
+						break;
+					}
+				}
+				break;
+			}
+
+			case T_Aggref:
+			{
+				exprDescription = "an aggregation";
+				break;
+			}
+
+			case T_CaseExpr:
+			{
+				exprDescription = "a case expression";
+				break;
+			}
+
+			case T_CoalesceExpr:
+			{
+				exprDescription = "a coalesce expression";
+				break;
+			}
+
+			case T_RowExpr:
+			{
+				exprDescription = "a row expression";
+				break;
+			}
+
+			case T_MinMaxExpr:
+			{
+				exprDescription = "a min/max expression";
+				break;
+			}
+
+			case T_CoerceViaIO:
+			{
+				exprDescription = "an explicit coercion";
+				break;
+			}
+
+			default:
+			{
+				exprDescription =
+					"an expression that is not a simple column reference";
+				break;
+			}
+		}
+
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "cannot perform distributed INSERT INTO ... SELECT "
+							 "because the partition columns in the source table "
+							 "and subquery do not match",
+							 psprintf(errorDetailTemplate, exprDescription),
+							 "Ensure the target table's partition column has a "
+							 "corresponding simple column reference to a distributed "
+							 "table's partition column in the subquery.");
+	}
+
+	/*
+	 * Insert target expression could only be non-var if the select target
+	 * entry does not have the same type (i.e., target column requires casting).
+	 */
+	if (!IsA(insertTargetEntry->expr, Var))
+	{
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "cannot perform distributed INSERT INTO ... SELECT "
+							 "because the partition columns in the source table "
+							 "and subquery do not match",
+							 "The data type of the target table's partition column "
+							 "should exactly match the data type of the "
+							 "corresponding simple column reference in the subquery.",
+							 NULL);
+	}
+
+	/* finally, check that the select target column is a partition column */
+	if (!IsPartitionColumn(selectTargetExpr, subquery, skipOuterVars))
+	{
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "cannot perform distributed INSERT INTO ... SELECT "
+							 "because the partition columns in the source table "
+							 "and subquery do not match",
+							 "The target table's partition column should correspond "
+							 "to a partition column in the subquery.",
+							 NULL);
+	}
+
+	/* we can set the select relation id */
+	*selectPartitionColumnTableId = subqueryPartitionColumnRelationId;
+
 	return NULL;
+}
+
+
+/*
+ * SelectTargetEntryForInsertPartitionColumn walks the INSERT target list to find
+ * the entry that feeds the target table's distribution column and returns the
+ * corresponding SELECT (subquery) target entry that produces its value. Returns
+ * NULL when the INSERT does not project the distribution column via a single Var.
+ *
+ * When insertTargetEntry is not NULL, it is set to the matching INSERT target
+ * entry so that callers can inspect it if needed.
+ */
+static TargetEntry *
+SelectTargetEntryForInsertPartitionColumn(Query *query, RangeTblEntry *insertRte,
+										  RangeTblEntry *subqueryRte,
+										  TargetEntry **insertTargetEntry)
+{
+	Oid insertRelationId = insertRte->relid;
+	Var *insertPartitionColumn = PartitionColumn(insertRelationId, 1);
+	Query *subquery = subqueryRte->subquery;
+
+	if (insertTargetEntry != NULL)
+	{
+		*insertTargetEntry = NULL;
+	}
+
+	/*
+	 * Single-shard (null distribution key) target tables have no
+	 * distribution column, so there is no INSERT partition column to look
+	 * up.
+	 */
+	if (insertPartitionColumn == NULL)
+	{
+		return NULL;
+	}
+
+	ListCell *targetEntryCell = NULL;
+	foreach(targetEntryCell, query->targetList)
+	{
+		TargetEntry *targetEntry = (TargetEntry *) lfirst(targetEntryCell);
+		List *insertTargetEntryColumnList = pull_var_clause_default((Node *) targetEntry);
+
+		/*
+		 * We only consider target entries that include a single column. Note that
+		 * this is slightly different than directly checking whether the
+		 * targetEntry->expr is a Var since the Var could be wrapped into an
+		 * implicit/explicit casting.
+		 *
+		 * Also note that we skip the target entry if it does not contain a Var,
+		 * which corresponds to columns with DEFAULT values on the target list.
+		 */
+		if (list_length(insertTargetEntryColumnList) != 1)
+		{
+			continue;
+		}
+
+		Var *insertVar = (Var *) linitial(insertTargetEntryColumnList);
+
+		/* skip processing of target table non-partition columns */
+		if (targetEntry->resno != insertPartitionColumn->varattno)
+		{
+			continue;
+		}
+
+		/*
+		 * insertVar->varattno indexes into subquery->targetList via list_nth()
+		 * below, so it must be a valid 1-based ordinary column reference.
+		 * Reject whole-row / system column references (varattno <= 0) as well as
+		 * out-of-range indexes to keep the lookup in bounds.
+		 */
+		if (insertVar->varattno <= 0 ||
+			insertVar->varattno > list_length(subquery->targetList))
+		{
+			return NULL;
+		}
+
+		if (insertTargetEntry != NULL)
+		{
+			*insertTargetEntry = targetEntry;
+		}
+
+		return list_nth(subquery->targetList, insertVar->varattno - 1);
+	}
+
+	return NULL;
+}
+
+
+/*
+ * IsInsertSelectBatchPassThroughDistributionColumn returns true if the given SELECT target
+ * expression is a batch pass-through of the distribution
+ * column, i.e. it has the shape
+ *
+ *     unnest(array_agg(<partition column>))
+ *
+ * (optionally projected through one or more plain-Var subquery indirections, and
+ * with array_agg allowed to carry an ORDER BY modifier). DISTINCT and FILTER on
+ * the aggregate are rejected: they make the pass-through emit fewer values than
+ * the group has rows, so ProjectSet would NULL-pad the distribution column when a
+ * sibling set-returning target is longer (see the DISTINCT/FILTER guard below).
+ *
+ * The invariant is narrow: unnest(array_agg(<partition column>)) re-emits
+ * distribution values verbatim from source rows of the current shard, so -
+ * given source and target are colocated - each value routes back into this
+ * shard's range.
+ *
+ * This shape check alone does not prove the whole INSERT is shard-local. It
+ * assumes the row reaching the INSERT actually carries one of those original
+ * distribution values, and not a targetlist/SRF artifact such as a NULL-padded
+ * row emitted when a sibling set-returning target in the same projection emits
+ * more rows than this pass-through.
+ */
+static bool
+IsInsertSelectBatchPassThroughDistributionColumn(Expr *expr, Query *query)
+{
+	Query *leafQuery = query;
+
+	/*
+	 * Peel plain-Var subquery projection indirection down to the underlying
+	 * expression. We only follow the simple "SELECT <col> FROM (subquery)"
+	 * projection form; anything else makes us conservatively bail out.
+	 */
+	for (;;)
+	{
+		CHECK_FOR_INTERRUPTS();
+
+		expr = (Expr *) strip_implicit_coercions((Node *) expr);
+
+		if (!IsA(expr, Var))
+		{
+			break;
+		}
+
+		Var *var = (Var *) expr;
+		if (var->varlevelsup != 0 || var->varattno <= InvalidAttrNumber)
+		{
+			return false;
+		}
+
+		if (var->varno <= 0 || var->varno > list_length(leafQuery->rtable))
+		{
+			return false;
+		}
+
+		RangeTblEntry *rte = rt_fetch(var->varno, leafQuery->rtable);
+		if (rte->rtekind != RTE_SUBQUERY)
+		{
+			return false;
+		}
+
+		Query *subquery = rte->subquery;
+		if (var->varattno > list_length(subquery->targetList))
+		{
+			return false;
+		}
+
+		TargetEntry *targetEntry = list_nth(subquery->targetList, var->varattno - 1);
+		expr = targetEntry->expr;
+		leafQuery = subquery;
+	}
+
+	/* the leaf expression must be unnest(...) over a single array argument */
+	if (!IsA(expr, FuncExpr))
+	{
+		return false;
+	}
+
+	FuncExpr *unnestExpr = (FuncExpr *) expr;
+	if (unnestExpr->funcid != F_UNNEST_ANYARRAY ||
+		list_length(unnestExpr->args) != 1)
+	{
+		return false;
+	}
+
+	/* the unnest argument must be array_agg(...) with no wrapping transform */
+	Expr *unnestArg = (Expr *) strip_implicit_coercions(
+		(Node *) linitial(unnestExpr->args));
+	if (!IsA(unnestArg, Aggref))
+	{
+		return false;
+	}
+
+	Aggref *arrayAgg = (Aggref *) unnestArg;
+	if (arrayAgg->aggfnoid != F_ARRAY_AGG_ANYNONARRAY &&
+		arrayAgg->aggfnoid != F_ARRAY_AGG_ANYARRAY)
+	{
+		return false;
+	}
+
+	/*
+	 * DISTINCT or FILTER make array_agg emit fewer values than the group has
+	 * rows, so this pass-through set-returning expression becomes shorter than a
+	 * sibling set-returning target in the same projection. ProjectSet then
+	 * NULL-pads the distribution column, which would insert a NULL (mis-routed)
+	 * distribution key. A plain array_agg re-emits exactly one value per source
+	 * row, so reject DISTINCT/FILTER here (ORDER BY is fine: it only reorders the
+	 * shard-local values, it does not change their count).
+	 */
+	if (arrayAgg->aggdistinct != NIL || arrayAgg->aggfilter != NULL)
+	{
+		return false;
+	}
+
+	/*
+	 * Locate the single aggregated value argument. ORDER BY keys that differ
+	 * from the aggregated value appear as additional resjunk target entries;
+	 * they only reorder the (shard-local) values and do not affect routing.
+	 */
+	TargetEntry *aggValueTargetEntry = NULL;
+	TargetEntry *aggArgTargetEntry = NULL;
+	foreach_declared_ptr(aggArgTargetEntry, arrayAgg->args)
+	{
+		if (aggArgTargetEntry->resjunk)
+		{
+			continue;
+		}
+
+		if (aggValueTargetEntry != NULL)
+		{
+			/*
+			 * array_agg (the OIDs we matched above) is a single-argument
+			 * aggregate, so a second non-resjunk entry cannot occur for a
+			 * well-formed tree. Assert to catch a broken invariant in debug
+			 * builds, but still bail out gracefully in production: a false
+			 * result only forgoes the optimization, it is never unsafe.
+			 */
+			Assert(false);
+			return false;
+		}
+
+		aggValueTargetEntry = aggArgTargetEntry;
+	}
+
+	if (aggValueTargetEntry == NULL)
+	{
+		return false;
+	}
+
+	/* the aggregated value must be the untransformed source partition column */
+	bool skipOuterVars = false;
+	return IsPartitionColumn(aggValueTargetEntry->expr, leafQuery, skipOuterVars);
 }
 
 
