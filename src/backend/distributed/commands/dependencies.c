@@ -13,6 +13,7 @@
 #include "fmgr.h"
 #include "miscadmin.h"
 
+#include "access/xact.h"
 #include "catalog/dependency.h"
 #include "catalog/objectaddress.h"
 #include "commands/extension.h"
@@ -75,21 +76,49 @@ Datum
 citus_internal_distribute_object(PG_FUNCTION_ARGS)
 {
 	CheckCitusVersion(ERROR);
-	EnsureCoordinator();
+
+	/*
+	 * Check for superuser before anything else so that a non-superuser gets the
+	 * "must be superuser" error even when the UDF is invoked on a worker node,
+	 * where EnsureCoordinator() would otherwise fail first.
+	 */
 	EnsureSuperUser();
+	EnsureCoordinator();
+
+	/*
+	 * We create the object on the workers via a separate connection that commits
+	 * immediately, but the pg_dist_object records are written within the caller's
+	 * transaction. Disallow running inside an explicit transaction block so that
+	 * an operator-issued ROLLBACK cannot leave the cluster in a state where the
+	 * workers have the object but no node records it as distributed.
+	 */
+	PreventInTransactionBlock(true, "citus_internal.distribute_object");
+
+	/*
+	 * The pg_dist_object records are only propagated to the other nodes when
+	 * metadata syncing is enabled. Without it we would create the object on the
+	 * workers but record it only on the coordinator, so we refuse to run rather
+	 * than leave the cluster in that half-repaired state.
+	 */
+	if (!EnableMetadataSync)
+	{
+		ereport(ERROR, (errmsg("citus_internal.distribute_object requires "
+							   "citus.enable_metadata_sync to be enabled")));
+	}
 
 	Oid classId = PG_GETARG_OID(0);
 	Oid objectId = PG_GETARG_OID(1);
-	bool forceRecreate = PG_GETARG_BOOL(2);
+	int32 objectSubId = PG_GETARG_INT32(2);
+	bool forceRecreate = PG_GETARG_BOOL(3);
 
-	ObjectAddress *objectAddress = palloc0(sizeof(ObjectAddress));
-	ObjectAddressSet(*objectAddress, classId, objectId);
+	ObjectAddress objectAddress = { 0 };
+	ObjectAddressSubSet(objectAddress, classId, objectId, objectSubId);
 
 	/*
 	 * The object must exist on the coordinator so that we can generate the DDL
 	 * commands to (re)create it on the other nodes.
 	 */
-	if (!ObjectExists(objectAddress))
+	if (!ObjectExists(&objectAddress))
 	{
 		ereport(ERROR, (errmsg("object with classid %u and objid %u does not exist "
 							   "on the local node", classId, objectId)));
@@ -100,17 +129,17 @@ citus_internal_distribute_object(PG_FUNCTION_ARGS)
 	 * before attempting to do so. Otherwise, GetDependencyCreateDDLCommands would
 	 * fail with a hard error for an unsupported object type.
 	 */
-	if (!SupportedDependencyByCitus(objectAddress))
+	if (!SupportedDependencyByCitus(&objectAddress))
 	{
 		bool missingOk = false;
 		char *objectIdentity =
-			getObjectIdentity(objectAddress, missingOk);
+			getObjectIdentity(&objectAddress, missingOk);
 		ereport(ERROR, (errmsg("cannot distribute object \"%s\"", objectIdentity),
 						errdetail("Citus does not support distributing objects of "
 								  "this type.")));
 	}
 
-	EnsureObjectExistsOnAllNodes(objectAddress, forceRecreate);
+	EnsureObjectExistsOnAllNodes(&objectAddress, forceRecreate);
 
 	PG_RETURN_VOID();
 }
@@ -172,9 +201,10 @@ EnsureObjectExistsOnAllNodes(const ObjectAddress *target, bool forceRecreate)
 
 	if (list_length(ddlCommands) == 0)
 	{
-		ereport(ERROR, (errmsg("could not generate DDL commands to create object "
-							   "with classid %u and objid %u",
-							   target->classId, target->objectId)));
+		bool missingOk = false;
+		char *objectIdentity = getObjectIdentity(target, missingOk);
+		ereport(ERROR, (errmsg("could not generate DDL commands to create "
+							   "object \"%s\"", objectIdentity)));
 	}
 
 	/* since we are executing DDL commands, disable propagation */
@@ -214,6 +244,11 @@ EnsureObjectExistsOnAllNodes(const ObjectAddress *target, bool forceRecreate)
 			SendCommandListToWorkerOutsideTransaction(nodeName, nodePort,
 													  CitusExtensionOwnerName(),
 													  ddlCommands);
+		}
+		else
+		{
+			ereport(NOTICE, (errmsg("object already exists on node %s:%d, skipping "
+									"its (re)creation", nodeName, nodePort)));
 		}
 	}
 
@@ -274,23 +309,26 @@ ObjectExistsOnNodeCommand(const ObjectAddress *target)
 
 
 /*
- * RemoteCommandOnNodeReturnsRow opens an outside-transaction connection to
- * the node identified by nodeName and nodePort, executes the given command
+ * RemoteCommandOnNodeReturnsRow opens a dedicated outside-transaction connection
+ * to the node identified by nodeName and nodePort, executes the given command
  * over it, and returns whether the command produced at least one row.
  *
- * Since the connection is opened with the OUTSIDE_TRANSACTION flag, a
- * statement-level error raised by the command is reported as "no rows returned"
- * and never rolls back the caller's transaction. Only connection-level failures
- * are surfaced as errors.
+ * The connection is opened with OUTSIDE_TRANSACTION | FORCE_NEW_CONNECTION and is
+ * claimed exclusively so that GetNodeUserDatabaseConnection() cannot hand us a
+ * connection that is (or later becomes) part of the caller's coordinated
+ * transaction. This guarantees that a statement-level error raised by the command
+ * -- which we report as "no rows returned" -- never rolls back the caller's
+ * transaction. Only connection-level failures are surfaced as errors.
  */
 static bool
 RemoteCommandOnNodeReturnsRow(const char *nodeName, uint32 nodePort,
 							  const char *command)
 {
-	int connectionFlags = OUTSIDE_TRANSACTION;
+	int connectionFlags = OUTSIDE_TRANSACTION | FORCE_NEW_CONNECTION;
 	MultiConnection *connection =
 		GetNodeUserDatabaseConnection(connectionFlags, nodeName, nodePort,
 									  CitusExtensionOwnerName(), NULL);
+	ClaimConnectionExclusively(connection);
 
 	int querySent = SendRemoteCommand(connection, command);
 	if (querySent == 0)
@@ -311,6 +349,7 @@ RemoteCommandOnNodeReturnsRow(const char *nodeName, uint32 nodePort,
 		/* we lost the connection while running the command, so error out */
 		PQclear(result);
 		ForgetResults(connection);
+		UnclaimConnection(connection);
 		ReportConnectionError(connection, ERROR);
 	}
 
@@ -320,6 +359,7 @@ RemoteCommandOnNodeReturnsRow(const char *nodeName, uint32 nodePort,
 	 */
 	PQclear(result);
 	ForgetResults(connection);
+	UnclaimConnection(connection);
 
 	return returnedRow;
 }

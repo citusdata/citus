@@ -333,6 +333,59 @@ DROP ROLE distobj_role;
 DROP PUBLICATION distobj_pub;
 -- It errors for an object that does not exist on the local node.
 SELECT citus_internal.distribute_object('pg_proc'::regclass::oid, 0);
+-- ---------------------------------------------------------------------------
+-- force_recreate syncs body drift that the by-name probe cannot detect
+-- ---------------------------------------------------------------------------
+-- The existence probe matches an object by name only, so a worker that has a
+-- same-named object with a drifted definition is treated as "present". Without
+-- force_recreate that drift is left in place; with force_recreate it is synced.
+SET citus.enable_metadata_sync TO OFF;
+CREATE FUNCTION distobj.fn_drift(int) RETURNS int LANGUAGE sql IMMUTABLE AS $fn$ SELECT $1 $fn$;
+RESET citus.enable_metadata_sync;
+SELECT citus_internal.distribute_object('pg_proc'::regclass::oid, 'distobj.fn_drift(int)'::regprocedure::oid);
+-- drift the body on a single worker (returns $1 + 100 there)
+SELECT bool_and(success) AS fn_drift_applied FROM master_run_on_worker(ARRAY['localhost']::text[], ARRAY[:one_worker_port]::int[], ARRAY[$$SET citus.enable_ddl_propagation TO off; CREATE OR REPLACE FUNCTION distobj.fn_drift(int) RETURNS int LANGUAGE sql IMMUTABLE AS 'SELECT $1 + 100'$$]::text[], false);
+-- without force_recreate the drifted worker keeps its divergent body
+SELECT citus_internal.distribute_object('pg_proc'::regclass::oid, 'distobj.fn_drift(int)'::regprocedure::oid);
+SELECT bool_or(result = '101') AS fn_drift_remains FROM run_command_on_workers($$SELECT distobj.fn_drift(1)$$);
+-- with force_recreate the body is re-synced on every worker
+SELECT citus_internal.distribute_object('pg_proc'::regclass::oid, 'distobj.fn_drift(int)'::regprocedure::oid, force_recreate := true);
+SELECT bool_and(result = '1') AS fn_drift_synced FROM run_command_on_workers($$SELECT distobj.fn_drift(1)$$);
+-- With client_min_messages raised, the per-node skip NOTICE is visible: the
+-- object is present on every worker after the sync above, so a no-force call
+-- reports that it is skipping the (re)creation on each of them.
+SET client_min_messages TO NOTICE;
+SELECT citus_internal.distribute_object('pg_proc'::regclass::oid, 'distobj.fn_drift(int)'::regprocedure::oid);
+SET client_min_messages TO WARNING;
+-- ---------------------------------------------------------------------------
+-- negative paths
+-- ---------------------------------------------------------------------------
+-- It errors for an object type that Citus does not know how to distribute at
+-- all (SupportedDependencyByCitus is false, e.g. a materialized view).
+CREATE MATERIALIZED VIEW distobj.unsupported_mv AS SELECT 1 AS a;
+SELECT citus_internal.distribute_object('pg_class'::regclass::oid, 'distobj.unsupported_mv'::regclass::oid);
+DROP MATERIALIZED VIEW distobj.unsupported_mv;
+-- It errors for a supported object class that yields no create DDL (a plain,
+-- non-distributed table produces an empty DDL list).
+CREATE TABLE distobj.unsupported_tbl (a int);
+SELECT citus_internal.distribute_object('pg_class'::regclass::oid, 'distobj.unsupported_tbl'::regclass::oid);
+DROP TABLE distobj.unsupported_tbl;
+-- A non-superuser without EXECUTE cannot call it (the REVOKE ... FROM PUBLIC
+-- gate). We pass a bare oid literal so that argument evaluation does not require
+-- access to the distobj schema before the function-level permission is checked.
+CREATE ROLE distobj_nonsuper;
+SET ROLE distobj_nonsuper;
+SELECT citus_internal.distribute_object('pg_proc'::regclass::oid, 0);
+RESET ROLE;
+-- Even with EXECUTE granted, a non-superuser hits the superuser check.
+GRANT EXECUTE ON FUNCTION citus_internal.distribute_object(oid, oid, int, boolean) TO distobj_nonsuper;
+SET ROLE distobj_nonsuper;
+SELECT citus_internal.distribute_object('pg_proc'::regclass::oid, 0);
+RESET ROLE;
+REVOKE EXECUTE ON FUNCTION citus_internal.distribute_object(oid, oid, int, boolean) FROM distobj_nonsuper;
+DROP ROLE distobj_nonsuper;
+-- Running it on a worker node hits the coordinator-only check.
+SELECT success, result FROM master_run_on_worker(ARRAY['localhost']::text[], ARRAY[:one_worker_port]::int[], ARRAY[$$SELECT citus_internal.distribute_object('pg_proc'::regclass::oid, 0)$$]::text[], false);
 -- Cleanup.
 SET client_min_messages TO ERROR;
 DROP SCHEMA distobj, distobj_s CASCADE;
