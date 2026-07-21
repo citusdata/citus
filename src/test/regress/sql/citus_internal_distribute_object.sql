@@ -386,6 +386,10 @@ REVOKE EXECUTE ON FUNCTION citus_internal.distribute_object(oid, oid, int, boole
 DROP ROLE distobj_nonsuper;
 -- Running it on a worker node hits the coordinator-only check.
 SELECT success, result FROM master_run_on_worker(ARRAY['localhost']::text[], ARRAY[:one_worker_port]::int[], ARRAY[$$SELECT citus_internal.distribute_object('pg_proc'::regclass::oid, 0)$$]::text[], false);
+-- It refuses to run when metadata syncing is disabled, and hints how to enable it.
+SET citus.enable_metadata_sync TO OFF;
+SELECT citus_internal.distribute_object('pg_proc'::regclass::oid, 0);
+RESET citus.enable_metadata_sync;
 -- Cleanup.
 SET client_min_messages TO ERROR;
 DROP SCHEMA distobj, distobj_s CASCADE;

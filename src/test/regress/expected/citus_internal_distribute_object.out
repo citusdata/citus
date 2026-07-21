@@ -1065,6 +1065,12 @@ SELECT success, result FROM master_run_on_worker(ARRAY['localhost']::text[], ARR
  f       | ERROR:  operation is not allowed on this node
 (1 row)
 
+-- It refuses to run when metadata syncing is disabled, and hints how to enable it.
+SET citus.enable_metadata_sync TO OFF;
+SELECT citus_internal.distribute_object('pg_proc'::regclass::oid, 0);
+ERROR:  citus_internal.distribute_object requires citus.enable_metadata_sync to be enabled
+HINT:  Run "SET citus.enable_metadata_sync TO on" before calling this function.
+RESET citus.enable_metadata_sync;
 -- Cleanup.
 SET client_min_messages TO ERROR;
 DROP SCHEMA distobj, distobj_s CASCADE;

@@ -98,7 +98,9 @@ citus_internal_distribute_object(PG_FUNCTION_ARGS)
 	if (!EnableMetadataSync)
 	{
 		ereport(ERROR, (errmsg("citus_internal.distribute_object requires "
-							   "citus.enable_metadata_sync to be enabled")));
+							   "citus.enable_metadata_sync to be enabled"),
+						errhint("Run \"SET citus.enable_metadata_sync TO on\" "
+								"before calling this function.")));
 	}
 
 	Oid classId = PG_GETARG_OID(0);
