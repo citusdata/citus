@@ -75,7 +75,7 @@ build() {  # build <worktree> ; installs into $SHARED
   ./configure PG_CONFIG="$SHARED/bin/pg_config" >/tmp/cfg.log 2>&1
   make -sj"$(nproc)"   >/tmp/mk.log  2>&1
   make -s install-all  >/tmp/ins.log 2>&1
-  ls "$SHARED/share/extension/" | grep -E '^citus--1[34]' | sort   # sanity: see the ladder
+  ls "$SHARED/share/extension/" | grep -E '^citus--1[3-5]' | sort   # sanity: see the ladder
 }
 ```
 Re-use the same cluster data dirs across hops:
