@@ -53,6 +53,10 @@ Project skills under `.github/skills/` are discovered automatically by GitHub
 Copilot CLI. (The Agent Skills format is intentionally portable; other agent tools
 may read `.claude/skills/` or `.agents/skills/` instead — see each tool's docs.)
 
+`.github/copilot-instructions.md` (auto-loaded repo-wide) also carries a short
+`task → skill` index so agents are pointed here even before they browse this
+directory. When you add a skill, add a row there too.
+
 ## Adding a new skill
 
 1. Create `./<skill-name>/SKILL.md` with valid frontmatter.
@@ -60,3 +64,4 @@ may read `.claude/skills/` or `.agents/skills/` instead — see each tool's docs
    from `SKILL.md`.
 3. Keep it repo-specific and evidence-based; avoid machine- or user-specific paths
    so it works for anyone who clones citus.
+4. Add a `task → skill` row to `.github/copilot-instructions.md` so agents discover it.
