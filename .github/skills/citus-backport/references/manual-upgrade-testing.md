@@ -73,8 +73,8 @@ Build helper — reconfigure each tree against the SHARED PG and `install-all`:
 build() {  # build <worktree> ; installs into $SHARED
   cd "$1"
   ./configure PG_CONFIG="$SHARED/bin/pg_config" >/tmp/cfg.log 2>&1
-  make -sj"$(nproc)"             >/tmp/mk.log  2>&1
-  make -sj"$(nproc)" install-all >/tmp/ins.log 2>&1
+  make -sj"$(nproc)"   >/tmp/mk.log  2>&1
+  make -s install-all  >/tmp/ins.log 2>&1
   ls "$SHARED/share/extension/" | grep -E '^citus--1[34]' | sort   # sanity: see the ladder
 }
 ```
@@ -134,7 +134,7 @@ nodes" the ask means.
 ## Cleanup / restore
 - The shared PG's Citus was left at whatever you installed last (after the final main hop that
   is main's `15.0-1`). **Restore the env's own build:** rebuild the PG's normal Citus branch with
-  `make -sj"$(nproc)" install-all` (verify `default_version` + the ladder edges are back).
+  `make -s install-all` (verify `default_version` + the ladder edges are back).
 - Stop the test cluster (`pg_ctl -D cluster/<role> -w -m fast stop` per node, or your cluster
   helper's stop command) and `git worktree remove` the throwaway build trees (+ `git worktree
   prune`) when done.
