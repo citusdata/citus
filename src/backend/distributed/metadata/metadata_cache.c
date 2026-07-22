@@ -63,6 +63,7 @@
 #include "distributed/backend_data.h"
 #include "distributed/citus_depended_object.h"
 #include "distributed/citus_ruleutils.h"
+#include "distributed/cluster_version.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/connection_management.h"
 #include "distributed/foreign_key_relationship.h"
@@ -5135,6 +5136,9 @@ InvalidateNodeRelationCacheCallback(Datum argument, Oid relationId)
 	{
 		workerNodeHashValid = false;
 		LocalNodeId = -1;
+
+		/* the set of nodes changed, so the cached cluster minimum version is stale */
+		InvalidateClusterVersionCache();
 	}
 }
 

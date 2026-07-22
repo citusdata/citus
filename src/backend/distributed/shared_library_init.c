@@ -58,6 +58,7 @@
 #include "distributed/citus_nodefuncs.h"
 #include "distributed/citus_safe_lib.h"
 #include "distributed/cluster_changes_block.h"
+#include "distributed/cluster_version.h"
 #include "distributed/combine_query_planner.h"
 #include "distributed/commands.h"
 #include "distributed/commands/multi_copy.h"
@@ -523,6 +524,7 @@ _PG_init(void)
 	InitializeSharedConnectionStats();
 	InitializeLocallyReservedSharedConnections();
 	InitializeClusterClockMem();
+	InitializeClusterVersionShmem();
 
 	/*
 	 * Adjust the Dynamic Library Path to prepend citus_decodes to the dynamic
@@ -652,6 +654,7 @@ citus_shmem_request(void)
 	RequestAddinShmemSpace(CitusQueryStatsSharedMemSize());
 	RequestAddinShmemSpace(LogicalClockShmemSize());
 	RequestAddinShmemSpace(ClusterChangesBlockShmemSize());
+	RequestAddinShmemSpace(ClusterVersionShmemSize());
 	RequestNamedLWLockTranche(STATS_SHARED_MEM_NAME, 1);
 	RequestAddinShmemSpace(StatCountersShmemSize());
 	RequestNamedLWLockTranche(SAVED_BACKEND_STATS_HASH_LOCK_TRANCHE_NAME, 1);
@@ -1106,6 +1109,21 @@ RegisterCitusConfigVariables(void)
 		"default",
 		PGC_SU_BACKEND,
 		GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomIntVariable(
+		"citus.cluster_version_refresh_interval",
+		gettext_noop("Sets how often the maintenance daemon recomputes the cached "
+					 "cluster minimum Citus version."),
+		gettext_noop("The maintenance daemon periodically recomputes, via fan-out, "
+					 "the value returned by citus_minimum_cluster_version() and stores "
+					 "it in shared memory, so on-demand reads are always served from a "
+					 "warm cache. This also lets in-place version changes be picked up. "
+					 "Use -1 to disable."),
+		&ClusterVersionRefreshInterval,
+		60 * MS_PER_SECOND, -1, 7 * MS_PER_DAY,
+		PGC_SIGHUP,
+		GUC_UNIT_MS | GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomEnumVariable(

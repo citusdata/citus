@@ -50,6 +50,7 @@
 #include "distributed/background_jobs.h"
 #include "distributed/background_worker_utils.h"
 #include "distributed/citus_safe_lib.h"
+#include "distributed/cluster_version.h"
 #include "distributed/coordinator_protocol.h"
 #include "distributed/distributed_deadlock_detection.h"
 #include "distributed/maintenanced.h"
@@ -463,6 +464,7 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 	TimestampTz lastRecoveryTime = 0;
 	TimestampTz lastShardCleanTime = 0;
 	TimestampTz lastStatStatementsPurgeTime = 0;
+	TimestampTz lastClusterVersionRefreshTime = 0;
 	TimestampTz nextMetadataSyncTime = 0;
 
 	/* state kept for the background tasks queue monitor */
@@ -709,6 +711,43 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 
 			/* make sure we don't wait too long */
 			timeout = Min(timeout, DeferShardDeleteInterval);
+		}
+
+		/*
+		 * Periodically recompute the cached cluster minimum version via fan-out
+		 * so that on-demand reads are always served from a warm cache and the
+		 * value reflects in-place version changes (which don't touch
+		 * pg_dist_node). RefreshClusterVersionCache never errors on a node being
+		 * down (it invalidates the cache instead), so it cannot crash the daemon.
+		 */
+		if (ClusterVersionRefreshInterval > 0 &&
+			TimestampDifferenceExceeds(lastClusterVersionRefreshTime,
+								   GetCurrentTimestamp(),
+								   ClusterVersionRefreshInterval))
+		{
+			InvalidateMetadataSystemCache();
+			StartTransactionCommand();
+
+			if (!LockCitusExtension())
+			{
+				ereport(DEBUG1, (errmsg("could not lock the citus extension, "
+										"skipping cluster version refresh")));
+			}
+			else if (CheckCitusVersion(DEBUG1) && CitusHasBeenLoaded())
+			{
+				/*
+				 * Record the time at start so we run once per interval even if
+				 * the refresh takes a while.
+				 */
+				lastClusterVersionRefreshTime = GetCurrentTimestamp();
+
+				RefreshClusterVersionCache();
+			}
+
+			CommitTransactionCommand();
+
+			/* make sure we don't wait too long */
+			timeout = Min(timeout, ClusterVersionRefreshInterval);
 		}
 
 		if (StatStatementsPurgeInterval > 0 &&
