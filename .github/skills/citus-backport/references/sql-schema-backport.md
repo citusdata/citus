@@ -115,7 +115,7 @@ Rule of thumb: **a step introduced on major N must be copied onto every branch f
    ```
    (and the analogous `14.1-1--14.2-1` trio from `bp-<pr>-release-14.0` when copying onto main.)
 3. **Keep the header verbatim** — even the `-- bump version to 13.4-1` line stays on downstream
-   branches where 13.4 is not the default. Confirmed identical across branches in the #8541 family.
+   branches where 13.4 is not the default. Confirmed identical across branches in the #8621 UDF family.
 4. **Purely additive.** Do NOT touch `citus.control` / `default_version`. Do NOT touch the
    `13.2-1--14.0-1` major-bridge migration. main's `latest.sql` still points at its own top
    version (15.0-1); leave it. `check_sql_snapshots.sh` verifies latest.sql == highest udf.
@@ -130,10 +130,13 @@ Rule of thumb: **a step introduced on major N must be copied onto every branch f
    covered) — see the dedicated section below.
 
 **Template PR family** (study these to see the end-state, don't reverse-engineer from one PR):
-find the original feature PR, then every PR that mentions it in title/desc. For #8541:
-`#8563`→13.2, `#8564`→14.0, `#8567`→main (merged); `#8558`/`#8559` were closed attempts. The main
-PR (`#8567`) is the model for the main ladder commit's title/body ("Add sql paths added into
-Citus 13 / 14 for #<pr>"); it's internal plumbing so usually **no `DESCRIPTION:` line**.
+find the original feature PR, then every PR that mentions it in title/desc. Worked example — the
+`citus_internal.distribute_object` repair UDF, introduced on main in **#8621**: backported
+one-branch-per-target via **#8684**→release-13.2 and **#8685**→release-14.0 (each branch also carries
+the sibling GUC PR **#8625** `citus.allow_unsafe_insert_select_pushdown`, unsquashed as its own
+commit), with the 13.x/14.x upgrade paths propagated to `main` in **#8686**. The main ladder PR
+(#8686, "Add 13.x/14.x upgrade paths for citus_internal.distribute_object to main") is the model for
+the main ladder commit's title/body; it's internal plumbing so usually **no `DESCRIPTION:` line**.
 
 ## multi_extension.sql ladder tests for new steps (off-walk detour pattern)
 
