@@ -50,6 +50,7 @@
 #include "distributed/background_jobs.h"
 #include "distributed/background_worker_utils.h"
 #include "distributed/citus_safe_lib.h"
+#include "distributed/cluster_version.h"
 #include "distributed/coordinator_protocol.h"
 #include "distributed/distributed_deadlock_detection.h"
 #include "distributed/maintenanced.h"
@@ -463,6 +464,7 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 	TimestampTz lastRecoveryTime = 0;
 	TimestampTz lastShardCleanTime = 0;
 	TimestampTz lastStatStatementsPurgeTime = 0;
+	TimestampTz lastClusterVersionInvalidationTime = 0;
 	TimestampTz nextMetadataSyncTime = 0;
 
 	/* state kept for the background tasks queue monitor */
@@ -709,6 +711,24 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 
 			/* make sure we don't wait too long */
 			timeout = Min(timeout, DeferShardDeleteInterval);
+		}
+
+		/*
+		 * Periodically invalidate the cached cluster minimum version so the next
+		 * reader recomputes it. This bounds staleness and lets in-place version
+		 * changes (which do not touch pg_dist_node) be picked up. It only flips a
+		 * shared-memory flag, so it needs no transaction, lock, or remote work.
+		 */
+		if (ClusterVersionRefreshInterval > 0 &&
+			TimestampDifferenceExceeds(lastClusterVersionInvalidationTime,
+								   GetCurrentTimestamp(),
+								   ClusterVersionRefreshInterval))
+		{
+			lastClusterVersionInvalidationTime = GetCurrentTimestamp();
+			InvalidateClusterVersionCache();
+
+			/* make sure we don't wait too long */
+			timeout = Min(timeout, ClusterVersionRefreshInterval);
 		}
 
 		if (StatStatementsPurgeInterval > 0 &&
