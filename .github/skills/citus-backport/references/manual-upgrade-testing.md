@@ -46,7 +46,9 @@ so it needs the **downgrade** scripts `13.4-1--13.3-1`, `13.3-1--13.2-1` and the
 **bridge** `13.2-1--14.0-1` (all shipped under `sql/downgrades/` on `release-14.0`). `make install`
 omits every downgrade → `ALTER EXTENSION citus UPDATE` fails with "no update path from 13.4-1 to
 14.2-1". Always build the test PG with **`make install-all`** (it runs `install` +
-`install-downgrades` for both the distributed and columnar extensions).
+`install-downgrades` for both the distributed and columnar extensions). Run install-all
+**serially — no `-j`** (parallel `install-all` races on the shared SQL-script generation and can
+lay down truncated / missing downgrade files); parallelize the preceding compile instead.
 
 ### PG version must be common to all builds
 Baseline Citus must support the chosen PG. 13.0/13.2 support PG15/16/17; 14.0 supports 16/17/18;
