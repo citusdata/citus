@@ -135,16 +135,12 @@ STILL running under `check-multi-1-create-citus` on every normal PG job (coverag
 
 **N-1 version label = the actual N-1 CI version = the PREVIOUS MINOR (it advances every release).**
 Read the authoritative number from `build_and_test.yml`'s N-1 jobs — the `citus_version:` (SQL /
-Worker / Coordinator N-1) and `citus_libdir:` (Lib / Coordinator N-1) pins — NOT from the neighboring
-`citus_cluster_changes_block` comment, which can be **stale**. As of this writing: release-13.2 pins
+Worker / Coordinator N-1) and `citus_libdir:` (Lib / Coordinator N-1) pins, not from 
+maybe-stale comments at `multi_1_create_citus_schedule`. As of this writing: release-13.2 pins
 `citus_version: "13.3-1"` / `citus_libdir: v13.3.0` (its `default_version` is 13.4-1, so N-1 = 13.3-1);
 release-14.0 pins `14.1-1` / `v14.1.0` (default 14.2-1, N-1 = 14.1-1). The rule is simply
 `default_version` minus one minor, and it is bumped whenever the branch ships a new minor.
 
-- **Why the `citus_cluster_changes_block` neighbor says a LOWER number (e.g. `N-1 (13.2-1)`):** that
-  comment was written when the branch shipped an earlier minor (13.3-1, so N-1 was 13.2-1 then) and
-  is never re-bumped, because that test only moves back to `multi_schedule` at the NEXT MAJOR, not per
-  minor. So the number there is frozen at its introduction time — do NOT copy it as today's N-1.
 - **Write the label with today's N-1 version.** For a GUC introduced in the branch's current
   `default_version` (e.g. 13.4 on release-13.2), the N-1 binary is the previous minor (13.3-1) and the
   GUC is absent there, so: `GUC introduced in 13.4; not present in the N-1 (13.3-1) Citus binary ...
