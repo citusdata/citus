@@ -1,14 +1,15 @@
 # CI triage for backports — PG-version compat + the baseline-red release branches
 
-Two independent things make backport CI confusing: (1) `main` supports fewer PG majors than the
-release branches, so a "trivial C-only" cherry-pick can fail to COMPILE on an old PG; and (2) the
-release branches are BASELINE-RED — several jobs fail on the pristine base branch with no backport.
-Handle both before declaring a red "your fault".
+Two independent things make backport CI confusing: (1) `main` might support different PG majors
+than a release branch, so a "trivial C-only" cherry-pick can fail to COMPILE on an old PG; and
+(2) the release branches are BASELINE-RED — several jobs fail on the pristine base branch with
+no backport. Handle both before declaring a red "your fault".
 
 ## PG-version compat (the #1 non-obvious C-backport failure)
-`main` supports FEWER PG majors than the release branches, so code `main` wrote unconditionally
+`main` may support different PG majors than the release branches, so code `main` wrote unconditionally
 against a newer PG API breaks the older-PG build on a release branch. Check each branch's supported
-PG set in `.github/workflows/build_and_test.yml` (the `pgNN_version` params block):
+PG set in `.github/workflows/build_and_test.yml` (the `pgNN_version` params block). Today, these are the
+supported PG majors by main and two most recent release branches:
 
 | Branch        | PG majors built      |
 |---------------|----------------------|
@@ -105,11 +106,11 @@ Everything else on these branches is baseline noise.
 
 ## The NEW N-1 red a feature backport ADDS — move it to the N-1-excluded schedule
 Backporting a feature that adds a **new GUC or UDF** whose regression test runs under an N-1
-schedule (`multi_schedule` → `check-multi`/`check-multi-1`) makes the **N-1 (mixed-version)** jobs
-show that test as a NEW red. The red itself is EXPECTED graceful-degradation (not a defect), but the
-CLEAN fix is to relocate the test so N-1 never runs it — do NOT mangle the reviewed test, fabricate
-output, or just "leave + document". Proven on both the 13.2 and 14.0 backports of the
-`citus.allow_unsafe_insert_select_pushdown` GUC:
+schedule (`multi_schedule` / `multi_1_schedule` → `check-multi`/`check-multi-1`) makes the **N-1
+(mixed-version)** jobs show that test as a NEW red. The red itself is EXPECTED graceful-degradation
+(not a defect), but the CLEAN fix is to relocate the test so N-1 never runs it — do NOT mangle the
+reviewed test, fabricate output, or just "leave + document". Proven on both the 13.2 and 14.0
+backports of the `citus.allow_unsafe_insert_select_pushdown` GUC:
 - Test `allow_unsafe_insert_select_pushdown` (backported GUC `citus.allow_unsafe_insert_select_pushdown`).
 - Under N-1 the OLD lib runs on the coordinator (`lib-v13.3.0` / `lib-v14.1.0`), which lacks the GUC.
   `SET citus.allow_unsafe_insert_select_pushdown` → `ERROR: invalid configuration parameter name ...
@@ -117,7 +118,7 @@ output, or just "leave + document". Proven on both the 13.2 and 14.0 backports o
 - **That fallback IS the N-1 contract** (old binary → GUC absent → safe pre-feature behavior); the diff
   *demonstrates* compatibility. But a red CI job is still noise, so move the test off the N-1 matrix.
 
-**THE FIX: move the test line from `multi_schedule` into the placeholder section of
+**THE FIX: move the test line from its schedule into the placeholder section of
 `multi_1_create_citus_schedule`.** The N-1 jobs' `make_targets` (build_and_test.yml Coordinator/Lib
 N-1 blocks) list `check-multi`, `check-multi-1`, `check-add-backup-node`, ... but **NOT
 `check-multi-1-create-citus`**, so any test in `multi_1_create_citus_schedule` is N-1-invisible while
@@ -171,14 +172,12 @@ The same EXPLAIN can differ by PG major. Real example: PG15 omits a functionally
 sort column that PG16+ keeps — `Sort Key: q.batch` (PG15) vs `Sort Key: q.batch, q.text_id` (PG16+).
 release-13.2 hits it on the PG15 `check-multi`; main/release-14.0 never see it (no PG15).
 Fix, in the order the repo prefers:
-1. **EXPLAIN params** — usually can't help: there is NO EXPLAIN option that suppresses `Sort Key`
-   for a Sort node (`COSTS OFF` still prints it). Rule this out first but expect failure.
-2. **An explain helper from `main`'s `multi_test_helpers.sql`** — check whether one already
+1. **An explain helper from `main`'s `multi_test_helpers.sql`** — check whether one already
    normalizes the divergent bit. As of 13.x/14.x none normalizes Sort Key (there are
    `coordinator_plan`, `plan_normalize_memory`, `explain_with_pg16_subplan_format`,
    `explain_with_pg17_initplan_format`, and boolean `explain_has_distributed_subplan` /
    `explain_has_single_task` — the booleans would need an invasive test rewrite).
-3. **MOVE the diverging blocks into a PG-version-guarded test file (PREFERRED on release-13.2 when
+2. **MOVE the diverging blocks into a PG-version-guarded test file (PREFERRED on release-13.2 when
    the divergence is PG15-only).** release-13.2 ships `sql/pg16.sql`, which `\q`-skips below PG16
    (guard at top: `SELECT substring(:'server_version','\d+')::int >= 16 ... \if ... \else \q \endif`)
    AND already lives in `multi_1_create_citus_schedule` (the N-1-excluded schedule). So relocating the
@@ -192,21 +191,8 @@ Fix, in the order the repo prefers:
      moved EXPLAIN blocks, then `DROP SCHEMA ... CASCADE;`. It must not depend on the parent test's
      schema (schedules run independently).
    - Regenerate BOTH `.out`s (source shrinks, `pg16.out` grows) via the runner; never hand-edit.
-   - **ICU GOTCHA (blocks pg16.out regen):** `pg16.sql` has ICU tests (`CREATE DATABASE ...
-     LOCALE_PROVIDER='icu'`, `CREATE COLLATION`) that `ERROR: ICU is not supported in this build` and
-     ABORT the script before your appended section — leaving a truncated `pg16.out`. If your local PG
-     was built `--without-icu`, rebuild it `--with-icu` (needs `libicu-dev`), reinstall PG, then
-     rebuild Citus. CI already has ICU (the committed `pg16.out` is ~1100 ICU-based lines).
-4. **`normalize.sed` rule** — only if it can be made TIGHT. Risky when the divergent token is a
-   generic column name (e.g. a trailing `.text_id`) that could silently mask a real Sort Key diff in
-   another test. normalize.sed is global (whole suite).
-5. **Alternative expected file `<test>_N.out`** — LAST resort (prefer a pg-version-file move or
-   normalize.sed over adding an alt file "for just 5 lines"). Zero-blast-radius and standard citus
-   practice (dozens of `_0.out` / `_pg15_0.out` files exist): pg_regress (`pg_regress.c`
-   `results_differ`) tries `<test>.out` then `<test>_0.out`..`_9.out` and passes on the first EXACT
-   match. Build it by copying the primary `.out` and applying ONLY the version-diff lines. **You can't
-   validate the older-PG alt file in a single-PG build environment** — rely on CI for the older-PG
-   job. Use only when the divergence is scattered through a test that can't be cleanly excised.
+3. Add a new **`normalize.sed` rule** or update an existing one to generalize the coverage, or add an
+   alternative expected file as a last resort.
 
 ### (c) Flaky detector goes all-red because your changed-file set is widely depended-on
 "Test flakyness (1..32)" computes a changed-test set by DEPENDENCY EXPANSION of the PR's changed
@@ -220,10 +206,9 @@ file list is pure dependency-expansion, not a change you made.
 **Do NOT hand-wave "it's flaky".** Two pieces of hard evidence, both cheap:
 1. **Read the actual diff** from the shard's uploaded artifact (they DO upload one, named
    `test_flakyness_parallel_<N>`; see fetch recipe below). Confirm the failing test is a base test
-   you did not touch AND the diff contains ZERO of your backported symbols. A genuine flake here
-   looks like **colocationid drift** (`980000`->`980004`) and **FK-colocation ordering ERRORs** —
-   the signature of `--use-whole-schedule-line` running the whole schedule line in parallel so other
-   tests consume colocation IDs first. Scan: `grep -c <your_symbol> regression.diffs` (want 0),
+   you did not touch AND the diff contains ZERO of your backported symbols. The signature of
+   `--use-whole-schedule-line` running the whole schedule line in parallel so other tests consume
+   colocation IDs first. Scan: `grep -c <your_symbol> regression.diffs` (want 0),
    `grep -oE "expected/[a-z_0-9]+[.]out"` (only the base test).
 2. **Reproduce on the PRISTINE base** to prove pre-existing, not introduced. From `src/test/regress`:
    `python citus_tests/run_test.py <flaky_test> --repeat 8 --use-whole-schedule-line` on your branch

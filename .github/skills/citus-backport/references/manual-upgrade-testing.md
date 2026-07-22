@@ -3,7 +3,7 @@
 Backporting a SQL-schema change and propagating the upgrade ladder (see
 `sql-schema-backport.md` §Step 5) only *claims* MVU safety. This doc is how you **prove** it
 end-to-end on a real multi-node cluster: stand up N nodes at an OLD Citus major, then walk the
-extension forward across both backport branches — and, optionally, one hop further onto the
+extension forward across both backport branches — and, one hop further onto the
 `main`-targeting PR branch — with `ALTER EXTENSION citus UPDATE`, capturing `citus_version()` AND
 `pg_extension.extversion` on every node after every hop.
 
@@ -13,7 +13,7 @@ declaring a SQL-schema backport family done. A C-only backport does NOT need it.
 ## What this proves
 - A cluster shipped at the 13.x tail (`default_version` of `release-13.2`, e.g. `13.4-1`) can
   still cross to 14.x — i.e. a future managed-service 13→14 MVU won't strand the customer.
-- **Optional final hop:** a 14.x-tail cluster (e.g. `14.2-1`) can cross to the NEXT major on
+- **Final hop:** a 14.x-tail cluster (e.g. `14.2-1`) can cross to the NEXT major on
   `main` (`15.0-1`) via the PR branch you opened against `main` — proving the SAME object also
   rides a future 14.x→15.0 MVU. `main` jumps `14.0-1 → 15.0-1` directly (it has NO 14.1/14.2
   *upgrade-in-line*), but it MUST carry the `14.2-1--14.1-1` and `14.1-1--14.0-1` **downgrades**
@@ -64,6 +64,7 @@ cd <main clone>            # holds all the branches/tags
 git worktree add --detach /tmp/mvu/wt130 v13.0.5            # OLD baseline (a real tag)
 git worktree add --detach /tmp/mvu/wt132 <bp-release-13.2-head-sha>
 git worktree add --detach /tmp/mvu/wt140 <bp-release-14.0-head-sha>
+git worktree add --detach /tmp/mvu/wtmain <bp-main-PR-head-sha>
 ```
 
 Build helper — reconfigure each tree against the SHARED PG and `install-all`:
@@ -77,6 +78,7 @@ build() {  # build <worktree> ; installs into $SHARED
   ls "$SHARED/share/extension/" | grep -E '^citus--1[34]' | sort   # sanity: see the ladder
 }
 ```
+Re-use the same cluster data dirs across hops:
 
 1. **Baseline 13.0.** `build /tmp/mvu/wt130`. Stand up a cluster on `$SHARED` with `citus_dev`
    (it `CREATE EXTENSION citus` at `default_version` = the currently-installed `13.0-1`). Verify
@@ -95,15 +97,12 @@ build() {  # build <worktree> ; installs into $SHARED
    `create_distributed_table` + INSERT + distributed `count(*)`, `pg_dist_shard` count, and that
    the backported object is present (e.g. `SELECT proname FROM pg_proc WHERE proname =
    'distribute_object' AND pronamespace = 'citus_internal'::regnamespace;`).
-5. **(Optional) One more hop onto the `main` PR branch.** Detached worktree at the `bp-<pr>-main`
+5. **One more hop onto the `main` PR branch.** Detached worktree at the `bp-<pr>-main`
    head, `build` it into the SAME `$SHARED` (overwrites Citus to `default_version = 15.0-1`,
    installs main's up+down ladder incl. the 14.x downgrades). **Restart every node.** On EACH node:
    `ALTER EXTENSION citus UPDATE;` → routes `14.2-1 → 14.1-1 → 14.0-1 → 15.0-1`. Re-run the
    functional check. Expect `Citus 15.0devel ... (sha: <main-PR-head>)` and the backported object
-   still present at `15.0-1`. This hop can reuse the SAME cluster: `ALTER ... UPDATE` mutates only
-   the catalog, so **the cluster data dirs survive a teardown** (`pg_ctl stop` + `git worktree
-   remove` of the old build tree) — just reinstall the new Citus into `$SHARED` and restart the
-   nodes on the same data dirs.
+   still present at `15.0-1`.
 
 **KEY NUANCE — `citus_version()` reports the BINARY, `extversion` reports the CATALOG.** After you
 install a newer Citus + restart (but BEFORE `ALTER EXTENSION citus UPDATE`), `citus_version()`
@@ -133,7 +132,7 @@ nodes" the ask means.
   a `pg_ctl -w` wrapper returning.
 
 ## Cleanup / restore
-- The shared PG's Citus was left at whatever you installed last (after the optional main hop that
+- The shared PG's Citus was left at whatever you installed last (after the final main hop that
   is main's `15.0-1`). **Restore the env's own build:** rebuild the PG's normal Citus branch with
   `make -sj"$(nproc)" install-all` (verify `default_version` + the ladder edges are back).
 - Stop the test cluster (`pg_ctl -D cluster/<role> -w -m fast stop` per node, or your cluster

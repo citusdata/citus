@@ -84,11 +84,11 @@ Then run the feature's own test + `multi_extension`.
 
 ## Step 5 — propagate the upgrade ladder ACROSS branches (MVU safety)
 
-Backporting the object DOWN to a release branch is not enough. The managed service will one day
-support Major Version Upgrade (13.x→14.y→main). An MVU replays the migration **ladder**, so a new
-SQL object must be reachable on EVERY higher branch's ladder too — otherwise a cluster upgraded
-13.x→14.y would silently lose it. Net effect: **the same object is defined MULTIPLE times per
-branch, once per major's introduction step.** This is intentional, not duplication to "fix".
+Backporting the object DOWN to a release branch is not enough. An MVU replays the migration
+**ladder**, so a new SQL object must be reachable on EVERY higher branch's ladder too — otherwise
+a cluster upgraded 13.x→14.y would silently lose it. Net effect: **the same object is defined
+MULTIPLE times per branch, once per major's introduction step.** This is intentional, not
+duplication to "fix".
 
 **Topology** (worked example: `citus_internal.distribute_object`, introduced on main at
 `14.0-1--15.0-1`, backported to 13.2 at `13.3-1--13.4-1` and to 14.0 at `14.1-1--14.2-1`):

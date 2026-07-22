@@ -45,8 +45,7 @@ four (add `manual-upgrade-testing.md` as the final proof once CI is green).
 - **ONE branch per MAJOR.** `release-13.2` serves the WHOLE 13.x line; `release-14.0` serves ALL of
   14.x; `main` is the next major. Citus no longer cuts a branch per minor (this changed ~2026-05).
 - **Backport FEATURES, not just bugfixes**, to the **newest two majors** (13 & 14 as of this
-  writing). The managed service has no Major Version Upgrade yet, so any N-1-safe change rides the
-  next minor and customers get it without an MVU.
+  writing).
 - **Branch names LIE about the version.** `release-13.2` currently ships 13.4; `release-14.0` ships
   14.2. **NEVER infer the target minor from the branch name** — read `default_version` from
   `src/backend/distributed/citus.control` on each target branch. That value drives every SQL edit.
@@ -96,11 +95,11 @@ four (add `manual-upgrade-testing.md` as the final proof once CI is green).
    test runs under N-1 makes the (non-blocking) **N-1 mixed-version** jobs show that test as a NEW
    red — the old coordinator lib lacks the GUC/UDF, so it errors and falls back to the pre-feature
    plan. That fallback IS the N-1 contract (proves compat, not breaks it). The CLEAN fix is to MOVE
-   the test line from `multi_schedule` into the placeholder section of `multi_1_create_citus_schedule`
-   (the N-1 make_targets omit `check-multi-1-create-citus`, so it stops running under N-1 while still
-   running on every normal PG job). Mirror the existing `citus_cluster_changes_block` block, and label
-   the N-1 version as the MAJOR FLOOR (13.2-1 / 14.0-1), copied from that neighbor comment. See
-   ci-triage §"NEW N-1 red".
+   the test line from its schedule, usually is `multi_schedule`, into the placeholder section of
+   `multi_1_create_citus_schedule` (the N-1 make_targets omit `check-multi-1-create-citus`, so it
+   stops running under N-1 while still running on every normal PG job). Mirror the existing
+   `citus_cluster_changes_block` block, and label the N-1 version as the MAJOR FLOOR (13.2-1 /
+   14.0-1), copied from that neighbor comment. See ci-triage §"NEW N-1 red".
    Fix-commit handling depends on review state: **pre-review**, amend the single commit +
    `git push --force-with-lease`; **post-review** (the commits have already been reviewed), add ONE
    NEW fix commit on top and never rewrite the reviewed SHAs — if a *bad* fix commit is already on
@@ -109,8 +108,9 @@ four (add `manual-upgrade-testing.md` as the final proof once CI is green).
 9. **Propagate the ladder UP (SQL-schema backports only).** A new SQL object must also be reachable
    on every HIGHER major's upgrade ladder, or a future 13.x→14.y Major Version Upgrade loses it.
    As SEPARATE commits (its own PR on main), copy the introduction step/downgrade/udf files
-   byte-for-byte onto release-14.0 (for a 13.x path) and main (for 13.x and 14.x paths); main's own
-   top path stays untouched. Full topology + recipe in `references/sql-schema-backport.md` §Step 5.
+   byte-for-byte onto release-14.0 (for a 13.x path) and main (for 13.x and 14.x paths, given today's
+   two most recent major versions); main's own top path stays untouched. Full topology + recipe in
+   `references/sql-schema-backport.md` §Step 5.
 10. **Add `multi_extension.sql` ladder-test coverage** for every new step. The test walks only the
     main upgrade path, so a step you add off that path (13.x/14.x maintenance tail) is never
     exercised → add a **detour** that matches the shape of the on-walk blocks: round-trip no-op (up
@@ -126,10 +126,10 @@ four (add `manual-upgrade-testing.md` as the final proof once CI is green).
 11. **Prove MVU safety on a real cluster (SQL-schema backports, after CI is green).** The ladder
     propagation only *claims* a future 13→14 Major Version Upgrade keeps the object; prove it. Stand
     up a multi-node cluster at an OLD major, then `ALTER EXTENSION citus UPDATE` on EVERY node across
-    the backport branches (13.x tail → cross-major → 14.x tail), capturing `citus_version()` and
-    `pg_extension.extversion` per node per hop, plus a functional check that the backported object
-    survived. Build all Citus versions into ONE shared PG with **`make install-all`** (plain
-    `install` omits the downgrade + bridge scripts the cross-major route needs → "no update path").
+    the backport branches (13.x tail → cross-major → 14.x tail → cross-major → main tail), capturing
+    `citus_version()` and `pg_extension.extversion` per node per hop, plus a functional check that the
+    backported object survived. Build all Citus versions into ONE shared PG with **`make install-all`**
+    (plain `install` omits the downgrade + bridge scripts the cross-major route needs → "no update path").
     Full recipe and the single-PG requirement in `references/manual-upgrade-testing.md`.
 
 ## Hard rules / traps (full detail in the references)
@@ -162,6 +162,6 @@ four (add `manual-upgrade-testing.md` as the final proof once CI is green).
   (1) by reverting the helper if the backported TEST calls it — it's required, not over-reach. Full
   recipe: `references/ci-triage.md` §Genuinely-new failures.
 - **A NEW GUC/UDF whose test runs under N-1 has a CLEAN fix, not "leave it".** Move the test line
-  from `multi_schedule` into the `multi_1_create_citus_schedule` placeholder section (N-1 make_targets
+  from its schedule into the `multi_1_create_citus_schedule` placeholder section (N-1 make_targets
   omit `check-multi-1-create-citus`). N-1 version label = major floor (13.2-1 / 14.0-1), copied from
   the branch's own `citus_cluster_changes_block` comment. Details: `references/ci-triage.md` §"NEW N-1 red".
