@@ -6,9 +6,9 @@ build/style/PR rules and `src/test/regress/README.md` for the regression-test wo
 ## Agent skills
 
 This repo ships task-specific **agent skills** under `.github/skills/`. Before starting
-a task that matches one, load that skill's `SKILL.md` and follow it — it captures
-hard-won, repo-specific know-how so you don't re-derive it. Each skill's `SKILL.md`
-frontmatter `description` states exactly when to use it; the index below is a quick map.
+a task that matches one, load that skill's `SKILL.md` and follow it so you don't re-derive
+it. Each skill's `SKILL.md` frontmatter `description` states exactly when to use it; the
+index below is a quick map.
 
 | Task | Skill |
 |------|-------|
