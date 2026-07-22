@@ -135,7 +135,7 @@ STILL running under `check-multi-1-create-citus` on every normal PG job (coverag
 
 **N-1 version label = the actual N-1 CI version = the PREVIOUS MINOR (it advances every release).**
 Read the authoritative number from `build_and_test.yml`'s N-1 jobs — the `citus_version:` (SQL /
-Worker / Coordinator N-1) and `citus_libdir:` (Lib / Coordinator N-1) pins, not from 
+Worker / Coordinator N-1) and `citus_libdir:` (Lib / Coordinator N-1) pins, not from
 maybe-stale comments at `multi_1_create_citus_schedule`. As of this writing: release-13.2 pins
 `citus_version: "13.3-1"` / `citus_libdir: v13.3.0` (its `default_version` is 13.4-1, so N-1 = 13.3-1);
 release-14.0 pins `14.1-1` / `v14.1.0` (default 14.2-1, N-1 = 14.1-1). The rule is simply
