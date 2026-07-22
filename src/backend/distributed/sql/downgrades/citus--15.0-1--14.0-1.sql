@@ -26,3 +26,7 @@ DROP FUNCTION IF EXISTS citus_internal.acquire_placement_colocation_lock(bigint,
 DROP FUNCTION IF EXISTS pg_catalog.citus_cluster_changes_block(int);
 DROP FUNCTION IF EXISTS pg_catalog.citus_cluster_changes_unblock();
 DROP FUNCTION IF EXISTS pg_catalog.citus_cluster_changes_block_status();
+
+-- cluster-wide Citus version tracking UDFs
+DROP FUNCTION IF EXISTS pg_catalog.citus_minimum_cluster_version();
+DROP FUNCTION IF EXISTS pg_catalog.citus_version_num();
