@@ -133,14 +133,26 @@ STILL running under `check-multi-1-create-citus` on every normal PG job (coverag
 3. `run_test.py` auto-discovers the new schedule (it prints `SCHEDULE: multi_1_create_citus_schedule`);
    the `.out` file is schedule-independent, so NO `.out` regen is needed — it's a pure schedule move.
 
-**N-1 version label = the MAJOR's FLOOR, not the previous minor.** The comment must name the N-1
-binary version. Do NOT guess "previous minor" (13.4 dev → 13.3). The `citus_cluster_changes_block`
-neighbor is ground truth: on release-13.2 it says **N-1 (13.2-1)**; on release-14.0 **N-1 (14.0-1)**.
-The N-1 baseline is pinned to the FIRST release of the major line (the whole-major compat floor the
-release model enforces), so on release-13.2 N-1 = 13.2-1 and on release-14.0 N-1 = 14.0-1. Write
-"GUC introduced in <branch default_version, e.g. 13.4 / 14.2>; not present in the N-1 (13.2-1 /
-14.0-1) Citus binary ... Move back to multi_schedule at Citus <next major, 14 / 15>." Always copy the
-exact version tokens from the branch's own `citus_cluster_changes_block` comment.
+**N-1 version label = the actual N-1 CI version = the PREVIOUS MINOR (it advances every release).**
+Read the authoritative number from `build_and_test.yml`'s N-1 jobs — the `citus_version:` (SQL /
+Worker / Coordinator N-1) and `citus_libdir:` (Lib / Coordinator N-1) pins — NOT from the neighboring
+`citus_cluster_changes_block` comment, which can be **stale**. As of this writing: release-13.2 pins
+`citus_version: "13.3-1"` / `citus_libdir: v13.3.0` (its `default_version` is 13.4-1, so N-1 = 13.3-1);
+release-14.0 pins `14.1-1` / `v14.1.0` (default 14.2-1, N-1 = 14.1-1). The rule is simply
+`default_version` minus one minor, and it is bumped whenever the branch ships a new minor.
+
+- **Why the `citus_cluster_changes_block` neighbor says a LOWER number (e.g. `N-1 (13.2-1)`):** that
+  comment was written when the branch shipped an earlier minor (13.3-1, so N-1 was 13.2-1 then) and
+  is never re-bumped, because that test only moves back to `multi_schedule` at the NEXT MAJOR, not per
+  minor. So the number there is frozen at its introduction time — do NOT copy it as today's N-1.
+- **Write the label with today's N-1 version.** For a GUC introduced in the branch's current
+  `default_version` (e.g. 13.4 on release-13.2), the N-1 binary is the previous minor (13.3-1) and the
+  GUC is absent there, so: `GUC introduced in 13.4; not present in the N-1 (13.3-1) Citus binary ...
+  Move back to multi_schedule at Citus <next major, 14>.` On release-14.0 the corresponding numbers
+  are 14.2 / N-1 14.1-1 / next major 15.
+- **Sanity gate:** the move is only warranted when the object is genuinely ABSENT in that N-1 version
+  (introduced in a minor strictly newer than N-1). If your object was introduced at or below N-1, the
+  N-1 binary already has it — no red, no move.
 
 - **Why a new UDF may NOT need this move** (asymmetry): a test already placed in
   `multi_1_create_citus_schedule` (e.g. `citus_internal_distribute_object`) is ALREADY N-1-invisible,

@@ -86,43 +86,32 @@ four (add `manual-upgrade-testing.md` as the final proof once CI is green).
    so kick CI with `gh workflow run "Build & Test" --repo <your-fork>/citus --ref <branch>`. Open
    PRs only when the change owner asks.
 8. **Wait for CI and triage** per `references/ci-triage.md`. Separate baseline-red noise (N-1 /
-   flaky / coverage) from **genuinely-new failures you introduced** — the two you WILL hit on a
-   release branch are (a) a version-pinned `.out` that prints a shared helper's *signature* after
-   you changed it, and (b) a PG-version planner divergence on the OLDER PG the release branch still
-   supports but `main` dropped (PREFER moving the diverging cases into a PG-guarded test file, e.g.
-   `pg16.sql`, over a `<test>_N.out` alt file; see ci-triage §Genuinely-new).
-   One red you must NOT chase green by mangling the test: backporting a feature whose new GUC/UDF
-   test runs under N-1 makes the (non-blocking) **N-1 mixed-version** jobs show that test as a NEW
-   red — the old coordinator lib lacks the GUC/UDF, so it errors and falls back to the pre-feature
-   plan. That fallback IS the N-1 contract (proves compat, not breaks it). The CLEAN fix is to MOVE
-   the test line from its schedule, usually is `multi_schedule`, into the placeholder section of
-   `multi_1_create_citus_schedule` (the N-1 make_targets omit `check-multi-1-create-citus`, so it
-   stops running under N-1 while still running on every normal PG job). Mirror the existing
-   `citus_cluster_changes_block` block, and label the N-1 version as the MAJOR FLOOR (13.2-1 /
-   14.0-1), copied from that neighbor comment. See ci-triage §"NEW N-1 red".
-   Fix-commit handling depends on review state: **pre-review**, amend the single commit +
-   `git push --force-with-lease`; **post-review** (the commits have already been reviewed), add ONE
-   NEW fix commit on top and never rewrite the reviewed SHAs — if a *bad* fix commit is already on
-   the remote, REPLACE just it with `git push --force-with-lease=<branch>:<badsha>`. Report evidence;
-   don't declare done on red.
+   flaky / coverage) from **genuinely-new failures you introduced**. The two you WILL hit on a
+   release branch: (a) a version-pinned `.out` that prints a shared helper's changed *signature*, and
+   (b) a PG-version planner divergence on the OLDER PG the branch keeps but `main` dropped (PREFER a
+   PG-guarded file like `pg16.sql` over a `<test>_N.out` alt file). A third you must NOT chase green
+   by mangling the test: a new GUC/UDF whose test runs under N-1 shows a NEW red in the (non-blocking)
+   **N-1 mixed-version** jobs — the old lib lacks it and falls back, which IS the N-1 contract. The
+   clean fix is to move that test line into the `multi_1_create_citus_schedule` placeholder section
+   (schedule mechanics + N-1 label rule in the hard-rules below and `ci-triage.md §"NEW N-1 red"`).
+   **Fix-commit rule (all fixes):** pre-review → amend + `git push --force-with-lease`; post-review →
+   add ONE new fix commit, never rewrite reviewed SHAs (replace a bad remote fix commit with
+   `--force-with-lease=<branch>:<badsha>`). Report evidence; don't declare done on red.
 9. **Propagate the ladder UP (SQL-schema backports only).** A new SQL object must also be reachable
    on every HIGHER major's upgrade ladder, or a future 13.x→14.y Major Version Upgrade loses it.
    As SEPARATE commits (its own PR on main), copy the introduction step/downgrade/udf files
    byte-for-byte onto release-14.0 (for a 13.x path) and main (for 13.x and 14.x paths, given today's
    two most recent major versions); main's own top path stays untouched. Full topology + recipe in
    `references/sql-schema-backport.md` §Step 5.
-10. **Add `multi_extension.sql` ladder-test coverage** for every new step. The test walks only the
-    main upgrade path, so a step you add off that path (13.x/14.x maintenance tail) is never
-    exercised → add a **detour** that matches the shape of the on-walk blocks: round-trip no-op (up
-    then down, assert empty), then a snapshot at the detour (shows the new object). Don't add a
-    separate "return" block — instead retarget the *existing* next round-trip so it bounces
-    `<detour> ↔ <next>` (not `<parent> ↔ <next>`), keeping the walk moving forward from the detour.
-    This shifts exactly ONE downstream block — the `Snapshot of state at <next>` — by the detour's
-    object (gains a dropped-row if `<next>` lacks it, or loses an added-row if `<next>` already has
-    it); everything after stays byte-identical. No editorial parentheticals. A branch's own
-    top/default_version is already covered by its snapshot block, so it needs nothing. Never hand-edit
-    `.out`. Prefer append-only on already-reviewed branches. Full pattern + `diff -w` header gotcha in
-    `references/sql-schema-backport.md`.
+10. **Add `multi_extension.sql` ladder-test coverage** for every new step. The test only walks the
+    main upgrade path, so a step OFF that path (a 13.x/14.x maintenance-tail detour) is never
+    exercised unless you add a detour block matching the on-walk shape (and the file's existing
+    comment style — no editorial parentheticals): a round-trip no-op + a snapshot at the detour,
+    then retarget the *existing* next round-trip to bounce `<detour> ↔ <next>` rather than adding a
+    separate "return" block. That shifts exactly one downstream snapshot; everything after stays
+    byte-identical. A branch's own top/default_version is already covered by its snapshot block.
+    Never hand-edit `.out`; prefer append-only on reviewed branches. Full pattern + the `diff -w`
+    header gotcha in `references/sql-schema-backport.md`.
 11. **Prove MVU safety on a real cluster (SQL-schema backports, after CI is green).** The ladder
     propagation only *claims* a future 13→14 Major Version Upgrade keeps the object; prove it. Stand
     up a multi-node cluster at an OLD major, then `ALTER EXTENSION citus UPDATE` on EVERY node across
@@ -152,16 +141,16 @@ four (add `manual-upgrade-testing.md` as the final proof once CI is green).
   `references/sql-schema-backport.md` §Step 5.
 - **Show evidence.** Present the proof (build-job outcomes, `regression.diffs` excerpts, the
   upstream-baseline comparison), not a bare "CI is green/red".
-- **A backport onto an older-PG release branch surfaces failures `main` never saw.** release-13.2
-  still builds **PG15** (main/14.0 don't), and the branch ships version-pinned `expected/*.out`. Two
-  new-fault patterns follow: (1) a shared helper whose SIGNATURE you changed → pinned `.out` that
-  prints it in `CONTEXT`/`PL/pgSQL function ... line N` mismatches (normalize.sed masks the line
-  NUMBER, not the signature); (2) a PG15-vs-PG16+ EXPLAIN/planner diff → PREFER moving the diverging
-  cases out of the normal test into a PG-guarded file (`pg16.sql` `\q`-skips <PG16 and already lives
-  in the N-1-excluded schedule); a `<test>_0.out` alternative file is the LAST resort. Do NOT "fix"
-  (1) by reverting the helper if the backported TEST calls it — it's required, not over-reach. Full
-  recipe: `references/ci-triage.md` §Genuinely-new failures.
+- **A backport onto an older-PG release branch surfaces failures `main` never saw** (release-13.2
+  still builds PG15; the branch ships version-pinned `expected/*.out`). Two patterns: (1) a shared
+  helper whose SIGNATURE you changed prints in a pinned `.out` (`normalize.sed` masks the line
+  NUMBER, not the signature) — do NOT "fix" it by reverting the helper if the backported TEST needs
+  it (it's required, not over-reach); (2) a PG15-vs-PG16+ EXPLAIN/planner diff → PREFER a PG-guarded
+  file (`pg16.sql` `\q`-skips <PG16 and already lives in the N-1-excluded schedule) over a
+  `<test>_0.out` alt. Full recipe: `references/ci-triage.md` §Genuinely-new failures.
 - **A NEW GUC/UDF whose test runs under N-1 has a CLEAN fix, not "leave it".** Move the test line
   from its schedule into the `multi_1_create_citus_schedule` placeholder section (N-1 make_targets
-  omit `check-multi-1-create-citus`). N-1 version label = major floor (13.2-1 / 14.0-1), copied from
-  the branch's own `citus_cluster_changes_block` comment. Details: `references/ci-triage.md` §"NEW N-1 red".
+  omit `check-multi-1-create-citus`). N-1 version label = the branch's CURRENT N-1 = the previous
+  minor (13.3-1 on release-13.2, 14.1-1 on release-14.0), read from the live `citus_version:` /
+  `citus_libdir:` pin in build_and_test.yml — not the (possibly-stale) number in the neighbor comment.
+  Details: `references/ci-triage.md` §"NEW N-1 red".
