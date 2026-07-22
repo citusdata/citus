@@ -78,7 +78,7 @@ make -C src/backend/columnar    install-downgrades
 ```
 
 (`columnar` is a SEPARATE extension with its own downgrades; omitting it surfaces as a
-`citus_columnar` "no update path" error. `make install-all` runs both — do NOT `-j` it.)
+`citus_columnar` "no update path" error. `make install-all` runs both.)
 
 Then run the feature's own test + `multi_extension`.
 

@@ -128,7 +128,7 @@ four (add `manual-upgrade-testing.md` as the final proof once CI is green).
   `git reset --hard HEAD`.
 - **`make install` does NOT install downgrade scripts.** For any SQL change run BOTH
   `make -C src/backend/distributed install-downgrades` and `make -C src/backend/columnar
-  install-downgrades` (columnar is a separate extension). `make install-all` does both; don't `-j` it.
+  install-downgrades` (columnar is a separate extension). `make install-all` does both.
 - **A single build environment builds ONE PG only** — it cannot catch a compile break on another PG
   the release branch supports. Rely on CI's per-PG `Build for PGNN` jobs; scan cherry-picked C for
   struct fields / APIs newer than the branch's OLDEST PG and add `#if PG_VERSION_NUM >= PG_VERSION_NN`.

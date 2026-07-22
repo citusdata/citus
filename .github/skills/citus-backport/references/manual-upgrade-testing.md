@@ -46,9 +46,7 @@ so it needs the **downgrade** scripts `13.4-1--13.3-1`, `13.3-1--13.2-1` and the
 **bridge** `13.2-1--14.0-1` (all shipped under `sql/downgrades/` on `release-14.0`). `make install`
 omits every downgrade → `ALTER EXTENSION citus UPDATE` fails with "no update path from 13.4-1 to
 14.2-1". Always build the test PG with **`make install-all`** (it runs `install` +
-`install-downgrades` for both the distributed and columnar extensions). Run install-all
-**serially — no `-j`** (parallel `install-all` races on the shared SQL-script generation and can
-lay down truncated / missing downgrade files); parallelize the preceding compile instead.
+`install-downgrades` for both the distributed and columnar extensions).
 
 ### PG version must be common to all builds
 Baseline Citus must support the chosen PG. 13.0/13.2 support PG15/16/17; 14.0 supports 16/17/18;
@@ -75,8 +73,8 @@ Build helper — reconfigure each tree against the SHARED PG and `install-all`:
 build() {  # build <worktree> ; installs into $SHARED
   cd "$1"
   ./configure PG_CONFIG="$SHARED/bin/pg_config" >/tmp/cfg.log 2>&1
-  make -sj"$(nproc)"   >/tmp/mk.log  2>&1
-  make -s install-all  >/tmp/ins.log 2>&1
+  make -sj"$(nproc)"             >/tmp/mk.log  2>&1
+  make -sj"$(nproc)" install-all >/tmp/ins.log 2>&1
   ls "$SHARED/share/extension/" | grep -E '^citus--1[3-5]' | sort   # sanity: see the ladder
 }
 ```
@@ -136,7 +134,7 @@ nodes" the ask means.
 ## Cleanup / restore
 - The shared PG's Citus was left at whatever you installed last (after the final main hop that
   is main's `15.0-1`). **Restore the env's own build:** rebuild the PG's normal Citus branch with
-  `make -s install-all` (verify `default_version` + the ladder edges are back).
+  `make -sj"$(nproc)" install-all` (verify `default_version` + the ladder edges are back).
 - Stop the test cluster (`pg_ctl -D cluster/<role> -w -m fast stop` per node, or your cluster
   helper's stop command) and `git worktree remove` the throwaway build trees (+ `git worktree
   prune`) when done.
