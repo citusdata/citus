@@ -158,8 +158,8 @@ SET client_min_messages TO DEBUG1;
 -- force multi-shard query to be able to
 -- have remote connections
 SELECT COUNT(*) FROM test WHERE x = 1 OR x = 2;
-NOTICE:  issuing SELECT count(*) AS count FROM single_node_ent.test_90730500 test WHERE ((x OPERATOR(pg_catalog.=) 1) OR (x OPERATOR(pg_catalog.=) 2))
-NOTICE:  issuing SELECT count(*) AS count FROM single_node_ent.test_90730503 test WHERE ((x OPERATOR(pg_catalog.=) 1) OR (x OPERATOR(pg_catalog.=) 2))
+NOTICE:  issuing SELECT count(*) AS count FROM single_node_ent.test_90730500 test WHERE (x OPERATOR(pg_catalog.=) 1)
+NOTICE:  issuing SELECT count(*) AS count FROM single_node_ent.test_90730503 test WHERE (x OPERATOR(pg_catalog.=) 2)
  count
 ---------------------------------------------------------------------
      1
