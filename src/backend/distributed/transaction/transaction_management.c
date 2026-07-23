@@ -82,14 +82,6 @@ int StoredProcedureLevel = 0;
 /* number of nested DO block levels we are currently in */
 int DoBlockLevel = 0;
 
-/*
- * Tracks the number of statements that have been executed without
- * coordinated transaction in the current stored procedure call.
- * Used to ensure that at most one statement can skip coordination
- * per procedure invocation, preventing partial-commit scenarios.
- */
-int ProcedureNonCoordinatedExecutionCount = 0;
-
 /* state needed to keep track of operations used during a transaction */
 XactModificationType XactModificationLevel = XACT_MODIFICATION_NONE;
 
@@ -152,11 +144,11 @@ AllowedDistributionColumn AllowedDistributionColumnValue;
 bool FunctionOpensTransactionBlock = true;
 
 /*
- * When enabled, CALL statements that execute a single task on a single shard
- * with a single placement can skip coordinated (2PC) transactions. This avoids
- * the overhead of BEGIN + PREPARE TRANSACTION + COMMIT PREPARED when it is safe
- * to do so (i.e., there is only one participant and no cross-shard coordination
- * is needed).
+ * When enabled, CALL statements whose procedure body contains exactly one
+ * SQL statement (determined by static analysis at func_beg time) and that
+ * target a single task on a single shard skip coordinated (2PC) transactions.
+ * Multi-statement procedures gracefully fall back to the normal coordinated
+ * transaction path.
  */
 bool EnableProcedureTransactionSkip = false;
 
