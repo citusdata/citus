@@ -78,6 +78,7 @@
 #include "distributed/multi_logical_replication.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/multi_physical_planner.h"
+#include "distributed/procedure_body_analysis.h"
 #include "distributed/reference_table_utils.h"
 #include "distributed/remote_commands.h"
 #include "distributed/resource_lock.h"
@@ -309,6 +310,16 @@ citus_ProcessUtility(PlannedStmt *pstmt,
 		PG_CATCH();
 		{
 			StoredProcedureLevel -= 1;
+
+			/*
+			 * Defensively reset the single-statement flag on the error path.
+			 * The normal-path reset lives in the PLpgSQL plugin's
+			 * citus_func_end callback, which is not guaranteed to run when a
+			 * procedure errors mid-body. Clearing it here keeps the invariant
+			 * obvious: ProcedureBodyIsSingleStatement is never left true once
+			 * no procedure is executing, independent of func_end ordering.
+			 */
+			ProcedureBodyIsSingleStatement = false;
 
 			if (InDelegatedProcedureCall && StoredProcedureLevel == 0)
 			{

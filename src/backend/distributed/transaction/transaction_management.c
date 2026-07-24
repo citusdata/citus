@@ -142,6 +142,15 @@ AllowedDistributionColumn AllowedDistributionColumnValue;
 /* if disabled, distributed statements in a function may run as separate transactions */
 bool FunctionOpensTransactionBlock = true;
 
+/*
+ * When enabled, CALL statements whose procedure body contains exactly one
+ * SQL statement (determined by static analysis at func_beg time) and that
+ * target a single task on a single shard skip coordinated (2PC) transactions.
+ * Multi-statement procedures gracefully fall back to the normal coordinated
+ * transaction path.
+ */
+bool EnableProcedureTransactionSkip = false;
+
 /* if true, we should trigger node metadata sync on commit */
 bool NodeMetadataSyncOnCommit = false;
 

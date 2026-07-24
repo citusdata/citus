@@ -89,6 +89,7 @@
 #include "distributed/pg_dist_partition.h"
 #include "distributed/placement_connection.h"
 #include "distributed/priority.h"
+#include "distributed/procedure_body_analysis.h"
 #include "distributed/query_pushdown_planning.h"
 #include "distributed/recursive_planning.h"
 #include "distributed/reference_table_utils.h"
@@ -513,6 +514,9 @@ _PG_init(void)
 
 	/* initialize coordinated transaction management */
 	InitializeTransactionManagement();
+
+	/* install PLpgSQL plugin for procedure body analysis */
+	InstallProcedureBodyAnalysisPlugin();
 	InitializeBackendManagement();
 	InitializeConnectionManagement();
 	InitPlacementConnectionManagement();
@@ -1510,6 +1514,25 @@ RegisterCitusConfigVariables(void)
 					 "or altering the shard count of one of those distributed "
 					 "tables."),
 		&EnableNonColocatedRouterQueryPushdown,
+		false,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		"citus.enable_procedure_transaction_skip",
+		gettext_noop("Skip coordinated transactions for single-statement, "
+					 "single-shard procedure calls."),
+		gettext_noop("When enabled, CALL statements whose procedure body "
+					 "contains exactly one SQL statement (determined by static "
+					 "analysis before execution) and that target a single task "
+					 "on a single shard skip coordinated (2PC) transactions. "
+					 "Multi-statement procedures gracefully fall back to the "
+					 "normal coordinated transaction path. The optimization "
+					 "applies to PLpgSQL procedures only; SQL-language and C "
+					 "procedures never set the single-statement flag and are "
+					 "never eligible."),
+		&EnableProcedureTransactionSkip,
 		false,
 		PGC_USERSET,
 		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
