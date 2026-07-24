@@ -14,7 +14,9 @@
 
 #include "distributed/executor_util.h"
 #include "distributed/listutils.h"
+#include "distributed/procedure_body_analysis.h"
 #include "distributed/shardinterval_utils.h"
+#include "distributed/transaction_management.h"
 
 
 /*
@@ -42,6 +44,111 @@ TaskListModifiesDatabase(RowModifyLevel modLevel, List *taskList)
 	Task *firstTask = (Task *) linitial(taskList);
 
 	return !ReadOnlyTask(firstTask->taskType);
+}
+
+
+/*
+ * CanSkipProcedureCoordination checks whether we can safely skip
+ * coordinated (2PC) transactions for the current procedure execution
+ * based on pre-execution static analysis of the procedure body.
+ *
+ * This is safe only when ALL of the following are true:
+ *   1. The GUC citus.enable_procedure_transaction_skip is enabled
+ *   2. The procedure body was analyzed and found to contain exactly one
+ *      SQL-producing statement (ProcedureBodyIsSingleStatement == true)
+ *   3. We are inside a stored procedure (StoredProcedureLevel == 1, not nested)
+ *   4. We are NOT inside an explicit BEGIN block or DO $$ block
+ *   5. There is exactly 1 task with exactly 1 placement
+ *   6. No coordinated transaction has been started yet
+ *
+ * Unlike the previous runtime counter approach, this uses pre-execution
+ * static analysis: the PLpgSQL func_beg callback walks the procedure body
+ * and sets ProcedureBodyIsSingleStatement before any statement executes.
+ * Multi-statement procedures simply fall back to normal coordinated
+ * transactions — no ERROR is raised and no partial commits occur.
+ */
+static bool
+CanSkipProcedureCoordination(List *taskList)
+{
+	/* GUC gate */
+	if (!EnableProcedureTransactionSkip)
+	{
+		return false;
+	}
+
+	/* Already in a coordinated transaction — no point evaluating further */
+	if (InCoordinatedTransaction())
+	{
+		ereport(DEBUG2, (errmsg("procedure transaction skip: already in "
+								"coordinated transaction")));
+		return false;
+	}
+
+	/* Body analysis must have determined single-statement */
+	if (!ProcedureBodyIsSingleStatement)
+	{
+		ereport(DEBUG2, (errmsg("procedure transaction skip: body is not "
+								"single-statement, using coordinated transaction")));
+		return false;
+	}
+
+	/* Only for non-nested stored procedure calls */
+	if (StoredProcedureLevel != 1)
+	{
+		ereport(DEBUG2, (errmsg("procedure transaction skip: nested procedure "
+								"call (level %d), using coordinated transaction",
+								StoredProcedureLevel)));
+		return false;
+	}
+
+	/* Not inside explicit BEGIN block */
+	if (IsTransactionBlock())
+	{
+		ereport(DEBUG2, (errmsg("procedure transaction skip: inside explicit "
+								"transaction block, using coordinated transaction")));
+		return false;
+	}
+
+	/* Not inside DO $$ block */
+	if (DoBlockLevel > 0)
+	{
+		ereport(DEBUG2, (errmsg("procedure transaction skip: inside DO block, "
+								"using coordinated transaction")));
+		return false;
+	}
+
+	/* Exactly one task */
+	if (list_length(taskList) != 1)
+	{
+		ereport(DEBUG2, (errmsg("procedure transaction skip: %d tasks (need 1), "
+								"using coordinated transaction",
+								list_length(taskList))));
+		return false;
+	}
+
+	Task *task = (Task *) linitial(taskList);
+
+	/* Exactly one placement (no replication) */
+	if (list_length(task->taskPlacementList) != 1)
+	{
+		ereport(DEBUG2, (errmsg("procedure transaction skip: %d placements "
+								"(need 1), using coordinated transaction",
+								list_length(task->taskPlacementList))));
+		return false;
+	}
+
+	/* Multi-query tasks need a transaction */
+	if (task->queryCount > 1)
+	{
+		ereport(DEBUG2, (errmsg("procedure transaction skip: multi-query task, "
+								"using coordinated transaction")));
+		return false;
+	}
+
+	ereport(DEBUG2, (errmsg("procedure transaction skip: all conditions met, "
+							"skipping coordinated transaction (2PC)")));
+
+	return true;
 }
 
 
@@ -86,7 +193,19 @@ TaskListRequiresRollback(List *taskList)
 
 	if (IsMultiStatementTransaction())
 	{
-		return true;
+		/*
+		 * When the single-shard procedure optimization is enabled and the
+		 * procedure body was determined to be a single SQL statement by
+		 * pre-execution analysis, we can skip coordinated transactions.
+		 *
+		 * This avoids the overhead of BEGIN + PREPARE TRANSACTION +
+		 * COMMIT PREPARED for single-shard single-placement writes
+		 * inside single-statement stored procedures.
+		 */
+		if (!CanSkipProcedureCoordination(taskList))
+		{
+			return true;
+		}
 	}
 
 	if (list_length(taskList) > 1)
