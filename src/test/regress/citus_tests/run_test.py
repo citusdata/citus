@@ -117,8 +117,14 @@ DEPS = {
     "multi_add_node_from_backup_negative": TestDeps(
         None, ["multi_add_node_from_backup"], worker_count=5, repeatable=False
     ),
+    "multi_add_node_from_backup_coordinator": TestDeps(
+        None, ["multi_add_node_from_backup_negative"], worker_count=5, repeatable=False
+    ),
     "multi_add_node_from_backup_sync_replica": TestDeps(
         None, repeatable=False, worker_count=5
+    ),
+    "multi_add_node_from_backup_sequences": TestDeps(
+        None, ["multi_add_node_from_backup_negative"], worker_count=5, repeatable=False
     ),
     "single_node": TestDeps(None, ["multi_test_helpers"]),
     "single_node_truncate": TestDeps(None),
@@ -228,6 +234,7 @@ DEPS = {
         repeatable=False,
     ),
     "multi_prepare_plsql": TestDeps("base_schedule"),
+    "multi_utility_statements": TestDeps("base_schedule"),
     "pg15": TestDeps("base_schedule"),
     "foreign_key_to_reference_shard_rebalance": TestDeps(
         "minimal_schedule", ["remove_coordinator_from_metadata"]
@@ -271,6 +278,9 @@ DEPS = {
         "minimal_schedule", ["multi_behavioral_analytics_create_table"]
     ),
     "multi_subquery_in_where_reference_clause": TestDeps(
+        "minimal_schedule", ["multi_behavioral_analytics_create_table"]
+    ),
+    "adaptive_executor_batching": TestDeps(
         "minimal_schedule", ["multi_behavioral_analytics_create_table"]
     ),
     "subquery_in_where": TestDeps(

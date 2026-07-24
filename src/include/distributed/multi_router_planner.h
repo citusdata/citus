@@ -79,7 +79,9 @@ extern RangeTblEntry * ExtractResultRelationRTE(Query *query);
 extern RangeTblEntry * ExtractResultRelationRTEOrError(Query *query);
 extern RangeTblEntry * ExtractDistributedInsertValuesRTE(Query *query);
 extern bool IsMultiRowInsert(Query *query);
-extern void AddPartitionKeyNotNullFilterToSelect(Query *subqery);
+extern void AddPartitionKeyNotNullFilterToSelect(Query *subqery,
+												 bool distributionColumnIsShardKeyIdentity
+												 );
 extern bool UpdateOrDeleteOrMergeQuery(Query *query);
 extern bool IsMergeQuery(Query *query);
 

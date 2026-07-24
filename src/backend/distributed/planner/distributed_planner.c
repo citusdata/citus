@@ -83,7 +83,7 @@ int PlannerLevel = 0;
 
 static bool ListContainsDistributedTableRTE(List *rangeTableList,
 											bool *maybeHasForeignDistributedTable);
-static bool PlanContainsDistributedSubPlanRTE(List *subPlanList);
+static bool PlanContainsDistributedSubPlanRTE(DistributedPlanningContext *planContext);
 static PlannedStmt * CreateDistributedPlannedStmt(DistributedPlanningContext *
 												  planContext);
 static PlannedStmt * InlineCtesAndCreateDistributedPlannedStmt(uint64 planId,
@@ -94,7 +94,8 @@ static PlannedStmt * TryCreateDistributedPlannedStmt(PlannedStmt *localPlan,
 													 Query *query, ParamListInfo
 													 boundParams,
 													 PlannerRestrictionContext *
-													 plannerRestrictionContext);
+													 plannerRestrictionContext,
+													 int cursorOptions);
 static DeferredErrorMessage * DeferErrorIfPartitionTableNotSingleReplicated(Oid
 																			relationId);
 
@@ -436,8 +437,9 @@ ListContainsDistributedTableRTE(List *rangeTableList,
 
 
 /*
- * PlanContainsDistributedSubPlanRTE checks whether any of the subplans in the given
- * subPlanList is a Read Intermediate Result function scan.
+ * PlanContainsDistributedSubPlanRTE checks whether any of the subplans in the
+ * plan context's PlannedStmt->subplans list is a Read Intermediate Result
+ * function scan.
  *
  * It is used by the check after standard_planner() to determine whether the plan
  * still requires distributed planning; in addition to checking the range table for
@@ -446,13 +448,25 @@ ListContainsDistributedTableRTE(List *rangeTableList,
  * that distributed planning is required.
  */
 static bool
-PlanContainsDistributedSubPlanRTE(List *subPlanList)
+PlanContainsDistributedSubPlanRTE(DistributedPlanningContext *planContext)
 {
+	/*
+	 * We iterate over planContext->plan->subplans, which is PostgreSQL's
+	 * PlannedStmt->subplans list. PostgreSQL's setrefs.c (set_plan_references)
+	 * resolves AlternativeSubPlan nodes by picking one alternative and setting
+	 * the discarded subplan entries to NULL. We must therefore skip NULL entries.
+	 */
+	List *subPlanList = planContext->plan->subplans;
 	ListCell *subPlanCell = NULL;
 
 	foreach(subPlanCell, subPlanList)
 	{
 		Node *planRoot = (Node *) lfirst(subPlanCell);
+
+		if (planRoot == NULL)
+		{
+			continue;
+		}
 
 		if (!IsA(planRoot, FunctionScan))
 		{
@@ -853,7 +867,8 @@ CreateDistributedPlannedStmt(DistributedPlanningContext *planContext)
 	distributedPlan->planId = planId;
 
 	/* create final plan by combining local plan with distributed plan */
-	resultPlan = FinalizePlan(planContext->plan, distributedPlan);
+	resultPlan = FinalizePlan(planContext->plan, distributedPlan,
+							  planContext->cursorOptions);
 
 	/*
 	 * As explained above, force planning costs to be unrealistically high if
@@ -902,7 +917,9 @@ InlineCtesAndCreateDistributedPlannedStmt(uint64 planId,
 														  planContext->query,
 														  planContext->boundParams,
 														  planContext->
-														  plannerRestrictionContext);
+														  plannerRestrictionContext,
+														  planContext->
+														  cursorOptions);
 
 	return result;
 }
@@ -918,7 +935,8 @@ static PlannedStmt *
 TryCreateDistributedPlannedStmt(PlannedStmt *localPlan,
 								Query *originalQuery,
 								Query *query, ParamListInfo boundParams,
-								PlannerRestrictionContext *plannerRestrictionContext)
+								PlannerRestrictionContext *plannerRestrictionContext,
+								int cursorOptions)
 {
 	MemoryContext savedContext = CurrentMemoryContext;
 	PlannedStmt *result = NULL;
@@ -930,6 +948,7 @@ TryCreateDistributedPlannedStmt(PlannedStmt *localPlan,
 	planContext->originalQuery = originalQuery;
 	planContext->query = query;
 	planContext->plannerRestrictionContext = plannerRestrictionContext;
+	planContext->cursorOptions = cursorOptions;
 
 
 	PG_TRY();
@@ -1437,7 +1456,8 @@ GetDistributedPlan(CustomScan *customScan)
  * which can be run by the PostgreSQL executor.
  */
 PlannedStmt *
-FinalizePlan(PlannedStmt *localPlan, DistributedPlan *distributedPlan)
+FinalizePlan(PlannedStmt *localPlan, DistributedPlan *distributedPlan,
+			 int cursorOptions)
 {
 	PlannedStmt *finalPlan = NULL;
 	CustomScan *customScan = makeNode(CustomScan);
@@ -1456,6 +1476,12 @@ FinalizePlan(PlannedStmt *localPlan, DistributedPlan *distributedPlan)
 		case MULTI_EXECUTOR_ADAPTIVE:
 		{
 			customScan->methods = &AdaptiveExecutorCustomScanMethods;
+			break;
+		}
+
+		case MULTI_EXECUTOR_SORTED_MERGE:
+		{
+			customScan->methods = &SortedMergeCustomScanMethods;
 			break;
 		}
 
@@ -1498,8 +1524,8 @@ FinalizePlan(PlannedStmt *localPlan, DistributedPlan *distributedPlan)
 
 	customScan->custom_private = list_make1(distributedPlanData);
 
-	/* necessary to avoid extra Result node in PG15 */
-	customScan->flags = CUSTOMPATH_SUPPORT_BACKWARD_SCAN | CUSTOMPATH_SUPPORT_PROJECTION;
+	/* CUSTOMPATH_SUPPORT_PROJECTION avoids an extra Result node in PG15+ */
+	customScan->flags = CUSTOMPATH_SUPPORT_PROJECTION;
 
 	/*
 	 * Fast path queries cannot have any subplans by definition, so skip
@@ -1524,6 +1550,21 @@ FinalizePlan(PlannedStmt *localPlan, DistributedPlan *distributedPlan)
 	else
 	{
 		finalPlan = FinalizeRouterPlan(localPlan, customScan);
+	}
+
+	/*
+	 * For SCROLL cursors, wrap the plan in a Material node so that backward
+	 * scan works correctly with batched execution. PG's standard_planner()
+	 * already added a Material node, but Citus discarded the entire plan tree
+	 * above and replaced it with a CustomScan. Re-apply it here.
+	 *
+	 * Material is lazy (non-blocking): it fetches one tuple at a time from the
+	 * child and appends it to its own tuplestore, so batching is preserved.
+	 */
+	if ((cursorOptions & CURSOR_OPT_SCROLL) &&
+		!ExecSupportsBackwardScan(finalPlan->planTree))
+	{
+		finalPlan->planTree = materialize_finished_plan(finalPlan->planTree);
 	}
 
 	return finalPlan;
@@ -2975,7 +3016,7 @@ CheckPostPlanDistribution(DistributedPlanningContext *planContext, bool
 			/* ..or a distributed subplan */
 			planHasDistribution = planHasDistribution ||
 								  PlanContainsDistributedSubPlanRTE(
-				planContext->plan->subplans);
+				planContext);
 
 			/*
 			 * The plan has a distributed relation, so we know for sure that

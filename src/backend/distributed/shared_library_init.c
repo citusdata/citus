@@ -57,6 +57,7 @@
 #include "distributed/citus_depended_object.h"
 #include "distributed/citus_nodefuncs.h"
 #include "distributed/citus_safe_lib.h"
+#include "distributed/cluster_changes_block.h"
 #include "distributed/combine_query_planner.h"
 #include "distributed/commands.h"
 #include "distributed/commands/multi_copy.h"
@@ -88,6 +89,7 @@
 #include "distributed/pg_dist_partition.h"
 #include "distributed/placement_connection.h"
 #include "distributed/priority.h"
+#include "distributed/procedure_body_analysis.h"
 #include "distributed/query_pushdown_planning.h"
 #include "distributed/recursive_planning.h"
 #include "distributed/reference_table_utils.h"
@@ -510,9 +512,13 @@ _PG_init(void)
 
 	InitializeMaintenanceDaemon();
 	InitializeMaintenanceDaemonForMainDb();
+	InitializeClusterChangesBlock();
 
 	/* initialize coordinated transaction management */
 	InitializeTransactionManagement();
+
+	/* install PLpgSQL plugin for procedure body analysis */
+	InstallProcedureBodyAnalysisPlugin();
 	InitializeBackendManagement();
 	InitializeConnectionManagement();
 	InitPlacementConnectionManagement();
@@ -649,6 +655,7 @@ citus_shmem_request(void)
 	RequestAddinShmemSpace(MaintenanceDaemonShmemSize());
 	RequestAddinShmemSpace(CitusQueryStatsSharedMemSize());
 	RequestAddinShmemSpace(LogicalClockShmemSize());
+	RequestAddinShmemSpace(ClusterChangesBlockShmemSize());
 	RequestNamedLWLockTranche(STATS_SHARED_MEM_NAME, 1);
 	RequestAddinShmemSpace(StatCountersShmemSize());
 	RequestNamedLWLockTranche(SAVED_BACKEND_STATS_HASH_LOCK_TRANCHE_NAME, 1);
@@ -1049,6 +1056,38 @@ RegisterCitusConfigVariables(void)
 					 "separately may not be desirable. This setting can then be used "
 					 "to disable the check."),
 		&AllowUnsafeConstraints,
+		false,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		"citus.allow_unsafe_insert_select_pushdown",
+		gettext_noop("Allows pushdown of otherwise-unsafe colocated "
+					 "INSERT ... SELECT queries."),
+		gettext_noop("When enabled, Citus relaxes safety checks (GROUP BY / window / "
+					 "aggregate / DISTINCT constructs on non-distribution columns) "
+					 "for colocated INSERT ... SELECT, so that batching and any batch "
+					 "UDF call run on the shards instead of pulling data to the "
+					 "coordinator. The INSERT's distribution column may then be a "
+					 "provably shard-local unnest(array_agg(<distribution column>)); "
+					 "any other derived distribution value is still rejected, since it "
+					 "could route rows that actually belong to a different shard. "
+					 "Colocation is still enforced, but the user takes responsibility "
+					 "for keeping batches order-preserving; otherwise results may be "
+					 "silently incorrect. Because the relaxed checks also apply to "
+					 "nested subqueries, any grouping, window, or aggregate now runs "
+					 "per shard rather than across the whole table, so a global "
+					 "window/aggregate (e.g. count(*) OVER ()) silently becomes "
+					 "per-shard. Finally, the runtime NOT NULL filter guards only the "
+					 "distribution column, not the other projected values, so a batch "
+					 "UDF that returns fewer values than its input inserts NULLs into "
+					 "those value columns; the distribution column itself is never NULL "
+					 "here, since a NULL-padded key is dropped by that filter. The "
+					 "user must ensure the batch produces exactly one value per input "
+					 "row. This is an experimental feature and semantics "
+					 "may change in future releases."),
+		&AllowUnsafeInsertSelectPushdown,
 		false,
 		PGC_USERSET,
 		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
@@ -1499,6 +1538,23 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
+		"citus.enable_or_clause_arm_pruning",
+		gettext_noop("Enables removing the arms of a top-level OR clause that "
+					 "cannot match any row on a shard when generating the "
+					 "per-shard query."),
+		gettext_noop("When a query filters on the distribution column inside "
+					 "each arm of an OR (e.g. (dist=a AND ...) OR (dist=b AND "
+					 "...)), every shard otherwise receives the full OR. With "
+					 "this enabled, each shard's query only keeps the arms that "
+					 "can match on that shard, allowing a single precise index "
+					 "scan instead of an N-way bitmap OR."),
+		&EnableOrClauseArmPruning,
+		true,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
 		"citus.enable_outer_joins_with_pseudoconstant_quals_pre_pg17",
 		gettext_noop("Enables running distributed queries with outer joins "
 					 "and pseudoconstant quals pre PG17."),
@@ -1519,15 +1575,15 @@ RegisterCitusConfigVariables(void)
 		"citus.enable_procedure_transaction_skip",
 		gettext_noop("Skip coordinated transactions for single-statement, "
 					 "single-shard procedure calls."),
-		gettext_noop("When enabled, CALL statements that execute exactly one "
-					 "distributed write targeting a single task on a single "
-					 "shard with a single placement skip coordinated (2PC) "
-					 "transactions. Only applies to non-nested procedure calls "
-					 "outside of explicit transaction blocks. "
-					 "WARNING: this is intended for single-statement procedures "
-					 "only. If a procedure issues a second distributed statement, "
-					 "it will raise an ERROR, but the first statement will have "
-					 "already been committed and cannot be rolled back."),
+		gettext_noop("When enabled, CALL statements whose procedure body "
+					 "contains exactly one SQL statement (determined by static "
+					 "analysis before execution) and that target a single task "
+					 "on a single shard skip coordinated (2PC) transactions. "
+					 "Multi-statement procedures gracefully fall back to the "
+					 "normal coordinated transaction path. The optimization "
+					 "applies to PLpgSQL procedures only; SQL-language and C "
+					 "procedures never set the single-statement flag and are "
+					 "never eligible."),
 		&EnableProcedureTransactionSkip,
 		false,
 		PGC_USERSET,
@@ -1601,6 +1657,19 @@ RegisterCitusConfigVariables(void)
 		&EnableSingleHashRepartitioning,
 		false,
 		PGC_USERSET,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		"citus.enable_sorted_merge",
+		gettext_noop("Enables sorted merge of worker results for ORDER BY queries."),
+		gettext_noop("When enabled during planning, Citus pushes ORDER BY to workers "
+					 "and merges the pre-sorted results on the coordinator using a "
+					 "binary heap, eliminating the Sort node in the combine query. "
+					 "This is an experimental feature."),
+		&EnableSortedMerge,
+		true,
+		PGC_SUSET,
 		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
@@ -1694,6 +1763,38 @@ RegisterCitusConfigVariables(void)
 		true,
 		PGC_USERSET,
 		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
+		NULL, NULL, NULL);
+
+	DefineCustomIntVariable(
+		"citus.executor_batch_size",
+		gettext_noop("Maximum number of rows per batch in the adaptive executor."),
+		gettext_noop("When set to 0 (the default), the batch size is automatically "
+					 "calculated from work_mem and the estimated tuple size. This is a "
+					 "soft limit because a full result chunk from a worker is always "
+					 "processed atomically, so the actual number of rows per batch can "
+					 "exceed the estimate by the value of citus.executor_chunk_size. "
+					 "A non-zero value overrides the automatic calculation with a fixed "
+					 "row count. Small values (e.g. 1) can cause extreme overhead and"
+					 " should only be used for testing."),
+		&ExecutorBatchSize,
+		0, 0, INT_MAX,
+		PGC_USERSET,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomIntVariable(
+		"citus.executor_chunk_size",
+		gettext_noop("Chunk size in rows for libpq chunked row mode."),
+		gettext_noop(
+			"Controls the number of rows per chunk passed to PQsetChunkedRowsMode "
+			"when fetching rows from workers. Larger values reduce per-result "
+			"overhead but increase memory usage per fetch. Only effective "
+			"on PostgreSQL 17 and later. A value of 1 is equivalent to "
+			"single-row mode."),
+		&ExecutorChunkSize,
+		8192, 1, INT_MAX,
+		PGC_USERSET,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
