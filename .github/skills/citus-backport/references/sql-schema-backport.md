@@ -72,7 +72,7 @@ by an earlier test in `after_pg_upgrade_with_columnar_schedule`; run alone it di
 path, so after every rebuild run both:
 
 ```
-make -sj$(nproc) install
+make -sj"$(nproc 2>/dev/null || sysctl -n hw.logicalcpu)" install
 make -C src/backend/distributed install-downgrades
 make -C src/backend/columnar    install-downgrades
 ```

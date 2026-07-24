@@ -65,7 +65,7 @@ four (add `manual-upgrade-testing.md` as the final proof once CI is green).
      compat (`references/ci-triage.md` §PG-version) — the #1 non-obvious C-backport failure.
    - **SQL-schema:** migration / udf / `multi_extension.out` conflict → remap by hand per
      `references/sql-schema-backport.md`. Do NOT just accept `main`'s next-major (e.g. `15.0-1`) files.
-4. **Build in the isolated env:** `make -sj$(nproc) install`. For any SQL change ALSO install
+4. **Build in the isolated env:** `make -sj"$(nproc 2>/dev/null || sysctl -n hw.logicalcpu)" install`. For any SQL change ALSO install
    downgrades (see `references/sql-schema-backport.md` — plain `make install` skips them and
    `multi_extension` will fail with cascading "no update path" errors otherwise; use
    `make install-all`).

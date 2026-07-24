@@ -220,7 +220,7 @@ file list is pure dependency-expansion, not a change you made.
    `grep -oE "expected/[a-z_0-9]+[.]out"` (only the base test).
 2. **Reproduce on the PRISTINE base** to prove pre-existing, not introduced. From `src/test/regress`:
    `python citus_tests/run_test.py <flaky_test> --repeat 8 --use-whole-schedule-line` on your branch
-   head, then `git checkout <merge-base> && make -sj$(nproc) install` and run the SAME command. If the
+   head, then `git checkout <merge-base> && make -sj"$(nproc 2>/dev/null || sysctl -n hw.logicalcpu)" install` and run the SAME command. If the
    base fails the identical N/N under the identical flags, it's 100% pre-existing (checkout your
    branch + rebuild to restore afterward). Example proven this way: `start_stop_metadata_sync` failed
    8/8 on both `bp-release-13.2` tip and its pristine base, same colocationid/FK diff — not the
