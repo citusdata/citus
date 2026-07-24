@@ -593,6 +593,7 @@ typedef List *(*ReorderFunction)(List *);
 /* Config variable managed via guc.c */
 extern int TaskAssignmentPolicy;
 extern bool EnableUniqueJobIds;
+extern bool EnableOrClauseArmPruning;
 
 
 /* Function declarations for building physical plans and constructing queries */
