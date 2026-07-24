@@ -2007,6 +2007,49 @@ DROP SCHEMA pg18_minmax CASCADE;
 -- END: PG18: MIN/MAX aggregate OID resolution for ANYARRAY and RECORD
 
 
+-- PG18: shard-local INSERT .. SELECT batching pushdown
+-- (citus.allow_unsafe_insert_select_pushdown). This mirrors a case from
+-- allow_unsafe_insert_select_pushdown.sql, which wraps EXPLAIN in
+-- public.explain_filter so the plan is comparable across supported Postgres
+-- versions. Here we keep the raw EXPLAIN output because this file only runs on
+-- PG18+, so we exercise the real plan including the PG18-only WindowAgg
+-- "Window:" line.
+CREATE SCHEMA pg18_insert_select_pushdown;
+SET search_path TO pg18_insert_select_pushdown;
+SET citus.next_shard_id TO 14100000;
+SET citus.shard_count = 4;
+SET citus.shard_replication_factor = 1;
+
+CREATE TABLE dist(text_id int, text_col text);
+CREATE TABLE res(text_id int, val int);
+SELECT create_distributed_table('dist', 'text_id');
+SELECT create_distributed_table('res', 'text_id');
+
+INSERT INTO dist SELECT g, 't' || g FROM generate_series(1, 500) g;
+
+-- a batch UDF: returns one value per input, mimicking a batched API call.
+-- immutable + parallel safe, like a real batch UDF.
+CREATE FUNCTION batch_transform(t text[]) RETURNS int[]
+LANGUAGE sql IMMUTABLE PARALLEL SAFE AS $$ SELECT array_agg(length(x)) FROM unnest(t) x $$;
+SELECT create_distributed_function('batch_transform(text[])');
+
+SET citus.allow_unsafe_insert_select_pushdown TO on;
+
+-- the batching and batch UDF run on the shards; the raw PG18 plan
+-- includes the WindowAgg "Window:" line
+EXPLAIN (COSTS OFF) INSERT INTO res(text_id, val)
+SELECT id, val FROM (
+  SELECT b, unnest(array_agg(text_id)) id,
+            unnest(batch_transform(array_agg(text_col))) val
+  FROM (SELECT text_id, text_col, (row_number() OVER () - 1) / 100 b FROM dist) q
+  GROUP BY b
+) s;
+
+RESET citus.allow_unsafe_insert_select_pushdown;
+DROP SCHEMA pg18_insert_select_pushdown CASCADE;
+SET search_path TO pg18_nn;
+
+
 -- cleanup with minimum verbosity
 SET client_min_messages TO ERROR;
 RESET search_path;
