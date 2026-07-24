@@ -535,7 +535,7 @@ CreateDistributedTableConcurrently(Oid relationId, char *distributionColumnName,
 	 */
 	Var *distributionColumn = BuildDistributionKeyFromColumnName(relationId,
 																 distributionColumnName,
-																 NoLock);
+																 NoLock, false);
 
 	/* get an advisory lock to serialize concurrent default group creations */
 	if (IsColocateWithDefault(colocateWithTableName))
@@ -704,7 +704,7 @@ EnsureColocateWithTableIsValid(Oid relationId, char distributionMethod,
 
 	Var *distributionColumn = BuildDistributionKeyFromColumnName(relationId,
 																 distributionColumnName,
-																 NoLock);
+																 AccessShareLock, true);
 	EnsureTableCanBeColocatedWith(relationId, replicationModel,
 								  distributionColumn, colocateWithTableId);
 }
@@ -1221,7 +1221,7 @@ CreateCitusTable(Oid relationId, CitusTableType tableType,
 		distributionColumn = BuildDistributionKeyFromColumnName(relationId,
 																distributedTableParams->
 																distributionColumnName,
-																NoLock);
+																NoLock, false);
 	}
 
 	CitusTableParams citusTableParams = DecideCitusTableParams(tableType,

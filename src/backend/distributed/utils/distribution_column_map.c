@@ -71,7 +71,8 @@ AddDistributionColumnForRelation(DistributionColumnMap *distributionColumnMap,
 	Assert(!entryFound);
 
 	entry->distributionColumn =
-		BuildDistributionKeyFromColumnName(relationId, distributionColumnName, NoLock);
+		BuildDistributionKeyFromColumnName(relationId, distributionColumnName, NoLock,
+										   false);
 
 	if (PartitionedTable(relationId))
 	{
