@@ -67,6 +67,15 @@ double CountDistinctErrorRate = 0.0; /* precision of count(distinct) approximate
 int CoordinatorAggregationStrategy = COORDINATOR_AGGREGATION_ROW_GATHER;
 bool AllowAggregateWorkerCombineOnInternalTypes = true;
 
+/*
+ * When false, distributed custom-combine aggregates are pushed down using the
+ * text-based worker_partial_agg() path instead of worker_binary_partial_agg().
+ * worker_binary_partial_agg() was introduced in Citus 14.0, so a coordinator
+ * running ahead of not-yet-upgraded (e.g. 12.1) workers can set this off to
+ * keep aggregate pushdown working against those older workers.
+ */
+bool EnableBinaryWorkerPartialAgg = true;
+
 /* Constant used throughout file */
 static const uint32 masterTableId = 1; /* first range table reference on the master node */
 
@@ -2183,7 +2192,8 @@ MasterAggregateExpression(Aggref *originalAggregate,
 		{
 			aggform = (Form_pg_aggregate) GETSTRUCT(aggTuple);
 			combine = aggform->aggcombinefn;
-			useBinaryCoordinatorCombine = aggform->aggtranstype != InvalidOid &&
+			useBinaryCoordinatorCombine = EnableBinaryWorkerPartialAgg &&
+										  aggform->aggtranstype != InvalidOid &&
 										  IsAggTransTypeBinarySerializable(aggform);
 			ReleaseSysCache(aggTuple);
 		}
@@ -3396,7 +3406,8 @@ WorkerAggregateExpressionList(Aggref *originalAggregate,
 		{
 			aggform = (Form_pg_aggregate) GETSTRUCT(aggTuple);
 			combine = aggform->aggcombinefn;
-			useBinaryWorkerAggregate = (OidIsValid(aggform->aggtranstype) &&
+			useBinaryWorkerAggregate = (EnableBinaryWorkerPartialAgg &&
+										OidIsValid(aggform->aggtranstype) &&
 										IsAggTransTypeBinarySerializable(aggform));
 
 			ReleaseSysCache(aggTuple);

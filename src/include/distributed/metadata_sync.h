@@ -227,5 +227,8 @@ extern void SendInterTableRelationshipCommands(MetadataSyncContext *context);
 /* controlled via GUC */
 extern char *EnableManualMetadataChangesForUser;
 extern bool EnableMetadataSync;
+extern bool UseCitusInternalSchema;
+
+extern const char * CitusInternalSchemaPrefix(void);
 
 #endif /* METADATA_SYNC_H */

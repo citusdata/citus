@@ -1008,6 +1008,24 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
+		"citus.enable_binary_worker_partial_agg",
+		gettext_noop("Enables pushing down custom-combine aggregates using the "
+					 "binary worker_binary_partial_agg() path."),
+		gettext_noop(
+			"When enabled, distributed custom-combine aggregates whose partial "
+			"state is binary-serializable are pushed down using "
+			"worker_binary_partial_agg(), which was introduced in Citus 14.0. "
+			"Turn this off so the coordinator falls back to the text-based "
+			"worker_partial_agg() path, which lets aggregate pushdown keep "
+			"working against workers that have not yet been upgraded to a Citus "
+			"version providing worker_binary_partial_agg()."),
+		&EnableBinaryWorkerPartialAgg,
+		true,
+		PGC_USERSET,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
 		"citus.allow_modifications_from_workers_to_replicated_tables",
 		gettext_noop("Enables modifications from workers to replicated "
 					 "tables such as reference tables or hash "
@@ -1518,6 +1536,23 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
+		"citus.use_citus_internal_schema",
+		gettext_noop("Use the citus_internal schema for internal metadata "
+					 "helper functions in commands sent to workers."),
+		gettext_noop("When enabled (default), metadata-sync commands reference "
+					 "functions such as citus_internal.add_partition_metadata, "
+					 "which were introduced in Citus 13.1. When disabled, the "
+					 "older pg_catalog.citus_internal_* names are emitted instead "
+					 "so the coordinator can sync metadata to workers running a "
+					 "Citus version that predates the citus_internal schema "
+					 "(e.g. 12.1) -- useful during a mixed-version upgrade."),
+		&UseCitusInternalSchema,
+		true,
+		PGC_USERSET,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
 		"citus.enable_non_colocated_router_query_pushdown",
 		gettext_noop("Enables router planner for the queries that reference "
 					 "non-colocated distributed tables."),
@@ -1722,6 +1757,24 @@ RegisterCitusConfigVariables(void)
 		true,
 		PGC_USERSET,
 		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		"citus.enforce_foreign_key_colocation",
+		gettext_noop("Enforce that distributed-to-distributed foreign keys are "
+					 "between colocated relations."),
+		gettext_noop("When enabled (default), creating a foreign key between two "
+					 "distributed tables that are not colocated raises an error. "
+					 "When disabled, the requirement is downgraded to a warning so "
+					 "the foreign key can still be created -- for example during a "
+					 "mixed-version upgrade before citus_finish_citus_upgrade() has "
+					 "run and tables may have landed in different colocation groups. "
+					 "Citus cannot enforce the foreign key across non-colocated "
+					 "shards, so use this only as a temporary migration aid."),
+		&EnforceForeignKeyColocation,
+		true,
+		PGC_USERSET,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
