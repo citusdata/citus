@@ -22,6 +22,18 @@ CREATE TABLE modify_fast_path_reference(key int, value_1 int, value_2 text);
 SELECT create_reference_table('modify_fast_path_reference');
 
 
+-- Pre-propagate the plpgsql extension to workers via Citus's function
+-- distribution machinery, before enabling DEBUG-level output. Otherwise the
+-- first distributed CREATE FUNCTION below would emit worker-side "extension
+-- plpgsql already exists" notices that only appear when this test runs against
+-- a setup where plpgsql wasn't registered in pg_dist_object by an earlier
+-- test in the schedule (e.g. the flakyness detector's minimal schedule).
+SET client_min_messages TO WARNING;
+CREATE OR REPLACE FUNCTION _propagate_plpgsql() RETURNS void
+    LANGUAGE plpgsql AS $$BEGIN END$$;
+DROP FUNCTION _propagate_plpgsql();
+RESET client_min_messages;
+
 -- show the output
 SET client_min_messages TO DEBUG;
 
@@ -173,4 +185,68 @@ RESET citus.enable_fast_path_router_planner;
 
 RESET client_min_messages;
 RESET citus.log_remote_commands;
+
+-- Regression coverage for the delayed-fast-path zero-shard modification
+-- case. When the WHERE clause combines a distribution-key equality with
+-- a statically-unsatisfiable sub-predicate (`AND false`, `AND 1 = 0`, or
+-- when the fast-path fallback triggers e.g. via bigint-key-vs-int-literal
+-- type mismatch) shard pruning legitimately yields zero shards. Prior to
+-- the fix, CheckAndBuildDelayedFastPathPlan tripped
+-- `Assert(list_length(tasks) == 1)`; the fix routes these queries through
+-- the same "empty task list is a silent no-op" contract already used by
+-- the non-fast-path UPDATE/DELETE route.
+CREATE TABLE modify_fast_path_bigint(dist_key bigint, val int);
+SELECT create_distributed_table('modify_fast_path_bigint', 'dist_key');
+INSERT INTO modify_fast_path_bigint VALUES (7, 100), (8, 200);
+
+SET client_min_messages TO DEBUG2;
+
+-- bigint-key vs int-literal: DistKeyInSimpleOpExpression bails out on the
+-- type mismatch so fastPathContext->distributionKeyValue is NULL, then
+-- TargetShardIntervalForFastPathQuery falls back to PruneShards which
+-- short-circuits on ContainsFalseClause -> zero shards -> empty task list.
+UPDATE modify_fast_path_bigint SET val = val WHERE dist_key = 7 AND false;
+DELETE FROM modify_fast_path_bigint WHERE dist_key = 7 AND false;
+UPDATE modify_fast_path_bigint SET val = val WHERE dist_key = 7 AND 1 = 0;
+
+-- Same shape but on an int-keyed table (matching type). Plan shape must
+-- remain the pre-fix fast-path single-shard dispatch that lets PG
+-- evaluate AND FALSE at the shard.
+UPDATE modify_fast_path SET value_1 = value_1 WHERE key = 1 AND false;
+UPDATE modify_fast_path SET value_1 = value_1 WHERE key = 1 AND 1 = 0;
+DELETE FROM modify_fast_path WHERE key = 1 AND (value_2 IS NULL AND false);
+
+-- Standalone RETURNING variant: client sees an empty result set (no rows),
+-- distinct from the plain UPDATE/DELETE "UPDATE 0" client shape.
+UPDATE modify_fast_path_bigint SET val = val WHERE dist_key = 7 AND false
+    RETURNING dist_key;
+DELETE FROM modify_fast_path_bigint WHERE dist_key = 7 AND false
+    RETURNING dist_key;
+
+-- Explicit transaction block: the no-op must not abort the surrounding
+-- transaction; subsequent statements proceed normally.
+BEGIN;
+UPDATE modify_fast_path_bigint SET val = val WHERE dist_key = 7 AND false;
+DELETE FROM modify_fast_path_bigint WHERE dist_key = 7 AND false;
+SELECT 1 AS still_alive;
+COMMIT;
+
+-- Sanity: the satisfiable happy-paths for both key types still resolve
+-- to fast-path single-shard dispatch (must show "query has a single
+-- distribution column value: N").
+UPDATE modify_fast_path_bigint SET val = val + 1 WHERE dist_key = 7;
+UPDATE modify_fast_path SET value_1 = value_1 + 1 WHERE key = 1;
+
+-- Sanity: the zero-shard rows returned zero rows affected.
+SET client_min_messages TO WARNING;
+SELECT dist_key, val FROM modify_fast_path_bigint ORDER BY dist_key;
+SET client_min_messages TO DEBUG2;
+
+-- Plain SELECT with AND false must still work (the Phase 2 gate must not
+-- fire here; only modifying-CTE SELECTs enter that transform).
+SELECT count(*) FROM modify_fast_path_bigint WHERE dist_key = 7 AND false;
+SELECT count(*) FROM modify_fast_path WHERE key = 1 AND false;
+
+RESET client_min_messages;
+
 DROP SCHEMA fast_path_router_modify CASCADE;
