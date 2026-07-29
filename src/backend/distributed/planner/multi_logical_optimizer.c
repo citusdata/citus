@@ -281,7 +281,12 @@ static Oid CitusFunctionOidWithSignature(char *functionName, int numargs, Oid *a
 static Oid WorkerPartialAggOid(void);
 static Oid WorkerBinaryPartialAggOid(void);
 static Oid CoordBinaryCombineAggOid(void);
-static bool IsTypeBinarySerializable(Oid transitionType);
+
+/*
+ * Commented out for the mixed-version fork: the text-based worker_partial_agg()
+ * path is forced, so this binary-serializability helper is unused.
+ * static bool IsTypeBinarySerializable(Oid transitionType);
+ */
 static Oid CoordCombineAggOid(void);
 static Oid AggregateFunctionOid(const char *functionName, Oid inputType);
 static Oid TypeOid(Oid schemaId, const char *typeName);
@@ -2130,8 +2135,15 @@ MasterAggregateExpression(Aggref *originalAggregate,
 		{
 			aggform = (Form_pg_aggregate) GETSTRUCT(aggTuple);
 			combine = aggform->aggcombinefn;
-			useBinaryCoordinatorCombine = aggform->aggtranstype != InvalidOid &&
-										  IsTypeBinarySerializable(aggform->aggtranstype);
+
+			/*
+			 * Force the text-based worker_partial_agg() path (leave
+			 * useBinaryCoordinatorCombine false) so aggregate pushdown keeps
+			 * working against pre-14 workers that lack worker_binary_partial_agg().
+			 * Original stock line commented out:
+			 * useBinaryCoordinatorCombine = aggform->aggtranstype != InvalidOid &&
+			 *							  IsTypeBinarySerializable(aggform->aggtranstype);
+			 */
 			ReleaseSysCache(aggTuple);
 		}
 
@@ -3295,9 +3307,14 @@ WorkerAggregateExpressionList(Aggref *originalAggregate,
 		{
 			aggform = (Form_pg_aggregate) GETSTRUCT(aggTuple);
 			combine = aggform->aggcombinefn;
-			useBinaryWorkerAggregate = (OidIsValid(aggform->aggtranstype) &&
-										IsTypeBinarySerializable(aggform->aggtranstype));
 
+			/*
+			 * Force the text-based worker_partial_agg() path (leave
+			 * useBinaryWorkerAggregate false) for pre-14 worker compatibility.
+			 * Original stock line commented out:
+			 * useBinaryWorkerAggregate = (OidIsValid(aggform->aggtranstype) &&
+			 *							IsTypeBinarySerializable(aggform->aggtranstype));
+			 */
 			ReleaseSysCache(aggTuple);
 		}
 
@@ -3847,23 +3864,26 @@ TypeOid(Oid schemaId, const char *typeName)
 }
 
 
-static bool
-IsTypeBinarySerializable(Oid transitionType)
-{
-	HeapTuple typeTuple = SearchSysCache1(TYPEOID, ObjectIdGetDatum(transitionType));
-	if (!HeapTupleIsValid(typeTuple))
-	{
-		elog(ERROR, "citus cache lookup failed for transition type %u", transitionType);
-	}
-
-	Form_pg_type typeForm = (Form_pg_type) GETSTRUCT(typeTuple);
-	bool isBinaryCoercible = typeForm->typsend != InvalidOid &&
-							 typeForm->typreceive != InvalidOid;
-
-	ReleaseSysCache(typeTuple);
-
-	return isBinaryCoercible;
-}
+/*
+ * Commented out for the mixed-version fork (text partial-agg path is forced):
+ * static bool
+ * IsTypeBinarySerializable(Oid transitionType)
+ * {
+ *	HeapTuple typeTuple = SearchSysCache1(TYPEOID, ObjectIdGetDatum(transitionType));
+ *	if (!HeapTupleIsValid(typeTuple))
+ *	{
+ *		elog(ERROR, "citus cache lookup failed for transition type %u", transitionType);
+ *	}
+ *
+ *	Form_pg_type typeForm = (Form_pg_type) GETSTRUCT(typeTuple);
+ *	bool isBinaryCoercible = typeForm->typsend != InvalidOid &&
+ *							 typeForm->typreceive != InvalidOid;
+ *
+ *	ReleaseSysCache(typeTuple);
+ *
+ *	return isBinaryCoercible;
+ * }
+ */
 
 
 /*

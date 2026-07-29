@@ -1321,10 +1321,23 @@ worker_last_saved_explain_analyze(PG_FUNCTION_ARGS)
 
 	if (SavedExplainPlan != NULL)
 	{
+		/*
+		 * execution_ntuples and execution_nloops were added to
+		 * worker_last_saved_explain_analyze() in Citus 13.2. In a mixed-version
+		 * cluster the coordinator fetches with a 2-column definition (see
+		 * FetchPlanQueryForExplainAnalyze), so accept either the legacy 2-column
+		 * or the extended 4-column shape based on the caller's expected tuple
+		 * descriptor rather than a fixed count.
+		 */
 		int columnCount = tupleDescriptor->natts;
-		if (columnCount != 4)
+		/* Original stock check commented out: if (columnCount != 4) */
+		if (columnCount != 2 && columnCount != 4)
 		{
-			ereport(ERROR, (errmsg("expected 4 output columns in definition of "
+			/*
+			 * Original stock message commented out:
+			 * ereport(ERROR, (errmsg("expected 4 output columns in definition of "
+			 */
+			ereport(ERROR, (errmsg("expected 2 or 4 output columns in definition of "
 								   "worker_last_saved_explain_analyze, but got %d",
 								   columnCount)));
 		}
@@ -1727,13 +1740,24 @@ CreateExplainAnlyzeDestination(Task *task, TupleDestination *taskDest)
 	tupleDestination->originalTask = task;
 	tupleDestination->originalTaskDestination = taskDest;
 
-	TupleDesc lastSavedExplainAnalyzeTupDesc = CreateTemplateTupleDesc(4);
+	/*
+	 * We only fetch explain_analyze_output and execution_duration so distributed
+	 * EXPLAIN ANALYZE keeps working against pre-13.2 workers (e.g. 12.1) whose
+	 * worker_last_saved_explain_analyze() lacks execution_ntuples/execution_nloops.
+	 * This must match the column list in FetchPlanQueryForExplainAnalyze.
+	 * Original stock line commented out: CreateTemplateTupleDesc(4).
+	 */
+	TupleDesc lastSavedExplainAnalyzeTupDesc = CreateTemplateTupleDesc(2);
 
 	TupleDescInitEntry(lastSavedExplainAnalyzeTupDesc, 1, "explain analyze", TEXTOID, 0,
 					   0);
 	TupleDescInitEntry(lastSavedExplainAnalyzeTupDesc, 2, "duration", FLOAT8OID, 0, 0);
-	TupleDescInitEntry(lastSavedExplainAnalyzeTupDesc, 3, "ntuples", FLOAT8OID, 0, 0);
-	TupleDescInitEntry(lastSavedExplainAnalyzeTupDesc, 4, "nloops", FLOAT8OID, 0, 0);
+
+	/*
+	 * Extended columns commented out for the mixed-version fork:
+	 * TupleDescInitEntry(lastSavedExplainAnalyzeTupDesc, 3, "ntuples", FLOAT8OID, 0, 0);
+	 * TupleDescInitEntry(lastSavedExplainAnalyzeTupDesc, 4, "nloops", FLOAT8OID, 0, 0);
+	 */
 
 	tupleDestination->lastSavedExplainAnalyzeTupDesc = lastSavedExplainAnalyzeTupDesc;
 
@@ -1829,8 +1853,11 @@ ExplainAnalyzeDestPutTuple(TupleDestination *self, Task *task,
 		}
 
 		Datum executionDuration = heap_getattr(heapTuple, 2, tupDesc, &isNull);
-		Datum executionTuples = heap_getattr(heapTuple, 3, tupDesc, &isNull);
-		Datum executionLoops = heap_getattr(heapTuple, 4, tupDesc, &isNull);
+		/*
+		 * Extended-column reads commented out for the mixed-version fork:
+		 * Datum executionTuples = heap_getattr(heapTuple, 3, tupDesc, &isNull);
+		 * Datum executionLoops = heap_getattr(heapTuple, 4, tupDesc, &isNull);
+		 */
 
 		if (isNull)
 		{
@@ -1840,8 +1867,17 @@ ExplainAnalyzeDestPutTuple(TupleDestination *self, Task *task,
 
 		char *fetchedExplainAnalyzePlan = TextDatumGetCString(explainAnalyze);
 		double fetchedExplainAnalyzeExecutionDuration = DatumGetFloat8(executionDuration);
-		double fetchedExplainAnalyzeTuples = DatumGetFloat8(executionTuples);
-		double fetchedExplainAnalyzeLoops = DatumGetFloat8(executionLoops);
+
+		/*
+		 * We only fetch explain_analyze_output and execution_duration (see
+		 * FetchPlanQueryForExplainAnalyze) so ntuples/nloops are unavailable in
+		 * mixed-version clusters with pre-13.2 workers; report them as 0.
+		 * Original stock lines commented out:
+		 * double fetchedExplainAnalyzeTuples = DatumGetFloat8(executionTuples);
+		 * double fetchedExplainAnalyzeLoops = DatumGetFloat8(executionLoops);
+		 */
+		double fetchedExplainAnalyzeTuples = 0;
+		double fetchedExplainAnalyzeLoops = 0;
 
 		/*
 		 * Allocate fetchedExplainAnalyzePlan in the same context as the Task, since we are
@@ -2108,9 +2144,20 @@ FetchPlanQueryForExplainAnalyze(const char *queryString, ParamListInfo params)
 						 ParameterResolutionSubquery(params));
 	}
 
+	/*
+	 * Only fetch explain_analyze_output and execution_duration; execution_ntuples
+	 * and execution_nloops were added to worker_last_saved_explain_analyze() in
+	 * Citus 13.2 and are absent on older workers (e.g. 12.1), so requesting them
+	 * would fail with 'column "execution_ntuples" does not exist'. The coordinator
+	 * reports 0 for ntuples/nloops for such tasks.
+	 * Original stock query commented out:
+	 * appendStringInfoString(fetchQuery,
+	 *					   "SELECT explain_analyze_output, execution_duration, "
+	 *					   "execution_ntuples, execution_nloops "
+	 *					   "FROM worker_last_saved_explain_analyze()");
+	 */
 	appendStringInfoString(fetchQuery,
-						   "SELECT explain_analyze_output, execution_duration, "
-						   "execution_ntuples, execution_nloops "
+						   "SELECT explain_analyze_output, execution_duration "
 						   "FROM worker_last_saved_explain_analyze()");
 
 	return fetchQuery->data;

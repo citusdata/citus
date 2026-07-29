@@ -99,6 +99,20 @@
 char *EnableManualMetadataChangesForUser = "";
 int MetadataSyncTransMode = METADATA_SYNC_TRANSACTIONAL;
 
+/*
+ * CitusInternalSchemaPrefix returns the prefix used to qualify the internal
+ * metadata helper functions in commands propagated to workers. We always emit
+ * the pre-13.1 pg_catalog.citus_internal_* names so a Citus 14 coordinator can
+ * sync metadata to older workers (e.g. 12.1) that predate the citus_internal
+ * schema; appending the bare function name (e.g. "add_partition_metadata")
+ * yields "pg_catalog.citus_internal_add_partition_metadata".
+ */
+const char *
+CitusInternalSchemaPrefix(void)
+{
+	return "pg_catalog.citus_internal_";
+}
+
 
 static void EnsureObjectMetadataIsSane(int distributionArgumentIndex,
 									   int colocationId);
@@ -817,10 +831,16 @@ NodeListInsertCommand(List *workerNodeList)
 	}
 
 	/* generate the query without any values yet */
+	/*
+	 * Original stock column list commented out for the mixed-version fork
+	 * (nodeisclone / nodeprimarynodeid omitted so pre-clone-column workers such
+	 * as 12.1 accept the INSERT):
+	 * "nodecluster, shouldhaveshards, nodeisclone, nodeprimarynodeid) VALUES ");
+	 */
 	appendStringInfo(nodeListInsertCommand,
 					 "INSERT INTO pg_dist_node (nodeid, groupid, nodename, nodeport, "
 					 "noderack, hasmetadata, metadatasynced, isactive, noderole, "
-					 "nodecluster, shouldhaveshards, nodeisclone, nodeprimarynodeid) VALUES ");
+					 "nodecluster, shouldhaveshards) VALUES ");
 
 	/* iterate over the worker nodes, add the values */
 	WorkerNode *workerNode = NULL;
@@ -830,14 +850,19 @@ NodeListInsertCommand(List *workerNodeList)
 		char *metadataSyncedString = workerNode->metadataSynced ? "TRUE" : "FALSE";
 		char *isActiveString = workerNode->isActive ? "TRUE" : "FALSE";
 		char *shouldHaveShards = workerNode->shouldHaveShards ? "TRUE" : "FALSE";
-		char *nodeiscloneString = workerNode->nodeisclone ? "TRUE" : "FALSE";
+		/* commented out: char *nodeiscloneString = workerNode->nodeisclone ? "TRUE" : "FALSE"; */
 
 		Datum nodeRoleOidDatum = ObjectIdGetDatum(workerNode->nodeRole);
 		Datum nodeRoleStringDatum = DirectFunctionCall1(enum_out, nodeRoleOidDatum);
 		char *nodeRoleString = DatumGetCString(nodeRoleStringDatum);
 
+		/*
+		 * Original stock format/args commented out for the mixed-version fork:
+		 * "(%d, %d, %s, %d, %s, %s, %s, %s, '%s'::noderole, %s, %s, %s, %d)"
+		 * ... shouldHaveShards, nodeiscloneString, workerNode->nodeprimarynodeid);
+		 */
 		appendStringInfo(nodeListInsertCommand,
-						 "(%d, %d, %s, %d, %s, %s, %s, %s, '%s'::noderole, %s, %s, %s, %d)",
+						 "(%d, %d, %s, %d, %s, %s, %s, %s, '%s'::noderole, %s, %s)",
 						 workerNode->nodeId,
 						 workerNode->groupId,
 						 quote_literal_cstr(workerNode->workerName),
@@ -848,9 +873,7 @@ NodeListInsertCommand(List *workerNodeList)
 						 isActiveString,
 						 nodeRoleString,
 						 quote_literal_cstr(workerNode->nodeCluster),
-						 shouldHaveShards,
-						 nodeiscloneString,
-						 workerNode->nodeprimarynodeid);
+						 shouldHaveShards);
 
 		processedWorkerNodeCount++;
 		if (processedWorkerNodeCount != workerCount)
@@ -886,9 +909,13 @@ NodeListIdempotentInsertCommand(List *workerNodeList)
 						  "noderole = EXCLUDED.noderole, "
 						  "nodecluster = EXCLUDED.nodecluster, "
 						  "metadatasynced = EXCLUDED.metadatasynced, "
-						  "shouldhaveshards = EXCLUDED.shouldhaveshards, "
-						  "nodeisclone = EXCLUDED.nodeisclone, "
-						  "nodeprimarynodeid = EXCLUDED.nodeprimarynodeid";
+						  "shouldhaveshards = EXCLUDED.shouldhaveshards";
+	/*
+	 * Original stock trailing clauses commented out for the mixed-version fork:
+	 * "shouldhaveshards = EXCLUDED.shouldhaveshards, "
+	 * "nodeisclone = EXCLUDED.nodeisclone, "
+	 * "nodeprimarynodeid = EXCLUDED.nodeprimarynodeid";
+	 */
 	appendStringInfoString(nodeInsertIdempotentCommand, onConflictStr);
 	return nodeInsertIdempotentCommand->data;
 }
@@ -997,10 +1024,12 @@ MarkObjectsDistributedCreateCommand(List *addresses,
 
 	appendStringInfo(insertDistributedObjectsCommand, ") ");
 
+	/* stock: ") SELECT citus_internal.add_object_metadata(" */
 	appendStringInfo(insertDistributedObjectsCommand,
-					 "SELECT citus_internal.add_object_metadata("
+					 "SELECT %sadd_object_metadata("
 					 "typetext, objnames, objargs, distargumentindex::int, colocationid::int, force_delegation::bool) "
-					 "FROM distributed_object_data;");
+					 "FROM distributed_object_data;",
+					 CitusInternalSchemaPrefix());
 
 	return insertDistributedObjectsCommand->data;
 }
@@ -1132,9 +1161,11 @@ DistributionCreateCommand(CitusTableCacheEntry *cacheEntry)
 						 quote_literal_cstr(partitionKeyColumnName));
 	}
 
+	/* stock: "SELECT citus_internal.add_partition_metadata " */
 	appendStringInfo(insertDistributionCommand,
-					 "SELECT citus_internal.add_partition_metadata "
+					 "SELECT %sadd_partition_metadata "
 					 "(%s::regclass, '%c', %s, %d, '%c')",
+					 CitusInternalSchemaPrefix(),
 					 quote_literal_cstr(qualifiedRelationName),
 					 distributionMethod,
 					 tablePartitionKeyNameString->data,
@@ -1174,8 +1205,10 @@ DistributionDeleteMetadataCommand(Oid relationId)
 	StringInfo deleteCommand = makeStringInfo();
 	char *qualifiedRelationName = generate_qualified_relation_name(relationId);
 
+	/* stock: "SELECT citus_internal.delete_partition_metadata(%s)" */
 	appendStringInfo(deleteCommand,
-					 "SELECT citus_internal.delete_partition_metadata(%s)",
+					 "SELECT %sdelete_partition_metadata(%s)",
+					 CitusInternalSchemaPrefix(),
 					 quote_literal_cstr(qualifiedRelationName));
 
 	return deleteCommand->data;
@@ -1257,10 +1290,12 @@ ShardListInsertCommand(List *shardIntervalList)
 
 	appendStringInfo(insertPlacementCommand, ") ");
 
+	/* stock: "SELECT citus_internal.add_placement_metadata(" */
 	appendStringInfo(insertPlacementCommand,
-					 "SELECT citus_internal.add_placement_metadata("
+					 "SELECT %sadd_placement_metadata("
 					 "shardid, shardlength, groupid, placementid) "
-					 "FROM placement_data;");
+					 "FROM placement_data;",
+					 CitusInternalSchemaPrefix());
 
 	/* now add shards to insertShardCommand */
 	StringInfo insertShardCommand = makeStringInfo();
@@ -1313,10 +1348,12 @@ ShardListInsertCommand(List *shardIntervalList)
 
 	appendStringInfo(insertShardCommand, ") ");
 
+	/* stock: "SELECT citus_internal.add_shard_metadata(relationname, shardid, " */
 	appendStringInfo(insertShardCommand,
-					 "SELECT citus_internal.add_shard_metadata(relationname, shardid, "
+					 "SELECT %sadd_shard_metadata(relationname, shardid, "
 					 "storagetype, shardminvalue, shardmaxvalue) "
-					 "FROM shard_data;");
+					 "FROM shard_data;",
+					 CitusInternalSchemaPrefix());
 
 	/*
 	 * There are no active placements for the table, so do not create the
@@ -1352,8 +1389,10 @@ ShardDeleteCommandList(ShardInterval *shardInterval)
 	uint64 shardId = shardInterval->shardId;
 
 	StringInfo deleteShardCommand = makeStringInfo();
+	/* stock: "SELECT citus_internal.delete_shard_metadata(%ld);" */
 	appendStringInfo(deleteShardCommand,
-					 "SELECT citus_internal.delete_shard_metadata(%ld);", shardId);
+					 "SELECT %sdelete_shard_metadata(%ld);",
+					 CitusInternalSchemaPrefix(), shardId);
 
 	return list_make1(deleteShardCommand->data);
 }
@@ -1422,8 +1461,10 @@ ColocationIdUpdateCommand(Oid relationId, uint32 colocationId)
 {
 	StringInfo command = makeStringInfo();
 	char *qualifiedRelationName = generate_qualified_relation_name(relationId);
+	/* stock: "SELECT citus_internal.update_relation_colocation(%s::regclass, %d)" */
 	appendStringInfo(command,
-					 "SELECT citus_internal.update_relation_colocation(%s::regclass, %d)",
+					 "SELECT %supdate_relation_colocation(%s::regclass, %d)",
+					 CitusInternalSchemaPrefix(),
 					 quote_literal_cstr(qualifiedRelationName), colocationId);
 
 	return command->data;
@@ -4231,7 +4272,7 @@ ColocationGroupCreateCommand(uint32 colocationId, int shardCount, int replicatio
 
 	appendStringInfo(insertColocationCommand,
 					 "%s)) "
-					 "SELECT citus_internal.add_colocation_metadata("
+					 "SELECT %sadd_colocation_metadata("
 					 "colocationid, shardcount, replicationfactor, "
 					 "coalesce(t.oid, 0), collationid) "
 					 "FROM colocation_data "
@@ -4240,7 +4281,8 @@ ColocationGroupCreateCommand(uint32 colocationId, int shardCount, int replicatio
 					 "AND (typeschema IS NULL OR "
 					 "t.typnamespace = "
 					 "(SELECT oid FROM pg_namespace WHERE nspname = typeschema)))",
-					 RemoteCollationIdExpression(distributionColumnCollation));
+					 RemoteCollationIdExpression(distributionColumnCollation),
+					 CitusInternalSchemaPrefix());
 
 	return insertColocationCommand->data;
 }
@@ -4370,7 +4412,8 @@ ColocationGroupDeleteCommand(uint32 colocationId)
 	StringInfo deleteColocationCommand = makeStringInfo();
 
 	appendStringInfo(deleteColocationCommand,
-					 "SELECT citus_internal.delete_colocation_metadata(%d)",
+					 "SELECT %sdelete_colocation_metadata(%d)",
+					 CitusInternalSchemaPrefix(),
 					 colocationId);
 
 	return deleteColocationCommand->data;
@@ -4386,7 +4429,8 @@ TenantSchemaInsertCommand(Oid schemaId, uint32 colocationId)
 {
 	StringInfo command = makeStringInfo();
 	appendStringInfo(command,
-					 "SELECT citus_internal.add_tenant_schema(%s, %u)",
+					 "SELECT %sadd_tenant_schema(%s, %u)",
+					 CitusInternalSchemaPrefix(),
 					 RemoteSchemaIdExpressionById(schemaId), colocationId);
 
 	return command->data;
@@ -4402,7 +4446,8 @@ TenantSchemaDeleteCommand(char *schemaName)
 {
 	StringInfo command = makeStringInfo();
 	appendStringInfo(command,
-					 "SELECT citus_internal.delete_tenant_schema(%s)",
+					 "SELECT %sdelete_tenant_schema(%s)",
+					 CitusInternalSchemaPrefix(),
 					 RemoteSchemaIdExpressionByName(schemaName));
 
 	return command->data;
@@ -4419,7 +4464,8 @@ UpdateNoneDistTableMetadataCommand(Oid relationId, char replicationModel,
 {
 	StringInfo command = makeStringInfo();
 	appendStringInfo(command,
-					 "SELECT citus_internal.update_none_dist_table_metadata(%s, '%c', %u, %s)",
+					 "SELECT %supdate_none_dist_table_metadata(%s, '%c', %u, %s)",
+					 CitusInternalSchemaPrefix(),
 					 RemoteTableIdExpression(relationId), replicationModel, colocationId,
 					 autoConverted ? "true" : "false");
 
@@ -4437,7 +4483,8 @@ AddPlacementMetadataCommand(uint64 shardId, uint64 placementId,
 {
 	StringInfo command = makeStringInfo();
 	appendStringInfo(command,
-					 "SELECT citus_internal.add_placement_metadata(%ld, %ld, %d, %ld)",
+					 "SELECT %sadd_placement_metadata(%ld, %ld, %d, %ld)",
+					 CitusInternalSchemaPrefix(),
 					 shardId, shardLength, groupId, placementId);
 	return command->data;
 }
@@ -4452,7 +4499,8 @@ DeletePlacementMetadataCommand(uint64 placementId)
 {
 	StringInfo command = makeStringInfo();
 	appendStringInfo(command,
-					 "SELECT citus_internal.delete_placement_metadata(%ld)",
+					 "SELECT %sdelete_placement_metadata(%ld)",
+					 CitusInternalSchemaPrefix(),
 					 placementId);
 	return command->data;
 }
@@ -5105,7 +5153,7 @@ SendColocationMetadataCommands(MetadataSyncContext *context)
 		 * the type and its schema to be created first by dependency commands.
 		 */
 		appendStringInfo(colocationGroupCreateCommand,
-						 ") SELECT citus_internal.add_colocation_metadata("
+						 ") SELECT %sadd_colocation_metadata("
 						 "colocationid, shardcount, replicationfactor, "
 						 "coalesce(t.oid, 0), coalesce(c.oid, 0)) "
 						 "FROM colocation_group_data d "
@@ -5117,7 +5165,8 @@ SendColocationMetadataCommands(MetadataSyncContext *context)
 						 "LEFT JOIN pg_collation c "
 						 "ON (d.distributioncolumncollationname = c.collname "
 						 "AND c.collnamespace = (SELECT oid FROM pg_namespace WHERE "
-						 "nspname = d.distributioncolumncollationschema))");
+						 "nspname = d.distributioncolumncollationschema))",
+						 CitusInternalSchemaPrefix());
 
 		List *commandList = list_make1(colocationGroupCreateCommand->data);
 		SendOrCollectCommandListToActivatedNodes(context, commandList);
@@ -5162,7 +5211,8 @@ SendTenantSchemaMetadataCommands(MetadataSyncContext *context)
 
 		StringInfo insertTenantSchemaCommand = makeStringInfo();
 		appendStringInfo(insertTenantSchemaCommand,
-						 "SELECT citus_internal.add_tenant_schema(%s, %u)",
+						 "SELECT %sadd_tenant_schema(%s, %u)",
+						 CitusInternalSchemaPrefix(),
 						 RemoteSchemaIdExpressionById(tenantSchemaForm->schemaid),
 						 tenantSchemaForm->colocationid);
 
