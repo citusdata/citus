@@ -2464,7 +2464,7 @@ UpdateColocatedShardPlacementMetadataOnWorkers(int64 shardId,
 		StringInfo updateCommand = makeStringInfo();
 
 		appendStringInfo(updateCommand,
-						 "SELECT citus_internal.update_placement_metadata(%ld, %d, %d)",
+						 "SELECT pg_catalog.citus_internal_update_placement_metadata(%ld, %d, %d)",
 						 colocatedShard->shardId,
 						 sourceGroupId, targetGroupId);
 
