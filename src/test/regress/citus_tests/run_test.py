@@ -112,6 +112,17 @@ DEPS = {
         "minimal_schedule", ["multi_test_helpers_superuser"], repeatable=False
     ),
     "create_role_propagation": TestDeps(None, ["multi_cluster_management"]),
+    # multi_copy uses test_user which requires CREATE on schema public;
+    # base_schedule's multi_cluster_management issues the compensating GRANT
+    # that PostgreSQL 15+ no longer grants by default. Using base_schedule
+    # (rather than an extra_tests=[multi_cluster_management] override) avoids
+    # duplicating multi_cluster_management in downstream tests' setup
+    # (e.g. multi_size_queries) whose DEPS pull multi_copy in as an extra_test.
+    "multi_copy": TestDeps("base_schedule"),
+    # fast_path_router_modify shares its schedule line with multi_copy, so
+    # --use-whole-schedule-line drags multi_copy along; mirror the same base
+    # for the same reason.
+    "fast_path_router_modify": TestDeps("base_schedule"),
     "single_node_enterprise": TestDeps(None),
     "multi_add_node_from_backup": TestDeps(None, repeatable=False, worker_count=5),
     "multi_add_node_from_backup_negative": TestDeps(
