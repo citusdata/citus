@@ -1500,5 +1500,269 @@ CREATE TABLE multi_modifications.local (a int default 1, b int);
 INSERT INTO multi_modifications.local VALUES (default, (SELECT min(id) FROM summary_table));
 ERROR:  subqueries are not supported within INSERT queries
 HINT:  Try rewriting your queries with 'INSERT INTO ... SELECT' syntax.
+-- Regression coverage for zero-shard modifying CTE inside an outer SELECT.
+-- Prior to the fix, WITH u AS (UPDATE ... WHERE dist_key = X AND false
+-- RETURNING ...) SELECT ... FROM u; would fail at execution time in
+-- AcquireMetadataLocks -> LookupShardIdCacheEntry(0) with
+-- "could not find valid entry for shard xxxxx", because
+-- UpdateRelationToShardNames flipped every Citus-relation RTE to
+-- an empty-result RTE_SUBQUERY while the outer query's resultRelation
+-- (0 for a SELECT) did not trigger the direct UPDATE/DELETE escape in
+-- RouterJob. The fix rewrites each modifying CTE in-place to a plain
+-- SELECT returning matching-shape NULL columns under WHERE false and
+-- clears hasModifyingCTE, so the outer SELECT flows through the normal
+-- zero-shard router-SELECT machinery and emits the correct empty-CTE
+-- result set to its consumer.
+RESET client_min_messages;
+CREATE TABLE zero_shard_cte(dist_key int, val int, tag text);
+SELECT create_distributed_table('zero_shard_cte', 'dist_key');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO zero_shard_cte VALUES (7, 42, 'seven'), (8, 43, 'eight');
+CREATE TABLE zero_shard_cte_ref(k int, v int);
+SELECT create_reference_table('zero_shard_cte_ref');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO zero_shard_cte_ref VALUES (1, 100);
+SET client_min_messages TO DEBUG2;
+-- Literal false, folded (1 = 0), UPDATE and DELETE CTE variants -- all
+-- must return one row containing count = 0 from the outer SELECT.
+WITH u AS (UPDATE zero_shard_cte SET val = val WHERE dist_key = 7 AND false
+           RETURNING dist_key) SELECT count(*) FROM u;
+DEBUG:  Creating router plan
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+WITH u AS (DELETE FROM zero_shard_cte WHERE dist_key = 7 AND false
+           RETURNING dist_key) SELECT count(*) FROM u;
+DEBUG:  Creating router plan
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+WITH u AS (UPDATE zero_shard_cte SET val = val WHERE dist_key = 7 AND 1 = 0
+           RETURNING dist_key) SELECT count(*) FROM u;
+DEBUG:  Creating router plan
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+-- Multiple outer-consumer shapes: SELECT *, array_agg, max/count.
+WITH u AS (UPDATE zero_shard_cte SET val = val WHERE dist_key = 7 AND false
+           RETURNING dist_key) SELECT * FROM u;
+DEBUG:  Creating router plan
+ dist_key
+---------------------------------------------------------------------
+(0 rows)
+
+WITH u AS (UPDATE zero_shard_cte SET val = val WHERE dist_key = 7 AND false
+           RETURNING dist_key) SELECT array_agg(dist_key) FROM u;
+DEBUG:  Creating router plan
+ array_agg
+---------------------------------------------------------------------
+
+(1 row)
+
+WITH u AS (UPDATE zero_shard_cte SET val = val WHERE dist_key = 7 AND false
+           RETURNING dist_key, val)
+SELECT max(dist_key) AS mx, count(*) AS n FROM u;
+DEBUG:  Creating router plan
+ mx | n
+---------------------------------------------------------------------
+    | 0
+(1 row)
+
+-- RETURNING more than one column: the transform preserves output shape.
+WITH u AS (UPDATE zero_shard_cte SET val = val WHERE dist_key = 7 AND false
+           RETURNING dist_key, val, tag)
+SELECT count(*) AS n, count(tag) AS tag_n FROM u;
+DEBUG:  Creating router plan
+ n | tag_n
+---------------------------------------------------------------------
+ 0 |     0
+(1 row)
+
+-- Sanity: satisfiable modifying-CTE still performs the modification.
+WITH u AS (UPDATE zero_shard_cte SET val = val + 100 WHERE dist_key = 7
+           RETURNING dist_key, val)
+SELECT count(*) FROM u;
+DEBUG:  Creating router plan
+DEBUG:  query has a single distribution column value: 7
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
 SET client_min_messages TO WARNING;
+SELECT dist_key, val FROM zero_shard_cte WHERE dist_key = 7;
+ dist_key | val
+---------------------------------------------------------------------
+        7 | 142
+(1 row)
+
+SET client_min_messages TO DEBUG2;
+-- Sanity: satisfiable modifying-CTE that matches zero rows on a real
+-- shard still returns count = 0 (does not accidentally short-circuit
+-- through the Phase 2 gate).
+WITH u AS (UPDATE zero_shard_cte SET val = val WHERE dist_key = 999
+           RETURNING dist_key) SELECT count(*) FROM u;
+DEBUG:  Creating router plan
+DEBUG:  query has a single distribution column value: 999
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+-- Standalone RETURNING at top level: client sees an empty result set,
+-- distinct from the CTE-wrapped `count = 0` shape.
+UPDATE zero_shard_cte SET val = val WHERE dist_key = 7 AND false
+    RETURNING dist_key;
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  query has a single distribution column value: 7
+ dist_key
+---------------------------------------------------------------------
+(0 rows)
+
+DELETE FROM zero_shard_cte WHERE dist_key = 7 AND false
+    RETURNING dist_key;
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  query has a single distribution column value: 7
+ dist_key
+---------------------------------------------------------------------
+(0 rows)
+
+-- Explicit transaction block: the no-op must not abort the surrounding
+-- transaction; subsequent statements proceed normally.
+BEGIN;
+WITH u AS (UPDATE zero_shard_cte SET val = val WHERE dist_key = 7 AND false
+           RETURNING dist_key) SELECT count(*) FROM u;
+DEBUG:  Creating router plan
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+UPDATE zero_shard_cte SET val = val WHERE dist_key = 7 AND false;
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  query has a single distribution column value: 7
+SELECT 1 AS still_alive;
+ still_alive
+---------------------------------------------------------------------
+           1
+(1 row)
+
+COMMIT;
+-- Reference-table modifying-CTE: reference-table UPDATE/DELETE is
+-- multi-placement so this path is not fast-path; it goes through
+-- recursive planning, but should still succeed and return count = 0.
+WITH u AS (UPDATE zero_shard_cte_ref SET v = v WHERE k = 1 AND false
+           RETURNING k) SELECT count(*) FROM u;
+DEBUG:  cannot router plan modification of a non-distributed table
+DEBUG:  generating subplan XXX_1 for CTE u: UPDATE multi_modifications.zero_shard_cte_ref SET v = v WHERE ((k OPERATOR(pg_catalog.=) 1) AND false) RETURNING k
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.k FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(k integer)) u
+DEBUG:  Creating router plan
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+WITH u AS (DELETE FROM zero_shard_cte_ref WHERE k = 1 AND false
+           RETURNING k) SELECT count(*) FROM u;
+DEBUG:  cannot router plan modification of a non-distributed table
+DEBUG:  generating subplan XXX_1 for CTE u: DELETE FROM multi_modifications.zero_shard_cte_ref WHERE ((k OPERATOR(pg_catalog.=) 1) AND false) RETURNING k
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.k FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(k integer)) u
+DEBUG:  Creating router plan
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+-- Parameterised parameter that resolves to false at execution time.
+PREPARE cte_zero_prep(bool) AS
+WITH u AS (UPDATE zero_shard_cte SET val = val WHERE dist_key = 7 AND $1
+           RETURNING dist_key) SELECT count(*) FROM u;
+EXECUTE cte_zero_prep(false);
+DEBUG:  Creating router plan
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+EXECUTE cte_zero_prep(false);
+DEBUG:  Creating router plan
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+EXECUTE cte_zero_prep(false);
+DEBUG:  Creating router plan
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+EXECUTE cte_zero_prep(false);
+DEBUG:  Creating router plan
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+EXECUTE cte_zero_prep(false);
+DEBUG:  Creating router plan
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+EXECUTE cte_zero_prep(false);
+DEBUG:  Creating router plan
+DEBUG:  query has a single distribution column value: 7
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+DEALLOCATE cte_zero_prep;
+-- Two modifying CTEs where only one prunes to zero shards -- the
+-- satisfiable CTE must still update; overall the query executes and
+-- returns the correct aggregate.
+WITH u1 AS (UPDATE zero_shard_cte SET val = val WHERE dist_key = 7 AND false
+            RETURNING dist_key),
+     u2 AS (UPDATE zero_shard_cte SET val = val + 1000 WHERE dist_key = 8
+            RETURNING dist_key, val)
+SELECT (SELECT count(*) FROM u1) AS n1, (SELECT count(*) FROM u2) AS n2;
+DEBUG:  Creating router plan
+DEBUG:  query has a single distribution column value: 8
+ n1 | n2
+---------------------------------------------------------------------
+  0 |  1
+(1 row)
+
+SET client_min_messages TO WARNING;
+SELECT dist_key, val FROM zero_shard_cte ORDER BY dist_key;
+ dist_key | val
+---------------------------------------------------------------------
+        7 |  142
+        8 | 1043
+(2 rows)
+
 DROP SCHEMA multi_modifications CASCADE;

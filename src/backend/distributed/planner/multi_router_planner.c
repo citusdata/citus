@@ -173,6 +173,7 @@ static void ReorderTaskPlacementsByTaskAssignmentPolicy(Job *job,
 static bool ModifiesLocalTableWithRemoteCitusLocalTable(List *rangeTableList);
 static DeferredErrorMessage * DeferErrorIfUnsupportedLocalTableJoin(List *rangeTableList);
 static bool IsLocallyAccessibleCitusLocalTable(Oid relationId);
+static void ReplaceModifyingCteWithEmptyResult(Query *outerQuery);
 
 
 /*
@@ -279,6 +280,16 @@ CreateSingleTaskRouterSelectPlan(DistributedPlan *distributedPlan, Query *origin
 		/* query cannot be handled by this planner */
 		return;
 	}
+
+	/*
+	 * RouterJob may rewrite a zero-shard modifying CTE inside a router SELECT
+	 * into a plain empty-result CTE (see ReplaceModifyingCteWithEmptyResult).
+	 * That clears originalQuery->hasModifyingCTE, so recompute modLevel from
+	 * the (possibly-transformed) job query -- otherwise the executor would
+	 * treat the plan as ROW_MODIFY_NONCOMMUTATIVE and attempt to acquire
+	 * shard-locks on the pruned-away shard.
+	 */
+	distributedPlan->modLevel = RowModifyLevelForQuery(job->jobQuery);
 
 	ereport(DEBUG2, (errmsg("Creating router plan")));
 
@@ -1959,6 +1970,39 @@ RouterJob(Query *originalQuery, PlannerRestrictionContext *plannerRestrictionCon
 			}
 		}
 	}
+	else if (shardId == INVALID_SHARD_ID && originalQuery->hasModifyingCTE)
+	{
+		/*
+		 * Router SELECT that wraps a modifying CTE whose pruning
+		 * yielded zero shards (e.g. WITH u AS (UPDATE t ... WHERE
+		 * dist_key = X AND FALSE RETURNING ...) SELECT ... FROM u).
+		 *
+		 * PlanRouterQuery returned INVALID_SHARD_ID with a dummy
+		 * placement, and UpdateRelationToShardNames has already
+		 * flipped the CTE's target relation RTE to an empty-result
+		 * RTE_SUBQUERY. The direct UPDATE/DELETE escape above only
+		 * inspects the OUTER query's resultRelation (which is 0 for
+		 * a SELECT), so absent this branch the query would fall
+		 * through to SingleShardTaskList and be promoted to a
+		 * MODIFY_TASK with anchorShardId = 0 -- which then fails at
+		 * execution time in AcquireMetadataLocks ->
+		 * LookupShardIdCacheEntry(0) with "could not find valid
+		 * entry for shard 0".
+		 *
+		 * We cannot use the taskList = NIL contract that the direct
+		 * UPDATE/DELETE escape above uses, because the outer SELECT
+		 * has a consumer (e.g. SELECT count(*) FROM u must return
+		 * one row containing 0, not the empty resultset that an empty
+		 * task list would yield). Instead, rewrite each modifying CTE
+		 * in-place to a plain SELECT that returns no rows but retains
+		 * the CTE's output column shape, and clear hasModifyingCTE.
+		 * The rewritten query then flows through the normal
+		 * zero-shard router-SELECT machinery (READ_TASK on the dummy
+		 * placement), producing the correct empty CTE and letting the
+		 * outer aggregate emit the required single row.
+		 */
+		ReplaceModifyingCteWithEmptyResult(originalQuery);
+	}
 
 	if (isMultiShardModifyQuery)
 	{
@@ -1983,6 +2027,94 @@ RouterJob(Query *originalQuery, PlannerRestrictionContext *plannerRestrictionCon
 
 	job->requiresCoordinatorEvaluation = requiresCoordinatorEvaluation;
 	return job;
+}
+
+
+/*
+ * ReplaceModifyingCteWithEmptyResult rewrites each modifying (UPDATE/DELETE)
+ * CTE in outerQuery->cteList so that its body becomes a plain SELECT whose
+ * jointree quals are constant FALSE and whose target list is a matching-shape
+ * list of NULL constants. This preserves the outer query's structural reference
+ * to the CTE (name, output column names/types/typmods/collations) while
+ * guaranteeing the CTE produces zero rows and requires no shard metadata.
+ *
+ * hasModifyingCTE is cleared only if no other modifying CTE (e.g. CMD_INSERT,
+ * CMD_MERGE) remains in the cteList after the rewrite; otherwise the flag is
+ * preserved so downstream routing (READ_TASK vs MODIFY_TASK selection,
+ * modLevel computation, lock acquisition) still treats the query as
+ * modifying. When the flag does end up cleared, the outer SELECT flows
+ * through the standard zero-shard router-SELECT machinery (READ_TASK on the
+ * dummy placement, no shard-metadata lookups, no MODIFY_TASK promotion in
+ * SingleShardTaskList).
+ *
+ * This helper mutates outerQuery in place. Callers must have already
+ * established that pruning yielded zero shards (shardId == INVALID_SHARD_ID);
+ * pruning-relevant fields (placementList, relationShardList, prunedShardIntervalListList)
+ * are unaffected.
+ */
+static void
+ReplaceModifyingCteWithEmptyResult(Query *outerQuery)
+{
+	CommonTableExpr *cte = NULL;
+	bool anyModifyingCteLeft = false;
+
+	foreach_ptr(cte, outerQuery->cteList)
+	{
+		Query *cteQuery = (Query *) cte->ctequery;
+
+		if (cteQuery->commandType != CMD_UPDATE &&
+			cteQuery->commandType != CMD_DELETE)
+		{
+			/*
+			 * Non-UPDATE/DELETE CTE: leave it alone. If it is still a
+			 * modification (e.g. CMD_INSERT, CMD_MERGE) note that so we do
+			 * not clear the outer query's hasModifyingCTE flag below.
+			 */
+			if (cteQuery->commandType != CMD_SELECT)
+			{
+				anyModifyingCteLeft = true;
+			}
+			continue;
+		}
+
+		int columnCount = list_length(cte->ctecoltypes);
+		List *targetList = NIL;
+
+		for (int columnIndex = 0; columnIndex < columnCount; columnIndex++)
+		{
+			Oid coltype = list_nth_oid(cte->ctecoltypes, columnIndex);
+			int32 coltypmod = list_nth_int(cte->ctecoltypmods, columnIndex);
+			Oid colcoll = list_nth_oid(cte->ctecolcollations, columnIndex);
+			Node *colname = (Node *) list_nth(cte->ctecolnames, columnIndex);
+
+			Const *nullConst = makeNullConst(coltype, coltypmod, colcoll);
+
+			TargetEntry *targetEntry = makeNode(TargetEntry);
+			targetEntry->expr = (Expr *) nullConst;
+			targetEntry->resno = columnIndex + 1;
+			targetEntry->resname = pstrdup(strVal(colname));
+			targetEntry->resorigtbl = InvalidOid;
+			targetEntry->resorigcol = 0;
+			targetEntry->resjunk = false;
+
+			targetList = lappend(targetList, targetEntry);
+		}
+
+		FromExpr *joinTree = makeNode(FromExpr);
+		joinTree->fromlist = NIL;
+		joinTree->quals = (Node *) makeBoolConst(false, false);
+
+		Query *emptyCteQuery = makeNode(Query);
+		emptyCteQuery->commandType = CMD_SELECT;
+		emptyCteQuery->querySource = cteQuery->querySource;
+		emptyCteQuery->canSetTag = cteQuery->canSetTag;
+		emptyCteQuery->targetList = targetList;
+		emptyCteQuery->jointree = joinTree;
+
+		cte->ctequery = (Node *) emptyCteQuery;
+	}
+
+	outerQuery->hasModifyingCTE = anyModifyingCteLeft;
 }
 
 
