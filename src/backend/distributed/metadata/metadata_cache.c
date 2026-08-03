@@ -237,7 +237,7 @@ typedef struct MetadataCacheData
 static MetadataCacheData MetadataCache;
 
 /* Citus extension version variables */
-bool EnableVersionChecks = true; /* version checks are enabled */
+bool EnableVersionChecks = false; /* version checks are disabled to allow mixed 12/13/14 major versions on the same cluster */
 
 static bool citusVersionKnownCompatible = false;
 

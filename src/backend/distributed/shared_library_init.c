@@ -1642,7 +1642,7 @@ RegisterCitusConfigVariables(void)
 		gettext_noop("Enables version checks during CREATE/ALTER EXTENSION commands"),
 		NULL,
 		&EnableVersionChecks,
-		true,
+		false,
 		PGC_USERSET,
 		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);

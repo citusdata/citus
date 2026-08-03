@@ -167,7 +167,7 @@ static int ParseVersionComponent(const char *version, char **endPtr);
 
 /* global variables for CheckCitusColumnarVersion */
 static bool extensionLoadedColumnar = false;
-static bool EnableVersionChecksColumnar = true;
+static bool EnableVersionChecksColumnar = false;
 static bool citusVersionKnownCompatibleColumnar = false;
 
 /* Custom tuple slot ops used for columnar. Initialized in columnar_tableam_init(). */
@@ -2014,7 +2014,7 @@ columnar_tableam_init()
 		gettext_noop("Enables Version Check for Columnar"),
 		NULL,
 		&EnableVersionChecksColumnar,
-		true,
+		false,
 		PGC_USERSET,
 		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
