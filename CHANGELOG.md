@@ -1,3 +1,23 @@
+### citus v12.1.14 (August 4, 2026) ###
+
+* Fixes a crash on a writable standby coordinator when a write targets a shard
+  placed on the coordinator (#8706)
+
+* Fixes a segfault in `EXPLAIN` for queries combining `LEFT JOIN` with
+  correlated subqueries (#8705)
+
+* Fixes `could not find valid entry for shard 0` when a modifying CTE prunes to
+  zero shards and is consumed by an outer `SELECT` (#8702)
+
+* Fixes wrong results for `NOT (x IS DISTINCT FROM y)` when the query goes
+  through recursive planning (#8647)
+
+* Fixes a type mismatch when `COLLATE` is used together with a type cast in
+  distributed queries (#8704)
+
+* Fixes a shard cleanup race by using the latest snapshot when checking whether
+  a cleanup record still exists (#8703)
+
 ### citus v12.1.13 (July 1, 2026) ###
 
 * Fixes a crash when creating statistics on a relation that is not a plain
