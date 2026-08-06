@@ -1215,9 +1215,16 @@ CleanupRecordExists(uint64 recordId)
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_cleanup_record_id,
 				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(recordId));
 
-	/* make sure we can always see deletion after acquiring the operation ID lock */
-	PushActiveSnapshot(GetLatestSnapshot());
-	Snapshot snapshot = GetActiveSnapshot();
+	/*
+	 * Make sure we can always see deletion after acquiring the operation ID lock.
+	 *
+	 * PG18 requires the snapshot to be active or registered before it's used,
+	 * otherwise we hit
+	 * Assert(snapshot->regd_count > 0 || snapshot->active_count > 0);
+	 * Relevant PG18 commit:
+	 * 8076c00592e40e8dbd1fce7a98b20d4bf075e4ba
+	 */
+	Snapshot snapshot = RegisterSnapshot(GetLatestSnapshot());
 
 	SysScanDesc scanDescriptor = systable_beginscan(pgDistCleanup,
 													DistCleanupPrimaryKeyIndexId(),
@@ -1229,7 +1236,7 @@ CleanupRecordExists(uint64 recordId)
 	bool recordExists = HeapTupleIsValid(heapTuple);
 
 	systable_endscan(scanDescriptor);
-	PopActiveSnapshot();
+	UnregisterSnapshot(snapshot);
 
 	CommandCounterIncrement();
 	table_close(pgDistCleanup, NoLock);
