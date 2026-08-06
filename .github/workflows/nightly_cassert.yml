@@ -112,6 +112,9 @@ jobs:
       - uses: ./.github/actions/setup_cassert_pg
         with:
           pg_full: ${{ matrix.new_full }}
+      - name: Install python env for upgrade harness
+        shell: bash
+        run: ( cd src/test/regress && pipenv install --deploy )
       - name: check-pg-upgrade (with and without columnar)
         shell: bash
         timeout-minutes: 90
@@ -119,10 +122,10 @@ jobs:
           set -euo pipefail
           OLD="$HOME/.pgenv/pgsql-${{ matrix.old_full }}/bin"
           NEW="$HOME/.pgenv/pgsql-${{ matrix.new_full }}/bin"
-          make -C src/test/regress check-pg-upgrade \
-            old-bindir="$OLD" new-bindir="$NEW" test-with-columnar=false
-          make -C src/test/regress check-pg-upgrade \
-            old-bindir="$OLD" new-bindir="$NEW" test-with-columnar=true
+          ( cd src/test/regress && pipenv run make -C . check-pg-upgrade \
+              old-bindir="$OLD" new-bindir="$NEW" test-with-columnar=false )
+          ( cd src/test/regress && pipenv run make -C . check-pg-upgrade \
+              old-bindir="$OLD" new-bindir="$NEW" test-with-columnar=true )
       - name: Copy pg_upgrade logs for newData dir
         if: failure()
         shell: bash
