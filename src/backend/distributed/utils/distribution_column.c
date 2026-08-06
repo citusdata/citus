@@ -58,7 +58,7 @@ column_name_to_column(PG_FUNCTION_ARGS)
 	char *columnName = text_to_cstring(columnText);
 
 	Var *column = BuildDistributionKeyFromColumnName(relationId, columnName,
-													 AccessShareLock);
+													 AccessShareLock, false);
 	Assert(column != NULL);
 	char *columnNodeString = nodeToString(column);
 	text *columnNodeText = cstring_to_text(columnNodeString);
@@ -80,7 +80,7 @@ column_name_to_column_id(PG_FUNCTION_ARGS)
 	char *columnName = PG_GETARG_CSTRING(1);
 
 	Var *column = BuildDistributionKeyFromColumnName(distributedTableId, columnName,
-													 AccessExclusiveLock);
+													 AccessExclusiveLock, false);
 	Assert(column != NULL);
 
 	PG_RETURN_INT16((int16) column->varattno);
@@ -120,9 +120,12 @@ column_to_column_name(PG_FUNCTION_ARGS)
  *
  * The function returns NULL if the passed column name is NULL. That case only
  * corresponds to reference tables.
+ *
+ * If unlockRelation is true, the relation lock is released before returning.
  */
 Var *
-BuildDistributionKeyFromColumnName(Oid relationId, char *columnName, LOCKMODE lockMode)
+BuildDistributionKeyFromColumnName(Oid relationId, char *columnName, LOCKMODE lockMode,
+								   bool unlockRelation)
 {
 	Relation relation = try_relation_open(relationId, lockMode);
 
@@ -131,13 +134,13 @@ BuildDistributionKeyFromColumnName(Oid relationId, char *columnName, LOCKMODE lo
 		ereport(ERROR, (errmsg("relation does not exist")));
 	}
 
-	relation_close(relation, NoLock);
-
 	char *tableName = get_rel_name(relationId);
+	LOCKMODE closeLockMode = unlockRelation ? lockMode : NoLock;
 
 	/* short circuit for reference tables and single-shard tables */
 	if (columnName == NULL)
 	{
+		relation_close(relation, closeLockMode);
 		return NULL;
 	}
 
@@ -168,6 +171,7 @@ BuildDistributionKeyFromColumnName(Oid relationId, char *columnName, LOCKMODE lo
 									  columnForm->atttypmod, columnForm->attcollation, 0);
 
 	ReleaseSysCache(columnTuple);
+	relation_close(relation, closeLockMode);
 
 	return distributionColumn;
 }
