@@ -1,3 +1,47 @@
+### citus v13.4.0 (August 6, 2026) ###
+
+* Adds `citus_internal.distribute_object()`, a superuser-only repair UDF
+  that manually propagates an existing object to the worker nodes as a
+  distributed object (#8621)
+
+* Adds `citus.allow_unsafe_insert_select_pushdown` to allow shard-local
+  batched `INSERT ... SELECT` pushdown for colocated tables, for workloads
+  that call expensive batch-oriented UDFs (#8625)
+
+* Avoids coordinated transactions for single-statement single-shard
+  procedure calls by determining 2PC requirements through PL/pgSQL static
+  analysis instead of a runtime counter (#8566)
+
+* Enforces object ownership for more citus-internal UDFs (#8587)
+
+* Re-ranges sequences to the new group id when promoting a clone node so
+  that distributed, reference and Citus local tables keep globally-unique
+  sequence values (#8638)
+
+* Drops orphaned Citus local table shard copies on a worker promoted from
+  a clone of the coordinator (#8651)
+
+* Fixes wrong query results when recursive planning projects
+  restriction-referenced columns as NULL, such as for
+  `NOT (x IS DISTINCT FROM y)` (#8497)
+
+* Fixes a crash and `could not find valid entry for shard` errors when
+  planning `UPDATE` or `DELETE` on a distributed table whose `WHERE`
+  clause combines distribution key equality with an always-false
+  predicate (#8692)
+
+* Fixes a race condition in shard cleanup where a stale catalog snapshot
+  could cause an in-use shard to be dropped (#8594)
+
+* Fixes a type mismatch when `COLLATE` is used together with a type cast
+  in distributed queries (#8498)
+
+* Fixes a segfault in `EXPLAIN` for queries with a `LEFT JOIN` and
+  correlated subqueries (#8556)
+
+* Fixes a crash on a writable standby coordinator when writing to a
+  coordinator-local shard (#8561)
+
 ### citus v13.3.0 (May 15, 2026) ###
 
 * Adds support for running several DDLs for schema-based sharding from any
