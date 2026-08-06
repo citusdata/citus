@@ -1,0 +1,2 @@
+-- citus_columnar--13.5-1--13.4-1
+-- downgrade version to 13.4-1
