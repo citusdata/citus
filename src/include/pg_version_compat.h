@@ -352,6 +352,10 @@ LWLockNewTrancheIdCompat(const char *name)
 #include "catalog/pg_parameter_acl.h"
 #include "catalog/pg_policy.h"
 #include "catalog/pg_proc.h"
+#if PG_VERSION_NUM >= PG_VERSION_19
+#include "catalog/pg_propgraph_label.h"
+#include "catalog/pg_propgraph_property.h"
+#endif
 #include "catalog/pg_publication.h"
 #include "catalog/pg_publication_namespace.h"
 #include "catalog/pg_publication_rel.h"
@@ -410,6 +414,10 @@ typedef enum ObjectClass
 	OCLASS_EVENT_TRIGGER,       /* pg_event_trigger */
 	OCLASS_PARAMETER_ACL,       /* pg_parameter_acl */
 	OCLASS_POLICY,              /* pg_policy */
+#if PG_VERSION_NUM >= PG_VERSION_19
+	OCLASS_PROPGRAPH_LABEL,     /* pg_propgraph_label */
+	OCLASS_PROPGRAPH_PROPERTY,  /* pg_propgraph_property */
+#endif
 	OCLASS_PUBLICATION,         /* pg_publication */
 	OCLASS_PUBLICATION_NAMESPACE,   /* pg_publication_namespace */
 	OCLASS_PUBLICATION_REL,     /* pg_publication_rel */
@@ -618,6 +626,18 @@ getObjectClass(const ObjectAddress *object)
 		{
 			return OCLASS_POLICY;
 		}
+
+#if PG_VERSION_NUM >= PG_VERSION_19
+		case PropgraphLabelRelationId:
+		{
+			return OCLASS_PROPGRAPH_LABEL;
+		}
+
+		case PropgraphPropertyRelationId:
+		{
+			return OCLASS_PROPGRAPH_PROPERTY;
+		}
+#endif
 
 		case PublicationNamespaceRelationId:
 		{
