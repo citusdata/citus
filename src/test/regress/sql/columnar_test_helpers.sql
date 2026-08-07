@@ -151,8 +151,9 @@ BEGIN
   pgversion = substring(version(), '\d+')::int ;
   FOR query_plan IN execute explain_command LOOP
     IF pgversion >= 17 THEN
-      IF query_plan ~ 'SubPlan \d+\).col' THEN
-    	  query_plan = regexp_replace(query_plan, '\(ANY \(\w+ = \(SubPlan (\d+)\).col1\)\)', '(SubPlan \1)', 'g');
+      IF query_plan ~ 'SubPlan (any_)?\d+' THEN
+        query_plan = regexp_replace(query_plan, '\(ANY \(\w+ = \(SubPlan (any_)?(\d+)\).col1\)\)', '(SubPlan \2)', 'g');
+        query_plan = regexp_replace(query_plan, 'SubPlan any_(\d+)', 'SubPlan \1', 'g');
       END IF;
     END IF;
     RETURN NEXT;
