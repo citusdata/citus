@@ -197,6 +197,7 @@ test: multi_modifications
 test: multi_update_select
 test: multi_distribution_metadata
 test: multi_prune_shard_list
+test: multi_or_arm_pruning
 test: multi_upsert multi_simple_queries multi_data_types
 test: citus_copy_shard_placement
 # multi_utilities cannot be run in parallel with other tests because it checks

@@ -10,6 +10,16 @@
 
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 560000;
 
+-- Make this test re-runnable within the same cluster (needed by the
+-- flakyness detector). customer_copy_hash is *not* dropped at the end of
+-- this file because multi_size_queries later in multi_1_schedule inherits
+-- it; drop-if-exists here handles the repeat-run case without breaking that
+-- downstream dependency. See the end-of-file cleanup block for the tables
+-- that can be safely dropped.
+SET client_min_messages TO WARNING;
+DROP TABLE IF EXISTS customer_copy_hash;
+RESET client_min_messages;
+
 
 -- Create a new hash-partitioned table into which to COPY
 CREATE TABLE customer_copy_hash (
@@ -792,3 +802,35 @@ red	{"r":255,"g":0,"b":0
 \.
 
 DROP TABLE copy_jsonb;
+-- Drop the objects created earlier in this file that were not dropped inline,
+-- so that the test can be re-run within the same cluster without tripping on
+-- "relation already exists" / "type already exists" errors (e.g. from the
+-- flakyness detector or a repeated pg_regress invocation).
+--
+-- The BEGIN..master_create_empty_shard('customer_copy_append')..COPY-fails..END
+-- block near line 234 rolls back on the coordinator (removing the pg_dist_shard
+-- entry) but leaves the physical shard table customer_copy_append_560130 on the
+-- workers, because worker-side CREATE TABLE from master_create_empty_shard is
+-- not covered by the coordinator's rollback. A repeat run's ALTER SEQUENCE
+-- pg_dist_shardid_seq RESTART 560000 (line 11) cycles the shardid sequence and
+-- master_create_empty_shard re-issues 560130, colliding with the stranded
+-- worker-only table. Force-drop it via run_command_on_workers before the
+-- DROP TABLE below, since DROP TABLE only knows about shards recorded in
+-- pg_dist_shard.
+SET client_min_messages TO WARNING;
+SELECT success FROM run_command_on_workers($$DROP TABLE IF EXISTS customer_copy_append_560130$$);
+RESET client_min_messages;
+DROP TABLE customer_with_default;
+DROP TABLE customer_copy_range;
+DROP TABLE customer_copy_append;
+DROP TABLE lineitem_copy_append;
+DROP TABLE "customer_with_special_\\_character";
+DROP TABLE "1_customer";
+DROP TABLE packed_numbers_hash;
+DROP TABLE super_packed_numbers_hash;
+DROP TABLE packed_numbers_append;
+DROP TABLE super_packed_numbers_append;
+DROP TABLE composite_partition_column_table;
+DROP TYPE super_number_pack;
+DROP TYPE number_pack;
+DROP SCHEMA append CASCADE;

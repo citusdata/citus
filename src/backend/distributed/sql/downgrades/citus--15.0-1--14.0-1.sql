@@ -26,3 +26,8 @@ DROP FUNCTION IF EXISTS citus_internal.acquire_placement_colocation_lock(bigint,
 DROP FUNCTION IF EXISTS pg_catalog.citus_cluster_changes_block(int);
 DROP FUNCTION IF EXISTS pg_catalog.citus_cluster_changes_unblock();
 DROP FUNCTION IF EXISTS pg_catalog.citus_cluster_changes_block_status();
+
+-- restore citus_finish_citus_upgrade from 14.0-1
+#include "../udfs/citus_finish_citus_upgrade/14.0-1.sql"
+
+DROP FUNCTION IF EXISTS citus_internal.distribute_object(oid, oid, int, boolean);
