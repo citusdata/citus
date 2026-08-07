@@ -83,4 +83,4 @@ runs:
         make clean
         make -j"$(nproc)" all
         # Installs into the $HOME pgenv prefix for this version -> no sudo, no clobber across versions.
-        make install
+        make install-all
