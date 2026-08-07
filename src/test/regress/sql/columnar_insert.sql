@@ -89,8 +89,10 @@ ALTER TABLE test_toast_row ALTER COLUMN main SET STORAGE main; -- inline, compre
 ALTER TABLE test_toast_row ALTER COLUMN external SET STORAGE external; -- out-of-line, uncompressed
 ALTER TABLE test_toast_row ALTER COLUMN extended SET STORAGE extended; -- out-of-line, compressed
 
+SET default_toast_compression TO 'pglz';
 INSERT INTO test_toast_row VALUES(
        repeat('w', 5000), repeat('x', 5000), repeat('y', 5000), repeat('z', 5000));
+RESET default_toast_compression;
 
 SELECT
   pg_column_size(plain), pg_column_size(main),
