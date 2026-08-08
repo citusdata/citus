@@ -273,6 +273,7 @@ AppendPublicationObjects(StringInfo buf, List *publicationObjects,
 
 
 #if PG_VERSION_NUM >= PG_VERSION_19
+
 /*
  * AppendPublicationAllObjects appends the object list for a PG19
  * ALL TABLES/ALL SEQUENCES publication.
@@ -306,12 +307,14 @@ AppendPublicationAllObjects(StringInfo buf, bool forAllTables,
 	if (forAllSequences)
 	{
 		appendStringInfoString(buf, appendedObject ? ", ALL SEQUENCES" :
-							  " ALL SEQUENCES");
+							   " ALL SEQUENCES");
 		appendedObject = true;
 	}
 
 	return appendedObject;
 }
+
+
 #endif
 
 
