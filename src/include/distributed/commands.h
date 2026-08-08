@@ -493,7 +493,8 @@ extern List * GetAlterPublicationDDLCommandsForTable(Oid relationId, bool isAdd)
 extern char * GetAlterPublicationTableDDLCommand(Oid publicationId, Oid relationId,
 												 bool isAdd);
 #if PG_VERSION_NUM >= PG_VERSION_19
-extern char * GetAlterPublicationExcludedTablesDDLCommand(Oid publicationId);
+extern char * GetAlterPublicationExcludedTablesDDLCommand(Oid publicationId,
+														  bool includeLocalTables);
 #endif
 extern List * AlterPublicationOwnerStmtObjectAddress(Node *node, bool missingOk,
 													 bool isPostProcess);
