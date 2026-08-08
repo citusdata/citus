@@ -510,6 +510,102 @@ FROM unnest(activate_node_snapshot()) WITH ORDINALITY AS s(c, ord);
 (1 row)
 
 DROP PUBLICATION publication_all_except_part;
+-- Conversions that give a table a new OID must not lose its exclusion, because
+-- the exclusion is tied to the old OID and cannot be restored with
+-- ALTER PUBLICATION .. ADD TABLE.
+SET client_min_messages TO WARNING;
+-- undistribute_table() drops the table and recreates it under the same name.
+CREATE TABLE publication_undist_excluded (id int);
+CREATE PUBLICATION publication_all_except_undist
+    FOR ALL TABLES EXCEPT (TABLE publication_undist_excluded);
+SELECT create_distributed_table('publication_undist_excluded', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT undistribute_table('publication_undist_excluded');
+ undistribute_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT count(*) = 1 AS exclusion_retained_after_undistribute
+FROM pg_publication p
+JOIN pg_publication_rel r ON r.prpubid = p.oid AND r.prexcept
+JOIN pg_class c ON c.oid = r.prrelid
+WHERE p.pubname = 'publication_all_except_undist'
+  AND c.relname = 'publication_undist_excluded';
+ exclusion_retained_after_undistribute
+---------------------------------------------------------------------
+ t
+(1 row)
+
+DROP PUBLICATION publication_all_except_undist;
+DROP TABLE publication_undist_excluded;
+-- citus_add_local_table_to_metadata() renames the original table into a shard
+-- and creates a new shell table under the original name, so the exclusion has
+-- to move to the shell table instead of staying behind on the shard.
+SELECT citus_set_coordinator_host('localhost', :master_port);
+ citus_set_coordinator_host
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE publication_conv_excluded (id int);
+CREATE PUBLICATION publication_all_except_conv
+    FOR ALL TABLES EXCEPT (TABLE publication_conv_excluded);
+SELECT citus_add_local_table_to_metadata('publication_conv_excluded');
+ citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT count(*) = 1 AS exclusion_moved_to_shell_table
+FROM pg_publication p
+JOIN pg_publication_rel r ON r.prpubid = p.oid AND r.prexcept
+JOIN pg_class c ON c.oid = r.prrelid
+WHERE p.pubname = 'publication_all_except_conv'
+  AND c.relname = 'publication_conv_excluded';
+ exclusion_moved_to_shell_table
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT count(*) = 0 AS no_exclusion_left_behind_on_shard
+FROM pg_publication p
+JOIN pg_publication_rel r ON r.prpubid = p.oid AND r.prexcept
+JOIN pg_class c ON c.oid = r.prrelid
+WHERE p.pubname = 'publication_all_except_conv'
+  AND c.relname <> 'publication_conv_excluded';
+ no_exclusion_left_behind_on_shard
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT bool_and(result::boolean) AS exclusion_present_on_workers
+FROM run_command_on_workers($$
+    SELECT count(*) = 1
+    FROM pg_publication p
+    JOIN pg_publication_rel r ON r.prpubid = p.oid AND r.prexcept
+    JOIN pg_class c ON c.oid = r.prrelid
+    WHERE p.pubname = 'publication_all_except_conv'
+      AND c.relname = 'publication_conv_excluded'
+$$);
+ exclusion_present_on_workers
+---------------------------------------------------------------------
+ t
+(1 row)
+
+DROP PUBLICATION publication_all_except_conv;
+DROP TABLE publication_conv_excluded;
+SELECT citus_remove_node('localhost', :master_port);
+ citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+RESET client_min_messages;
 SET client_min_messages TO WARNING;
 DROP SCHEMA pg19_repack CASCADE;
 RESET client_min_messages;
