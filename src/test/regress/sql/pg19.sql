@@ -273,6 +273,51 @@ CREATE TABLE repack_part_2021 PARTITION OF repack_part
 SELECT create_distributed_table('repack_part', 'id');
 REPACK repack_part USING INDEX repack_part_pk;
 
+-- PG19 represents ALL TABLES EXCEPT relations as PUBLICATIONOBJ_EXCEPT_TABLE,
+-- and stores ALL TABLES/ALL SEQUENCES as independent flags. Verify both
+-- catalog-backed CREATE reconstruction and direct ALTER propagation.
+CREATE TABLE publication_excluded_1 (id int);
+CREATE TABLE publication_excluded_2 (id int);
+CREATE TABLE publication_local_excluded (id int);
+SELECT create_distributed_table('publication_excluded_1', 'id');
+SELECT create_distributed_table('publication_excluded_2', 'id');
+
+CREATE PUBLICATION publication_all_except
+    FOR ALL TABLES EXCEPT (TABLE publication_excluded_1,
+                           TABLE publication_local_excluded),
+        ALL SEQUENCES;
+
+SELECT bool_and(result::boolean) AS create_propagated
+FROM run_command_on_workers($$
+    SELECT p.puballtables AND p.puballsequences
+           AND count(*) FILTER (WHERE r.prexcept) = 1
+           AND bool_and(c.relname = 'publication_excluded_1')
+    FROM pg_publication p
+    JOIN pg_publication_rel r ON r.prpubid = p.oid
+    JOIN pg_class c ON c.oid = r.prrelid
+    WHERE p.pubname = 'publication_all_except'
+    GROUP BY p.puballtables, p.puballsequences
+$$);
+
+ALTER PUBLICATION publication_all_except
+    SET ALL TABLES EXCEPT (TABLE publication_excluded_2,
+                           TABLE publication_local_excluded),
+        ALL SEQUENCES;
+
+SELECT bool_and(result::boolean) AS alter_propagated
+FROM run_command_on_workers($$
+    SELECT p.puballtables AND p.puballsequences
+           AND count(*) FILTER (WHERE r.prexcept) = 1
+           AND bool_and(c.relname = 'publication_excluded_2')
+    FROM pg_publication p
+    JOIN pg_publication_rel r ON r.prpubid = p.oid
+    JOIN pg_class c ON c.oid = r.prrelid
+    WHERE p.pubname = 'publication_all_except'
+    GROUP BY p.puballtables, p.puballsequences
+$$);
+
+DROP PUBLICATION publication_all_except;
+
 SET client_min_messages TO WARNING;
 DROP SCHEMA pg19_repack CASCADE;
 RESET client_min_messages;
