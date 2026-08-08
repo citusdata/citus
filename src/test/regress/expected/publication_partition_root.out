@@ -1,0 +1,86 @@
+CREATE SCHEMA publication_partition_root;
+SET search_path TO publication_partition_root;
+SET citus.shard_replication_factor TO 1;
+CREATE FUNCTION activate_node_snapshot()
+    RETURNS text[]
+    LANGUAGE C STRICT
+    AS 'citus';
+CREATE TABLE parent_with_children (id int) PARTITION BY RANGE (id);
+CREATE TABLE child_1 PARTITION OF parent_with_children
+    FOR VALUES FROM (0) TO (10);
+CREATE TABLE child_2 PARTITION OF parent_with_children
+    FOR VALUES FROM (10) TO (20);
+SELECT create_distributed_table('parent_with_children', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE parent_without_children (id int) PARTITION BY RANGE (id);
+SELECT create_distributed_table('parent_without_children', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE PUBLICATION pub_partition_root_with_children
+    FOR TABLE parent_with_children
+    WITH (publish_via_partition_root = false);
+CREATE PUBLICATION pub_partition_root_without_children
+    FOR TABLE parent_without_children
+    WITH (publish_via_partition_root = false);
+-- Worker catalogs should contain the explicitly published roots.
+SELECT DISTINCT result
+FROM run_command_on_workers($$
+    SELECT array_agg(p.pubname || ':' || c.relname || ':' || p.pubviaroot
+                     ORDER BY p.pubname)::text
+    FROM pg_publication p
+    JOIN pg_publication_rel pr ON pr.prpubid = p.oid
+    JOIN pg_class c ON c.oid = pr.prrelid
+    WHERE p.pubname LIKE 'pub_partition_root_%'
+$$)
+ORDER BY result;
+                                                             result
+---------------------------------------------------------------------
+ {pub_partition_root_with_children:parent_with_children:false,pub_partition_root_without_children:parent_without_children:false}
+(1 row)
+
+-- PostgreSQL should retain its runtime leaf expansion semantics.
+SELECT p.pubname,
+       COALESCE(string_agg(t.tablename, ', ' ORDER BY t.tablename), '<none>') AS tables
+FROM pg_publication p
+LEFT JOIN pg_publication_tables t USING (pubname)
+WHERE p.pubname LIKE 'pub_partition_root_%'
+GROUP BY p.pubname
+ORDER BY p.pubname;
+               pubname               |      tables
+---------------------------------------------------------------------
+ pub_partition_root_with_children    | child_1, child_2
+ pub_partition_root_without_children | <none>
+(2 rows)
+
+-- Node activation should reconstruct the roots, not expanded leaves.
+SELECT c
+FROM unnest(activate_node_snapshot()) c
+WHERE c LIKE '%CREATE PUBLICATION%'
+  AND c LIKE '%pub_partition_root_%'
+ORDER BY c;
+                                                                                                                              c
+---------------------------------------------------------------------
+ SELECT worker_create_or_replace_object('CREATE PUBLICATION pub_partition_root_with_children FOR TABLE publication_partition_root.parent_with_children WITH (publish_via_partition_root = ''false'', publish = ''insert, update, delete, truncate'')');
+ SELECT worker_create_or_replace_object('CREATE PUBLICATION pub_partition_root_without_children FOR TABLE publication_partition_root.parent_without_children WITH (publish_via_partition_root = ''false'', publish = ''insert, update, delete, truncate'')');
+(2 rows)
+
+DROP PUBLICATION pub_partition_root_with_children;
+DROP PUBLICATION pub_partition_root_without_children;
+DROP SCHEMA publication_partition_root CASCADE;
+NOTICE:  drop cascades to 3 other objects
+DETAIL:  drop cascades to function activate_node_snapshot()
+drop cascades to table parent_with_children
+drop cascades to table parent_without_children
+SELECT public.wait_for_resource_cleanup();
+ wait_for_resource_cleanup
+---------------------------------------------------------------------
+
+(1 row)
+
