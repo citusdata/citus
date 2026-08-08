@@ -414,22 +414,76 @@ $$);
 (1 row)
 
 DROP PUBLICATION publication_all_except;
+-- A table that is excluded while it is still a local table cannot be named on
+-- the workers, so it is filtered out when the publication is propagated.
+-- Distributing it later has to restore the exclusion on the workers, otherwise
+-- the workers would publish a table that the coordinator excludes.
+CREATE TABLE publication_late_excluded (id int);
+CREATE PUBLICATION publication_all_except_late
+    FOR ALL TABLES EXCEPT (TABLE publication_late_excluded);
+SELECT bool_and(result::boolean) AS exclusion_deferred_while_local
+FROM run_command_on_workers($$
+    SELECT count(*) = 0
+    FROM pg_publication p
+    JOIN pg_publication_rel r ON r.prpubid = p.oid AND r.prexcept
+    WHERE p.pubname = 'publication_all_except_late'
+$$);
+ exclusion_deferred_while_local
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT create_distributed_table('publication_late_excluded', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT bool_and(result::boolean) AS exclusion_restored_after_distribution
+FROM run_command_on_workers($$
+    SELECT count(*) = 1
+    FROM pg_publication p
+    JOIN pg_publication_rel r ON r.prpubid = p.oid AND r.prexcept
+    JOIN pg_class c ON c.oid = r.prrelid
+    WHERE p.pubname = 'publication_all_except_late'
+      AND c.relname = 'publication_late_excluded'
+$$);
+ exclusion_restored_after_distribution
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT count(*) = 1 AS exclusion_retained_on_coordinator
+FROM pg_publication p
+JOIN pg_publication_rel r ON r.prpubid = p.oid AND r.prexcept
+JOIN pg_class c ON c.oid = r.prrelid
+WHERE p.pubname = 'publication_all_except_late'
+  AND c.relname = 'publication_late_excluded';
+ exclusion_retained_on_coordinator
+---------------------------------------------------------------------
+ t
+(1 row)
+
+DROP PUBLICATION publication_all_except_late;
 -- The activation path rebuilds publication DDL from catalogs rather than
 -- deparsing the original statement, so exercise it directly. An excluded
 -- partitioned root must survive as the root (not be expanded to its leaves),
 -- and excluded Citus tables must be ordered before the publication itself.
+-- The publication is created while the excluded root is still a local table so
+-- that it is registered as a distributed object before the table is; only the
+-- publication -> excluded relation dependency can order the table first.
 CREATE TABLE publication_part_excluded (id int, ts timestamptz)
     PARTITION BY RANGE (ts);
 CREATE TABLE publication_part_excluded_2020 PARTITION OF publication_part_excluded
     FOR VALUES FROM ('2020-01-01') TO ('2021-01-01');
+CREATE PUBLICATION publication_all_except_part
+    FOR ALL TABLES EXCEPT (TABLE publication_part_excluded);
 SELECT create_distributed_table('publication_part_excluded', 'id');
  create_distributed_table
 ---------------------------------------------------------------------
 
 (1 row)
 
-CREATE PUBLICATION publication_all_except_part
-    FOR ALL TABLES EXCEPT (TABLE publication_part_excluded);
 CREATE OR REPLACE FUNCTION activate_node_snapshot()
     RETURNS text[]
     LANGUAGE C STRICT
@@ -445,6 +499,7 @@ WHERE c LIKE '%CREATE PUBLICATION%publication_all_except_part%'
 (1 row)
 
 SELECT min(ord) FILTER (WHERE c LIKE '%publication_part_excluded%'
+                          AND c NOT LIKE '%publication_part_excluded_2020%'
                           AND c NOT LIKE '%CREATE PUBLICATION%')
      < min(ord) FILTER (WHERE c LIKE '%CREATE PUBLICATION%publication_all_except_part%')
        AS excluded_table_precedes_publication

@@ -21,6 +21,8 @@
 #include "utils/acl.h"
 #include "utils/rel.h"
 
+#include "pg_version_constants.h"
+
 #include "distributed/metadata_utility.h"
 
 
@@ -490,6 +492,9 @@ extern List * PreprocessAlterPublicationStmt(Node *stmt, const char *queryString
 extern List * GetAlterPublicationDDLCommandsForTable(Oid relationId, bool isAdd);
 extern char * GetAlterPublicationTableDDLCommand(Oid publicationId, Oid relationId,
 												 bool isAdd);
+#if PG_VERSION_NUM >= PG_VERSION_19
+extern char * GetAlterPublicationExcludedTablesDDLCommand(Oid publicationId);
+#endif
 extern List * AlterPublicationOwnerStmtObjectAddress(Node *node, bool missingOk,
 													 bool isPostProcess);
 extern List * AlterPublicationStmtObjectAddress(Node *node, bool missingOk,
