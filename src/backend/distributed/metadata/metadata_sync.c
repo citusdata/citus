@@ -408,8 +408,11 @@ AddTableToPublications(Oid relationId)
 		 * propagated, because it was not a Citus table back then. Resend the full
 		 * membership, since an EXCEPT list can only be replaced as a whole.
 		 */
+		bool includeLocalTables = false;
+
 		SendCommandToRemoteNodesWithMetadata(
-			GetAlterPublicationExcludedTablesDDLCommand(publicationId));
+			GetAlterPublicationExcludedTablesDDLCommand(publicationId,
+														includeLocalTables));
 	}
 #endif
 
