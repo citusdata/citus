@@ -414,6 +414,47 @@ $$);
 (1 row)
 
 DROP PUBLICATION publication_all_except;
+-- The activation path rebuilds publication DDL from catalogs rather than
+-- deparsing the original statement, so exercise it directly. An excluded
+-- partitioned root must survive as the root (not be expanded to its leaves),
+-- and excluded Citus tables must be ordered before the publication itself.
+CREATE TABLE publication_part_excluded (id int, ts timestamptz)
+    PARTITION BY RANGE (ts);
+CREATE TABLE publication_part_excluded_2020 PARTITION OF publication_part_excluded
+    FOR VALUES FROM ('2020-01-01') TO ('2021-01-01');
+SELECT create_distributed_table('publication_part_excluded', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE PUBLICATION publication_all_except_part
+    FOR ALL TABLES EXCEPT (TABLE publication_part_excluded);
+CREATE OR REPLACE FUNCTION activate_node_snapshot()
+    RETURNS text[]
+    LANGUAGE C STRICT
+    AS 'citus';
+SELECT count(*) = 1 AS part_root_preserved
+FROM unnest(activate_node_snapshot()) c
+WHERE c LIKE '%CREATE PUBLICATION%publication_all_except_part%'
+  AND c LIKE '%publication_part_excluded%'
+  AND c NOT LIKE '%publication_part_excluded_2020%';
+ part_root_preserved
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT min(ord) FILTER (WHERE c LIKE '%publication_part_excluded%'
+                          AND c NOT LIKE '%CREATE PUBLICATION%')
+     < min(ord) FILTER (WHERE c LIKE '%CREATE PUBLICATION%publication_all_except_part%')
+       AS excluded_table_precedes_publication
+FROM unnest(activate_node_snapshot()) WITH ORDINALITY AS s(c, ord);
+ excluded_table_precedes_publication
+---------------------------------------------------------------------
+ t
+(1 row)
+
+DROP PUBLICATION publication_all_except_part;
 SET client_min_messages TO WARNING;
 DROP SCHEMA pg19_repack CASCADE;
 RESET client_min_messages;
