@@ -125,6 +125,45 @@ CreatePublicationDDLCommand(Oid publicationId)
 }
 
 
+#if PG_VERSION_NUM >= PG_VERSION_19
+
+/*
+ * GetAlterPublicationExcludedTablesDDLCommand returns an
+ * "ALTER PUBLICATION .. SET ALL TABLES EXCEPT (..)" string that restores the
+ * complete membership of a FOR ALL TABLES publication.
+ *
+ * EXCEPT membership cannot be amended with ALTER PUBLICATION .. ADD/DROP TABLE,
+ * so we always have to resend the whole list. This is needed when a table that
+ * was excluded while it was still a local table becomes a Citus table, since
+ * such a table is filtered out when the publication is first propagated.
+ */
+char *
+GetAlterPublicationExcludedTablesDDLCommand(Oid publicationId)
+{
+	CreatePublicationStmt *createPubStmt = BuildCreatePublicationStmt(publicationId);
+
+	AlterPublicationStmt *alterPubStmt = makeNode(AlterPublicationStmt);
+	alterPubStmt->pubname = createPubStmt->pubname;
+	alterPubStmt->action = AP_SetObjects;
+	alterPubStmt->pubobjects = createPubStmt->pubobjects;
+	alterPubStmt->for_all_tables = createPubStmt->for_all_tables;
+	alterPubStmt->for_all_sequences = createPubStmt->for_all_sequences;
+
+	/* we took the WHERE clause from the catalog where it is already transformed */
+	bool whereClauseRequiresTransform = false;
+
+	/* only propagate Citus tables in publication */
+	bool includeLocalTables = false;
+
+	return DeparseAlterPublicationStmtExtended((Node *) alterPubStmt,
+											   whereClauseRequiresTransform,
+											   includeLocalTables);
+}
+
+
+#endif
+
+
 /*
  * BuildCreatePublicationStmt constructs a CreatePublicationStmt struct for the
  * given publication.
