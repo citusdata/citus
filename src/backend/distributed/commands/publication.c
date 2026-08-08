@@ -176,10 +176,18 @@ BuildCreatePublicationStmt(Oid publicationId)
 	if (publicationForm->puballtables)
 	{
 		excluded = true;
+
+		/*
+		 * An EXCEPT list names relations explicitly, and those exact relations
+		 * are what pg_publication_rel stores. Always ask for the listed relation
+		 * itself, regardless of pubviaroot: expanding an excluded partitioned
+		 * root to its leaves would drop the exclusion entirely when the root has
+		 * no partitions, and would freeze it to the partitions that happen to
+		 * exist now, so partitions added later would be published on the worker
+		 * but not on the coordinator.
+		 */
 		relationIds = GetExcludedPublicationTables(publicationId,
-												   publicationForm->pubviaroot ?
-												   PUBLICATION_PART_ROOT :
-												   PUBLICATION_PART_LEAF);
+												   PUBLICATION_PART_ROOT);
 	}
 	else
 #endif
