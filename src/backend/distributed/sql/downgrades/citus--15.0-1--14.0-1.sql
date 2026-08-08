@@ -1,10 +1,7 @@
 -- citus--15.0-1--14.0-1
 -- downgrade version to 14.0-1
 
-ALTER TABLE pg_catalog.pg_dist_partition RESET (user_catalog_table);
-ALTER TABLE pg_catalog.pg_dist_shard RESET (user_catalog_table);
-ALTER TABLE pg_catalog.pg_dist_local_group RESET (user_catalog_table);
-
+-- Retain user_catalog_table so logical decoding remains compatible with PostgreSQL 19.
 DROP FUNCTION IF EXISTS citus_internal.get_next_colocation_id();
 
 -- re-create the legacy version that we kept for backward compatibility at Citus 13 and 14
