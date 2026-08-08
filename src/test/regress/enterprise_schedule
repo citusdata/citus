@@ -18,6 +18,7 @@ test: citus_local_tables_ent
 
 # --------
 
+test: publication_partition_root
 test: publication
 test: logical_replication
 test: check_cluster_state
