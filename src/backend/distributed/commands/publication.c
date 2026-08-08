@@ -136,9 +136,13 @@ CreatePublicationDDLCommand(Oid publicationId)
  * so we always have to resend the whole list. This is needed when a table that
  * was excluded while it was still a local table becomes a Citus table, since
  * such a table is filtered out when the publication is first propagated.
+ *
+ * Callers that restore the publication on the local node pass includeLocalTables
+ * as true, since the local publication has to keep excluding local tables too.
  */
 char *
-GetAlterPublicationExcludedTablesDDLCommand(Oid publicationId)
+GetAlterPublicationExcludedTablesDDLCommand(Oid publicationId,
+											bool includeLocalTables)
 {
 	CreatePublicationStmt *createPubStmt = BuildCreatePublicationStmt(publicationId);
 
@@ -151,9 +155,6 @@ GetAlterPublicationExcludedTablesDDLCommand(Oid publicationId)
 
 	/* we took the WHERE clause from the catalog where it is already transformed */
 	bool whereClauseRequiresTransform = false;
-
-	/* only propagate Citus tables in publication */
-	bool includeLocalTables = false;
 
 	return DeparseAlterPublicationStmtExtended((Node *) alterPubStmt,
 											   whereClauseRequiresTransform,
@@ -498,6 +499,39 @@ GetAlterPublicationDDLCommandsForTable(Oid relationId, bool isAdd)
 
 		commands = lappend(commands, command);
 	}
+
+#if PG_VERSION_NUM >= PG_VERSION_19
+
+	/*
+	 * A table that is excluded from a FOR ALL TABLES publication cannot be
+	 * restored with ALTER PUBLICATION .. ADD TABLE, so we regenerate the
+	 * complete membership instead.
+	 *
+	 * Callers capture these commands before a conversion that gives the table
+	 * a new OID, and replay them once the replacement table exists under the
+	 * same name. Since the commands name the excluded tables, replaying them
+	 * moves the exclusion onto the replacement table. Replacing the whole list
+	 * at once also drops the exclusion that stayed behind on the relation that
+	 * the conversion turned into a shard.
+	 *
+	 * The DROP side needs nothing here, because the exclusions we would drop
+	 * are the ones the commands above restore.
+	 */
+	if (isAdd)
+	{
+		List *excludedPublicationIds = GetRelationExcludedPublications(relationId);
+
+		foreach_declared_oid(publicationId, excludedPublicationIds)
+		{
+			/* the publication on this node also excludes local tables */
+			bool includeLocalTables = true;
+
+			commands = lappend(commands,
+							   GetAlterPublicationExcludedTablesDDLCommand(
+								   publicationId, includeLocalTables));
+		}
+	}
+#endif
 
 	return commands;
 }
