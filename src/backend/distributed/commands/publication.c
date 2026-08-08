@@ -35,7 +35,8 @@
 static CreatePublicationStmt * BuildCreatePublicationStmt(Oid publicationId);
 static PublicationObjSpec * BuildPublicationRelationObjSpec(Oid relationId,
 															Oid publicationId,
-															bool tableOnly);
+															bool tableOnly,
+															bool excluded);
 static void AppendPublishOptionList(StringInfo str, List *strings);
 static char * AlterPublicationOwnerCommand(Oid publicationId);
 static bool ShouldPropagateCreatePublication(CreatePublicationStmt *stmt);
@@ -149,8 +150,9 @@ BuildCreatePublicationStmt(Oid publicationId)
 
 	/* FOR ALL TABLES */
 	createPubStmt->for_all_tables = publicationForm->puballtables;
-
-	ReleaseSysCache(publicationTuple);
+#if PG_VERSION_NUM >= PG_VERSION_19
+	createPubStmt->for_all_sequences = publicationForm->puballsequences;
+#endif
 
 	List *schemaIds = GetPublicationSchemas(publicationId);
 	Oid schemaId = InvalidOid;
@@ -168,10 +170,25 @@ BuildCreatePublicationStmt(Oid publicationId)
 		createPubStmt->pubobjects = lappend(createPubStmt->pubobjects, publicationObject);
 	}
 
-	List *relationIds = GetPublicationRelations(publicationId,
-												publicationForm->pubviaroot ?
-												PUBLICATION_PART_ROOT :
-												PUBLICATION_PART_LEAF);
+	bool excluded = false;
+	List *relationIds = NIL;
+#if PG_VERSION_NUM >= PG_VERSION_19
+	if (publicationForm->puballtables)
+	{
+		excluded = true;
+		relationIds = GetExcludedPublicationTables(publicationId,
+												   publicationForm->pubviaroot ?
+												   PUBLICATION_PART_ROOT :
+												   PUBLICATION_PART_LEAF);
+	}
+	else
+#endif
+	{
+		relationIds = GetPublicationRelations(publicationId,
+											  publicationForm->pubviaroot ?
+											  PUBLICATION_PART_ROOT :
+											  PUBLICATION_PART_LEAF);
+	}
 	Oid relationId = InvalidOid;
 
 	/* mainly for consistent ordering in test output */
@@ -179,11 +196,12 @@ BuildCreatePublicationStmt(Oid publicationId)
 
 	foreach_declared_oid(relationId, relationIds)
 	{
-		bool tableOnly = false;
+		bool tableOnly = excluded;
 
 		/* since postgres 15, tables can have a column list and filter */
 		PublicationObjSpec *publicationObject =
-			BuildPublicationRelationObjSpec(relationId, publicationId, tableOnly);
+			BuildPublicationRelationObjSpec(relationId, publicationId, tableOnly,
+											excluded);
 
 		createPubStmt->pubobjects = lappend(createPubStmt->pubobjects, publicationObject);
 	}
@@ -250,6 +268,7 @@ BuildCreatePublicationStmt(Oid publicationId)
 		createPubStmt->options = lappend(createPubStmt->options, publishOption);
 	}
 
+	ReleaseSysCache(publicationTuple);
 
 	return createPubStmt;
 }
@@ -283,7 +302,7 @@ AppendPublishOptionList(StringInfo str, List *options)
  */
 static PublicationObjSpec *
 BuildPublicationRelationObjSpec(Oid relationId, Oid publicationId,
-								bool tableOnly)
+								bool tableOnly, bool excluded)
 {
 	HeapTuple pubRelationTuple = SearchSysCache2(PUBLICATIONRELMAP,
 												 ObjectIdGetDatum(relationId),
@@ -348,6 +367,15 @@ BuildPublicationRelationObjSpec(Oid relationId, Oid publicationId,
 
 	PublicationObjSpec *publicationObject = makeNode(PublicationObjSpec);
 	publicationObject->pubobjtype = PUBLICATIONOBJ_TABLE;
+#if PG_VERSION_NUM >= PG_VERSION_19
+	if (excluded)
+	{
+		publicationObject->pubobjtype = PUBLICATIONOBJ_EXCEPT_TABLE;
+		publicationTable->except = true;
+	}
+#else
+	Assert(!excluded);
+#endif
 	publicationObject->pubtable = publicationTable;
 	publicationObject->name = NULL;
 	publicationObject->location = -1;
@@ -458,7 +486,7 @@ GetAlterPublicationTableDDLCommand(Oid publicationId, Oid relationId,
 
 	/* since postgres 15, tables can have a column list and filter */
 	PublicationObjSpec *publicationObject =
-		BuildPublicationRelationObjSpec(relationId, publicationId, tableOnly);
+		BuildPublicationRelationObjSpec(relationId, publicationId, tableOnly, false);
 
 	alterPubStmt->pubobjects = lappend(alterPubStmt->pubobjects, publicationObject);
 	alterPubStmt->action = isAdd ? AP_AddObjects : AP_DropObjects;
