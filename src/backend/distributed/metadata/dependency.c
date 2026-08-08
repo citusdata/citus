@@ -2090,7 +2090,7 @@ GetPublicationRelationsDependencyList(Oid publicationId)
 		 * depends on.
 		 */
 		allRelationIds = GetExcludedPublicationTables(publicationId,
-													 PUBLICATION_PART_ROOT);
+													  PUBLICATION_PART_ROOT);
 	}
 	else
 #endif
