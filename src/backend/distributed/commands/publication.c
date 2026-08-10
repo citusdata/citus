@@ -232,10 +232,8 @@ BuildCreatePublicationStmt(Oid publicationId)
 	else
 #endif
 	{
-		relationIds = GetPublicationRelations(publicationId,
-											  publicationForm->pubviaroot ?
-											  PUBLICATION_PART_ROOT :
-											  PUBLICATION_PART_LEAF);
+		/* reconstruct explicit catalog entries, not runtime-expanded partitions */
+		relationIds = GetPublicationRelations(publicationId, PUBLICATION_PART_ROOT);
 	}
 	Oid relationId = InvalidOid;
 
