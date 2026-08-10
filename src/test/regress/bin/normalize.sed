@@ -398,8 +398,9 @@ s/^([ ]{16}InitPlan) exists_1/\1 2/
 s/^([ ]{22}One-Time Filter: \(InitPlan) exists_1/\1 2/
 s/(InitPlan|SubPlan) (exists|expr|hashed)_([0-9]+)/\1 \3/g
 
-# PG19 renamed implicit ANY subqueries.
+# PG19 renamed implicit subqueries.
 # this rule can be removed when PG19 is the minimum supported version
+/^[[:space:]]*->[[:space:]]+Subquery Scan on / s/"\*SELECT\*"/"ANY_subquery"/
 s/\<unnamed_subquery\>/"ANY_subquery"/g
 
 # PG19 changed VACUUM PARALLEL option errors.
