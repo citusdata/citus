@@ -25,6 +25,7 @@
 
 #include "pg_version_constants.h"
 
+#include "distributed/adaptive_executor.h"
 #include "distributed/backend_data.h"
 #include "distributed/citus_clauses.h"
 #include "distributed/citus_custom_scan.h"
@@ -78,7 +79,6 @@ static void CitusReScan(CustomScanState *node);
 static TupleTableSlot * SortedMergeExecScan(CustomScanState *node);
 static void SortedMergeEndScan(CustomScanState *node);
 static void SortedMergeReScan(CustomScanState *node);
-static void CitusExecScanCommon(CitusScanState *scanState);
 static void CitusEndScanCommon(CitusScanState *scanState);
 static void CitusReScanCommon(CustomScanState *node);
 static void EnsureForceDelegationDistributionKey(Job *job);
@@ -287,44 +287,6 @@ CitusPreExecScan(CitusScanState *scanState)
 
 
 /*
- * CitusExecScanCommon performs the first-call work shared by all Citus
- * custom-scan ExecCustomScan callbacks: it runs the distributed query
- * (filling the tuplestore or per-task stores attached to the streaming
- * merge adapter), increments the multi/single-shard query counter, and
- * marks the remote scan as finished. Subsequent calls are no-ops.
- *
- * Variant-specific tuple delivery (ReturnTupleFromTuplestore vs
- * ReturnTupleFromSortedMerge) is left to each caller.
- */
-static void
-CitusExecScanCommon(CitusScanState *scanState)
-{
-	if (scanState->finishedRemoteScan)
-	{
-		return;
-	}
-
-	bool isMultiTaskPlan = IsMultiTaskPlan(scanState->distributedPlan);
-
-	AdaptiveExecutor(scanState);
-
-	if (!scanState->distributedPlan->disableTrackingQueryCounters)
-	{
-		if (isMultiTaskPlan)
-		{
-			IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_MULTI_SHARD);
-		}
-		else
-		{
-			IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_SINGLE_SHARD);
-		}
-	}
-
-	scanState->finishedRemoteScan = true;
-}
-
-
-/*
  * CitusExecScan is called when a tuple is pulled from a non-sorted-merge
  * Citus custom scan. On the first call, it executes the distributed
  * query and fills the scan's tuplestore. The postgres executor calls
@@ -338,9 +300,38 @@ CitusExecScan(CustomScanState *node)
 {
 	CitusScanState *scanState = (CitusScanState *) node;
 
-	CitusExecScanCommon(scanState);
+	if (!scanState->executionStarted)
+	{
+		bool isMultiTaskPlan = IsMultiTaskPlan(scanState->distributedPlan);
 
-	return ReturnTupleFromTuplestore(scanState);
+		AdaptiveExecutorStart(scanState);
+
+		if (!scanState->distributedPlan->disableTrackingQueryCounters)
+		{
+			if (isMultiTaskPlan)
+			{
+				IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_MULTI_SHARD);
+			}
+			else
+			{
+				IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_SINGLE_SHARD);
+			}
+		}
+
+		scanState->executionStarted = true;
+	}
+
+	TupleTableSlot *resultSlot = ReturnTupleFromTuplestore(scanState);
+	if (TupIsNull(resultSlot) && !scanState->finishedRemoteScan)
+	{
+		tuplestore_clear(scanState->tuplestorestate);
+
+		scanState->finishedRemoteScan = AdaptiveExecutorRun(scanState);
+
+		resultSlot = ReturnTupleFromTuplestore(scanState);
+	}
+
+	return resultSlot;
 }
 
 
@@ -778,6 +769,7 @@ AdaptiveExecutorCreateScan(CustomScan *scan)
 
 	scanState->finishedPreScan = false;
 	scanState->finishedRemoteScan = false;
+	scanState->executionStarted = false;
 
 	return (Node *) scanState;
 }
@@ -944,22 +936,46 @@ CitusEndScan(CustomScanState *node)
 		tuplestore_end(scanState->tuplestorestate);
 		scanState->tuplestorestate = NULL;
 	}
+
+	/*
+	 * Clean up any in-flight distributed execution. This handles the case
+	 * where an error occurs between batches in the adaptive executor,
+	 * ensuring sessions and connections are properly released.
+	 */
+	AdaptiveExecutorEnd(scanState);
 }
 
 
 /*
  * SortedMergeExecScan is the per-row callback for sorted-merge plans.
- * On the first call CitusExecScanCommon runs the distributed query
- * (filling the per-task tuple stores attached to the streaming merge
- * adapter); subsequent calls just pull globally-sorted tuples directly
- * from the adapter via ReturnTupleFromSortedMerge.
+ * On the first call EagerAdaptiveExecutor runs the distributed query
+ * to completion (filling the per-task tuple stores attached to the
+ * streaming merge adapter); subsequent calls just pull globally-sorted
+ * tuples directly from the adapter via ReturnTupleFromSortedMerge.
  */
 static TupleTableSlot *
 SortedMergeExecScan(CustomScanState *node)
 {
 	CitusScanState *scanState = (CitusScanState *) node;
 
-	CitusExecScanCommon(scanState);
+	if (!scanState->finishedRemoteScan)
+	{
+		bool isMultiTaskPlan = IsMultiTaskPlan(scanState->distributedPlan);
+
+		EagerAdaptiveExecutor(scanState);
+
+		if (!scanState->distributedPlan->disableTrackingQueryCounters)
+		{
+			if (isMultiTaskPlan)
+			{
+				IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_MULTI_SHARD);
+			}
+			else
+			{
+				IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_SINGLE_SHARD);
+			}
+		}
+	}
 
 	return ReturnTupleFromSortedMerge(scanState);
 }

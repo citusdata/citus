@@ -31,6 +31,7 @@
 #include "catalog/pg_type.h"
 #include "commands/defrem.h"
 #include "commands/sequence.h"
+#include "common/hashfn.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
 #include "nodes/pathnodes.h"
@@ -48,6 +49,7 @@
 #include "utils/datum.h"
 #include "utils/fmgroids.h"
 #include "utils/guc.h"
+#include "utils/hsearch.h"
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
 #include "utils/rel.h"
@@ -91,6 +93,13 @@ int RepartitionJoinBucketCountPerNode = 4;
 /* Policy to use when assigning tasks to worker nodes */
 int TaskAssignmentPolicy = TASK_ASSIGNMENT_GREEDY;
 bool EnableUniqueJobIds = true;
+
+/*
+ * EnableOrClauseArmPruning controls whether we drop the arms of top-level OR
+ * clauses that cannot match any row on the task's shard (because they constrain
+ * the distribution column to a value that prunes to a different shard).
+ */
+bool EnableOrClauseArmPruning = true;
 
 
 /*
@@ -180,6 +189,16 @@ static Task * QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 									  bool updateQualsForOuterJoin,
 									  DeferredErrorMessage **planningError);
 static List * SqlTaskList(Job *job);
+static void PruneOrClausesForTaskFragments(Query *taskQuery,
+										   List *fragmentCombination,
+										   HTAB **armShardHash);
+static Node * PruneUnreachableOrArms(Node *qual, Oid relationId, Index rangeTableId,
+									 uint64 shardId, HTAB **armShardHash);
+static List * ReachableShardListForArm(Node *arm, Oid relationId, Index rangeTableId,
+									   HTAB **armShardHash);
+static bool ShardListContainsShardId(List *shardIntervalList, uint64 shardId);
+static uint32 ArmShardHashFn(const void *key, Size keysize);
+static int ArmShardMatchFn(const void *key1, const void *key2, Size keysize);
 static bool DependsOnHashPartitionJob(Job *job);
 static uint32 AnchorRangeTableId(List *rangeTableList);
 static List * BaseRangeTableIdList(List *rangeTableList);
@@ -2808,6 +2827,10 @@ CoPartitionedTables(Oid firstRelationId, Oid secondRelationId)
  * function then joins table fragments from different range tables, and creates
  * all fragment combinations. For each created combination, the function builds
  * a SQL task, and appends this task to a task list.
+ *
+ * When EnableOrClauseArmPruning is enabled, each per-task query is a private
+ * copy of the job query, and its WHERE clause is mutated in place to drop the
+ * arms of top-level OR clauses that cannot match any row on that task's shard.
  */
 static List *
 SqlTaskList(Job *job)
@@ -2885,6 +2908,16 @@ SqlTaskList(Job *job)
 	}
 
 	ListCell *fragmentCombinationCell = NULL;
+
+	/*
+	 * Cache of each OR arm's reachable shard set, shared across all tasks of this
+	 * job. An arm's reachability depends only on (relation, range table id, arm
+	 * expression), not on which task we are building, so we compute it once per
+	 * distinct arm here instead of once per shard. Created lazily on first use,
+	 * and only when EnableOrClauseArmPruning is set.
+	 */
+	HTAB *armShardHash = NULL;
+
 	foreach(fragmentCombinationCell, fragmentCombinationList)
 	{
 		List *fragmentCombination = (List *) lfirst(fragmentCombinationCell);
@@ -2898,6 +2931,19 @@ SqlTaskList(Job *job)
 		/* update range table entries with fragment aliases (in place) */
 		Query *taskQuery = copyObject(jobQuery);
 		List *fragmentRangeTableList = taskQuery->rtable;
+
+		/*
+		 * Drop the arms of top-level OR clauses that cannot match any row on
+		 * this task's shard. This turns a query that pushes the full N-way OR
+		 * to every shard into one that only carries the relevant disjunct(s)
+		 * per shard, which lets the worker pick a single, precise index scan.
+		 */
+		if (EnableOrClauseArmPruning)
+		{
+			PruneOrClausesForTaskFragments(taskQuery, fragmentCombination,
+										   &armShardHash);
+		}
+
 		UpdateRangeTableAlias(fragmentRangeTableList, fragmentCombination);
 
 		/* transform the updated task query to a SQL query string */
@@ -2927,6 +2973,336 @@ SqlTaskList(Job *job)
 	}
 
 	return sqlTaskList;
+}
+
+
+/*
+ * ArmShardHashKey identifies an OR arm's reachability question: the shard set
+ * that arm can reach for (relationId, rangeTableId). It is the lookup key of
+ * the armShardHash table. Arm equality uses the regular node equal(), so
+ * structurally identical arms from different per-task query copies share an
+ * entry. Must be the first field of ArmShardHashEntry.
+ */
+typedef struct ArmShardHashKey
+{
+	Oid relationId;
+	Index rangeTableId;
+	Node *arm;
+} ArmShardHashKey;
+
+
+/*
+ * ArmShardHashEntry caches the shard set an OR arm can reach, so PruneShards is
+ * run once per distinct arm rather than once per (shard x arm). Lookups are
+ * O(1) via a hash of the arm expression; see ReachableShardListForArm.
+ */
+typedef struct ArmShardHashEntry
+{
+	ArmShardHashKey key;
+	List *shardIntervalList;
+} ArmShardHashEntry;
+
+
+/*
+ * PruneOrClausesForTaskFragments rewrites the task query's WHERE clause by
+ * removing the arms of top-level OR expressions that cannot match any row on
+ * the shard(s) targeted by this task. It iterates the fragments of the task
+ * and, for every base distributed relation fragment, prunes OR arms that
+ * constrain that relation's distribution column to a value belonging to a
+ * different shard.
+ *
+ * armShardHash is a job-wide cache (shared across all tasks) of each arm's
+ * reachable shard set; see ReachableShardListForArm.
+ */
+static void
+PruneOrClausesForTaskFragments(Query *taskQuery, List *fragmentCombination,
+							   HTAB **armShardHash)
+{
+	Node *quals = taskQuery->jointree->quals;
+	if (quals == NULL)
+	{
+		return;
+	}
+
+	RangeTableFragment *fragment = NULL;
+	foreach_declared_ptr(fragment, fragmentCombination)
+	{
+		if (fragment->fragmentType != CITUS_RTE_RELATION)
+		{
+			continue;
+		}
+
+		ShardInterval *shardInterval = (ShardInterval *) fragment->fragmentReference;
+		Oid relationId = shardInterval->relationId;
+
+		/*
+		 * Only hash-distributed tables with a distribution key are eligible:
+		 * for these the regular shard-pruning machinery can decide which shard
+		 * an OR arm targets.
+		 */
+		CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
+		if (!IsCitusTableTypeCacheEntry(cacheEntry, HASH_DISTRIBUTED) ||
+			!HasDistributionKeyCacheEntry(cacheEntry))
+		{
+			continue;
+		}
+
+		quals = PruneUnreachableOrArms(quals, relationId, fragment->rangeTableId,
+									   shardInterval->shardId, armShardHash);
+	}
+
+	taskQuery->jointree->quals = quals;
+}
+
+
+/*
+ * PruneUnreachableOrArms walks a (sub)qual and removes the arms of
+ * top-level OR expressions that cannot match any row on the given shard.
+ *
+ * For each arm of an OR, we run the regular shard-pruning machinery
+ * (PruneShards) on that arm alone. If the resulting shard set does not contain
+ * this task's shard, the arm provably matches no row here and is dropped. An
+ * arm that carries no constraint on the distribution column prunes to all
+ * shards and is therefore always kept, so this rewrite never changes results.
+ *
+ * Dropping an arm removes any volatile or side-effect-producing function it
+ * contains from the query on that shard, so the number of times such a function
+ * is invoked per row can change.
+ */
+static Node *
+PruneUnreachableOrArms(Node *qual, Oid relationId, Index rangeTableId, uint64 shardId,
+					   HTAB **armShardHash)
+{
+	if (qual == NULL)
+	{
+		return NULL;
+	}
+
+	if (IsA(qual, List))
+	{
+		List *conjuncts = (List *) qual;
+		ListCell *conjunctCell = NULL;
+		foreach(conjunctCell, conjuncts)
+		{
+			lfirst(conjunctCell) = PruneUnreachableOrArms((Node *) lfirst(conjunctCell),
+														  relationId, rangeTableId,
+														  shardId, armShardHash);
+		}
+
+		return (Node *) conjuncts;
+	}
+
+	if (IsA(qual, BoolExpr))
+	{
+		BoolExpr *boolExpr = (BoolExpr *) qual;
+
+		if (boolExpr->boolop == AND_EXPR)
+		{
+			ListCell *argCell = NULL;
+			foreach(argCell, boolExpr->args)
+			{
+				lfirst(argCell) = PruneUnreachableOrArms((Node *) lfirst(argCell),
+														 relationId, rangeTableId,
+														 shardId, armShardHash);
+			}
+
+			return qual;
+		}
+		else if (boolExpr->boolop == OR_EXPR)
+		{
+			List *keptArms = NIL;
+			bool anyDropped = false;
+			int keptCount = 0;
+			int armIndex = 0;
+			ListCell *armCell = NULL;
+
+			foreach(armCell, boolExpr->args)
+			{
+				Node *arm = (Node *) lfirst(armCell);
+				List *armShardList = ReachableShardListForArm(arm, relationId,
+															  rangeTableId,
+															  armShardHash);
+				bool reachable = ShardListContainsShardId(armShardList, shardId);
+
+				if (reachable)
+				{
+					keptCount++;
+				}
+
+				if (!reachable && !anyDropped)
+				{
+					/*
+					 * First arm we drop: only now do we materialize the kept
+					 * list, backfilling the earlier arms, which were all kept.
+					 */
+					anyDropped = true;
+					keptArms = list_copy_head(boolExpr->args, armIndex);
+				}
+				else if (reachable && anyDropped)
+				{
+					keptArms = lappend(keptArms, arm);
+				}
+
+				armIndex++;
+			}
+
+			/*
+			 * Be a strict no-op unless we both kept at least one arm and
+			 * dropped at least one: nothing dropped needs no rewrite, and
+			 * keeping zero arms would only happen if our pruning disagreed with
+			 * the task's own shard selection. Not building the list until the
+			 * first arm is dropped also avoids allocating in the common case
+			 * where every arm is retained.
+			 */
+			if (!anyDropped || keptCount == 0)
+			{
+				return qual;
+			}
+
+			if (keptCount == 1)
+			{
+				/* a single-argument OR is not a valid expression */
+				return (Node *) linitial(keptArms);
+			}
+
+			boolExpr->args = keptArms;
+			return qual;
+		}
+	}
+
+	return qual;
+}
+
+
+/*
+ * ReachableShardListForArm returns the list of ShardIntervals that the given OR
+ * arm cannot be proven to exclude for (relationId, rangeTableId), i.e. the
+ * shards on which the arm might match a row. Results are cached in
+ * *armShardHash because reachability depends only on the arm expression and the
+ * relation, not on which task we are currently building.
+ *
+ * The cache is a hash table keyed on (relationId, rangeTableId, arm) so each
+ * lookup is O(1) in the number of distinct arms; this matters because a single
+ * top-level OR can have very many arms (e.g. ORM-generated composite-key batch
+ * reads), and SqlTaskList probes every arm once per shard. The table is created
+ * lazily on the first arm so queries without an eligible OR pay nothing.
+ */
+static List *
+ReachableShardListForArm(Node *arm, Oid relationId, Index rangeTableId,
+						 HTAB **armShardHash)
+{
+	if (*armShardHash == NULL)
+	{
+		HASHCTL info = { 0 };
+		info.keysize = sizeof(ArmShardHashKey);
+		info.entrysize = sizeof(ArmShardHashEntry);
+		info.hash = ArmShardHashFn;
+		info.match = ArmShardMatchFn;
+		info.hcxt = CurrentMemoryContext;
+
+		*armShardHash = hash_create("Or arm shard cache", 32, &info,
+									HASH_ELEM | HASH_FUNCTION | HASH_COMPARE |
+									HASH_CONTEXT);
+	}
+
+	ArmShardHashKey lookupKey;
+	memset(&lookupKey, 0, sizeof(lookupKey));
+	lookupKey.relationId = relationId;
+	lookupKey.rangeTableId = rangeTableId;
+	lookupKey.arm = arm;
+
+	bool found = false;
+	ArmShardHashEntry *entry = hash_search(*armShardHash, &lookupKey, HASH_FIND,
+										   &found);
+	if (found)
+	{
+		return entry->shardIntervalList;
+	}
+
+	/*
+	 * Compute the shard list before inserting the entry so the cache is never
+	 * left holding an entry with an uninitialized value (e.g. if PruneShards
+	 * throws).
+	 */
+	List *armClauseList = make_ands_implicit((Expr *) arm);
+	List *shardIntervalList = PruneShards(relationId, rangeTableId, armClauseList, NULL);
+
+	entry = hash_search(*armShardHash, &lookupKey, HASH_ENTER, NULL);
+	entry->shardIntervalList = shardIntervalList;
+
+	return shardIntervalList;
+}
+
+
+/*
+ * ArmShardHashFn hashes an ArmShardHashKey. The arm expression is hashed via
+ * its canonical serialized form so that structurally identical arms (which
+ * ArmShardMatchFn treats as equal) land in the same bucket, even though they
+ * are distinct pointers in each per-task copy of the job query.
+ *
+ * Cost model: nodeToString() runs on every hash probe (both HASH_FIND and
+ * HASH_ENTER), i.e. O(arm size) per probe, with the probe count proportional to
+ * (OR arms x tasks). This serialization is the price of matching arms by value
+ * across copied query trees, and is dominated by the work the cache saves:
+ * PruneShards() runs only once per distinct arm (on a miss), not once per probe,
+ * and each task already pays a full copyObject() of the job query.
+ */
+static uint32
+ArmShardHashFn(const void *key, Size keysize)
+{
+	const ArmShardHashKey *hashKey = (const ArmShardHashKey *) key;
+
+	char *armString = nodeToString(hashKey->arm);
+	uint32 hashValue = hash_bytes((const unsigned char *) armString,
+								  strlen(armString));
+	pfree(armString);
+
+	hashValue = hash_combine(hashValue, hash_uint32((uint32) hashKey->relationId));
+	hashValue = hash_combine(hashValue, hash_uint32((uint32) hashKey->rangeTableId));
+
+	return hashValue;
+}
+
+
+/*
+ * ArmShardMatchFn compares two ArmShardHashKeys, returning 0 when they are
+ * equal. Arm equality uses node equal() so hash collisions never produce a
+ * wrong cache hit.
+ */
+static int
+ArmShardMatchFn(const void *key1, const void *key2, Size keysize)
+{
+	const ArmShardHashKey *hashKey1 = (const ArmShardHashKey *) key1;
+	const ArmShardHashKey *hashKey2 = (const ArmShardHashKey *) key2;
+
+	if (hashKey1->relationId == hashKey2->relationId &&
+		hashKey1->rangeTableId == hashKey2->rangeTableId &&
+		equal(hashKey1->arm, hashKey2->arm))
+	{
+		return 0;
+	}
+
+	return 1;
+}
+
+
+/*
+ * ShardListContainsShardId returns whether shardId appears in the given list
+ * of ShardIntervals.
+ */
+static bool
+ShardListContainsShardId(List *shardIntervalList, uint64 shardId)
+{
+	ShardInterval *shardInterval = NULL;
+	foreach_declared_ptr(shardInterval, shardIntervalList)
+	{
+		if (shardInterval->shardId == shardId)
+		{
+			return true;
+		}
+	}
+
+	return false;
 }
 
 

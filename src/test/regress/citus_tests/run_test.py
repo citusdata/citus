@@ -112,13 +112,30 @@ DEPS = {
         "minimal_schedule", ["multi_test_helpers_superuser"], repeatable=False
     ),
     "create_role_propagation": TestDeps(None, ["multi_cluster_management"]),
+    # multi_copy uses test_user which requires CREATE on schema public;
+    # base_schedule's multi_cluster_management issues the compensating GRANT
+    # that PostgreSQL 15+ no longer grants by default. Using base_schedule
+    # (rather than an extra_tests=[multi_cluster_management] override) avoids
+    # duplicating multi_cluster_management in downstream tests' setup
+    # (e.g. multi_size_queries) whose DEPS pull multi_copy in as an extra_test.
+    "multi_copy": TestDeps("base_schedule"),
+    # fast_path_router_modify shares its schedule line with multi_copy, so
+    # --use-whole-schedule-line drags multi_copy along; mirror the same base
+    # for the same reason.
+    "fast_path_router_modify": TestDeps("base_schedule"),
     "single_node_enterprise": TestDeps(None),
     "multi_add_node_from_backup": TestDeps(None, repeatable=False, worker_count=5),
     "multi_add_node_from_backup_negative": TestDeps(
         None, ["multi_add_node_from_backup"], worker_count=5, repeatable=False
     ),
+    "multi_add_node_from_backup_coordinator": TestDeps(
+        None, ["multi_add_node_from_backup_negative"], worker_count=5, repeatable=False
+    ),
     "multi_add_node_from_backup_sync_replica": TestDeps(
         None, repeatable=False, worker_count=5
+    ),
+    "multi_add_node_from_backup_sequences": TestDeps(
+        None, ["multi_add_node_from_backup_negative"], worker_count=5, repeatable=False
     ),
     "single_node": TestDeps(None, ["multi_test_helpers"]),
     "single_node_truncate": TestDeps(None),
@@ -228,6 +245,7 @@ DEPS = {
         repeatable=False,
     ),
     "multi_prepare_plsql": TestDeps("base_schedule"),
+    "multi_utility_statements": TestDeps("base_schedule"),
     "pg15": TestDeps("base_schedule"),
     "foreign_key_to_reference_shard_rebalance": TestDeps(
         "minimal_schedule", ["remove_coordinator_from_metadata"]
@@ -271,6 +289,9 @@ DEPS = {
         "minimal_schedule", ["multi_behavioral_analytics_create_table"]
     ),
     "multi_subquery_in_where_reference_clause": TestDeps(
+        "minimal_schedule", ["multi_behavioral_analytics_create_table"]
+    ),
+    "adaptive_executor_batching": TestDeps(
         "minimal_schedule", ["multi_behavioral_analytics_create_table"]
     ),
     "subquery_in_where": TestDeps(
