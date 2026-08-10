@@ -388,3 +388,11 @@ s/^[[:space:]]*ERROR:[[:space:]]+could not connect to the publisher:[[:space:]]*
 # can be removed when dropping pg17 support
 s/(:varnullingrels \(b\) :varlevelsup 0) (:varnosyn 1)/\1 :varreturningtype 0 \2/g
 # end pg18 varreturningtype
+
+# The two relation names in the "<x> and <y> are not colocated" error detail
+# can be printed in either order depending on the Citus version that produced
+# the message. Citus #8319 made newer versions print the names in sorted order,
+# but older versions (and therefore mixed-version regression runs) still print
+# them in a nondeterministic order. Normalize both names so the order of the
+# two relations never causes spurious diffs. See issue #8275.
+s/^DETAIL:  [a-zA-Z0-9_]+ and [a-zA-Z0-9_]+ are not colocated$/DETAIL:  <relation> and <relation> are not colocated/
