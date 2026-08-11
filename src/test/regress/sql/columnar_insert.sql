@@ -83,27 +83,50 @@ DROP TABLE test_logical_replication;
 --
 
 -- row table with data in different storage formats
-CREATE TABLE test_toast_row(plain TEXT, main TEXT, external TEXT, extended TEXT);
+CREATE TABLE test_toast_row(
+  plain TEXT,
+  main_pglz TEXT COMPRESSION pglz,
+  main_lz4 TEXT COMPRESSION lz4,
+  external TEXT,
+  extended_pglz TEXT COMPRESSION pglz,
+  extended_lz4 TEXT COMPRESSION lz4
+);
 ALTER TABLE test_toast_row ALTER COLUMN plain SET STORAGE plain; -- inline, uncompressed
-ALTER TABLE test_toast_row ALTER COLUMN main SET STORAGE main; -- inline, compressed
+ALTER TABLE test_toast_row ALTER COLUMN main_pglz SET STORAGE main; -- inline, compressed using pglz
+ALTER TABLE test_toast_row ALTER COLUMN main_lz4 SET STORAGE main; -- inline, compressed using lz4
 ALTER TABLE test_toast_row ALTER COLUMN external SET STORAGE external; -- out-of-line, uncompressed
-ALTER TABLE test_toast_row ALTER COLUMN extended SET STORAGE extended; -- out-of-line, compressed
+ALTER TABLE test_toast_row ALTER COLUMN extended_pglz SET STORAGE extended; -- out-of-line, compressed using pglz
+ALTER TABLE test_toast_row ALTER COLUMN extended_lz4 SET STORAGE extended; -- out-of-line, compressed using lz4
 
 INSERT INTO test_toast_row VALUES(
-       repeat('w', 5000), repeat('x', 5000), repeat('y', 5000), repeat('z', 5000));
+  repeat('u', 5000), repeat('v', 5000), repeat('w', 5000),
+  repeat('x', 5000), repeat('y', 5000), repeat('z', 5000)
+);
 
 SELECT
-  pg_column_size(plain), pg_column_size(main),
-  pg_column_size(external), pg_column_size(extended)
+  pg_column_size(plain) AS plain,
+  pg_column_size(main_pglz) as main_pglz,
+  pg_column_size(main_lz4) as main_lz4,
+  pg_column_size(external) as external,
+  pg_column_size(extended_pglz) as extended_pglz,
+  pg_column_size(extended_lz4) as extended_lz4
 FROM test_toast_row;
 
-CREATE TABLE test_toast_columnar(plain TEXT, main TEXT, external TEXT, extended TEXT)
+CREATE TABLE test_toast_columnar(plain TEXT, main_pglz TEXT, main_lz4 TEXT,
+                                 external TEXT, extended_pglz TEXT, extended_lz4 TEXT)
   USING columnar;
-INSERT INTO test_toast_columnar SELECT plain, main, external, extended
+
+INSERT INTO test_toast_columnar
+  SELECT plain, main_pglz, main_lz4, external, extended_pglz, extended_lz4
   FROM test_toast_row;
+
 SELECT
-  pg_column_size(plain), pg_column_size(main),
-  pg_column_size(external), pg_column_size(extended)
+  pg_column_size(plain) AS plain,
+  pg_column_size(main_pglz) as main_pglz,
+  pg_column_size(main_lz4) as main_lz4,
+  pg_column_size(external) as external,
+  pg_column_size(extended_pglz) as extended_pglz,
+  pg_column_size(extended_lz4) as extended_lz4
 FROM test_toast_columnar;
 
 select
