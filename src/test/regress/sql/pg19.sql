@@ -476,6 +476,62 @@ $$);
 DROP PUBLICATION publication_all_except_conv;
 DROP TABLE publication_conv_excluded;
 
+-- JSON COPY framing and protocol state must be owned by one coordinator COPY.
+CREATE TABLE json_copy_dist (id int, payload text, optional text);
+SELECT create_distributed_table('json_copy_dist', 'id',
+                                shard_count => 4, colocate_with => 'none');
+INSERT INTO json_copy_dist
+SELECT id, E'quote" slash\\ newline\n', NULL
+FROM (
+    SELECT DISTINCT ON (get_shard_id_for_distribution_column('json_copy_dist', id))
+           id
+    FROM generate_series(1, 100) id
+    ORDER BY get_shard_id_for_distribution_column('json_copy_dist', id), id
+    LIMIT 2
+) distinct_shards;
+
+SELECT count(DISTINCT get_shard_id_for_distribution_column('json_copy_dist', id)) = 2
+       AS rows_on_distinct_shards
+FROM json_copy_dist;
+
+COPY json_copy_dist (payload, optional) TO STDOUT
+    (FORMAT json, FORCE_ARRAY true);
+COPY json_copy_dist (payload) TO STDOUT
+    (FORMAT json, FORCE_ARRAY false);
+COPY json_copy_dist (payload) TO STDOUT
+    (FORMAT json, FORCE_ARRAY true, ENCODING 'UTF8', HEADER false);
+
+CREATE TABLE json_copy_empty (id int);
+SELECT create_distributed_table('json_copy_empty', 'id',
+                                shard_count => 4, colocate_with => 'none');
+COPY json_copy_empty TO STDOUT (FORMAT json, FORCE_ARRAY true);
+
+CREATE TABLE json_copy_single_shard (id int, payload text);
+SELECT create_distributed_table('json_copy_single_shard', NULL,
+                                colocate_with => 'none');
+INSERT INTO json_copy_single_shard VALUES (1, 'single shard');
+COPY json_copy_single_shard TO STDOUT (FORMAT json, FORCE_ARRAY true);
+
+CREATE TABLE json_copy_reference (id int PRIMARY KEY, payload text);
+SELECT create_reference_table('json_copy_reference');
+INSERT INTO json_copy_reference VALUES (1, 'reference');
+COPY json_copy_reference TO STDOUT (FORMAT json, FORCE_ARRAY true);
+
+CREATE TABLE json_copy_local (id int, payload text);
+INSERT INTO json_copy_local VALUES (1, 'local');
+COPY json_copy_local TO STDOUT (FORMAT json, FORCE_ARRAY true);
+
+CREATE TABLE json_copy_citus_local (id int, payload text);
+SELECT citus_add_local_table_to_metadata('json_copy_citus_local');
+INSERT INTO json_copy_citus_local VALUES (1, 'Citus local');
+COPY json_copy_citus_local TO STDOUT (FORMAT json, FORCE_ARRAY true);
+
+COPY json_copy_dist TO STDOUT (FORMAT json, DELIMITER ',');
+COPY json_copy_dist TO STDOUT (FORMAT json, HEADER true);
+
+DROP TABLE json_copy_dist, json_copy_empty, json_copy_single_shard,
+           json_copy_reference, json_copy_local, json_copy_citus_local;
+
 SELECT citus_remove_node('localhost', :master_port);
 RESET client_min_messages;
 

@@ -626,6 +626,108 @@ $$);
 
 DROP PUBLICATION publication_all_except_conv;
 DROP TABLE publication_conv_excluded;
+-- JSON COPY framing and protocol state must be owned by one coordinator COPY.
+CREATE TABLE json_copy_dist (id int, payload text, optional text);
+SELECT create_distributed_table('json_copy_dist', 'id',
+                                shard_count => 4, colocate_with => 'none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO json_copy_dist
+SELECT id, E'quote" slash\\ newline\n', NULL
+FROM (
+    SELECT DISTINCT ON (get_shard_id_for_distribution_column('json_copy_dist', id))
+           id
+    FROM generate_series(1, 100) id
+    ORDER BY get_shard_id_for_distribution_column('json_copy_dist', id), id
+    LIMIT 2
+) distinct_shards;
+SELECT count(DISTINCT get_shard_id_for_distribution_column('json_copy_dist', id)) = 2
+       AS rows_on_distinct_shards
+FROM json_copy_dist;
+ rows_on_distinct_shards
+---------------------------------------------------------------------
+ t
+(1 row)
+
+COPY json_copy_dist (payload, optional) TO STDOUT
+    (FORMAT json, FORCE_ARRAY true);
+[
+ {"payload":"quote\" slash\\ newline\n","optional":null}
+,{"payload":"quote\" slash\\ newline\n","optional":null}
+]
+COPY json_copy_dist (payload) TO STDOUT
+    (FORMAT json, FORCE_ARRAY false);
+{"payload":"quote\" slash\\ newline\n"}
+{"payload":"quote\" slash\\ newline\n"}
+COPY json_copy_dist (payload) TO STDOUT
+    (FORMAT json, FORCE_ARRAY true, ENCODING 'UTF8', HEADER false);
+[
+ {"payload":"quote\" slash\\ newline\n"}
+,{"payload":"quote\" slash\\ newline\n"}
+]
+CREATE TABLE json_copy_empty (id int);
+SELECT create_distributed_table('json_copy_empty', 'id',
+                                shard_count => 4, colocate_with => 'none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+COPY json_copy_empty TO STDOUT (FORMAT json, FORCE_ARRAY true);
+[
+]
+CREATE TABLE json_copy_single_shard (id int, payload text);
+SELECT create_distributed_table('json_copy_single_shard', NULL,
+                                colocate_with => 'none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO json_copy_single_shard VALUES (1, 'single shard');
+COPY json_copy_single_shard TO STDOUT (FORMAT json, FORCE_ARRAY true);
+[
+ {"id":1,"payload":"single shard"}
+]
+CREATE TABLE json_copy_reference (id int PRIMARY KEY, payload text);
+SELECT create_reference_table('json_copy_reference');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO json_copy_reference VALUES (1, 'reference');
+COPY json_copy_reference TO STDOUT (FORMAT json, FORCE_ARRAY true);
+[
+ {"id":1,"payload":"reference"}
+]
+CREATE TABLE json_copy_local (id int, payload text);
+INSERT INTO json_copy_local VALUES (1, 'local');
+COPY json_copy_local TO STDOUT (FORMAT json, FORCE_ARRAY true);
+[
+ {"id":1,"payload":"local"}
+]
+CREATE TABLE json_copy_citus_local (id int, payload text);
+SELECT citus_add_local_table_to_metadata('json_copy_citus_local');
+ citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO json_copy_citus_local VALUES (1, 'Citus local');
+COPY json_copy_citus_local TO STDOUT (FORMAT json, FORCE_ARRAY true);
+[
+ {"id":1,"payload":"Citus local"}
+]
+COPY json_copy_dist TO STDOUT (FORMAT json, DELIMITER ',');
+ERROR:  cannot specify DELIMITER in JSON mode
+COPY json_copy_dist TO STDOUT (FORMAT json, HEADER true);
+ERROR:  cannot specify HEADER in JSON mode
+DROP TABLE json_copy_dist, json_copy_empty, json_copy_single_shard,
+           json_copy_reference, json_copy_local, json_copy_citus_local;
 SELECT citus_remove_node('localhost', :master_port);
  citus_remove_node
 ---------------------------------------------------------------------
