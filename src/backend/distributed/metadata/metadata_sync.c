@@ -56,6 +56,8 @@
 #include "utils/snapmgr.h"
 #include "utils/syscache.h"
 
+#include "pg_version_constants.h"
+
 #include "distributed/argutils.h"
 #include "distributed/backend_data.h"
 #include "distributed/background_worker_utils.h"
@@ -109,6 +111,7 @@ static void CreateShellTableOnRemoteNodes(Oid relationId);
 static void CreateTableMetadataOnRemoteNodes(Oid relationId);
 static void CreateDependingViewsOnRemoteNodes(Oid relationId);
 static void AddTableToPublications(Oid relationId);
+static bool EnsurePublicationPropagatable(Oid publicationId);
 static NodeMetadataSyncResult SyncNodeMetadataToNodesOptional(void);
 static bool ShouldSyncTableMetadataInternal(bool hashDistributed,
 											bool citusTableWithNoDistKey);
@@ -342,7 +345,19 @@ static void
 AddTableToPublications(Oid relationId)
 {
 	List *publicationIds = GetRelationPublications(relationId);
-	if (publicationIds == NIL)
+	List *excludedPublicationIds = NIL;
+
+#if PG_VERSION_NUM >= PG_VERSION_19
+
+	/*
+	 * A table can also be a member of a FOR ALL TABLES publication through its
+	 * EXCEPT list. GetRelationPublications() only reports the publications that
+	 * include the table, so look up the ones that exclude it separately.
+	 */
+	excludedPublicationIds = GetRelationExcludedPublications(relationId);
+#endif
+
+	if (publicationIds == NIL && excludedPublicationIds == NIL)
 	{
 		return;
 	}
@@ -353,18 +368,11 @@ AddTableToPublications(Oid relationId)
 
 	foreach_declared_oid(publicationId, publicationIds)
 	{
-		ObjectAddress *publicationAddress = palloc0(sizeof(ObjectAddress));
-		ObjectAddressSet(*publicationAddress, PublicationRelationId, publicationId);
-		List *addresses = list_make1(publicationAddress);
-
-		if (!ShouldPropagateAnyObject(addresses))
+		if (!EnsurePublicationPropagatable(publicationId))
 		{
 			/* skip non-distributed publications */
 			continue;
 		}
-
-		/* ensure schemas exist */
-		EnsureAllObjectDependenciesExistOnAllNodes(addresses);
 
 		bool isAdd = true;
 		char *alterPublicationCommand =
@@ -374,7 +382,51 @@ AddTableToPublications(Oid relationId)
 		SendCommandToRemoteNodesWithMetadata(alterPublicationCommand);
 	}
 
+#if PG_VERSION_NUM >= PG_VERSION_19
+	foreach_declared_oid(publicationId, excludedPublicationIds)
+	{
+		if (!EnsurePublicationPropagatable(publicationId))
+		{
+			/* skip non-distributed publications */
+			continue;
+		}
+
+		/*
+		 * The table was filtered out of the EXCEPT list when the publication was
+		 * propagated, because it was not a Citus table back then. Resend the full
+		 * membership, since an EXCEPT list can only be replaced as a whole.
+		 */
+		bool includeLocalTables = false;
+
+		SendCommandToRemoteNodesWithMetadata(
+			GetAlterPublicationExcludedTablesDDLCommand(publicationId,
+														includeLocalTables));
+	}
+#endif
+
 	SendCommandToRemoteNodesWithMetadata(ENABLE_DDL_PROPAGATION);
+}
+
+
+/*
+ * EnsurePublicationPropagatable returns whether the publication should be
+ * propagated and ensures its dependencies exist on all metadata nodes if so.
+ */
+static bool
+EnsurePublicationPropagatable(Oid publicationId)
+{
+	ObjectAddress *publicationAddress = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*publicationAddress, PublicationRelationId, publicationId);
+	List *addresses = list_make1(publicationAddress);
+
+	if (!ShouldPropagateAnyObject(addresses))
+	{
+		return false;
+	}
+
+	EnsureAllObjectDependenciesExistOnAllNodes(addresses);
+
+	return true;
 }
 
 

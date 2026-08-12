@@ -35,7 +35,8 @@
 static CreatePublicationStmt * BuildCreatePublicationStmt(Oid publicationId);
 static PublicationObjSpec * BuildPublicationRelationObjSpec(Oid relationId,
 															Oid publicationId,
-															bool tableOnly);
+															bool tableOnly,
+															bool excluded);
 static void AppendPublishOptionList(StringInfo str, List *strings);
 static char * AlterPublicationOwnerCommand(Oid publicationId);
 static bool ShouldPropagateCreatePublication(CreatePublicationStmt *stmt);
@@ -124,6 +125,46 @@ CreatePublicationDDLCommand(Oid publicationId)
 }
 
 
+#if PG_VERSION_NUM >= PG_VERSION_19
+
+/*
+ * GetAlterPublicationExcludedTablesDDLCommand returns an
+ * "ALTER PUBLICATION .. SET ALL TABLES EXCEPT (..)" string that restores the
+ * complete membership of a FOR ALL TABLES publication.
+ *
+ * EXCEPT membership cannot be amended with ALTER PUBLICATION .. ADD/DROP TABLE,
+ * so we always have to resend the whole list. This is needed when a table that
+ * was excluded while it was still a local table becomes a Citus table, since
+ * such a table is filtered out when the publication is first propagated.
+ *
+ * Callers that restore the publication on the local node pass includeLocalTables
+ * as true, since the local publication has to keep excluding local tables too.
+ */
+char *
+GetAlterPublicationExcludedTablesDDLCommand(Oid publicationId,
+											bool includeLocalTables)
+{
+	CreatePublicationStmt *createPubStmt = BuildCreatePublicationStmt(publicationId);
+
+	AlterPublicationStmt *alterPubStmt = makeNode(AlterPublicationStmt);
+	alterPubStmt->pubname = createPubStmt->pubname;
+	alterPubStmt->action = AP_SetObjects;
+	alterPubStmt->pubobjects = createPubStmt->pubobjects;
+	alterPubStmt->for_all_tables = createPubStmt->for_all_tables;
+	alterPubStmt->for_all_sequences = createPubStmt->for_all_sequences;
+
+	/* we took the WHERE clause from the catalog where it is already transformed */
+	bool whereClauseRequiresTransform = false;
+
+	return DeparseAlterPublicationStmtExtended((Node *) alterPubStmt,
+											   whereClauseRequiresTransform,
+											   includeLocalTables);
+}
+
+
+#endif
+
+
 /*
  * BuildCreatePublicationStmt constructs a CreatePublicationStmt struct for the
  * given publication.
@@ -149,8 +190,9 @@ BuildCreatePublicationStmt(Oid publicationId)
 
 	/* FOR ALL TABLES */
 	createPubStmt->for_all_tables = publicationForm->puballtables;
-
-	ReleaseSysCache(publicationTuple);
+#if PG_VERSION_NUM >= PG_VERSION_19
+	createPubStmt->for_all_sequences = publicationForm->puballsequences;
+#endif
 
 	List *schemaIds = GetPublicationSchemas(publicationId);
 	Oid schemaId = InvalidOid;
@@ -168,10 +210,33 @@ BuildCreatePublicationStmt(Oid publicationId)
 		createPubStmt->pubobjects = lappend(createPubStmt->pubobjects, publicationObject);
 	}
 
-	List *relationIds = GetPublicationRelations(publicationId,
-												publicationForm->pubviaroot ?
-												PUBLICATION_PART_ROOT :
-												PUBLICATION_PART_LEAF);
+	bool excluded = false;
+	List *relationIds = NIL;
+#if PG_VERSION_NUM >= PG_VERSION_19
+	if (publicationForm->puballtables)
+	{
+		excluded = true;
+
+		/*
+		 * An EXCEPT list names relations explicitly, and those exact relations
+		 * are what pg_publication_rel stores. Always ask for the listed relation
+		 * itself, regardless of pubviaroot: expanding an excluded partitioned
+		 * root to its leaves would drop the exclusion entirely when the root has
+		 * no partitions, and would freeze it to the partitions that happen to
+		 * exist now, so partitions added later would be published on the worker
+		 * but not on the coordinator.
+		 */
+		relationIds = GetExcludedPublicationTables(publicationId,
+												   PUBLICATION_PART_ROOT);
+	}
+	else
+#endif
+	{
+		relationIds = GetPublicationRelations(publicationId,
+											  publicationForm->pubviaroot ?
+											  PUBLICATION_PART_ROOT :
+											  PUBLICATION_PART_LEAF);
+	}
 	Oid relationId = InvalidOid;
 
 	/* mainly for consistent ordering in test output */
@@ -179,11 +244,12 @@ BuildCreatePublicationStmt(Oid publicationId)
 
 	foreach_declared_oid(relationId, relationIds)
 	{
-		bool tableOnly = false;
+		bool tableOnly = excluded;
 
 		/* since postgres 15, tables can have a column list and filter */
 		PublicationObjSpec *publicationObject =
-			BuildPublicationRelationObjSpec(relationId, publicationId, tableOnly);
+			BuildPublicationRelationObjSpec(relationId, publicationId, tableOnly,
+											excluded);
 
 		createPubStmt->pubobjects = lappend(createPubStmt->pubobjects, publicationObject);
 	}
@@ -250,6 +316,7 @@ BuildCreatePublicationStmt(Oid publicationId)
 		createPubStmt->options = lappend(createPubStmt->options, publishOption);
 	}
 
+	ReleaseSysCache(publicationTuple);
 
 	return createPubStmt;
 }
@@ -283,7 +350,7 @@ AppendPublishOptionList(StringInfo str, List *options)
  */
 static PublicationObjSpec *
 BuildPublicationRelationObjSpec(Oid relationId, Oid publicationId,
-								bool tableOnly)
+								bool tableOnly, bool excluded)
 {
 	HeapTuple pubRelationTuple = SearchSysCache2(PUBLICATIONRELMAP,
 												 ObjectIdGetDatum(relationId),
@@ -348,6 +415,15 @@ BuildPublicationRelationObjSpec(Oid relationId, Oid publicationId,
 
 	PublicationObjSpec *publicationObject = makeNode(PublicationObjSpec);
 	publicationObject->pubobjtype = PUBLICATIONOBJ_TABLE;
+#if PG_VERSION_NUM >= PG_VERSION_19
+	if (excluded)
+	{
+		publicationObject->pubobjtype = PUBLICATIONOBJ_EXCEPT_TABLE;
+		publicationTable->except = true;
+	}
+#else
+	Assert(!excluded);
+#endif
 	publicationObject->pubtable = publicationTable;
 	publicationObject->name = NULL;
 	publicationObject->location = -1;
@@ -424,6 +500,39 @@ GetAlterPublicationDDLCommandsForTable(Oid relationId, bool isAdd)
 		commands = lappend(commands, command);
 	}
 
+#if PG_VERSION_NUM >= PG_VERSION_19
+
+	/*
+	 * A table that is excluded from a FOR ALL TABLES publication cannot be
+	 * restored with ALTER PUBLICATION .. ADD TABLE, so we regenerate the
+	 * complete membership instead.
+	 *
+	 * Callers capture these commands before a conversion that gives the table
+	 * a new OID, and replay them once the replacement table exists under the
+	 * same name. Since the commands name the excluded tables, replaying them
+	 * moves the exclusion onto the replacement table. Replacing the whole list
+	 * at once also drops the exclusion that stayed behind on the relation that
+	 * the conversion turned into a shard.
+	 *
+	 * The DROP side needs nothing here, because the exclusions we would drop
+	 * are the ones the commands above restore.
+	 */
+	if (isAdd)
+	{
+		List *excludedPublicationIds = GetRelationExcludedPublications(relationId);
+
+		foreach_declared_oid(publicationId, excludedPublicationIds)
+		{
+			/* the publication on this node also excludes local tables */
+			bool includeLocalTables = true;
+
+			commands = lappend(commands,
+							   GetAlterPublicationExcludedTablesDDLCommand(
+								   publicationId, includeLocalTables));
+		}
+	}
+#endif
+
 	return commands;
 }
 
@@ -458,7 +567,7 @@ GetAlterPublicationTableDDLCommand(Oid publicationId, Oid relationId,
 
 	/* since postgres 15, tables can have a column list and filter */
 	PublicationObjSpec *publicationObject =
-		BuildPublicationRelationObjSpec(relationId, publicationId, tableOnly);
+		BuildPublicationRelationObjSpec(relationId, publicationId, tableOnly, false);
 
 	alterPubStmt->pubobjects = lappend(alterPubStmt->pubobjects, publicationObject);
 	alterPubStmt->action = isAdd ? AP_AddObjects : AP_DropObjects;

@@ -355,6 +355,284 @@ SELECT create_distributed_table('repack_part', 'id');
 REPACK repack_part USING INDEX repack_part_pk;
 WARNING:  not propagating REPACK command for partitioned table to worker nodes
 HINT:  Provide a child partition table names in order to REPACK distributed partitioned tables.
+-- PG19 represents ALL TABLES EXCEPT relations as PUBLICATIONOBJ_EXCEPT_TABLE,
+-- and stores ALL TABLES/ALL SEQUENCES as independent flags. Verify both
+-- catalog-backed CREATE reconstruction and direct ALTER propagation.
+CREATE TABLE publication_excluded_1 (id int);
+CREATE TABLE publication_excluded_2 (id int);
+CREATE TABLE publication_local_excluded (id int);
+SELECT create_distributed_table('publication_excluded_1', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_table('publication_excluded_2', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE PUBLICATION publication_all_except
+    FOR ALL TABLES EXCEPT (TABLE publication_excluded_1,
+                           TABLE publication_local_excluded),
+        ALL SEQUENCES;
+SELECT bool_and(result::boolean) AS create_propagated
+FROM run_command_on_workers($$
+    SELECT p.puballtables AND p.puballsequences
+           AND count(*) FILTER (WHERE r.prexcept) = 1
+           AND bool_and(c.relname = 'publication_excluded_1')
+    FROM pg_publication p
+    JOIN pg_publication_rel r ON r.prpubid = p.oid
+    JOIN pg_class c ON c.oid = r.prrelid
+    WHERE p.pubname = 'publication_all_except'
+    GROUP BY p.puballtables, p.puballsequences
+$$);
+ create_propagated
+---------------------------------------------------------------------
+ t
+(1 row)
+
+ALTER PUBLICATION publication_all_except
+    SET ALL TABLES EXCEPT (TABLE publication_excluded_2,
+                           TABLE publication_local_excluded),
+        ALL SEQUENCES;
+SELECT bool_and(result::boolean) AS alter_propagated
+FROM run_command_on_workers($$
+    SELECT p.puballtables AND p.puballsequences
+           AND count(*) FILTER (WHERE r.prexcept) = 1
+           AND bool_and(c.relname = 'publication_excluded_2')
+    FROM pg_publication p
+    JOIN pg_publication_rel r ON r.prpubid = p.oid
+    JOIN pg_class c ON c.oid = r.prrelid
+    WHERE p.pubname = 'publication_all_except'
+    GROUP BY p.puballtables, p.puballsequences
+$$);
+ alter_propagated
+---------------------------------------------------------------------
+ t
+(1 row)
+
+DROP PUBLICATION publication_all_except;
+-- A table that is excluded while it is still a local table cannot be named on
+-- the workers, so it is filtered out when the publication is propagated.
+-- Distributing it later has to restore the exclusion on the workers, otherwise
+-- the workers would publish a table that the coordinator excludes.
+CREATE TABLE publication_late_excluded (id int);
+CREATE PUBLICATION publication_all_except_late
+    FOR ALL TABLES EXCEPT (TABLE publication_late_excluded);
+SELECT bool_and(result::boolean) AS exclusion_deferred_while_local
+FROM run_command_on_workers($$
+    SELECT count(*) = 0
+    FROM pg_publication p
+    JOIN pg_publication_rel r ON r.prpubid = p.oid AND r.prexcept
+    WHERE p.pubname = 'publication_all_except_late'
+$$);
+ exclusion_deferred_while_local
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT create_distributed_table('publication_late_excluded', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT bool_and(result::boolean) AS exclusion_restored_after_distribution
+FROM run_command_on_workers($$
+    SELECT count(*) = 1
+    FROM pg_publication p
+    JOIN pg_publication_rel r ON r.prpubid = p.oid AND r.prexcept
+    JOIN pg_class c ON c.oid = r.prrelid
+    WHERE p.pubname = 'publication_all_except_late'
+      AND c.relname = 'publication_late_excluded'
+$$);
+ exclusion_restored_after_distribution
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT count(*) = 1 AS exclusion_retained_on_coordinator
+FROM pg_publication p
+JOIN pg_publication_rel r ON r.prpubid = p.oid AND r.prexcept
+JOIN pg_class c ON c.oid = r.prrelid
+WHERE p.pubname = 'publication_all_except_late'
+  AND c.relname = 'publication_late_excluded';
+ exclusion_retained_on_coordinator
+---------------------------------------------------------------------
+ t
+(1 row)
+
+DROP PUBLICATION publication_all_except_late;
+-- Reference-table creation follows the same metadata-sync path and must restore
+-- an exclusion that could not be propagated while the table was still local.
+CREATE TABLE publication_ref_excluded (id int PRIMARY KEY);
+CREATE PUBLICATION publication_all_except_ref
+    FOR ALL TABLES EXCEPT (TABLE publication_ref_excluded);
+SELECT create_reference_table('publication_ref_excluded');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT bool_and(result::boolean) AS exclusion_restored_after_reference_table
+FROM run_command_on_workers($$
+    SELECT count(*) = 1
+    FROM pg_publication p
+    JOIN pg_publication_rel r ON r.prpubid = p.oid AND r.prexcept
+    JOIN pg_class c ON c.oid = r.prrelid
+    WHERE p.pubname = 'publication_all_except_ref'
+      AND c.relname = 'publication_ref_excluded'
+$$);
+ exclusion_restored_after_reference_table
+---------------------------------------------------------------------
+ t
+(1 row)
+
+DROP PUBLICATION publication_all_except_ref;
+DROP TABLE publication_ref_excluded;
+-- The activation path rebuilds publication DDL from catalogs rather than
+-- deparsing the original statement, so exercise it directly. An excluded
+-- partitioned root must survive as the root (not be expanded to its leaves),
+-- and excluded Citus tables must be ordered before the publication itself.
+-- The publication is created while the excluded root is still a local table so
+-- that it is registered as a distributed object before the table is; only the
+-- publication -> excluded relation dependency can order the table first.
+CREATE TABLE publication_part_excluded (id int, ts timestamptz)
+    PARTITION BY RANGE (ts);
+CREATE TABLE publication_part_excluded_2020 PARTITION OF publication_part_excluded
+    FOR VALUES FROM ('2020-01-01') TO ('2021-01-01');
+CREATE PUBLICATION publication_all_except_part
+    FOR ALL TABLES EXCEPT (TABLE publication_part_excluded);
+SELECT create_distributed_table('publication_part_excluded', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE OR REPLACE FUNCTION activate_node_snapshot()
+    RETURNS text[]
+    LANGUAGE C STRICT
+    AS 'citus';
+SELECT count(*) = 1 AS part_root_preserved
+FROM unnest(activate_node_snapshot()) c
+WHERE c LIKE '%CREATE PUBLICATION%publication_all_except_part%'
+  AND c LIKE '%publication_part_excluded%'
+  AND c NOT LIKE '%publication_part_excluded_2020%';
+ part_root_preserved
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT min(ord) FILTER (WHERE c LIKE '%publication_part_excluded%'
+                          AND c NOT LIKE '%publication_part_excluded_2020%'
+                          AND c NOT LIKE '%CREATE PUBLICATION%')
+     < min(ord) FILTER (WHERE c LIKE '%CREATE PUBLICATION%publication_all_except_part%')
+       AS excluded_table_precedes_publication
+FROM unnest(activate_node_snapshot()) WITH ORDINALITY AS s(c, ord);
+ excluded_table_precedes_publication
+---------------------------------------------------------------------
+ t
+(1 row)
+
+DROP PUBLICATION publication_all_except_part;
+-- Conversions that give a table a new OID must not lose its exclusion, because
+-- the exclusion is tied to the old OID and cannot be restored with
+-- ALTER PUBLICATION .. ADD TABLE.
+SET client_min_messages TO WARNING;
+-- undistribute_table() drops the table and recreates it under the same name.
+CREATE TABLE publication_undist_excluded (id int);
+CREATE PUBLICATION publication_all_except_undist
+    FOR ALL TABLES EXCEPT (TABLE publication_undist_excluded);
+SELECT create_distributed_table('publication_undist_excluded', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT undistribute_table('publication_undist_excluded');
+ undistribute_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT count(*) = 1 AS exclusion_retained_after_undistribute
+FROM pg_publication p
+JOIN pg_publication_rel r ON r.prpubid = p.oid AND r.prexcept
+JOIN pg_class c ON c.oid = r.prrelid
+WHERE p.pubname = 'publication_all_except_undist'
+  AND c.relname = 'publication_undist_excluded';
+ exclusion_retained_after_undistribute
+---------------------------------------------------------------------
+ t
+(1 row)
+
+DROP PUBLICATION publication_all_except_undist;
+DROP TABLE publication_undist_excluded;
+-- citus_add_local_table_to_metadata() renames the original table into a shard
+-- and creates a new shell table under the original name, so the exclusion has
+-- to move to the shell table instead of staying behind on the shard.
+SELECT citus_set_coordinator_host('localhost', :master_port);
+ citus_set_coordinator_host
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE publication_conv_excluded (id int);
+CREATE PUBLICATION publication_all_except_conv
+    FOR ALL TABLES EXCEPT (TABLE publication_conv_excluded);
+SELECT citus_add_local_table_to_metadata('publication_conv_excluded');
+ citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT count(*) = 1 AS exclusion_moved_to_shell_table
+FROM pg_publication p
+JOIN pg_publication_rel r ON r.prpubid = p.oid AND r.prexcept
+JOIN pg_class c ON c.oid = r.prrelid
+WHERE p.pubname = 'publication_all_except_conv'
+  AND c.relname = 'publication_conv_excluded';
+ exclusion_moved_to_shell_table
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT count(*) = 0 AS no_exclusion_left_behind_on_shard
+FROM pg_publication p
+JOIN pg_publication_rel r ON r.prpubid = p.oid AND r.prexcept
+JOIN pg_class c ON c.oid = r.prrelid
+WHERE p.pubname = 'publication_all_except_conv'
+  AND c.relname <> 'publication_conv_excluded';
+ no_exclusion_left_behind_on_shard
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT bool_and(result::boolean) AS exclusion_present_on_workers
+FROM run_command_on_workers($$
+    SELECT count(*) = 1
+    FROM pg_publication p
+    JOIN pg_publication_rel r ON r.prpubid = p.oid AND r.prexcept
+    JOIN pg_class c ON c.oid = r.prrelid
+    WHERE p.pubname = 'publication_all_except_conv'
+      AND c.relname = 'publication_conv_excluded'
+$$);
+ exclusion_present_on_workers
+---------------------------------------------------------------------
+ t
+(1 row)
+
+DROP PUBLICATION publication_all_except_conv;
+DROP TABLE publication_conv_excluded;
+SELECT citus_remove_node('localhost', :master_port);
+ citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+RESET client_min_messages;
 SET client_min_messages TO WARNING;
 DROP SCHEMA pg19_repack CASCADE;
 RESET client_min_messages;
