@@ -27,10 +27,6 @@
 
 #include "pg_version_constants.h"
 
-#if PG_VERSION_NUM < PG_VERSION_17
-#include "catalog/pg_am_d.h"
-#endif
-
 #include "citus_version.h"
 
 #include "columnar/columnar.h"

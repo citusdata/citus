@@ -2994,13 +2994,11 @@ CheckPostPlanDistribution(DistributedPlanningContext *planContext, bool
 		Node *origQuals = origQuery->jointree->quals;
 		Node *plannedQuals = plannedQuery->jointree->quals;
 
-		#if PG_VERSION_NUM >= PG_VERSION_17
 		if (IsMergeQuery(origQuery))
 		{
 			origQuals = origQuery->mergeJoinCondition;
 			plannedQuals = plannedQuery->mergeJoinCondition;
 		}
-		#endif
 
 		/*
 		 * If the WHERE quals have been eliminated by the Postgres planner, possibly

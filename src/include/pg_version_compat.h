@@ -36,7 +36,7 @@
 /* PG-18 unified row-compare operator codes under COMPARE_* */
 #define ROWCOMPARE_NE COMPARE_NE
 
-#elif PG_VERSION_NUM >= PG_VERSION_17
+#else
 #define create_foreignscan_path_compat(a, b, c, d, e, f, g, h, i, j, k) \
 		create_foreignscan_path( \
 			(a), (b), (c), (d), \
@@ -45,8 +45,6 @@
 			)
 
 #endif
-
-#if PG_VERSION_NUM >= PG_VERSION_17
 
 #include "catalog/pg_am.h"
 #include "catalog/pg_amop.h"
@@ -421,47 +419,6 @@ getStxstattarget_compat(HeapTuple tup)
 
 #define getProcNo_compat(a) (a->vxid.procNumber)
 #define getLxid_compat(a) (a->vxid.lxid)
-
-#else
-
-#define Anum_pg_collation_colllocale Anum_pg_collation_colliculocale
-#define Anum_pg_database_datlocale Anum_pg_database_daticulocale
-
-#include "access/htup_details.h"
-static inline int
-getAttstattarget_compat(HeapTuple attTuple)
-{
-	return ((Form_pg_attribute) GETSTRUCT(attTuple))->attstattarget;
-}
-
-
-#include "catalog/pg_statistic_ext.h"
-static inline int
-getStxstattarget_compat(HeapTuple tup)
-{
-	return ((Form_pg_statistic_ext) GETSTRUCT(tup))->stxstattarget;
-}
-
-
-#define getAlterStatsStxstattarget_compat(a) (a)
-#define getIntStxstattarget_compat(a) (a)
-
-#define WaitEventSetTracker_compat CurrentMemoryContext
-
-#define identitySequenceRelation_compat(a) (RelationGetRelid(a))
-
-#define matched_compat(a) (a->matched)
-
-#define create_foreignscan_path_compat(a, b, c, d, e, f, g, h, i, j, \
-									   k) create_foreignscan_path(a, b, c, d, e, f, g, h, \
-																  i, k)
-
-#define getProcNo_compat(a) (a->pgprocno)
-#define getLxid_compat(a) (a->lxid)
-
-#define COLLPROVIDER_BUILTIN 'b'
-
-#endif
 
 #define SetListCellPtr(a, b) ((a)->ptr_value = (b))
 #define RangeTableEntryFromNSItem(a) ((a)->p_rte)

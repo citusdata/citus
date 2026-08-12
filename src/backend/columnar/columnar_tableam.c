@@ -1385,12 +1385,7 @@ ConditionalLockRelationWithTimeout(Relation rel, LOCKMODE lockMode, int timeout,
 
 static bool
 columnar_scan_analyze_next_block(TableScanDesc scan,
-#if PG_VERSION_NUM >= PG_VERSION_17
 								 ReadStream *stream)
-#else
-								 BlockNumber blockno,
-								 BufferAccessStrategy bstrategy)
-#endif
 {
 	/*
 	 * Our access method is not pages based, i.e. tuples are not confined
@@ -1402,14 +1397,12 @@ columnar_scan_analyze_next_block(TableScanDesc scan,
 	 * expected for the scan_analyze_next_block function to check whether
 	 * there are any blocks left in the block sampler.
 	 */
-#if PG_VERSION_NUM >= PG_VERSION_17
 	Buffer buf = read_stream_next_buffer(stream, NULL);
 	if (!BufferIsValid(buf))
 	{
 		return false;
 	}
 	ReleaseBuffer(buf);
-#endif
 	return true;
 }
 

@@ -437,8 +437,6 @@ TranslateChangesIfSchemaChanged(Relation sourceRelation, Relation targetRelation
 		return;
 	}
 
-#if PG_VERSION_NUM >= PG_VERSION_17
-
 	/* Check the ReorderBufferChange's action type and handle them accordingly.*/
 	switch (change->action)
 	{
@@ -503,71 +501,4 @@ TranslateChangesIfSchemaChanged(Relation sourceRelation, Relation targetRelation
 			break;
 		}
 	}
-#else
-
-	/* Check the ReorderBufferChange's action type and handle them accordingly.*/
-	switch (change->action)
-	{
-		case REORDER_BUFFER_CHANGE_INSERT:
-		{
-			/* For insert action, only new tuple should always be translated*/
-			HeapTuple sourceRelationNewTuple = &(change->data.tp.newtuple->tuple);
-			HeapTuple targetRelationNewTuple = GetTupleForTargetSchemaForCdc(
-				sourceRelationNewTuple, sourceRelationDesc, targetRelationDesc);
-			change->data.tp.newtuple->tuple = *targetRelationNewTuple;
-			break;
-		}
-
-		/*
-		 * For update changes both old and new tuples need to be translated for target relation
-		 * if the REPLICA IDENTITY is set to FULL. Otherwise, only the new tuple needs to be
-		 * translated for target relation.
-		 */
-		case REORDER_BUFFER_CHANGE_UPDATE:
-		{
-			/* For update action, new tuple should always be translated*/
-			/* Get the new tuple from the ReorderBufferChange, and translate it to target relation. */
-			HeapTuple sourceRelationNewTuple = &(change->data.tp.newtuple->tuple);
-			HeapTuple targetRelationNewTuple = GetTupleForTargetSchemaForCdc(
-				sourceRelationNewTuple, sourceRelationDesc, targetRelationDesc);
-			change->data.tp.newtuple->tuple = *targetRelationNewTuple;
-
-			/*
-			 * Format oldtuple according to the target relation. If the column values of replica
-			 * identiy change, then the old tuple is non-null and needs to be formatted according
-			 * to the target relation schema.
-			 */
-			if (change->data.tp.oldtuple != NULL)
-			{
-				HeapTuple sourceRelationOldTuple = &(change->data.tp.oldtuple->tuple);
-				HeapTuple targetRelationOldTuple = GetTupleForTargetSchemaForCdc(
-					sourceRelationOldTuple,
-					sourceRelationDesc,
-					targetRelationDesc);
-
-				change->data.tp.oldtuple->tuple = *targetRelationOldTuple;
-			}
-			break;
-		}
-
-		case REORDER_BUFFER_CHANGE_DELETE:
-		{
-			/* For delete action, only old tuple should be translated*/
-			HeapTuple sourceRelationOldTuple = &(change->data.tp.oldtuple->tuple);
-			HeapTuple targetRelationOldTuple = GetTupleForTargetSchemaForCdc(
-				sourceRelationOldTuple,
-				sourceRelationDesc,
-				targetRelationDesc);
-
-			change->data.tp.oldtuple->tuple = *targetRelationOldTuple;
-			break;
-		}
-
-		default:
-		{
-			/* Do nothing for other action types. */
-			break;
-		}
-	}
-#endif
 }

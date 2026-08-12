@@ -154,8 +154,6 @@ FromExpr *
 GetMergeJoinTree(Query *mergeQuery)
 {
 	FromExpr *mergeJointree = NULL;
-#if PG_VERSION_NUM >= PG_VERSION_17
-
 	/*
 	 * In Postgres 17, the query tree has a specific field for the merge condition.
 	 * For deriving the WhereClauseList from the merge condition, we construct a dummy
@@ -165,9 +163,6 @@ GetMergeJoinTree(Query *mergeQuery)
 	 * Relevant PG17 commit: 0294df2f1
 	 */
 	mergeJointree = makeFromExpr(NIL, mergeQuery->mergeJoinCondition);
-#else
-	mergeJointree = mergeQuery->jointree;
-#endif
 
 	return mergeJointree;
 }
@@ -180,11 +175,7 @@ static Node *
 GetMergeJoinCondition(Query *mergeQuery)
 {
 	Node *joinCondition = NULL;
-#if PG_VERSION_NUM >= PG_VERSION_17
 	joinCondition = (Node *) mergeQuery->mergeJoinCondition;
-#else
-	joinCondition = (Node *) mergeQuery->jointree->quals;
-#endif
 	return joinCondition;
 }
 

@@ -37,10 +37,9 @@ jobs:
       style_checker_tools_version: "0.8.33"
       sql_snapshot_pg_version: "18.4"
       image_suffix: "-ve11b596"
-      pg16_version: '{ "major": "16", "full": "16.14" }'
       pg17_version: '{ "major": "17", "full": "17.10" }'
       pg18_version: '{ "major": "18", "full": "18.4" }'
-      upgrade_pg_versions: "16.14-17.10-18.4"
+      upgrade_pg_versions: "17.10-18.4"
     steps:
       # Since GHA jobs need at least one step we use a noop step here.
       - name: Set up parameters
@@ -114,7 +113,6 @@ jobs:
         image_suffix:
           - ${{ needs.params.outputs.image_suffix}}
         pg_version:
-          - ${{ needs.params.outputs.pg16_version }}
           - ${{ needs.params.outputs.pg17_version }}
           - ${{ needs.params.outputs.pg18_version }}
     runs-on: ubuntu-latest
@@ -144,7 +142,6 @@ jobs:
     with:
       pg_versions: >
         [
-          ${{ needs.params.outputs.pg16_version }},
           ${{ needs.params.outputs.pg17_version }},
           ${{ needs.params.outputs.pg18_version }}
         ]
@@ -162,7 +159,6 @@ jobs:
     with:
       pg_versions: >
         [
-          ${{ needs.params.outputs.pg16_version }},
           ${{ needs.params.outputs.pg17_version }},
           ${{ needs.params.outputs.pg18_version }}
         ]
@@ -180,7 +176,6 @@ jobs:
     with:
       pg_versions: >
         [
-          ${{ needs.params.outputs.pg16_version }},
           ${{ needs.params.outputs.pg17_version }},
           ${{ needs.params.outputs.pg18_version }}
         ]
@@ -205,7 +200,6 @@ jobs:
         image_name:
           - ${{ needs.params.outputs.fail_test_image_name }}
         pg_version:
-          - ${{ needs.params.outputs.pg16_version }}
           - ${{ needs.params.outputs.pg17_version }}
           - ${{ needs.params.outputs.pg18_version }}
         parallel: [0,1,2,3,4,5] # workaround for running 6 parallel jobs
@@ -252,11 +246,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - old_pg_major: 16
-            new_pg_major: 17
           - old_pg_major: 17
-            new_pg_major: 18
-          - old_pg_major: 16
             new_pg_major: 18
     env:
       old_pg_major: ${{ matrix.old_pg_major }}
@@ -313,7 +303,6 @@ jobs:
       fail-fast: false
       matrix:
         pg_version:
-          - ${{ needs.params.outputs.pg16_version }}
           - ${{ needs.params.outputs.pg17_version }}
     steps:
     - uses: actions/checkout@v5
