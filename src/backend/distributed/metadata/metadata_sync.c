@@ -111,6 +111,7 @@ static void CreateShellTableOnRemoteNodes(Oid relationId);
 static void CreateTableMetadataOnRemoteNodes(Oid relationId);
 static void CreateDependingViewsOnRemoteNodes(Oid relationId);
 static void AddTableToPublications(Oid relationId);
+static bool EnsurePublicationPropagatable(Oid publicationId);
 static NodeMetadataSyncResult SyncNodeMetadataToNodesOptional(void);
 static bool ShouldSyncTableMetadataInternal(bool hashDistributed,
 											bool citusTableWithNoDistKey);
@@ -367,18 +368,11 @@ AddTableToPublications(Oid relationId)
 
 	foreach_declared_oid(publicationId, publicationIds)
 	{
-		ObjectAddress *publicationAddress = palloc0(sizeof(ObjectAddress));
-		ObjectAddressSet(*publicationAddress, PublicationRelationId, publicationId);
-		List *addresses = list_make1(publicationAddress);
-
-		if (!ShouldPropagateAnyObject(addresses))
+		if (!EnsurePublicationPropagatable(publicationId))
 		{
 			/* skip non-distributed publications */
 			continue;
 		}
-
-		/* ensure schemas exist */
-		EnsureAllObjectDependenciesExistOnAllNodes(addresses);
 
 		bool isAdd = true;
 		char *alterPublicationCommand =
@@ -391,18 +385,11 @@ AddTableToPublications(Oid relationId)
 #if PG_VERSION_NUM >= PG_VERSION_19
 	foreach_declared_oid(publicationId, excludedPublicationIds)
 	{
-		ObjectAddress *publicationAddress = palloc0(sizeof(ObjectAddress));
-		ObjectAddressSet(*publicationAddress, PublicationRelationId, publicationId);
-		List *addresses = list_make1(publicationAddress);
-
-		if (!ShouldPropagateAnyObject(addresses))
+		if (!EnsurePublicationPropagatable(publicationId))
 		{
 			/* skip non-distributed publications */
 			continue;
 		}
-
-		/* ensure schemas exist */
-		EnsureAllObjectDependenciesExistOnAllNodes(addresses);
 
 		/*
 		 * The table was filtered out of the EXCEPT list when the publication was
@@ -418,6 +405,28 @@ AddTableToPublications(Oid relationId)
 #endif
 
 	SendCommandToRemoteNodesWithMetadata(ENABLE_DDL_PROPAGATION);
+}
+
+
+/*
+ * EnsurePublicationPropagatable returns whether the publication should be
+ * propagated and ensures its dependencies exist on all metadata nodes if so.
+ */
+static bool
+EnsurePublicationPropagatable(Oid publicationId)
+{
+	ObjectAddress *publicationAddress = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*publicationAddress, PublicationRelationId, publicationId);
+	List *addresses = list_make1(publicationAddress);
+
+	if (!ShouldPropagateAnyObject(addresses))
+	{
+		return false;
+	}
+
+	EnsureAllObjectDependenciesExistOnAllNodes(addresses);
+
+	return true;
 }
 
 

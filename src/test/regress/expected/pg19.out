@@ -465,6 +465,33 @@ WHERE p.pubname = 'publication_all_except_late'
 (1 row)
 
 DROP PUBLICATION publication_all_except_late;
+-- Reference-table creation follows the same metadata-sync path and must restore
+-- an exclusion that could not be propagated while the table was still local.
+CREATE TABLE publication_ref_excluded (id int PRIMARY KEY);
+CREATE PUBLICATION publication_all_except_ref
+    FOR ALL TABLES EXCEPT (TABLE publication_ref_excluded);
+SELECT create_reference_table('publication_ref_excluded');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT bool_and(result::boolean) AS exclusion_restored_after_reference_table
+FROM run_command_on_workers($$
+    SELECT count(*) = 1
+    FROM pg_publication p
+    JOIN pg_publication_rel r ON r.prpubid = p.oid AND r.prexcept
+    JOIN pg_class c ON c.oid = r.prrelid
+    WHERE p.pubname = 'publication_all_except_ref'
+      AND c.relname = 'publication_ref_excluded'
+$$);
+ exclusion_restored_after_reference_table
+---------------------------------------------------------------------
+ t
+(1 row)
+
+DROP PUBLICATION publication_all_except_ref;
+DROP TABLE publication_ref_excluded;
 -- The activation path rebuilds publication DDL from catalogs rather than
 -- deparsing the original statement, so exercise it directly. An excluded
 -- partitioned root must survive as the root (not be expanded to its leaves),
