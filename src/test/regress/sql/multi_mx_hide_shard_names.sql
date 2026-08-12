@@ -257,19 +257,14 @@ SELECT relname FROM pg_catalog.pg_class WHERE relnamespace = 'mx_hide_shard_name
 -- https://github.com/postgres/postgres/commit/18d67a8d7d30884655d65910b82781d9360819a6
 SHOW server_version \gset
 SELECT substring(:'server_version', '\d+')::int >= 18 AS server_version_ge_18 \gset
-SELECT substring(:'server_version', '\d+')::int >= 17 AS server_version_ge_17 \gset
 \if :server_version_ge_18
   SELECT 1 AS client_backend \gset
   SELECT 5 AS bgworker \gset
   SELECT 6 AS walsender \gset
-\elif :server_version_ge_17
+\else
   SELECT 1 AS client_backend \gset
   SELECT 4 AS bgworker \gset
   SELECT 5 AS walsender \gset
-\else
-  SELECT 4 AS client_backend \gset
-  SELECT 5 AS bgworker \gset
-  SELECT 12 AS walsender \gset
 \endif
 
 -- say, we set it to bgworker

@@ -1,9 +1,6 @@
 --
 -- PG17
 --
-SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int >= 17 AS server_version_ge_17
-\gset
 
 SET client_min_messages TO WARNING;
 CREATE EXTENSION IF NOT EXISTS citus_columnar;
@@ -294,11 +291,6 @@ SET citus.next_shard_id TO 20240023;
 SET client_min_messages TO ERROR;
 DROP SCHEMA pg17_outerjoin CASCADE;
 RESET client_min_messages;
-
-\if :server_version_ge_17
-\else
-\q
-\endif
 
 -- PG17-specific tests go here.
 --
