@@ -3033,36 +3033,19 @@ CitusCopySelect(CopyStmt *copyStatement)
 	SelectStmt *selectStmt = makeNode(SelectStmt);
 	selectStmt->fromClause = list_make1(copyObject(copyStatement->relation));
 
-	List *attributeNameList = copyStatement->attlist;
+	Relation distributedRelation = table_openrv(copyStatement->relation, AccessShareLock);
+	TupleDesc tupleDescriptor = RelationGetDescr(distributedRelation);
+	List *attributeNumberList = CopyGetAttnums(tupleDescriptor, distributedRelation,
+											   copyStatement->attlist);
 	List *targetList = NIL;
 
-	if (attributeNameList == NIL)
+	ListCell *attributeNumberCell = NULL;
+	foreach(attributeNumberCell, attributeNumberList)
 	{
-		Relation distributedRelation = table_openrv(copyStatement->relation, AccessShareLock);
-		TupleDesc tupleDescriptor = RelationGetDescr(distributedRelation);
-
-		for (int i = 0; i < tupleDescriptor->natts; i++)
-		{
-			Form_pg_attribute attr = TupleDescAttr(tupleDescriptor, i);
-
-			if (IsDroppedOrGenerated(attr))
-			{
-				continue;
-			}
-
-			attributeNameList = lappend(attributeNameList,
-										makeString(pstrdup(attr->attname.data)));
-		}
-
-		table_close(distributedRelation, NoLock);
-	}
-
-	ListCell *attributeNameCell = NULL;
-	foreach(attributeNameCell, attributeNameList)
-	{
-		char *attributeName = strVal(lfirst(attributeNameCell));
+		int attributeNumber = lfirst_int(attributeNumberCell);
+		Form_pg_attribute attribute = TupleDescAttr(tupleDescriptor, attributeNumber - 1);
 		ColumnRef *column = makeNode(ColumnRef);
-		column->fields = list_make1(makeString(pstrdup(attributeName)));
+		column->fields = list_make1(makeString(pstrdup(attribute->attname.data)));
 		column->location = -1;
 
 		ResTarget *selectTarget = makeNode(ResTarget);
@@ -3073,6 +3056,8 @@ CitusCopySelect(CopyStmt *copyStatement)
 
 		targetList = lappend(targetList, selectTarget);
 	}
+
+	table_close(distributedRelation, NoLock);
 
 	selectStmt->targetList = targetList;
 	return selectStmt;

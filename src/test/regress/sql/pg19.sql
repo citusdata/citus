@@ -477,7 +477,13 @@ DROP PUBLICATION publication_all_except_conv;
 DROP TABLE publication_conv_excluded;
 
 -- JSON COPY framing and protocol state must be owned by one coordinator COPY.
-CREATE TABLE json_copy_dist (id int, payload text, optional text);
+CREATE TABLE json_copy_dist
+(
+    id int,
+    payload text,
+    optional text,
+    generated text GENERATED ALWAYS AS (payload) STORED
+);
 SELECT create_distributed_table('json_copy_dist', 'id',
                                 shard_count => 4, colocate_with => 'none');
 INSERT INTO json_copy_dist
@@ -517,9 +523,19 @@ SELECT create_reference_table('json_copy_reference');
 INSERT INTO json_copy_reference VALUES (1, 'reference');
 COPY json_copy_reference TO STDOUT (FORMAT json, FORCE_ARRAY true);
 
-CREATE TABLE json_copy_local (id int, payload text);
+CREATE TABLE json_copy_local
+(
+    id int,
+    payload text,
+    generated text GENERATED ALWAYS AS (payload) STORED
+);
 INSERT INTO json_copy_local VALUES (1, 'local');
 COPY json_copy_local TO STDOUT (FORMAT json, FORCE_ARRAY true);
+
+COPY json_copy_local (generated) TO STDOUT (FORMAT json);
+COPY json_copy_dist (generated) TO STDOUT (FORMAT json);
+COPY json_copy_local (ctid) TO STDOUT (FORMAT json);
+COPY json_copy_dist (ctid) TO STDOUT (FORMAT json);
 
 CREATE TABLE json_copy_citus_local (id int, payload text);
 SELECT citus_add_local_table_to_metadata('json_copy_citus_local');
