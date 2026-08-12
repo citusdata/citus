@@ -1,7 +1,9 @@
 -- citus--15.0-1--14.0-1
 -- downgrade version to 14.0-1
 
--- Retain user_catalog_table so logical decoding remains compatible with PostgreSQL 19.
+-- The user_catalog_table reloptions set by 15.0-1 are intentionally retained
+-- for PostgreSQL 19 logical decoding; this downgrade requires no SQL for them.
+
 DROP FUNCTION IF EXISTS citus_internal.get_next_colocation_id();
 
 -- re-create the legacy version that we kept for backward compatibility at Citus 13 and 14
