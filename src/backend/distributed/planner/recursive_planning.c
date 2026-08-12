@@ -2634,8 +2634,6 @@ GeneratingSubplans(void)
 }
 
 
-
-
 /*
  * CanPushdownRecurringOuterJoinOnOuterRTE returns true if the given range table entry
  * is safe for pushdown when it is the outer relation of a outer join when the

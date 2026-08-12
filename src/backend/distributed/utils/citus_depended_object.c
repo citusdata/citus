@@ -245,6 +245,7 @@ HideCitusDependentObjectsOnQueriesOfPgMetaTables(Node *node, void *context)
 				if (OidIsValid(metaTableOid))
 				{
 					bool mergeJoinCondition = false;
+
 					/*
 					 * In Postgres 17, the query tree has a specific field for the merge condition.
 					 * So we shouldn't modify the jointree, but rather the mergeJoinCondition here

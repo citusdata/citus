@@ -154,6 +154,7 @@ FromExpr *
 GetMergeJoinTree(Query *mergeQuery)
 {
 	FromExpr *mergeJointree = NULL;
+
 	/*
 	 * In Postgres 17, the query tree has a specific field for the merge condition.
 	 * For deriving the WhereClauseList from the merge condition, we construct a dummy
