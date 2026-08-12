@@ -711,3 +711,94 @@ DROP ROLE pg19_owner, pg19_grantor_a, pg19_grantor_b, pg19_actor, pg19_grantee;
 DROP ROLE "Grant Owner", pg19_grantee2;
 RESET client_min_messages;
 RESET search_path;
+
+--
+-- FOR PORTION OF UPDATE/DELETE creates leftover rows for the parts of a
+-- temporal range outside the requested portion. PostgreSQL handles ordinary
+-- local tables, but Citus must reject queries that require distributed
+-- planning until it can preserve those leftover-row semantics.
+--
+CREATE SCHEMA pg19_for_portion_of;
+SET search_path TO pg19_for_portion_of;
+SET datestyle TO ISO, YMD;
+SET citus.shard_count TO 4;
+SET citus.shard_replication_factor TO 1;
+
+-- Pure PostgreSQL execution remains supported, including both syntaxes.
+CREATE TABLE temporal_local (id int, valid_at daterange, value text);
+INSERT INTO temporal_local VALUES
+    (1, '[2020-01-01,2021-01-01)', 'original');
+
+UPDATE temporal_local
+FOR PORTION OF valid_at FROM '2020-03-01' TO '2020-09-01'
+SET value = 'from_to'
+WHERE id = 1;
+
+UPDATE temporal_local
+FOR PORTION OF valid_at (daterange('2020-05-01', '2020-07-01'))
+SET value = 'direct'
+WHERE id = 1;
+
+SELECT * FROM temporal_local ORDER BY id, valid_at;
+
+CREATE TABLE temporal_dist (id int, valid_at daterange, value text);
+SELECT create_distributed_table('temporal_dist', 'id');
+INSERT INTO temporal_dist VALUES
+    (1, '[2020-01-01,2021-01-01)', 'distributed');
+
+-- Rejection does not depend on whether a local shard could execute the query.
+SET citus.enable_local_execution TO ON;
+UPDATE temporal_dist
+FOR PORTION OF valid_at FROM '2020-03-01' TO '2020-09-01'
+SET value = 'updated'
+WHERE id = 1;
+DELETE FROM temporal_dist
+FOR PORTION OF valid_at (daterange('2020-03-01', '2020-09-01'))
+WHERE id = 1;
+
+SET citus.enable_local_execution TO OFF;
+UPDATE temporal_dist
+FOR PORTION OF valid_at (daterange('2020-03-01', '2020-09-01'))
+SET value = 'updated'
+WHERE id = 1;
+DELETE FROM temporal_dist
+FOR PORTION OF valid_at FROM '2020-03-01' TO '2020-09-01'
+WHERE id = 1;
+RESET citus.enable_local_execution;
+
+-- The same early rejection applies when the modification is nested in a CTE.
+WITH changed AS (
+    UPDATE temporal_dist
+    FOR PORTION OF valid_at FROM '2020-03-01' TO '2020-09-01'
+    SET value = 'updated'
+    WHERE id = 1
+    RETURNING *
+)
+SELECT count(*) FROM changed;
+
+-- An ordinary local target still needs Citus planning when it reads a
+-- distributed source.
+CREATE TABLE temporal_local_from_dist
+    (id int, valid_at daterange, value text);
+INSERT INTO temporal_local_from_dist VALUES
+    (1, '[2020-01-01,2021-01-01)', 'local');
+UPDATE temporal_local_from_dist
+FOR PORTION OF valid_at FROM '2020-03-01' TO '2020-09-01'
+AS local_target
+SET value = source.value
+FROM temporal_dist AS source
+WHERE local_target.id = source.id;
+
+-- Reject even when the temporal period is also the distribution column.
+CREATE TABLE temporal_period_dist (valid_at daterange, value text);
+SELECT create_distributed_table('temporal_period_dist', 'valid_at');
+INSERT INTO temporal_period_dist VALUES
+    ('[2020-01-01,2021-01-01)', 'distributed by period');
+DELETE FROM temporal_period_dist
+FOR PORTION OF valid_at FROM '2020-03-01' TO '2020-09-01';
+
+SET client_min_messages TO WARNING;
+DROP SCHEMA pg19_for_portion_of CASCADE;
+RESET client_min_messages;
+RESET datestyle;
+RESET search_path;
