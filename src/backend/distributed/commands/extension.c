@@ -25,8 +25,6 @@
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
 
-#include "pg_version_constants.h"
-
 #include "citus_version.h"
 
 #include "columnar/columnar.h"
