@@ -77,3 +77,6 @@ WHEN MATCHED AND tid < 2 THEN
         DELETE
 RETURNING *;
 ROLLBACK;
+
+SET client_min_messages TO WARNING;
+DROP SCHEMA pgmerge_schema CASCADE;

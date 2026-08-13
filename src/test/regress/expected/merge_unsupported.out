@@ -91,3 +91,5 @@ WHEN MATCHED AND tid < 2 THEN
 RETURNING *;
 ERROR:  MERGE with RETURNING is not yet supported for Citus tables
 ROLLBACK;
+SET client_min_messages TO WARNING;
+DROP SCHEMA pgmerge_schema CASCADE;

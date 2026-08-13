@@ -286,6 +286,10 @@ DEPS = {
         repeatable=False,
     ),
     "pg17": TestDeps("minimal_schedule", ["multi_behavioral_analytics_create_table"]),
+    # pg17_json shares a schedule line with pg17, so it needs pg17's deps too.
+    "pg17_json": TestDeps(
+        "minimal_schedule", ["multi_behavioral_analytics_create_table"]
+    ),
     "multi_subquery_misc": TestDeps(
         "minimal_schedule", ["multi_behavioral_analytics_create_table"]
     ),
