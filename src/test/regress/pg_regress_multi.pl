@@ -570,6 +570,10 @@ if (-e $hll_control)
 }
 push(@pgOptions, "shared_preload_libraries='${sharedPreloadLibraries}'");
 
+if ($majorversion >= "19") {
+    push(@pgOptions, "output_plugin_libraries='pgoutput,citus'");
+}
+
 if ($vanillatest) {
     # use the default used in vanilla tests
     push(@pgOptions, "max_parallel_workers_per_gather=2");
