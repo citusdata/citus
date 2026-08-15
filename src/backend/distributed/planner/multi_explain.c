@@ -113,6 +113,9 @@ typedef struct
 	ExplainSerializeOption serialize;
 #endif
 	ExplainFormat format;
+#if PG_VERSION_NUM >= PG_VERSION_19
+	bool io;
+#endif
 } ExplainOptions;
 
 
@@ -939,7 +942,10 @@ RemoteExplain(Task *task, ExplainState *es, ParamListInfo params)
 {
 	/*
 	 * For EXPLAIN EXECUTE we still use the old method, so task->fetchedExplainAnalyzePlan
-	 * can be NULL for some cases of es->analyze == true.
+	 * can be NULL for some cases of es->analyze == true.  The same is true for a
+	 * distributed subplan: its saved output is keyed by task id and consumed once when
+	 * replayed into a freshly planned task list, so a task without a matching entry
+	 * falls through to a live remote EXPLAIN here.
 	 */
 	if (es->analyze && task->fetchedExplainAnalyzePlan)
 	{
@@ -1240,6 +1246,9 @@ BuildRemoteExplainQuery(char *queryString, ExplainState *es)
 #if PG_VERSION_NUM >= PG_VERSION_17
 					 "MEMORY %s, SERIALIZE %s, "
 #endif
+#if PG_VERSION_NUM >= PG_VERSION_19
+					 "IO %s, "
+#endif
 					 "FORMAT %s) %s",
 					 es->analyze ? "TRUE" : "FALSE",
 					 es->verbose ? "TRUE" : "FALSE",
@@ -1251,6 +1260,9 @@ BuildRemoteExplainQuery(char *queryString, ExplainState *es)
 #if PG_VERSION_NUM >= PG_VERSION_17
 					 es->memory ? "TRUE" : "FALSE",
 					 serializeStr,
+#endif
+#if PG_VERSION_NUM >= PG_VERSION_19
+					 es->io ? "TRUE" : "FALSE",
 #endif
 					 formatStr,
 					 queryString);
@@ -1393,6 +1405,9 @@ worker_save_query_explain_analyze(PG_FUNCTION_ARGS)
 	es->memory = ExtractFieldBoolean(explainOptions, "memory", es->memory);
 	es->serialize = ExtractFieldExplainSerialize(explainOptions, "serialize",
 												 es->serialize);
+#endif
+#if PG_VERSION_NUM >= PG_VERSION_19
+	es->io = ExtractFieldBoolean(explainOptions, "io", es->io);
 #endif
 
 	TupleDesc tupleDescriptor = NULL;
@@ -1640,6 +1655,9 @@ CitusExplainOneQuery(Query *query, int cursorOptions, IntoClause *into,
 #if PG_VERSION_NUM >= PG_VERSION_17
 	CurrentDistributedQueryExplainOptions.memory = es->memory;
 	CurrentDistributedQueryExplainOptions.serialize = es->serialize;
+#endif
+#if PG_VERSION_NUM >= PG_VERSION_19
+	CurrentDistributedQueryExplainOptions.io = es->io;
 #endif
 
 	/* rest is copied from ExplainOneQuery() */
@@ -2066,6 +2084,9 @@ WrapQueryForExplainAnalyze(const char *queryString, TupleDesc tupleDesc,
 #if PG_VERSION_NUM >= PG_VERSION_17
 					 "\"memory\": %s, \"serialize\": \"%s\", "
 #endif
+#if PG_VERSION_NUM >= PG_VERSION_19
+					 "\"io\": %s, "
+#endif
 					 "\"timing\": %s, \"summary\": %s, \"format\": \"%s\"}",
 					 CurrentDistributedQueryExplainOptions.verbose ? "true" : "false",
 					 CurrentDistributedQueryExplainOptions.costs ? "true" : "false",
@@ -2074,6 +2095,9 @@ WrapQueryForExplainAnalyze(const char *queryString, TupleDesc tupleDesc,
 #if PG_VERSION_NUM >= PG_VERSION_17
 					 CurrentDistributedQueryExplainOptions.memory ? "true" : "false",
 					 ExplainSerializeStr(CurrentDistributedQueryExplainOptions.serialize),
+#endif
+#if PG_VERSION_NUM >= PG_VERSION_19
+					 CurrentDistributedQueryExplainOptions.io ? "true" : "false",
 #endif
 					 CurrentDistributedQueryExplainOptions.timing ? "true" : "false",
 					 CurrentDistributedQueryExplainOptions.summary ? "true" : "false",
@@ -2362,6 +2386,11 @@ ExplainWorkerPlan(PlannedStmt *plannedstmt, DistributedSubPlan *subPlan, DestRec
 
 	if (es->wal)
 		instrument_option |= INSTRUMENT_WAL;
+
+#if PG_VERSION_NUM >= PG_VERSION_19
+	if (es->io)
+		instrument_option |= INSTRUMENT_IO;
+#endif
 
 	/*
 	 * We always collect timing for the entire statement, even when node-level
