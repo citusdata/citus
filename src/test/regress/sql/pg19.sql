@@ -29,6 +29,29 @@ SET citus.next_shard_id TO 1100000;
 SET citus.shard_count TO 4;
 SET citus.shard_replication_factor TO 1;
 
+-- EXTRACT accepts any string as its field name. Verify Citus quotes that field
+-- when deparsing task SQL, so text resembling a second statement remains data.
+SET citus.shard_count TO 1;
+CREATE TABLE extract_deparse_source (id int, ts timestamp);
+SELECT create_distributed_table('extract_deparse_source', 'id');
+INSERT INTO extract_deparse_source VALUES (1, timestamp '2026-01-01');
+
+DO $$
+BEGIN
+	PERFORM EXTRACT('year FROM timestamp ''2000-01-01''); CREATE TABLE injected(); --' FROM ts)
+	FROM extract_deparse_source
+	WHERE id = 1;
+EXCEPTION
+	WHEN invalid_parameter_value THEN NULL;
+END
+$$;
+
+SELECT bool_and(result::boolean) AS extract_field_injection_blocked
+FROM run_command_on_workers($$
+	SELECT to_regclass('pg19_repack.injected') IS NULL
+$$);
+SET citus.shard_count TO 4;
+
 CREATE TABLE repack_test (a int, b int);
 SELECT create_distributed_table('repack_test', 'a');
 INSERT INTO repack_test SELECT g, g % 10 FROM generate_series(1, 100) g;
