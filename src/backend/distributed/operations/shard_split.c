@@ -69,6 +69,9 @@ typedef struct GroupedDummyShards
 	List *shardIntervals;
 } GroupedDummyShards;
 
+/* name of the logical decoding output plugin used by non-blocking splits */
+#define CITUS_SPLIT_DECODER_PLUGIN "citus"
+
 /* Function declarations */
 static void ErrorIfCannotSplitShard(SplitOperation splitOperation,
 									ShardInterval *sourceShard);
@@ -92,6 +95,8 @@ static void CreateAuxiliaryStructuresForShardGroup(List *shardGroupSplitInterval
 												   List *workersForPlacementList,
 												   bool includeReplicaIdentity);
 static void CreateReplicaIdentitiesForDummyShards(HTAB *mapOfPlacementToDummyShardList);
+static void ErrorIfOutputPluginNotAllowed(MultiConnection *connection,
+										  char *outputPlugin);
 static void CreateObjectOnPlacement(List *objectCreationCommandList,
 									WorkerNode *workerNode);
 static List *    CreateSplitIntervalsForShardGroup(List *sourceColocatedShardList,
@@ -1366,6 +1371,72 @@ AcquireNonblockingSplitLock(Oid relationId)
 	}
 }
 
+/*
+ * ErrorIfOutputPluginNotAllowed errors out if the given logical decoding output
+ * plugin is not listed in the "output_plugin_libraries" setting on the node
+ * behind the given connection, which is where the replication slot is created.
+ *
+ * "output_plugin_libraries" was introduced in PostgreSQL 14.24, 15.19, 16.15,
+ * 17.11 and 18.6. On older minor versions current_setting() returns NULL and we
+ * skip the check, because there is nothing to enforce.
+ */
+static void
+ErrorIfOutputPluginNotAllowed(MultiConnection *connection, char *outputPlugin)
+{
+	StringInfo command = makeStringInfo();
+	appendStringInfo(command,
+					 "SELECT current_setting('output_plugin_libraries', true), "
+					 "coalesce(bool_or(btrim(name, ' \"') = %s), false) "
+					 "FROM unnest(string_to_array(coalesce("
+					 "current_setting('output_plugin_libraries', true), %s), ',')) name",
+					 quote_literal_cstr(outputPlugin),
+					 quote_literal_cstr(outputPlugin));
+
+	PGresult *result = NULL;
+	int queryResult = ExecuteOptionalRemoteCommand(connection, command->data, &result);
+
+	if (queryResult != RESPONSE_OKAY || !IsResponseOK(result) || PQntuples(result) != 1)
+	{
+		ReportResultError(connection, result, ERROR);
+	}
+
+	char *allowedPlugins = "";
+	if (!PQgetisnull(result, 0, 0))
+	{
+		allowedPlugins = pstrdup(PQgetvalue(result, 0, 0));
+	}
+
+	bool isAllowed = (strcmp(PQgetvalue(result, 0, 1), "t") == 0);
+
+	PQclear(result);
+	ForgetResults(connection);
+
+	if (isAllowed)
+	{
+		return;
+	}
+
+	StringInfo newValue = makeStringInfo();
+	if (allowedPlugins[0] != '\0')
+	{
+		appendStringInfo(newValue, "%s, ", allowedPlugins);
+	}
+	appendStringInfoString(newValue, outputPlugin);
+
+	ereport(ERROR, (errmsg("output plugin \"%s\" is not allowed on the source node",
+						   outputPlugin),
+					errdetail("Non-blocking shard splits replicate data with the \"%s\" "
+							  "logical decoding output plugin, but PostgreSQL on node "
+							  "%s:%d only allows the plugins listed in "
+							  "\"output_plugin_libraries\", which is set to \"%s\".",
+							  outputPlugin, connection->hostname, connection->port,
+							  allowedPlugins),
+					errhint("Allow the plugin on every node and reload the "
+							"configuration, for example: ALTER SYSTEM SET "
+							"output_plugin_libraries = %s; SELECT pg_reload_conf();",
+							newValue->data)));
+}
+
 
 /*
  * SplitShard API to split a given shard (or shard group) in non-blocking fashion
@@ -1424,6 +1495,12 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 		superUser,
 		databaseName);
 	ClaimConnectionExclusively(sourceConnection);
+
+	/*
+	 * Fail before creating any shards, publications or replication slots if
+	 * the source node does not allow our output plugin.
+	 */
+	ErrorIfOutputPluginNotAllowed(sourceConnection, CITUS_SPLIT_DECODER_PLUGIN);
 
 	MultiConnection *sourceReplicationConnection =
 		GetReplicationConnection(sourceShardToCopyNode->workerName,
@@ -1495,7 +1572,7 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 		groupedLogicalRepTargetsHash,
 		superUser, databaseName);
 
-	char *logicalRepDecoderPlugin = "citus";
+	char *logicalRepDecoderPlugin = CITUS_SPLIT_DECODER_PLUGIN;
 
 	/*
 	 * 6) Create replication slots and keep track of their snapshot.
