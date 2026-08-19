@@ -1371,6 +1371,7 @@ AcquireNonblockingSplitLock(Oid relationId)
 	}
 }
 
+
 /*
  * ErrorIfOutputPluginNotAllowed errors out if the given logical decoding output
  * plugin is not listed in the "output_plugin_libraries" setting on the node
