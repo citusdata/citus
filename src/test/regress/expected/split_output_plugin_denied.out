@@ -48,4 +48,4 @@ SELECT run_command_on_workers($$SELECT count(*) FROM pg_publication$$);
 (2 rows)
 
 DROP SCHEMA split_output_plugin_denied CASCADE;
-NOTICE:  drop cascades to table split_output_plugin_denied.table_to_split
+NOTICE:  drop cascades to table table_to_split
