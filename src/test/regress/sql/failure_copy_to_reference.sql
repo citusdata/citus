@@ -21,12 +21,12 @@ CREATE VIEW unhealthy_shard_count AS
   ON pdsp.shardid=pds.shardid
   WHERE logicalrelid='copy_reference_failure.test_table'::regclass AND shardstate != 1;
 
-SELECT current_setting('server_version_num')::int >= 190000 AS server_version_ge_19 \gset
+SELECT :VERSION_NUM / 10000 = 19 AND :'VERSION_NAME' ~ '^19(beta([3-9]|[1-9][0-9]+)|rc[1-9][0-9]*|[.][0-9]+)$' AS psql_version_ge_19beta3 \gset
 
 -- in the first test, kill just in the first
 -- response we get from the worker
 SELECT citus.mitmproxy('conn.kill()');
-\if :server_version_ge_19
+\if :psql_version_ge_19beta3
 \copy test_table FROM PROGRAM 'true' DELIMITER ','
 \else
 \copy test_table FROM STDIN DELIMITER ','
@@ -37,7 +37,7 @@ SELECT count(*) FROM test_table;
 
 -- kill as soon as the coordinator sends begin
 SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED").kill()');
-\if :server_version_ge_19
+\if :psql_version_ge_19beta3
 \copy test_table FROM PROGRAM 'true' DELIMITER ','
 \else
 \copy test_table FROM STDIN DELIMITER ','
@@ -48,7 +48,7 @@ SELECT count(*) FROM test_table;
 
 -- cancel as soon as the coordinator sends begin
 SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED").cancel(' ||  pg_backend_pid() || ')');
-\if :server_version_ge_19
+\if :psql_version_ge_19beta3
 \copy test_table FROM PROGRAM 'true' DELIMITER ','
 \else
 \copy test_table FROM STDIN DELIMITER ','
@@ -203,3 +203,4 @@ SELECT count(*) FROM test_table;
 
 DROP SCHEMA copy_reference_failure CASCADE;
 SET search_path TO default;
+

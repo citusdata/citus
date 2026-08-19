@@ -141,8 +141,8 @@ SELECT create_distributed_table('test_table_2','id');
 
 SELECT citus.mitmproxy('conn.kill()');
 
-SELECT current_setting('server_version_num')::int >= 190000 AS server_version_ge_19 \gset
-\if :server_version_ge_19
+SELECT :VERSION_NUM / 10000 = 19 AND :'VERSION_NAME' ~ '^19(beta([3-9]|[1-9][0-9]+)|rc[1-9][0-9]*|[.][0-9]+)$' AS psql_version_ge_19beta3 \gset
+\if :psql_version_ge_19beta3
 \COPY test_table_2 FROM PROGRAM 'true' delimiter ',';
 \else
 \COPY test_table_2 FROM stdin delimiter ',';
