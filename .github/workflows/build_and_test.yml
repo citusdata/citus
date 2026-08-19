@@ -141,6 +141,7 @@ jobs:
           - ${{ needs.params.outputs.pg16_version }}
         make:
           - check-split
+          - check-split-output-plugin-denied
           - check-multi
           - check-multi-1
           - check-multi-mx
