@@ -638,7 +638,11 @@ ModifyJobNeedsEvaluation(Job *workerJob)
  *
  * We must not change the distributed plan since it may be reused across multiple
  * executions of a prepared statement. Instead we create a deep copy that we only
- * use for the current execution.
+ * use for the current execution. Begin functions then mutate the copy with any necessary
+ * per-execution, parameter-dependent data, such as the partition key value and the
+ * task list. ExecuteCoordinatorEvaluableExpressions() bakes in this particular
+ * execution's parameter values into the query tree, as well as functions such as
+ * nextval().
  *
  * We also exclude localPlannedStatements from the copyObject call for performance
  * reasons, as they are immutable, so no need to have a deep copy.
