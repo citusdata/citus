@@ -272,9 +272,10 @@ SELECT citus.mitmproxy('conn.kill()');
 
 SELECT current_setting('server_version_num')::int >= 190000 AS server_version_ge_19 \gset
 \if :server_version_ge_19
+\COPY test_table_2 FROM PROGRAM 'true' delimiter ',';
+ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 \else
 \COPY test_table_2 FROM stdin delimiter ',';
-ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 \endif
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy

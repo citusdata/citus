@@ -141,7 +141,12 @@ SELECT create_distributed_table('test_table_2','id');
 
 SELECT citus.mitmproxy('conn.kill()');
 
+SELECT current_setting('server_version_num')::int >= 190000 AS server_version_ge_19 \gset
+\if :server_version_ge_19
+\COPY test_table_2 FROM PROGRAM 'true' delimiter ',';
+\else
 \COPY test_table_2 FROM stdin delimiter ',';
+\endif
 
 SELECT citus.mitmproxy('conn.allow()');
 SELECT pds.logicalrelid, pdsd.shardid, pdsd.shardstate

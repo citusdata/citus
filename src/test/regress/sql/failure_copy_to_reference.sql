@@ -21,24 +21,38 @@ CREATE VIEW unhealthy_shard_count AS
   ON pdsp.shardid=pds.shardid
   WHERE logicalrelid='copy_reference_failure.test_table'::regclass AND shardstate != 1;
 
+SELECT current_setting('server_version_num')::int >= 190000 AS server_version_ge_19 \gset
+
 -- in the first test, kill just in the first
 -- response we get from the worker
 SELECT citus.mitmproxy('conn.kill()');
+\if :server_version_ge_19
+\copy test_table FROM PROGRAM 'true' DELIMITER ','
+\else
 \copy test_table FROM STDIN DELIMITER ','
+\endif
 SELECT citus.mitmproxy('conn.allow()');
 SELECT * FROM unhealthy_shard_count;
 SELECT count(*) FROM test_table;
 
 -- kill as soon as the coordinator sends begin
 SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED").kill()');
+\if :server_version_ge_19
+\copy test_table FROM PROGRAM 'true' DELIMITER ','
+\else
 \copy test_table FROM STDIN DELIMITER ','
+\endif
 SELECT citus.mitmproxy('conn.allow()');
 SELECT * FROM unhealthy_shard_count;
 SELECT count(*) FROM test_table;
 
 -- cancel as soon as the coordinator sends begin
 SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED").cancel(' ||  pg_backend_pid() || ')');
+\if :server_version_ge_19
+\copy test_table FROM PROGRAM 'true' DELIMITER ','
+\else
 \copy test_table FROM STDIN DELIMITER ','
+\endif
 SELECT citus.mitmproxy('conn.allow()');
 SELECT * FROM unhealthy_shard_count;
 SELECT count(*) FROM test_table;
@@ -189,4 +203,3 @@ SELECT count(*) FROM test_table;
 
 DROP SCHEMA copy_reference_failure CASCADE;
 SET search_path TO default;
-

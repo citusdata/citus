@@ -36,9 +36,10 @@ SELECT citus.mitmproxy('conn.kill()');
 (1 row)
 
 \if :server_version_ge_19
+\copy test_table FROM PROGRAM 'true' DELIMITER ','
+ERROR:  failure on connection marked as essential: localhost:xxxxx
 \else
 \copy test_table FROM STDIN DELIMITER ','
-ERROR:  failure on connection marked as essential: localhost:xxxxx
 \endif
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
@@ -66,9 +67,10 @@ SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL R
 (1 row)
 
 \if :server_version_ge_19
+\copy test_table FROM PROGRAM 'true' DELIMITER ','
+ERROR:  failure on connection marked as essential: localhost:xxxxx
 \else
 \copy test_table FROM STDIN DELIMITER ','
-ERROR:  failure on connection marked as essential: localhost:xxxxx
 \endif
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
@@ -96,9 +98,10 @@ SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL R
 (1 row)
 
 \if :server_version_ge_19
+\copy test_table FROM PROGRAM 'true' DELIMITER ','
+ERROR:  canceling statement due to user request
 \else
 \copy test_table FROM STDIN DELIMITER ','
-ERROR:  canceling statement due to user request
 \endif
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
