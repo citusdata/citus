@@ -91,14 +91,31 @@ INSERT INTO reference_table (a, b, z) VALUES (2, 3, 4), (5, 6, 7);
 INSERT INTO citus_local_table (a, b, z) VALUES (2, 3, 4), (5, 6, 7);
 
 -- COPY is not possible because Citus user 2PC
+SELECT :VERSION_NUM / 10000 = 19 AND :'VERSION_NAME' ~ '^19(beta([3-9]|[1-9][0-9]+)|rc[1-9][0-9]*|[.][0-9]+)?([[:space:]].*)?$' AS psql_version_ge_19beta3 \gset
+\if :psql_version_ge_19beta3
+\copy the_table (a, b, z) FROM PROGRAM 'true' WITH CSV
+\else
 COPY the_table (a, b, z) FROM STDIN WITH CSV;
 \.
+\endif
+\if :psql_version_ge_19beta3
+\copy the_replicated_table (a, b, z) FROM PROGRAM 'true' WITH CSV
+\else
 COPY the_replicated_table (a, b, z) FROM STDIN WITH CSV;
 \.
+\endif
+\if :psql_version_ge_19beta3
+\copy reference_table (a, b, z) FROM PROGRAM 'true' WITH CSV
+\else
 COPY reference_table (a, b, z) FROM STDIN WITH CSV;
 \.
+\endif
+\if :psql_version_ge_19beta3
+\copy citus_local_table (a, b, z) FROM PROGRAM 'true' WITH CSV
+\else
 COPY citus_local_table (a, b, z) FROM STDIN WITH CSV;
 \.
+\endif
 
 -- all multi-shard modifications require 2PC hence not supported
 INSERT INTO the_table (a, b, z) VALUES (2, 3, 4), (5, 6, 7);
@@ -123,12 +140,24 @@ WITH del AS (DELETE FROM citus_local_table RETURNING *)
 SELECT * FROM del ORDER BY a;
 
 -- multi-shard COPY is not possible due to 2PC
+\if :psql_version_ge_19beta3
+\copy the_table (a, b, z) FROM PROGRAM 'true' WITH CSV
+\else
 COPY the_table (a, b, z) FROM STDIN WITH CSV;
 \.
+\endif
+\if :psql_version_ge_19beta3
+\copy reference_table (a, b, z) FROM PROGRAM 'true' WITH CSV
+\else
 COPY reference_table (a, b, z) FROM STDIN WITH CSV;
 \.
+\endif
+\if :psql_version_ge_19beta3
+\copy citus_local_table (a, b, z) FROM PROGRAM 'true' WITH CSV
+\else
 COPY citus_local_table (a, b, z) FROM STDIN WITH CSV;
 \.
+\endif
 SELECT * FROM the_table ORDER BY a;
 SELECT * FROM reference_table ORDER BY a;
 SELECT * FROM citus_local_table ORDER BY a;

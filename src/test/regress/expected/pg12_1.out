@@ -1,14 +1,11 @@
 SET citus.shard_replication_factor to 1;
 SET citus.next_shard_id TO 60000;
 SET citus.next_placement_id TO 60000;
-
 SET client_min_messages TO WARNING;
 CREATE EXTENSION IF NOT EXISTS citus_columnar;
 RESET client_min_messages;
-
 create schema test_pg12;
 set search_path to test_pg12;
-
 -- Test generated columns
 -- val1 after val2 to test https://github.com/citusdata/citus/issues/3538
 create table gen1 (
@@ -21,37 +18,78 @@ create table gen2 (
 	val1 int,
 	val2 int GENERATED ALWAYS AS (val1 + 2) STORED
 );
-
 insert into gen1 (id, val1) values (1,4),(3,6),(5,2),(7,2);
 insert into gen2 (id, val1) values (1,4),(3,6),(5,2),(7,2);
-
 select create_distributed_table('gen1', 'id');
+NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$test_pg12.gen1$$)
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
 select create_distributed_table('gen2', 'val2');
-
+ERROR:  cannot distribute relation: gen2
+DETAIL:  Distribution column must not use GENERATED ALWAYS AS (...) STORED.
 copy gen1 to :'temp_dir''pg12_copy_test_generated';
-
 insert into gen1 (id, val1) values (2,4),(4,6),(6,2),(8,2);
 insert into gen2 (id, val1) values (2,4),(4,6),(6,2),(8,2);
-
 select * from gen1 order by 1,2,3;
+ id | val2 | val1
+---------------------------------------------------------------------
+  1 |    6 |    4
+  2 |    6 |    4
+  3 |    8 |    6
+  4 |    8 |    6
+  5 |    4 |    2
+  6 |    4 |    2
+  7 |    4 |    2
+  8 |    4 |    2
+(8 rows)
+
 select * from gen2 order by 1,2,3;
+ id | val1 | val2
+---------------------------------------------------------------------
+  1 |    4 |    6
+  2 |    4 |    6
+  3 |    6 |    8
+  4 |    6 |    8
+  5 |    2 |    4
+  6 |    2 |    4
+  7 |    2 |    4
+  8 |    2 |    4
+(8 rows)
 
 truncate gen1;
 copy gen1 from :'temp_dir''pg12_copy_test_generated';
 select * from gen1 order by 1,2,3;
+ id | val2 | val1
+---------------------------------------------------------------------
+  1 |    6 |    4
+  3 |    8 |    6
+  5 |    4 |    2
+  7 |    4 |    2
+(4 rows)
 
 -- Test new VACUUM/ANALYZE options
 analyze (skip_locked) gen1;
 vacuum (skip_locked) gen1;
 vacuum (truncate 0) gen1;
 vacuum (index_cleanup 1) gen1;
-
 -- COPY FROM
 create table cptest (id int, val int);
 select create_distributed_table('cptest', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
 SELECT :VERSION_NUM / 10000 = 19 AND :'VERSION_NAME' ~ '^19(beta([3-9]|[1-9][0-9]+)|rc[1-9][0-9]*|[.][0-9]+)?([[:space:]].*)?$' AS psql_version_ge_19beta3 \gset
 \if :psql_version_ge_19beta3
 \copy cptest from PROGRAM 'true' with csv where val < 4
+ERROR:  Citus does not support COPY FROM with WHERE
 \else
 copy cptest from STDIN with csv where val < 4;
 1,6
@@ -60,24 +98,35 @@ copy cptest from STDIN with csv where val < 4;
 4,9
 5,4
 \.
+invalid command \.
 \endif
 select sum(id), sum(val) from cptest;
+ sum | sum
+---------------------------------------------------------------------
+     |
+(1 row)
 
 -- CTE materialized/not materialized
 CREATE TABLE single_hash_repartition_first (id int, sum int, avg float);
 CREATE TABLE single_hash_repartition_second (id int primary key, sum int, avg float);
-
 SELECT create_distributed_table('single_hash_repartition_first', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
 SELECT create_distributed_table('single_hash_repartition_second', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
 
 INSERT INTO single_hash_repartition_first
 SELECT i, i * 3, i * 0.3
 FROM generate_series(0, 100) i;
-
 INSERT INTO single_hash_repartition_second
 SELECT i * 2, i * 5, i * 0.6
 FROM generate_series(0, 100) i;
-
 -- a sample router query with NOT MATERIALIZED
 -- which pushes down the filters to the CTE
 SELECT public.coordinator_plan($Q$
@@ -91,6 +140,11 @@ SELECT count(*)
 FROM cte1, single_hash_repartition_second
 WHERE cte1.id = single_hash_repartition_second.id AND single_hash_repartition_second.id = 45;
 $Q$);
+       coordinator_plan
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)
+   Task Count: 1
+(2 rows)
 
 -- same query, without NOT MATERIALIZED, which is already default
 -- which pushes down the filters to the CTE
@@ -105,6 +159,11 @@ SELECT count(*)
 FROM cte1, single_hash_repartition_second
 WHERE cte1.id = single_hash_repartition_second.id AND single_hash_repartition_second.id = 45;
 $Q$);
+       coordinator_plan
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)
+   Task Count: 1
+(2 rows)
 
 -- same query with MATERIALIZED
 -- which prevents pushing down filters to the CTE,
@@ -120,6 +179,13 @@ SELECT count(*)
 FROM cte1, single_hash_repartition_second
 WHERE cte1.id = single_hash_repartition_second.id AND single_hash_repartition_second.id = 45;
 $Q$);
+             coordinator_plan
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)
+   ->  Distributed Subplan XXX_1
+         ->  Custom Scan (Citus Adaptive)
+               Task Count: 4
+(4 rows)
 
 -- similar query with MATERIALIZED
 -- now manually have the same filter in the CTE
@@ -136,6 +202,11 @@ SELECT count(*)
 FROM cte1, single_hash_repartition_second
 WHERE cte1.id = single_hash_repartition_second.id AND single_hash_repartition_second.id = 45;
 $Q$);
+       coordinator_plan
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)
+   Task Count: 1
+(2 rows)
 
 -- now, have a real-time query without MATERIALIZED
 -- these are sanitiy checks, because all of the CTEs are recursively
@@ -152,6 +223,14 @@ SELECT count(*)
 FROM cte1, single_hash_repartition_second
 WHERE cte1.id = single_hash_repartition_second.id AND single_hash_repartition_second.sum = 45;
 $Q$);
+                coordinator_plan
+---------------------------------------------------------------------
+ Aggregate
+   ->  Custom Scan (Citus Adaptive)
+         ->  Distributed Subplan XXX_1
+               ->  Custom Scan (Citus Adaptive)
+                     Task Count: 4
+(5 rows)
 
 SELECT public.coordinator_plan($Q$
 EXPLAIN (COSTS OFF)
@@ -165,6 +244,12 @@ SELECT count(*)
 FROM cte1, single_hash_repartition_second
 WHERE cte1.id = single_hash_repartition_second.id AND single_hash_repartition_second.sum = 45;
 $Q$);
+          coordinator_plan
+---------------------------------------------------------------------
+ Aggregate
+   ->  Custom Scan (Citus Adaptive)
+         Task Count: 4
+(3 rows)
 
 -- Foreign keys to partition tables
 CREATE TABLE collections_list (
@@ -173,82 +258,128 @@ CREATE TABLE collections_list (
 	value numeric,
 	PRIMARY KEY(key, collection_id)
 ) PARTITION BY LIST (collection_id);
-
 CREATE TABLE collections_list_0
 	PARTITION OF collections_list (key, collection_id, value)
 	FOR VALUES IN ( 0 );
 CREATE TABLE collections_list_1
 	PARTITION OF collections_list (key, collection_id, value)
 	FOR VALUES IN ( 1 );
-
 CREATE TABLE collection_users
 	(used_id integer, collection_id integer, key bigint);
-
 ALTER TABLE collection_users
     ADD CONSTRAINT collection_users_fkey FOREIGN KEY (key, collection_id) REFERENCES collections_list (key, collection_id);
-
 -- sanity check for postgres
 INSERT INTO collections_list VALUES (1, 0, '1.1');
 INSERT INTO collection_users VALUES (1, 0, 1);
-
 -- should fail because of fkey
 INSERT INTO collection_users VALUES (1, 1000, 1);
-
+ERROR:  insert or update on table "collection_users" violates foreign key constraint "collection_users_fkey"
+DETAIL:  Key (key, collection_id)=(1, 1000) is not present in table "collections_list".
 SELECT create_distributed_table('collections_list', 'key');
+NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$test_pg12.collections_list_0$$)
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
 SELECT create_distributed_table('collection_users', 'key');
+NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$test_pg12.collection_users$$)
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
 
 -- should still fail because of fkey
 INSERT INTO collection_users VALUES (1, 1000, 1);
-
+ERROR:  insert or update on table "collection_users_60028" violates foreign key constraint "collection_users_fkey_60028"
+DETAIL:  Key (key, collection_id)=(1, 1000) is not present in table "collections_list_60016".
+CONTEXT:  while executing command on localhost:xxxxx
 -- whereas new record with partition should go through
 INSERT INTO collections_list VALUES (2, 1, '1.2');
 INSERT INTO collection_users VALUES (5, 1, 2);
-
 -- AND CHAIN
 CREATE TABLE test (x int, y int);
 INSERT INTO test (x,y) SELECT i,i*3 from generate_series(1, 100) i;
-
 SELECT create_distributed_table('test', 'x');
+NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$test_pg12.test$$)
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
 
 -- single shard queries with CHAIN
 BEGIN;
 UPDATE test SET y = 15 WHERE x = 1;
 COMMIT AND CHAIN;
 SELECT * FROM test WHERE x = 1;
-COMMIT;
+ x | y
+---------------------------------------------------------------------
+ 1 | 15
+(1 row)
 
+COMMIT;
 BEGIN;
 UPDATE test SET y = 20 WHERE x = 1;
 ROLLBACK AND CHAIN;
 SELECT * FROM test WHERE x = 1;
-COMMIT;
+ x | y
+---------------------------------------------------------------------
+ 1 | 15
+(1 row)
 
+COMMIT;
 -- multi shard queries with CHAIN
 BEGIN;
 UPDATE test SET y = 25;
 COMMIT AND CHAIN;
 SELECT DISTINCT y FROM test;
-COMMIT;
+ y
+---------------------------------------------------------------------
+ 25
+(1 row)
 
+COMMIT;
 BEGIN;
 UPDATE test SET y = 30;
 ROLLBACK AND CHAIN;
 SELECT DISTINCT y FROM test;
+ y
+---------------------------------------------------------------------
+ 25
+(1 row)
+
 COMMIT;
-
 -- does read only carry over?
-
 BEGIN READ ONLY;
 COMMIT AND CHAIN;
 UPDATE test SET y = 35;
+ERROR:  cannot execute UPDATE in a read-only transaction
 COMMIT;
 SELECT DISTINCT y FROM test;
+ y
+---------------------------------------------------------------------
+ 25
+(1 row)
 
 BEGIN READ ONLY;
 ROLLBACK AND CHAIN;
 UPDATE test SET y = 40;
+ERROR:  cannot execute UPDATE in a read-only transaction
 COMMIT;
 SELECT DISTINCT y FROM test;
+ y
+---------------------------------------------------------------------
+ 25
+(1 row)
 
 -- non deterministic collations
 SET client_min_messages TO WARNING;
@@ -258,33 +389,51 @@ CREATE COLLATION test_pg12.case_insensitive (
 	deterministic = false
 );
 RESET client_min_messages;
-
 CREATE TABLE col_test (
 	id int,
 	val text collate case_insensitive
 );
-
 insert into col_test values
 	(1, 'asdF'), (2, 'vAlue'), (3, 'asDF');
-
 -- Hash distribution of non deterministic collations are unsupported
 select create_distributed_table('col_test', 'val');
+ERROR:  Hash distributed partition columns may not use a non deterministic collation
 select create_distributed_table('col_test', 'id');
+NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$test_pg12.col_test$$)
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
 
 insert into col_test values
 	(4, 'vALue'), (5, 'AsDf'), (6, 'value');
-
 select count(*)
 from col_test
 where val = 'asdf';
+ count
+---------------------------------------------------------------------
+     3
+(1 row)
 
 BEGIN;
   CREATE TABLE generated_stored_col_test (x int, y int generated always as (x+1) stored);
   SELECT citus_add_local_table_to_metadata('generated_stored_col_test');
+ citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
+(1 row)
 
   -- simply check if GENERATED ALWAYS AS (...) STORED expression works fine
   INSERT INTO generated_stored_col_test VALUES(1), (2);
   SELECT * FROM generated_stored_col_test ORDER BY 1,2;
+ x | y
+---------------------------------------------------------------------
+ 1 | 2
+ 2 | 3
+(2 rows)
 
   -- show that we keep such expressions on shell relation and shard relation
   SELECT s.relname, a.attname, a.attgenerated
@@ -293,43 +442,103 @@ BEGIN;
   WHERE s.relname LIKE 'generated_stored_col_test%' AND
         attname = 'y'
   ORDER BY 1,2;
-ROLLBACK;
+             relname             | attname | attgenerated
+---------------------------------------------------------------------
+ generated_stored_col_test       | y       | s
+ generated_stored_col_test_60040 | y       | s
+(2 rows)
 
+ROLLBACK;
 CREATE TABLE generated_stored_dist (
   col_1 int,
   "col\'_2" text,
   col_3 text generated always as (UPPER("col\'_2")) stored
 );
-
 SELECT create_distributed_table ('generated_stored_dist', 'col_1');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
 
 INSERT INTO generated_stored_dist VALUES (1, 'text_1'), (2, 'text_2');
 SELECT * FROM generated_stored_dist ORDER BY 1,2,3;
+ col_1 | col\'_2 | col_3
+---------------------------------------------------------------------
+     1 | text_1  | TEXT_1
+     2 | text_2  | TEXT_2
+(2 rows)
 
 INSERT INTO generated_stored_dist VALUES (1, 'text_1'), (2, 'text_2');
 SELECT alter_distributed_table('generated_stored_dist', shard_count := 5, cascade_to_colocated := false);
+NOTICE:  creating a new table for test_pg12.generated_stored_dist
+NOTICE:  moving the data of test_pg12.generated_stored_dist
+NOTICE:  dropping the old test_pg12.generated_stored_dist
+NOTICE:  renaming the new table to test_pg12.generated_stored_dist
+ alter_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
 SELECT * FROM generated_stored_dist ORDER BY 1,2,3;
+ col_1 | col\'_2 | col_3
+---------------------------------------------------------------------
+     1 | text_1  | TEXT_1
+     1 | text_1  | TEXT_1
+     2 | text_2  | TEXT_2
+     2 | text_2  | TEXT_2
+(4 rows)
 
 CREATE TABLE generated_stored_local (
   col_1 int,
   "col\'_2" text,
   col_3 text generated always as (UPPER("col\'_2")) stored
 );
-
 SELECT citus_add_local_table_to_metadata('generated_stored_local');
+ citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
+(1 row)
 
 INSERT INTO generated_stored_local VALUES (1, 'text_1'), (2, 'text_2');
 SELECT * FROM generated_stored_local ORDER BY 1,2,3;
+ col_1 | col\'_2 | col_3
+---------------------------------------------------------------------
+     1 | text_1  | TEXT_1
+     2 | text_2  | TEXT_2
+(2 rows)
 
 SELECT create_distributed_table ('generated_stored_local', 'col_1');
+NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$test_pg12.generated_stored_local$$)
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
 
 INSERT INTO generated_stored_local VALUES (1, 'text_1'), (2, 'text_2');
 SELECT * FROM generated_stored_local ORDER BY 1,2,3;
+ col_1 | col\'_2 | col_3
+---------------------------------------------------------------------
+     1 | text_1  | TEXT_1
+     1 | text_1  | TEXT_1
+     2 | text_2  | TEXT_2
+     2 | text_2  | TEXT_2
+(4 rows)
 
 create table generated_stored_columnar(i int) partition by range(i);
 create table generated_stored_columnar_p0 partition of generated_stored_columnar for values from (0) to (10);
 create table generated_stored_columnar_p1 partition of generated_stored_columnar for values from (10) to (20);
 SELECT alter_table_set_access_method('generated_stored_columnar_p0', 'columnar');
+NOTICE:  creating a new table for test_pg12.generated_stored_columnar_p0
+NOTICE:  moving the data of test_pg12.generated_stored_columnar_p0
+NOTICE:  dropping the old test_pg12.generated_stored_columnar_p0
+NOTICE:  renaming the new table to test_pg12.generated_stored_columnar_p0
+ alter_table_set_access_method
+---------------------------------------------------------------------
+
+(1 row)
 
 CREATE TABLE generated_stored_ref (
   col_1 int,
@@ -338,21 +547,50 @@ CREATE TABLE generated_stored_ref (
   col_4 int,
   col_5 int generated always as (col_4*2-col_1) stored
 );
-
 SELECT create_reference_table ('generated_stored_ref');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
 
 INSERT INTO generated_stored_ref (col_1, col_4) VALUES (1,2), (11,12);
 INSERT INTO generated_stored_ref (col_1, col_2, col_4) VALUES (100,101,102), (200,201,202);
-
 SELECT * FROM generated_stored_ref ORDER BY 1,2,3,4,5;
+ col_1 | col_2 | col_3 | col_4 | col_5
+---------------------------------------------------------------------
+     1 |       |       |     2 |     3
+    11 |       |       |    12 |    13
+   100 |   101 |   201 |   102 |   104
+   200 |   201 |   401 |   202 |   204
+(4 rows)
 
 BEGIN;
   SELECT undistribute_table('generated_stored_ref');
+NOTICE:  creating a new table for test_pg12.generated_stored_ref
+NOTICE:  moving the data of test_pg12.generated_stored_ref
+NOTICE:  dropping the old test_pg12.generated_stored_ref
+NOTICE:  renaming the new table to test_pg12.generated_stored_ref
+ undistribute_table
+---------------------------------------------------------------------
+
+(1 row)
+
   INSERT INTO generated_stored_ref (col_1, col_4) VALUES (11,12), (21,22);
   INSERT INTO generated_stored_ref (col_1, col_2, col_4) VALUES (200,201,202), (300,301,302);
   SELECT * FROM generated_stored_ref ORDER BY 1,2,3,4,5;
-ROLLBACK;
+ col_1 | col_2 | col_3 | col_4 | col_5
+---------------------------------------------------------------------
+     1 |       |       |     2 |     3
+    11 |       |       |    12 |    13
+    11 |       |       |    12 |    13
+    21 |       |       |    22 |    23
+   100 |   101 |   201 |   102 |   104
+   200 |   201 |   401 |   202 |   204
+   200 |   201 |   401 |   202 |   204
+   300 |   301 |   601 |   302 |   304
+(8 rows)
 
+ROLLBACK;
 BEGIN;
   -- drop some of the columns not having "generated always as stored" expressions
   -- PRE PG15, this would drop generated columns too
@@ -362,13 +600,29 @@ BEGIN;
   ALTER TABLE generated_stored_ref DROP COLUMN col_1 CASCADE;
   RESET client_min_messages;
   ALTER TABLE generated_stored_ref DROP COLUMN col_4;
-
   -- show that undistribute_table works fine
   SELECT undistribute_table('generated_stored_ref');
+NOTICE:  creating a new table for test_pg12.generated_stored_ref
+NOTICE:  moving the data of test_pg12.generated_stored_ref
+NOTICE:  dropping the old test_pg12.generated_stored_ref
+NOTICE:  renaming the new table to test_pg12.generated_stored_ref
+ undistribute_table
+---------------------------------------------------------------------
+
+(1 row)
+
   INSERT INTO generated_stored_ref VALUES (5);
   SELECT * FROM generated_stored_REF ORDER BY 1;
-ROLLBACK;
+ col_2
+---------------------------------------------------------------------
+     5
+   101
+   201
 
+
+(5 rows)
+
+ROLLBACK;
 BEGIN;
   -- now drop all columns
   ALTER TABLE generated_stored_ref DROP COLUMN col_3;
@@ -376,32 +630,38 @@ BEGIN;
   ALTER TABLE generated_stored_ref DROP COLUMN col_1;
   ALTER TABLE generated_stored_ref DROP COLUMN col_2;
   ALTER TABLE generated_stored_ref DROP COLUMN col_4;
-
   -- show that undistribute_table works fine
   SELECT undistribute_table('generated_stored_ref');
+NOTICE:  creating a new table for test_pg12.generated_stored_ref
+NOTICE:  moving the data of test_pg12.generated_stored_ref
+NOTICE:  dropping the old test_pg12.generated_stored_ref
+NOTICE:  renaming the new table to test_pg12.generated_stored_ref
+ undistribute_table
+---------------------------------------------------------------------
+
+(1 row)
 
   SELECT * FROM generated_stored_ref;
+--
+(4 rows)
+
 ROLLBACK;
-
 CREATE TABLE superuser_columnar_table (a int) USING columnar;
-
 CREATE USER read_access;
 SET ROLE read_access;
-
 -- user shouldn't be able to execute ALTER TABLE ... SET
 -- or ALTER TABLE ... RESET for a columnar table that it
 -- doesn't own
 ALTER TABLE test_pg12.superuser_columnar_table SET(columnar.chunk_group_row_limit = 100);
+ERROR:  permission denied for schema test_pg12
 ALTER TABLE test_pg12.superuser_columnar_table RESET (columnar.chunk_group_row_limit);
-
+ERROR:  permission denied for schema test_pg12
 RESET ROLE;
 DROP USER read_access;
-
 \set VERBOSITY terse
 drop schema test_pg12 cascade;
+NOTICE:  drop cascades to 16 other objects
 \set VERBOSITY default
-
 SET citus.shard_replication_factor to 2;
-
 SET client_min_messages TO WARNING;
 DROP EXTENSION citus_columnar CASCADE;

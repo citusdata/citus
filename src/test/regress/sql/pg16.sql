@@ -257,21 +257,43 @@ COPY copy_default FROM stdin WITH (format csv);
 SELECT * FROM copy_default ORDER BY id;
 TRUNCATE copy_default;
 
+SELECT :VERSION_NUM / 10000 = 19 AND :'VERSION_NAME' ~ '^19(beta([3-9]|[1-9][0-9]+)|rc[1-9][0-9]*|[.][0-9]+)?([[:space:]].*)?$' AS psql_version_ge_19beta3 \gset
 -- DEFAULT cannot be used in binary mode
+\if :psql_version_ge_19beta3
+\copy copy_default FROM PROGRAM 'true' WITH (format binary, default '\D')
+\else
 COPY copy_default FROM stdin WITH (format binary, default '\D');
+\endif
 
 -- DEFAULT cannot be new line nor carriage return
+\if :psql_version_ge_19beta3
+\copy copy_default FROM PROGRAM 'true' WITH (default E'\n')
+\copy copy_default FROM PROGRAM 'true' WITH (default E'\r')
+\else
 COPY copy_default FROM stdin WITH (default E'\n');
 COPY copy_default FROM stdin WITH (default E'\r');
+\endif
 
 -- DELIMITER cannot appear in DEFAULT spec
+\if :psql_version_ge_19beta3
+\copy copy_default FROM PROGRAM 'true' WITH (delimiter ';', default 'test;test')
+\else
 COPY copy_default FROM stdin WITH (delimiter ';', default 'test;test');
+\endif
 
 -- CSV quote cannot appear in DEFAULT spec
+\if :psql_version_ge_19beta3
+\copy copy_default FROM PROGRAM 'true' WITH (format csv, quote '"', default 'test"test')
+\else
 COPY copy_default FROM stdin WITH (format csv, quote '"', default 'test"test');
+\endif
 
 -- NULL and DEFAULT spec must be different
+\if :psql_version_ge_19beta3
+\copy copy_default FROM PROGRAM 'true' WITH (default '\N')
+\else
 COPY copy_default FROM stdin WITH (default '\N');
+\endif
 
 -- cannot use DEFAULT marker in column that has no DEFAULT value
 COPY copy_default FROM stdin WITH (default '\D');

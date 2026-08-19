@@ -4,6 +4,8 @@
 SHOW server_version \gset
 SELECT substring(:'server_version', '\d+')::int >= 17 AS server_version_ge_17
 \gset
+SELECT :VERSION_NUM / 10000 = 19 AND :'VERSION_NAME' ~ '^19(beta([3-9]|[1-9][0-9]+)|rc[1-9][0-9]*|[.][0-9]+)?([[:space:]].*)?$' AS psql_version_ge_19beta3
+\gset
 
 SET client_min_messages TO WARNING;
 CREATE EXTENSION IF NOT EXISTS citus_columnar;
@@ -844,11 +846,19 @@ ALTER INDEX tbl_idx ALTER COLUMN 2 SET STATISTICS -1;
 CREATE TABLE check_ign_err (n int, m int[], k int);
 SELECT create_distributed_table('check_ign_err', 'n');
 
+\if :psql_version_ge_19beta3
+\copy check_ign_err FROM PROGRAM 'true' WITH (on_error stop)
+\copy check_ign_err FROM PROGRAM 'true' WITH (ON_ERROR ignore)
+\copy check_ign_err FROM PROGRAM 'true' WITH (on_error ignore, log_verbosity verbose)
+\copy check_ign_err FROM PROGRAM 'true' WITH (log_verbosity verbose, on_error ignore)
+\copy check_ign_err FROM PROGRAM 'true' WITH (log_verbosity verbose)
+\else
 COPY check_ign_err FROM STDIN WITH (on_error stop);
 COPY check_ign_err FROM STDIN WITH (ON_ERROR ignore);
 COPY check_ign_err FROM STDIN WITH (on_error ignore, log_verbosity verbose);
 COPY check_ign_err FROM STDIN WITH (log_verbosity verbose, on_error ignore);
 COPY check_ign_err FROM STDIN WITH (log_verbosity verbose);
+\endif
 
 -- End of Test for COPY ON_ERROR option
 

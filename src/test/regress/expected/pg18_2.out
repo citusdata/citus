@@ -6,52 +6,51 @@ SELECT substring(:'server_version', '\d+')::int >= 18 AS server_version_ge_18
 \gset
 SELECT :VERSION_NUM / 10000 = 19 AND :'VERSION_NAME' ~ '^19(beta([3-9]|[1-9][0-9]+)|rc[1-9][0-9]*|[.][0-9]+)?([[:space:]].*)?$' AS psql_version_ge_19beta3
 \gset
-
 -- test invalid statistics
 -- behavior is same among PG versions, error message differs
 -- relevant PG18 commit: 3eea4dc2c7, 38883916e
 CREATE STATISTICS tst ON a FROM (VALUES (x)) AS foo;
-
+ERROR:  CREATE STATISTICS only supports relation names in the FROM clause
 CREATE FUNCTION tftest(int) returns table(a int, b int) as $$
 SELECT $1, $1+i FROM generate_series(1,5) g(i);
 $$ LANGUAGE sql IMMUTABLE STRICT;
 CREATE STATISTICS alt_stat2 ON a FROM tftest(1);
+ERROR:  CREATE STATISTICS only supports relation names in the FROM clause
 DROP FUNCTION tftest;
-
 \if :server_version_ge_18
 \else
 \q
 \endif
-
 -- PG18-specific tests go here.
 --
-
 -- Purpose: Verify PG18 behavior that NOT NULL constraints are materialized
 --          as pg_constraint rows with contype = 'n' on both coordinator and
 --          worker shards. Also confirm our helper view (table_checks) does
 --          NOT surface NOT NULL entries.
 -- https://github.com/postgres/postgres/commit/14e87ffa5c543b5f30ead7413084c25f7735039f
-
 CREATE SCHEMA pg18_nn;
 SET search_path TO pg18_nn;
-
 -- Local control table
 DROP TABLE IF EXISTS nn_local CASCADE;
+NOTICE:  table "nn_local" does not exist, skipping
 CREATE TABLE nn_local(
     a int NOT NULL,
     b int,
     c text NOT NULL
 );
-
 -- Distributed table
 DROP TABLE IF EXISTS nn_dist CASCADE;
+NOTICE:  table "nn_dist" does not exist, skipping
 CREATE TABLE nn_dist(
     a int NOT NULL,
     b int,
     c text NOT NULL
 );
-
 SELECT create_distributed_table('nn_dist', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
 
 -- Coordinator: count NOT NULL constraint rows
 SELECT 'local_n_count' AS label, contype, count(*)
@@ -59,34 +58,52 @@ FROM pg_constraint
 WHERE conrelid = 'pg18_nn.nn_local'::regclass
 GROUP BY contype
 ORDER BY contype;
+     label     | contype | count
+---------------------------------------------------------------------
+ local_n_count | n       |     2
+(1 row)
 
 SELECT 'dist_n_count' AS label, contype, count(*)
 FROM pg_constraint
 WHERE conrelid = 'pg18_nn.nn_dist'::regclass
 GROUP BY contype
 ORDER BY contype;
+    label     | contype | count
+---------------------------------------------------------------------
+ dist_n_count | n       |     2
+(1 row)
 
 -- Our helper view should exclude NOT NULL
 SELECT 'table_checks_local_count' AS label, count(*)
 FROM public.table_checks
 WHERE relid = 'pg18_nn.nn_local'::regclass;
+          label           | count
+---------------------------------------------------------------------
+ table_checks_local_count |     0
+(1 row)
 
 SELECT 'table_checks_dist_count' AS label, count(*)
 FROM public.table_checks
 WHERE relid = 'pg18_nn.nn_dist'::regclass;
+          label          | count
+---------------------------------------------------------------------
+ table_checks_dist_count |     0
+(1 row)
 
 -- Add a real CHECK to ensure table_checks still reports real checks
 ALTER TABLE nn_dist ADD CONSTRAINT nn_dist_check CHECK (b IS DISTINCT FROM 42);
-
 SELECT 'table_checks_dist_with_real_check' AS label, count(*)
 FROM public.table_checks
 WHERE relid = 'pg18_nn.nn_dist'::regclass;
+               label               | count
+---------------------------------------------------------------------
+ table_checks_dist_with_real_check |     1
+(1 row)
 
 -- === Worker checks ===
 \c - - - :worker_1_port
 SET client_min_messages TO WARNING;
 SET search_path TO pg18_nn;
-
 -- Pick one heap shard of nn_dist in our schema
 SELECT format('%I.%I', n.nspname, c.relname) AS shard_regclass
 FROM pg_class c
@@ -97,59 +114,80 @@ WHERE n.nspname = 'pg18_nn'
 ORDER BY c.relname
 LIMIT 1
 \gset
-
 -- Expect: 2 NOT NULL rows (a,c) + 1 CHECK row on the shard
 SELECT 'worker_shard_n_count' AS label, contype, count(*)
 FROM pg_constraint
 WHERE conrelid = :'shard_regclass'::regclass
 GROUP BY contype
 ORDER BY contype;
+        label         | contype | count
+---------------------------------------------------------------------
+ worker_shard_n_count | c       |     1
+ worker_shard_n_count | n       |     2
+(2 rows)
 
 -- table_checks on shard should hide NOT NULL
 SELECT 'table_checks_worker_shard_count' AS label, count(*)
 FROM public.table_checks
 WHERE relid = :'shard_regclass'::regclass;
+              label              | count
+---------------------------------------------------------------------
+ table_checks_worker_shard_count |     1
+(1 row)
 
 -- Drop one NOT NULL on coordinator; verify propagation
 \c - - - :master_port
 SET search_path TO pg18_nn;
-
 ALTER TABLE nn_dist ALTER COLUMN c DROP NOT NULL;
-
 -- Re-check on worker: NOT NULL count should drop to 1
 \c - - - :worker_1_port
 SET search_path TO pg18_nn;
-
 SELECT 'worker_shard_n_after_drop' AS label, contype, count(*)
 FROM pg_constraint
 WHERE conrelid = :'shard_regclass'::regclass
 GROUP BY contype
 ORDER BY contype;
+           label           | contype | count
+---------------------------------------------------------------------
+ worker_shard_n_after_drop | c       |     1
+ worker_shard_n_after_drop | n       |     1
+(2 rows)
 
 -- And on coordinator
 \c - - - :master_port
 SET search_path TO pg18_nn;
-
 SELECT 'dist_n_after_drop' AS label, contype, count(*)
 FROM pg_constraint
 WHERE conrelid = 'pg18_nn.nn_dist'::regclass
 GROUP BY contype
 ORDER BY contype;
+       label       | contype | count
+---------------------------------------------------------------------
+ dist_n_after_drop | c       |     1
+ dist_n_after_drop | n       |     1
+(2 rows)
 
 -- Purpose: test self join elimination for distributed, citus local and local tables.
 --
 CREATE TABLE sje_d1 (id bigserial PRIMARY KEY, name text, created_at timestamptz DEFAULT now());
 CREATE TABLE sje_d2 (id bigserial PRIMARY KEY, name text, created_at timestamptz DEFAULT now());
 CREATE TABLE sje_local (id bigserial PRIMARY KEY, title text);
-
 SET citus.next_shard_id TO 4754000;
 SELECT create_distributed_table('sje_d1', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
 SELECT create_distributed_table('sje_d2', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
 
 INSERT INTO sje_d1 SELECT i,  i::text, now() FROM generate_series(0,100)i;
 INSERT INTO sje_d2 SELECT i,  i::text, now() FROM generate_series(0,100)i;
 INSERT INTO sje_local SELECT i,  i::text FROM generate_series(0,100)i;
-
 -- Self-join elimination is applied when distributed tables are involved
 -- The query plan has only one join
 EXPLAIN (costs off)
@@ -160,6 +198,21 @@ JOIN sje_d2 u3 USING (id) INNER
 JOIN sje_d2 u4 USING (id) INNER
 JOIN sje_d2 u5 USING (id) INNER
 JOIN sje_d2 u6 USING (id);
+                            QUERY PLAN
+---------------------------------------------------------------------
+ Aggregate
+   ->  Custom Scan (Citus Adaptive)
+         Task Count: 4
+         Tasks Shown: One of 4
+         ->  Task
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  Aggregate
+                     ->  Hash Join
+                           Hash Cond: (sje_d1.id = u6.id)
+                           ->  Seq Scan on sje_d1_4754000 sje_d1
+                           ->  Hash
+                                 ->  Seq Scan on sje_d2_4754004 u6
+(12 rows)
 
 select count(1) from sje_d1 INNER
 JOIN sje_d2 u1 USING (id) INNER
@@ -168,14 +221,37 @@ JOIN sje_d2 u3 USING (id) INNER
 JOIN sje_d2 u4 USING (id) INNER
 JOIN sje_d2 u5 USING (id) INNER
 JOIN sje_d2 u6 USING (id);
+ count
+---------------------------------------------------------------------
+   101
+(1 row)
 
 -- Self-join elimination applied to from list join
 EXPLAIN (costs off)
 SELECT count(1) from sje_d1 d1, sje_d2 u1, sje_d2 u2, sje_d2 u3
 WHERE d1.id = u1.id and u1.id = u2.id and u3.id = d1.id;
+                            QUERY PLAN
+---------------------------------------------------------------------
+ Aggregate
+   ->  Custom Scan (Citus Adaptive)
+         Task Count: 4
+         Tasks Shown: One of 4
+         ->  Task
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  Aggregate
+                     ->  Hash Join
+                           Hash Cond: (d1.id = u3.id)
+                           ->  Seq Scan on sje_d1_4754000 d1
+                           ->  Hash
+                                 ->  Seq Scan on sje_d2_4754004 u3
+(12 rows)
 
 SELECT count(1) from sje_d1 d1, sje_d2 u1, sje_d2 u2, sje_d2 u3
 WHERE d1.id = u1.id and u1.id = u2.id and u3.id = d1.id;
+ count
+---------------------------------------------------------------------
+   101
+(1 row)
 
 -- Self-join elimination is not applied when a local table is involved
 -- This is a limitation that will be resolved in citus 14
@@ -187,6 +263,53 @@ JOIN sje_local u3 USING (id) INNER
 JOIN sje_local u4 USING (id) INNER
 JOIN sje_local u5 USING (id) INNER
 JOIN sje_local u6 USING (id);
+                                                                       QUERY PLAN
+---------------------------------------------------------------------
+ Aggregate
+   ->  Custom Scan (Citus Adaptive)
+         ->  Distributed Subplan XXX_1
+               ->  Seq Scan on sje_local u1
+         ->  Distributed Subplan XXX_2
+               ->  Seq Scan on sje_local u2
+         ->  Distributed Subplan XXX_3
+               ->  Seq Scan on sje_local u3
+         ->  Distributed Subplan XXX_4
+               ->  Seq Scan on sje_local u4
+         ->  Distributed Subplan XXX_5
+               ->  Seq Scan on sje_local u5
+         ->  Distributed Subplan XXX_6
+               ->  Seq Scan on sje_local u6
+         Task Count: 4
+         Tasks Shown: One of 4
+         ->  Task
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  Aggregate
+                     ->  Hash Join
+                           Hash Cond: (intermediate_result_5.id = sje_d1.id)
+                           ->  Function Scan on read_intermediate_result intermediate_result_5
+                           ->  Hash
+                                 ->  Hash Join
+                                       Hash Cond: (intermediate_result_4.id = sje_d1.id)
+                                       ->  Function Scan on read_intermediate_result intermediate_result_4
+                                       ->  Hash
+                                             ->  Hash Join
+                                                   Hash Cond: (intermediate_result_3.id = sje_d1.id)
+                                                   ->  Function Scan on read_intermediate_result intermediate_result_3
+                                                   ->  Hash
+                                                         ->  Hash Join
+                                                               Hash Cond: (intermediate_result_2.id = sje_d1.id)
+                                                               ->  Function Scan on read_intermediate_result intermediate_result_2
+                                                               ->  Hash
+                                                                     ->  Hash Join
+                                                                           Hash Cond: (intermediate_result_1.id = sje_d1.id)
+                                                                           ->  Function Scan on read_intermediate_result intermediate_result_1
+                                                                           ->  Hash
+                                                                                 ->  Hash Join
+                                                                                       Hash Cond: (intermediate_result.id = sje_d1.id)
+                                                                                       ->  Function Scan on read_intermediate_result intermediate_result
+                                                                                       ->  Hash
+                                                                                             ->  Seq Scan on sje_d1_4754000 sje_d1
+(44 rows)
 
 select count(1) from sje_d1 INNER
 JOIN sje_local u1 USING (id) INNER
@@ -195,7 +318,10 @@ JOIN sje_local u3 USING (id) INNER
 JOIN sje_local u4 USING (id) INNER
 JOIN sje_local u5 USING (id) INNER
 JOIN sje_local u6 USING (id);
-
+ count
+---------------------------------------------------------------------
+   101
+(1 row)
 
 -- to test USING vs ON equivalence
 EXPLAIN (costs off)
@@ -203,11 +329,30 @@ SELECT count(1)
 FROM sje_d1 d
 JOIN sje_d2 u1 ON (d.id = u1.id)
 JOIN sje_d2 u2 ON (u1.id = u2.id);
+                            QUERY PLAN
+---------------------------------------------------------------------
+ Aggregate
+   ->  Custom Scan (Citus Adaptive)
+         Task Count: 4
+         Tasks Shown: One of 4
+         ->  Task
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  Aggregate
+                     ->  Hash Join
+                           Hash Cond: (d.id = u2.id)
+                           ->  Seq Scan on sje_d1_4754000 d
+                           ->  Hash
+                                 ->  Seq Scan on sje_d2_4754004 u2
+(12 rows)
 
 SELECT count(1)
 FROM sje_d1 d
 JOIN sje_d2 u1 ON (d.id = u1.id)
 JOIN sje_d2 u2 ON (u1.id = u2.id);
+ count
+---------------------------------------------------------------------
+   101
+(1 row)
 
 -- Null-introducing join can have SJE
 EXPLAIN (costs off)
@@ -215,11 +360,26 @@ SELECT count(*)
 FROM sje_d1 d
 LEFT JOIN sje_d2 u1 USING (id)
 LEFT JOIN sje_d2 u2 USING (id);
+                           QUERY PLAN
+---------------------------------------------------------------------
+ Aggregate
+   ->  Custom Scan (Citus Adaptive)
+         Task Count: 4
+         Tasks Shown: One of 4
+         ->  Task
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  Aggregate
+                     ->  Seq Scan on sje_d1_4754000 d
+(8 rows)
 
 SELECT count(*)
 FROM sje_d1 d
 LEFT JOIN sje_d2 u1 USING (id)
 LEFT JOIN sje_d2 u2 USING (id);
+ count
+---------------------------------------------------------------------
+   101
+(1 row)
 
 -- prepared statement
 PREPARE sje_p(int,int) AS
@@ -228,11 +388,32 @@ FROM sje_d1 d
 JOIN sje_d2 u1 USING (id)
 JOIN sje_d2 u2 USING (id)
 WHERE d.id BETWEEN $1 AND $2;
-
 EXPLAIN (costs off)
 EXECUTE sje_p(10,20);
+                                     QUERY PLAN
+---------------------------------------------------------------------
+ Aggregate
+   ->  Custom Scan (Citus Adaptive)
+         Task Count: 4
+         Tasks Shown: One of 4
+         ->  Task
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  Aggregate
+                     ->  Hash Join
+                           Hash Cond: (u2.id = d.id)
+                           ->  Seq Scan on sje_d2_4754004 u2
+                           ->  Hash
+                                 ->  Bitmap Heap Scan on sje_d1_4754000 d
+                                       Recheck Cond: ((id >= 10) AND (id <= 20))
+                                       ->  Bitmap Index Scan on sje_d1_pkey_4754000
+                                             Index Cond: ((id >= 10) AND (id <= 20))
+(15 rows)
 
 EXECUTE sje_p(10,20);
+ count
+---------------------------------------------------------------------
+    11
+(1 row)
 
 -- cte
 EXPLAIN (costs off)
@@ -241,17 +422,36 @@ SELECT count(1)
 FROM sje_d1 d
 JOIN z USING (id)
 JOIN sje_d2 u2 USING (id);
+                               QUERY PLAN
+---------------------------------------------------------------------
+ Aggregate
+   ->  Custom Scan (Citus Adaptive)
+         Task Count: 4
+         Tasks Shown: One of 4
+         ->  Task
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  Aggregate
+                     ->  Hash Join
+                           Hash Cond: (d.id = u2.id)
+                           ->  Seq Scan on sje_d1_4754000 d
+                           ->  Hash
+                                 ->  Seq Scan on sje_d2_4754004 u2
+                                       Filter: ((id % '2'::bigint) = 0)
+(13 rows)
 
 WITH z AS (SELECT id FROM sje_d2 WHERE id % 2 = 0)
 SELECT count(1)
 FROM sje_d1 d
 JOIN z USING (id)
 JOIN sje_d2 u2 USING (id);
+ count
+---------------------------------------------------------------------
+    51
+(1 row)
 
 -- PG18 Feature: JSON functionality - JSON_TABLE has COLUMNS clause for
 -- extracting multiple fields from JSON documents.
 -- PG18 commit: https://github.com/postgres/postgres/commit/bb766cd
-
 CREATE TABLE pg18_json_test (id serial PRIMARY KEY, data JSON);
 INSERT INTO pg18_json_test (data) VALUES
 ('{ "user": {"name": "Alice", "age": 30, "city": "San Diego"} }'),
@@ -265,7 +465,6 @@ INSERT INTO pg18_json_test (data) VALUES
 ('{ "user": {"name": "Hannah", "age": 33, "city": "Seattle"} } '),
 ('{ "user": {"name": "Ian", "age": 26, "city": "Portland"} } '),
 ('{ "user": {"name": "Jane", "age": 38, "city": "San Francisco"} } ');
-
 SELECT jt.name, jt.age  FROM pg18_json_test, JSON_TABLE(
   data,
   '$.user'
@@ -276,6 +475,18 @@ SELECT jt.name, jt.age  FROM pg18_json_test, JSON_TABLE(
 ) AS jt
 WHERE jt.age between 25 and 35
 ORDER BY jt.age, jt.name;
+  name   | age
+---------------------------------------------------------------------
+ Bob     |  25
+ Ian     |  26
+ Fiona   |  27
+ Diana   |  28
+ George  |  29
+ Alice   |  30
+ Ethan   |  32
+ Hannah  |  33
+ Charlie |  35
+(9 rows)
 
 SELECT jt.city, count(1)  FROM pg18_json_test, JSON_TABLE(
   data,
@@ -286,9 +497,25 @@ SELECT jt.city, count(1)  FROM pg18_json_test, JSON_TABLE(
 ) AS jt
 GROUP BY jt.city
 ORDER BY count(1) DESC;
+     city      | count
+---------------------------------------------------------------------
+ Seattle       |     4
+ San Francisco |     2
+ Portland      |     2
+ Los Angeles   |     2
+ San Diego     |     1
+(5 rows)
 
 -- Make it distributed and repeat the queries
 SELECT create_distributed_table('pg18_json_test', 'id');
+NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$pg18_nn.pg18_json_test$$)
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
 
 SELECT jt.name, jt.age  FROM pg18_json_test, JSON_TABLE(
   data,
@@ -300,6 +527,18 @@ SELECT jt.name, jt.age  FROM pg18_json_test, JSON_TABLE(
 ) AS jt
 WHERE jt.age between 25 and 35
 ORDER BY jt.age, jt.name;
+  name   | age
+---------------------------------------------------------------------
+ Bob     |  25
+ Ian     |  26
+ Fiona   |  27
+ Diana   |  28
+ George  |  29
+ Alice   |  30
+ Ethan   |  32
+ Hannah  |  33
+ Charlie |  35
+(9 rows)
 
 SELECT jt.city, count(1)  FROM pg18_json_test, JSON_TABLE(
   data,
@@ -310,11 +549,17 @@ SELECT jt.city, count(1)  FROM pg18_json_test, JSON_TABLE(
 ) AS jt
 GROUP BY jt.city
 ORDER BY count(1) DESC;
-
+     city      | count
+---------------------------------------------------------------------
+ Seattle       |     4
+ Portland      |     2
+ Los Angeles   |     2
+ San Francisco |     2
+ San Diego     |     1
+(5 rows)
 
 -- PG18 Feature: WITHOUT OVERLAPS can appear in PRIMARY KEY and UNIQUE constraints.
 -- PG18 commit: https://github.com/postgres/postgres/commit/fc0438b4e
-
 CREATE TABLE temporal_rng (
   -- Since we can't depend on having btree_gist here,
   -- use an int4range instead of an int.
@@ -324,6 +569,10 @@ CREATE TABLE temporal_rng (
   CONSTRAINT temporal_rng_pk PRIMARY KEY (id, valid_at WITHOUT OVERLAPS)
 );
 SELECT create_distributed_table('temporal_rng', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
 
 -- okay:
 INSERT INTO temporal_rng (id, valid_at) VALUES ('[1,2)', daterange('2018-01-02', '2018-02-03'));
@@ -332,12 +581,28 @@ INSERT INTO temporal_rng (id, valid_at) VALUES ('[2,3)', daterange('2018-01-01',
 INSERT INTO temporal_rng (id, valid_at) VALUES ('[3,4)', daterange('2018-01-01', NULL));
 -- should fail:
 INSERT INTO temporal_rng (id, valid_at) VALUES ('[1,2)', daterange('2018-01-01', '2018-01-05'));
+ERROR:  conflicting key value violates exclusion constraint "temporal_rng_pk_4754013"
+DETAIL:  Key (id, valid_at)=([1,2), [2018-01-01,2018-01-05)) conflicts with existing key (id, valid_at)=([1,2), [2018-01-02,2018-02-03)).
+CONTEXT:  while executing command on localhost:xxxxx
 -- NULLs are not allowed in the shard key:
 INSERT INTO temporal_rng (id, valid_at) VALUES (NULL, daterange('2018-01-01', '2018-01-05'));
+ERROR:  cannot perform an INSERT with NULL in the partition column
 INSERT INTO temporal_rng (id, valid_at) VALUES ('[3,4)', NULL);
+ERROR:  null value in column "valid_at" violates not-null constraint
+DETAIL:  Failing row contains ([3,4), null).
+CONTEXT:  while executing command on localhost:xxxxx
 -- rejects empty:
 INSERT INTO temporal_rng (id, valid_at) VALUES ('[3,4)', 'empty');
+ERROR:  empty WITHOUT OVERLAPS value found in column "valid_at" in relation "temporal_rng_4754012"
+CONTEXT:  while executing command on localhost:xxxxx
 SELECT * FROM temporal_rng ORDER BY id, valid_at;
+  id   |        valid_at
+---------------------------------------------------------------------
+ [1,2) | [01-02-2018,02-03-2018)
+ [1,2) | [03-03-2018,04-04-2018)
+ [2,3) | [01-01-2018,01-05-2018)
+ [3,4) | [01-01-2018,)
+(4 rows)
 
 -- Repeat with UNIQUE constraint
 CREATE TABLE temporal_rng_uq (
@@ -348,6 +613,10 @@ CREATE TABLE temporal_rng_uq (
   CONSTRAINT temporal_rng_uq_uk UNIQUE (id, valid_at WITHOUT OVERLAPS)
 );
 SELECT create_distributed_table('temporal_rng_uq', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
 
 -- okay:
 INSERT INTO temporal_rng_uq (id, valid_at) VALUES ('[1,2)', daterange('2018-01-02', '2018-02-03'));
@@ -356,20 +625,32 @@ INSERT INTO temporal_rng_uq (id, valid_at) VALUES ('[2,3)', daterange('2018-01-0
 INSERT INTO temporal_rng_uq (id, valid_at) VALUES ('[3,4)', daterange('2018-01-01', NULL));
 -- should fail:
 INSERT INTO temporal_rng_uq (id, valid_at) VALUES ('[1,2)', daterange('2018-01-01', '2018-01-05'));
+ERROR:  conflicting key value violates exclusion constraint "temporal_rng_uq_uk_4754017"
+DETAIL:  Key (id, valid_at)=([1,2), [2018-01-01,2018-01-05)) conflicts with existing key (id, valid_at)=([1,2), [2018-01-02,2018-02-03)).
+CONTEXT:  while executing command on localhost:xxxxx
 -- NULLs are not allowed in the shard key:
 INSERT INTO temporal_rng_uq (id, valid_at) VALUES (NULL, daterange('2018-01-01', '2018-01-05'));
+ERROR:  cannot perform an INSERT with NULL in the partition column
 INSERT INTO temporal_rng_uq (id, valid_at) VALUES ('[3,4)', NULL);
 -- rejects empty:
 INSERT INTO temporal_rng_uq (id, valid_at) VALUES ('[3,4)', 'empty');
+ERROR:  empty WITHOUT OVERLAPS value found in column "valid_at" in relation "temporal_rng_uq_4754016"
+CONTEXT:  while executing command on localhost:xxxxx
 SELECT * FROM temporal_rng_uq ORDER BY id, valid_at;
+  id   |        valid_at
+---------------------------------------------------------------------
+ [1,2) | [01-02-2018,02-03-2018)
+ [1,2) | [03-03-2018,04-04-2018)
+ [2,3) | [01-01-2018,01-05-2018)
+ [3,4) | [01-01-2018,)
+ [3,4) |
+(5 rows)
 
 DROP TABLE temporal_rng CASCADE;
 DROP TABLE temporal_rng_uq CASCADE;
-
 -- Repeat the tests with the PRIMARY KEY and UNIQUE constraints added
 -- after the table is created and distributed. INSERTs produce the
 -- same results as before.
-
 CREATE TABLE temporal_rng (
   -- Since we can't depend on having btree_gist here,
   -- use an int4range instead of an int.
@@ -378,24 +659,42 @@ CREATE TABLE temporal_rng (
   valid_at daterange
 );
 SELECT create_distributed_table('temporal_rng', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
 
 -- okay:
 INSERT INTO temporal_rng (id, valid_at) VALUES ('[1,2)', daterange('2018-01-02', '2018-02-03'));
 INSERT INTO temporal_rng (id, valid_at) VALUES ('[1,2)', daterange('2018-03-03', '2018-04-04'));
 INSERT INTO temporal_rng (id, valid_at) VALUES ('[2,3)', daterange('2018-01-01', '2018-01-05'));
 INSERT INTO temporal_rng (id, valid_at) VALUES ('[3,4)', daterange('2018-01-01', NULL));
-
 ALTER TABLE temporal_rng
   ADD CONSTRAINT temporal_rng_pk PRIMARY KEY (id, valid_at WITHOUT OVERLAPS);
-
 -- should fail:
 INSERT INTO temporal_rng (id, valid_at) VALUES ('[1,2)', daterange('2018-01-01', '2018-01-05'));
+ERROR:  conflicting key value violates exclusion constraint "temporal_rng_pk_4754021"
+DETAIL:  Key (id, valid_at)=([1,2), [2018-01-01,2018-01-05)) conflicts with existing key (id, valid_at)=([1,2), [2018-01-02,2018-02-03)).
+CONTEXT:  while executing command on localhost:xxxxx
 -- NULLs are not allowed in the shard key:
 INSERT INTO temporal_rng (id, valid_at) VALUES (NULL, daterange('2018-01-01', '2018-01-05'));
+ERROR:  cannot perform an INSERT with NULL in the partition column
 INSERT INTO temporal_rng (id, valid_at) VALUES ('[3,4)', NULL);
+ERROR:  null value in column "valid_at" violates not-null constraint
+DETAIL:  Failing row contains ([3,4), null).
+CONTEXT:  while executing command on localhost:xxxxx
 -- rejects empty:
 INSERT INTO temporal_rng (id, valid_at) VALUES ('[3,4)', 'empty');
+ERROR:  empty WITHOUT OVERLAPS value found in column "valid_at" in relation "temporal_rng_4754020"
+CONTEXT:  while executing command on localhost:xxxxx
 SELECT * FROM temporal_rng ORDER BY id, valid_at;
+  id   |        valid_at
+---------------------------------------------------------------------
+ [1,2) | [01-02-2018,02-03-2018)
+ [1,2) | [03-03-2018,04-04-2018)
+ [2,3) | [01-01-2018,01-05-2018)
+ [3,4) | [01-01-2018,)
+(4 rows)
 
 -- Repeat with UNIQUE constraint
 CREATE TABLE temporal_rng_uq (
@@ -405,115 +704,173 @@ CREATE TABLE temporal_rng_uq (
   valid_at daterange
 );
 SELECT create_distributed_table('temporal_rng_uq', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
 
 -- okay:
 INSERT INTO temporal_rng_uq (id, valid_at) VALUES ('[1,2)', daterange('2018-01-02', '2018-02-03'));
 INSERT INTO temporal_rng_uq (id, valid_at) VALUES ('[1,2)', daterange('2018-03-03', '2018-04-04'));
 INSERT INTO temporal_rng_uq (id, valid_at) VALUES ('[2,3)', daterange('2018-01-01', '2018-01-05'));
 INSERT INTO temporal_rng_uq (id, valid_at) VALUES ('[3,4)', daterange('2018-01-01', NULL));
-
 ALTER TABLE temporal_rng_uq
   ADD CONSTRAINT temporal_rng_uq_uk UNIQUE (id, valid_at WITHOUT OVERLAPS);
-
 -- should fail:
 INSERT INTO temporal_rng_uq (id, valid_at) VALUES ('[1,2)', daterange('2018-01-01', '2018-01-05'));
+ERROR:  conflicting key value violates exclusion constraint "temporal_rng_uq_uk_4754025"
+DETAIL:  Key (id, valid_at)=([1,2), [2018-01-01,2018-01-05)) conflicts with existing key (id, valid_at)=([1,2), [2018-01-02,2018-02-03)).
+CONTEXT:  while executing command on localhost:xxxxx
 -- NULLs are not allowed in the shard key:
 INSERT INTO temporal_rng_uq (id, valid_at) VALUES (NULL, daterange('2018-01-01', '2018-01-05'));
+ERROR:  cannot perform an INSERT with NULL in the partition column
 INSERT INTO temporal_rng_uq (id, valid_at) VALUES ('[3,4)', NULL);
 -- rejects empty:
 INSERT INTO temporal_rng_uq (id, valid_at) VALUES ('[3,4)', 'empty');
+ERROR:  empty WITHOUT OVERLAPS value found in column "valid_at" in relation "temporal_rng_uq_4754024"
+CONTEXT:  while executing command on localhost:xxxxx
 SELECT * FROM temporal_rng_uq ORDER BY id, valid_at;
+  id   |        valid_at
+---------------------------------------------------------------------
+ [1,2) | [01-02-2018,02-03-2018)
+ [1,2) | [03-03-2018,04-04-2018)
+ [2,3) | [01-01-2018,01-05-2018)
+ [3,4) | [01-01-2018,)
+ [3,4) |
+(5 rows)
 
 -- PG18 Feature: RETURNING old and new values in DML statements
 -- PG18 commit: https://github.com/postgres/postgres/commit/80feb727c
-
 CREATE TABLE users (id SERIAL PRIMARY KEY, email text, category int);
 INSERT INTO users (email, category) SELECT 'xxx@foo.com', i % 10 from generate_series (1,100) t(i);
-
 SELECT create_distributed_table('users','id');
+NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$pg18_nn.users$$)
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
 
 UPDATE users SET email = 'colm@planet.com' WHERE id = 1
 	RETURNING OLD.email AS previous_email,
 		  NEW.email AS current_email;
+ previous_email |  current_email
+---------------------------------------------------------------------
+ xxx@foo.com    | colm@planet.com
+(1 row)
 
 SELECT * FROM users WHERE id = 1
 ORDER BY id;
+ id |      email      | category
+---------------------------------------------------------------------
+  1 | colm@planet.com |        1
+(1 row)
 
 UPDATE users SET email = 'tim@arctic.net' WHERE id = 22
   RETURNING OLD.email AS previous_email,
       NEW.email AS current_email;
+ previous_email | current_email
+---------------------------------------------------------------------
+ xxx@foo.com    | tim@arctic.net
+(1 row)
 
 UPDATE users SET email = 'john@farm.ie' WHERE id = 33
   RETURNING OLD.email AS previous_email,
       NEW.email AS current_email;
+ previous_email | current_email
+---------------------------------------------------------------------
+ xxx@foo.com    | john@farm.ie
+(1 row)
 
 SELECT * FROM users WHERE id = 22
 ORDER BY id;
+ id |     email      | category
+---------------------------------------------------------------------
+ 22 | tim@arctic.net |        2
+(1 row)
 
 SELECT * FROM users
 WHERE email not like 'xxx@%'
 ORDER BY id;
+ id |      email      | category
+---------------------------------------------------------------------
+  1 | colm@planet.com |        1
+ 22 | tim@arctic.net  |        2
+ 33 | john@farm.ie    |        3
+(3 rows)
 
 -- NULL values creep into the email column..
 INSERT INTO users (email, category) VALUES (null, 5)
   RETURNING OLD.email AS previous_email,
       NEW.email AS current_email;
+ previous_email | current_email
+---------------------------------------------------------------------
+                |
+(1 row)
 
 UPDATE users SET email = NULL WHERE id = 79
   RETURNING OLD.email AS previous_email,
       NEW.email AS current_email;
+ previous_email | current_email
+---------------------------------------------------------------------
+ xxx@foo.com    |
+(1 row)
 
 -- Now add a NOT NULL constraint on email, but do
 -- not apply it to existing rows yet.
 ALTER TABLE users
 ADD CONSTRAINT users_email_not_null
 CHECK (email IS NOT NULL) NOT VALID;
-
 UPDATE users SET email = NULL WHERE id = 50
   RETURNING OLD.email AS previous_email,
       NEW.email AS current_email;
-
+ERROR:  new row for relation "users_4754028" violates check constraint "users_email_not_null_4754028"
+DETAIL:  Failing row contains (50, null, 0).
+CONTEXT:  while executing command on localhost:xxxxx
 -- Validation should fail due to existing NULLs
 ALTER TABLE users VALIDATE CONSTRAINT users_email_not_null;
-
+ERROR:  check constraint "users_email_not_null_4754028" of relation "users_4754028" is violated by some row
+CONTEXT:  while executing command on localhost:xxxxx
 -- Fix NULL emails to a default value
 UPDATE users SET email = 'xxx@foo.com' WHERE email IS NULL
   RETURNING OLD.email AS previous_email,
       NEW.email AS current_email;
+ previous_email | current_email
+---------------------------------------------------------------------
+                | xxx@foo.com
+                | xxx@foo.com
+(2 rows)
 
 -- Validation should now succeed
 ALTER TABLE users VALIDATE CONSTRAINT users_email_not_null;
-
 -- And prevent future NULLs
 INSERT INTO users (email, category) VALUES (null, 10)
   RETURNING OLD.email AS previous_email,
       NEW.email AS current_email;
-
+ERROR:  new row for relation "users_4754030" violates check constraint "users_email_not_null_4754030"
+DETAIL:  Failing row contains (102, null, 10).
+CONTEXT:  while executing command on localhost:xxxxx
 -- PG18 Feature: support for LIKE in CREATE FOREIGN TABLE
 -- PG18 commit: https://github.com/postgres/postgres/commit/302cf1575
 SET citus.use_citus_managed_tables TO ON;
 CREATE EXTENSION postgres_fdw;
-
 CREATE SERVER foreign_server
         FOREIGN DATA WRAPPER postgres_fdw
         OPTIONS (host 'localhost', port :'master_port', dbname 'regression');
-
 CREATE USER MAPPING FOR CURRENT_USER
         SERVER foreign_server
         OPTIONS (user 'postgres');
-
 CREATE TABLE ctl_table(a int PRIMARY KEY,
   b varchar COMPRESSION pglz,
   c int GENERATED ALWAYS AS (a * 2) STORED,
   d bigint GENERATED ALWAYS AS IDENTITY,
   e int DEFAULT 1);
-
 CREATE INDEX ctl_table_ab_key ON ctl_table(a, b);
 COMMENT ON COLUMN ctl_table.b IS 'Column b';
 CREATE STATISTICS ctl_table_stat ON a,b FROM ctl_table;
-
 INSERT INTO ctl_table VALUES (1, 'first'), (2, 'second'), (3, 'third'), (4, 'fourth');
-
 -- Test EXCLUDING ALL
 CREATE FOREIGN TABLE ctl_ft1(LIKE ctl_table EXCLUDING ALL)
   SERVER foreign_server
@@ -522,41 +879,106 @@ CREATE FOREIGN TABLE ctl_ft1(LIKE ctl_table EXCLUDING ALL)
 CREATE FOREIGN TABLE ctl_ft2(LIKE ctl_table INCLUDING ALL)
   SERVER foreign_server
         OPTIONS (schema_name 'pg18_nn', table_name 'ctl_table');
-
 -- check that the foreign tables are citus local table
 SELECT partmethod, repmodel FROM pg_dist_partition
 WHERE logicalrelid IN ('ctl_ft1'::regclass, 'ctl_ft2'::regclass) ORDER BY logicalrelid;
+ partmethod | repmodel
+---------------------------------------------------------------------
+ n          | s
+ n          | s
+(2 rows)
 
 -- we can query the foreign tables
 EXPLAIN (VERBOSE, COSTS OFF)
 SELECT * FROM ctl_ft1 ORDER BY a;
+                                           QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)
+   Output: remote_scan.a, remote_scan.b, remote_scan.c, remote_scan.d, remote_scan.e
+   Task Count: 1
+   Tasks Shown: All
+   ->  Task
+         Query: SELECT a, b, c, d, e FROM pg18_nn.ctl_ft1_4754033 ctl_ft1 ORDER BY a
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Foreign Scan on pg18_nn.ctl_ft1_4754033 ctl_ft1
+               Output: a, b, c, d, e
+               Remote SQL: SELECT a, b, c, d, e FROM pg18_nn.ctl_table ORDER BY a ASC NULLS LAST
+(10 rows)
+
 SELECT * FROM ctl_ft1 ORDER BY a;
+ a |   b    | c | d | e
+---------------------------------------------------------------------
+ 1 | first  | 2 | 1 | 1
+ 2 | second | 4 | 2 | 1
+ 3 | third  | 6 | 3 | 1
+ 4 | fourth | 8 | 4 | 1
+(4 rows)
+
 EXPLAIN (VERBOSE, COSTS OFF)
 SELECT * FROM ctl_ft2 ORDER BY a;
+                                           QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)
+   Output: remote_scan.a, remote_scan.b, remote_scan.c, remote_scan.d, remote_scan.e
+   Task Count: 1
+   Tasks Shown: All
+   ->  Task
+         Query: SELECT a, b, c, d, e FROM pg18_nn.ctl_ft2_4754034 ctl_ft2 ORDER BY a
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Foreign Scan on pg18_nn.ctl_ft2_4754034 ctl_ft2
+               Output: a, b, c, d, e
+               Remote SQL: SELECT a, b, c, d, e FROM pg18_nn.ctl_table ORDER BY a ASC NULLS LAST
+(10 rows)
+
 SELECT * FROM ctl_ft2 ORDER BY a;
+ a |   b    | c | d | e
+---------------------------------------------------------------------
+ 1 | first  | 2 | 1 | 1
+ 2 | second | 4 | 2 | 1
+ 3 | third  | 6 | 3 | 1
+ 4 | fourth | 8 | 4 | 1
+(4 rows)
 
 -- Clean up foreign table test
 RESET citus.use_citus_managed_tables;
 SELECT undistribute_table('ctl_ft1');
+NOTICE:  creating a new table for pg18_nn.ctl_ft1
+NOTICE:  dropping the old pg18_nn.ctl_ft1
+NOTICE:  renaming the new table to pg18_nn.ctl_ft1
+ undistribute_table
+---------------------------------------------------------------------
+
+(1 row)
+
 SELECT undistribute_table('ctl_ft2');
+NOTICE:  creating a new table for pg18_nn.ctl_ft2
+NOTICE:  dropping the old pg18_nn.ctl_ft2
+NOTICE:  renaming the new table to pg18_nn.ctl_ft2
+ undistribute_table
+---------------------------------------------------------------------
+
+(1 row)
 
 DROP SERVER foreign_server CASCADE;
-
+NOTICE:  drop cascades to 3 other objects
+DETAIL:  drop cascades to user mapping for postgres on server foreign_server
+drop cascades to foreign table ctl_ft1
+drop cascades to foreign table ctl_ft2
 -- PG18 Feature: PERIOD clause in foreign key constraint definitions.
 -- PG18 commit: https://github.com/postgres/postgres/commit/89f908a6d
-
 -- This test verifies that the PG18 tests apply to Citus tables
-
 CREATE EXTENSION btree_gist; -- needed for range type indexing
 CREATE TABLE temporal_test (
   id integer,
   valid_at daterange,
   CONSTRAINT temporal_test_pk PRIMARY KEY (id, valid_at WITHOUT OVERLAPS)
 );
-
 SET citus.shard_count TO 4;
-
 SELECT create_reference_table( 'temporal_test');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
 
 INSERT INTO temporal_test VALUES
   (1, '[2000-01-01,2001-01-01)');
@@ -569,10 +991,11 @@ INSERT INTO temporal_test VALUES
 -- should fail:
 INSERT INTO temporal_test VALUES
   (1, '[2000-06-01,2001-01-01)');
-
+ERROR:  conflicting key value violates exclusion constraint "temporal_test_pk_4754035"
+DETAIL:  Key (id, valid_at)=(1, [2000-06-01,2001-01-01)) conflicts with existing key (id, valid_at)=(1, [2000-01-01,2001-01-01)).
+CONTEXT:  while executing command on localhost:xxxxx
 -- Required for foreign key constraint on distributed table
 SET citus.shard_replication_factor TO 1;
-
 -- Create and distribute a table with temporal foreign key constraints
 CREATE TABLE temporal_fk_rng2rng (
   id integer,
@@ -580,8 +1003,11 @@ CREATE TABLE temporal_fk_rng2rng (
   parent_id integer,
   CONSTRAINT temporal_fk_rng2rng_pk PRIMARY KEY (id, valid_at WITHOUT OVERLAPS)
 );
-
 SELECT create_distributed_table( 'temporal_fk_rng2rng', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
 
 --
 -- Add foreign key constraint with PERIOD clause
@@ -589,7 +1015,6 @@ SELECT create_distributed_table( 'temporal_fk_rng2rng', 'id');
 ALTER TABLE temporal_fk_rng2rng
   ADD CONSTRAINT temporal_fk_rng2rng_fk FOREIGN KEY (parent_id, PERIOD valid_at)
     REFERENCES temporal_test (id, PERIOD valid_at);
-
 INSERT INTO temporal_fk_rng2rng VALUES
   (1, '[2000-01-01,2001-01-01)', 1);
 -- okay spanning two parent records:
@@ -598,21 +1023,31 @@ INSERT INTO temporal_fk_rng2rng VALUES
 -- key is missing
 INSERT INTO temporal_fk_rng2rng VALUES
   (3, '[2000-01-01,2001-01-01)', 3);
+ERROR:  insert or update on table "temporal_fk_rng2rng_4754037" violates foreign key constraint "temporal_fk_rng2rng_fk_4754037"
+DETAIL:  Key (parent_id, valid_at)=(3, [2000-01-01,2001-01-01)) is not present in table "temporal_test_4754035".
+CONTEXT:  while executing command on localhost:xxxxx
 -- key exist but is outside range
 INSERT INTO temporal_fk_rng2rng VALUES
   (4, '[2001-01-01,2002-01-01)', 2);
+ERROR:  insert or update on table "temporal_fk_rng2rng_4754037" violates foreign key constraint "temporal_fk_rng2rng_fk_4754037"
+DETAIL:  Key (parent_id, valid_at)=(2, [2001-01-01,2002-01-01)) is not present in table "temporal_test_4754035".
+CONTEXT:  while executing command on localhost:xxxxx
 -- key exist but is partly outside range
 INSERT INTO temporal_fk_rng2rng VALUES
   (5, '[2000-01-01,2002-01-01)', 2);
-
+ERROR:  insert or update on table "temporal_fk_rng2rng_4754036" violates foreign key constraint "temporal_fk_rng2rng_fk_4754036"
+DETAIL:  Key (parent_id, valid_at)=(2, [2000-01-01,2002-01-01)) is not present in table "temporal_test_4754035".
+CONTEXT:  while executing command on localhost:xxxxx
 -- PG18 Feature: REJECT_LIMIT option for COPY errors
 -- PG18 commit: https://github.com/postgres/postgres/commit/4ac2a9bec
-
 -- Citus does not support COPY with ON_ERROR so just need to
 -- ensure the appropriate error is returned.
-
 CREATE TABLE check_ign_err (n int, m int[], k int);
 SELECT create_distributed_table('check_ign_err', 'n');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
 
 \if :psql_version_ge_19beta3
 \copy check_ign_err FROM PROGRAM 'true' WITH (on_error stop, reject_limit 5)
@@ -623,16 +1058,19 @@ SELECT create_distributed_table('check_ign_err', 'n');
 \copy check_ign_err FROM PROGRAM 'true' WITH (reject_limit 100)
 \else
 COPY check_ign_err FROM STDIN WITH (on_error stop, reject_limit 5);
+ERROR:  Citus does not support COPY FROM with ON_ERROR option.
 COPY check_ign_err FROM STDIN WITH (ON_ERROR ignore, REJECT_LIMIT 100);
+ERROR:  Citus does not support COPY FROM with ON_ERROR option.
 COPY check_ign_err FROM STDIN WITH (on_error ignore, log_verbosity verbose, reject_limit 50);
+ERROR:  Citus does not support COPY FROM with ON_ERROR option.
 COPY check_ign_err FROM STDIN WITH (reject_limt 77, log_verbosity verbose, on_error ignore);
+ERROR:  Citus does not support COPY FROM with ON_ERROR option.
 -- PG requires on_error when reject_limit is specified
 COPY check_ign_err FROM STDIN WITH (reject_limit 100);
+ERROR:  COPY REJECT_LIMIT requires ON_ERROR to be set to IGNORE
 \endif
-
 -- PG18 Feature: COPY TABLE TO on a materialized view
 -- PG18 commit: https://github.com/postgres/postgres/commit/534874fac
-
 -- This does not work in Citus as a materialized view cannot be distributed.
 -- So just verify that the appropriate error is raised.
 CREATE MATERIALIZED VIEW copytest_mv AS
@@ -641,106 +1079,125 @@ CREATE MATERIALIZED VIEW copytest_mv AS
 -- Attempting to make it distributed should fail with appropriate error as
 -- Citus does not yet support materialized views.
 SELECT create_distributed_table('copytest_mv', 'id');
+ERROR:  copytest_mv is not a regular, foreign or partitioned table
 -- After that, any command on the materialized view is outside Citus support.
-
 -- PG18: verify publish_generated_columns is preserved for distributed tables
 -- https://github.com/postgres/postgres/commit/7054186c4
 \c - - - :master_port
 CREATE SCHEMA pg18_publication;
 SET search_path TO pg18_publication;
-
 -- table with a stored generated column
 CREATE TABLE gen_pub_tab (
     id int primary key,
     a  int,
     b  int GENERATED ALWAYS AS (a * 10) STORED
 );
-
 -- make it distributed so CREATE PUBLICATION goes through Citus metadata/DDL path
 SELECT create_distributed_table('gen_pub_tab', 'id', colocate_with := 'none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
 
 -- publication using the new PG18 option: stored
 CREATE PUBLICATION pub_gen_cols_stored
     FOR TABLE gen_pub_tab
     WITH (publish = 'insert, update', publish_generated_columns = stored);
-
 -- second publication explicitly using "none" for completeness
 CREATE PUBLICATION pub_gen_cols_none
     FOR TABLE gen_pub_tab
     WITH (publish = 'insert, update', publish_generated_columns = none);
-
 -- On coordinator: pubgencols must be 's' and 'n' respectively
 SELECT pubname, pubgencols
 FROM pg_publication
 WHERE pubname IN ('pub_gen_cols_stored', 'pub_gen_cols_none')
 ORDER BY pubname;
+       pubname       | pubgencols
+---------------------------------------------------------------------
+ pub_gen_cols_none   | n
+ pub_gen_cols_stored | s
+(2 rows)
 
 -- On worker 1: both publications must exist and keep pubgencols in sync
 \c - - - :worker_1_port
 SET search_path TO pg18_publication;
-
 SELECT pubname, pubgencols
 FROM pg_publication
 WHERE pubname IN ('pub_gen_cols_stored', 'pub_gen_cols_none')
 ORDER BY pubname;
+       pubname       | pubgencols
+---------------------------------------------------------------------
+ pub_gen_cols_none   | n
+ pub_gen_cols_stored | s
+(2 rows)
 
 -- On worker 2: same check
 \c - - - :worker_2_port
 SET search_path TO pg18_publication;
-
 SELECT pubname, pubgencols
 FROM pg_publication
 WHERE pubname IN ('pub_gen_cols_stored', 'pub_gen_cols_none')
 ORDER BY pubname;
+       pubname       | pubgencols
+---------------------------------------------------------------------
+ pub_gen_cols_none   | n
+ pub_gen_cols_stored | s
+(2 rows)
 
 -- Now verify ALTER PUBLICATION .. SET (publish_generated_columns = none)
 -- propagates to workers as well.
-
 \c - - - :master_port
 SET search_path TO pg18_publication;
-
 ALTER PUBLICATION pub_gen_cols_stored
     SET (publish_generated_columns = none);
-
 -- coordinator: both publications should now have pubgencols = 'n'
 SELECT pubname, pubgencols
 FROM pg_publication
 WHERE pubname IN ('pub_gen_cols_stored', 'pub_gen_cols_none')
 ORDER BY pubname;
+       pubname       | pubgencols
+---------------------------------------------------------------------
+ pub_gen_cols_none   | n
+ pub_gen_cols_stored | n
+(2 rows)
 
 -- worker 1: pubgencols must match coordinator
 \c - - - :worker_1_port
 SET search_path TO pg18_publication;
-
 SELECT pubname, pubgencols
 FROM pg_publication
 WHERE pubname IN ('pub_gen_cols_stored', 'pub_gen_cols_none')
 ORDER BY pubname;
+       pubname       | pubgencols
+---------------------------------------------------------------------
+ pub_gen_cols_none   | n
+ pub_gen_cols_stored | n
+(2 rows)
 
 -- worker 2: same check
 \c - - - :worker_2_port
 SET search_path TO pg18_publication;
-
 SELECT pubname, pubgencols
 FROM pg_publication
 WHERE pubname IN ('pub_gen_cols_stored', 'pub_gen_cols_none')
 ORDER BY pubname;
+       pubname       | pubgencols
+---------------------------------------------------------------------
+ pub_gen_cols_none   | n
+ pub_gen_cols_stored | n
+(2 rows)
 
 -- Column list precedence test: Citus must preserve both prattrs and pubgencols
-
 \c - - - :master_port
 SET search_path TO pg18_publication;
-
 -- Case 1: column list explicitly includes the generated column, flag = none
 CREATE PUBLICATION pub_gen_cols_list_includes_b
     FOR TABLE gen_pub_tab (id, a, b)
     WITH (publish_generated_columns = none);
-
 -- Case 2: column list excludes the generated column, flag = stored
 CREATE PUBLICATION pub_gen_cols_list_excludes_b
     FOR TABLE gen_pub_tab (id, a)
     WITH (publish_generated_columns = stored);
-
 -- Helper: show pubname, pubgencols, and column list (prattrs) for gen_pub_tab
 SELECT p.pubname,
        p.pubgencols,
@@ -752,11 +1209,15 @@ WHERE p.pubname IN ('pub_gen_cols_list_includes_b',
                     'pub_gen_cols_list_excludes_b')
   AND c.relname = 'gen_pub_tab'
 ORDER BY p.pubname;
+           pubname            | pubgencols | prattrs
+---------------------------------------------------------------------
+ pub_gen_cols_list_excludes_b | s          | 1 2
+ pub_gen_cols_list_includes_b | n          | 1 2 3
+(2 rows)
 
 -- worker 1: must see the same pubgencols + prattrs
 \c - - - :worker_1_port
 SET search_path TO pg18_publication;
-
 SELECT p.pubname,
        p.pubgencols,
        r.prattrs
@@ -767,11 +1228,15 @@ WHERE p.pubname IN ('pub_gen_cols_list_includes_b',
                     'pub_gen_cols_list_excludes_b')
   AND c.relname = 'gen_pub_tab'
 ORDER BY p.pubname;
+           pubname            | pubgencols | prattrs
+---------------------------------------------------------------------
+ pub_gen_cols_list_excludes_b | s          | 1 2
+ pub_gen_cols_list_includes_b | n          | 1 2 3
+(2 rows)
 
 -- worker 2: same check
 \c - - - :worker_2_port
 SET search_path TO pg18_publication;
-
 SELECT p.pubname,
        p.pubgencols,
        r.prattrs
@@ -782,6 +1247,11 @@ WHERE p.pubname IN ('pub_gen_cols_list_includes_b',
                     'pub_gen_cols_list_excludes_b')
   AND c.relname = 'gen_pub_tab'
 ORDER BY p.pubname;
+           pubname            | pubgencols | prattrs
+---------------------------------------------------------------------
+ pub_gen_cols_list_excludes_b | s          | 1 2
+ pub_gen_cols_list_includes_b | n          | 1 2 3
+(2 rows)
 
 -- back to coordinator for subsequent tests / cleanup
 \c - - - :master_port
@@ -790,8 +1260,6 @@ DROP PUBLICATION pub_gen_cols_stored;
 DROP PUBLICATION pub_gen_cols_none;
 DROP PUBLICATION pub_gen_cols_list_includes_b;
 DROP PUBLICATION pub_gen_cols_list_excludes_b;
-
-
 -- ============================================================
 -- PG18: replicate stored generated columns when included in publication column list
 -- Upstream: 745217a05
@@ -815,7 +1283,6 @@ BEGIN
       expectedCount, tableName, actualCount;
   END IF;
 END$$ LANGUAGE plpgsql;
-
 CREATE OR REPLACE FUNCTION wait_for_expected_rowcount_at_query(query text, expectedCount integer)
 RETURNS void AS $$
 DECLARE
@@ -833,42 +1300,35 @@ BEGIN
       query, expectedCount, actualCount;
   END IF;
 END$$ LANGUAGE plpgsql;
-
 -- Build conninfo safely (psql vars do NOT expand inside single quotes)
 \set conninfo_w1 '\'user=postgres host=localhost port=' :worker_1_port ' dbname=regression\''
-
 -- --------------------------
 -- Case A: column list includes generated column b
 -- Expectation: subscriber receives b values (publisher b = a*10) because b is published in the column list.
 -- --------------------------
-
 \c - - - :worker_1_port
 SET search_path TO pg18_publication;
-
 DROP PUBLICATION IF EXISTS pub_gen_repl_a;
+NOTICE:  publication "pub_gen_repl_a" does not exist, skipping
 DROP TABLE IF EXISTS gen_pub_repl_a;
-
-
+NOTICE:  table "gen_pub_repl_a" does not exist, skipping
 CREATE TABLE gen_pub_repl_a (
     id int PRIMARY KEY,
     a  int,
     b  int GENERATED ALWAYS AS (a * 10) STORED
 );
-
 INSERT INTO gen_pub_repl_a (id, a) VALUES (1, 2), (2, 7);
-
 SET citus.enable_ddl_propagation TO off;
 CREATE PUBLICATION pub_gen_repl_a
     FOR TABLE gen_pub_repl_a (id, a, b)
     WITH (publish = 'insert, update', publish_generated_columns = none);
 RESET citus.enable_ddl_propagation;
-
 \c - - - :worker_2_port
 SET search_path TO pg18_publication;
-
 DROP SUBSCRIPTION IF EXISTS sub_gen_repl_a;
+NOTICE:  subscription "sub_gen_repl_a" does not exist, skipping
 DROP TABLE IF EXISTS gen_pub_repl_a;
-
+NOTICE:  table "gen_pub_repl_a" does not exist, skipping
 -- IMPORTANT: subscriber b is NOT generated. This is the PG18 “replicate generated values” use-case.
 CREATE TABLE gen_pub_repl_a (
     id int PRIMARY KEY,
@@ -879,65 +1339,82 @@ CREATE SUBSCRIPTION sub_gen_repl_a
     CONNECTION :conninfo_w1
     PUBLICATION pub_gen_repl_a
     WITH (copy_data = true);
-
+NOTICE:  created replication slot "sub_gen_repl_a" on publisher
 SELECT wait_for_expected_rowcount_at_table('gen_pub_repl_a', 2);
+ wait_for_expected_rowcount_at_table
+---------------------------------------------------------------------
+
+(1 row)
+
 SELECT * FROM gen_pub_repl_a ORDER BY id;  -- expect b=20,70
+ id | a | b
+---------------------------------------------------------------------
+  1 | 2 | 20
+  2 | 7 | 70
+(2 rows)
 
 \c - - - :worker_1_port
 SET search_path TO pg18_publication;
-
 INSERT INTO gen_pub_repl_a (id, a) VALUES (3, 9);
 UPDATE gen_pub_repl_a SET a = 5 WHERE id = 1;
-
 \c - - - :worker_2_port
 SET search_path TO pg18_publication;
-
 SELECT wait_for_expected_rowcount_at_table('gen_pub_repl_a', 3);
+ wait_for_expected_rowcount_at_table
+---------------------------------------------------------------------
+
+(1 row)
+
 SELECT wait_for_expected_rowcount_at_query(
   $$SELECT COUNT(*) FROM gen_pub_repl_a WHERE id=1 AND a=5 AND b=50$$, 1);
+ wait_for_expected_rowcount_at_query
+---------------------------------------------------------------------
+
+(1 row)
+
 SELECT * FROM gen_pub_repl_a ORDER BY id;  -- expect (1,5,50) (2,7,70) (3,9,90)
+ id | a | b
+---------------------------------------------------------------------
+  1 | 5 | 50
+  2 | 7 | 70
+  3 | 9 | 90
+(3 rows)
 
 -- Cleanup Case A
 DROP SUBSCRIPTION sub_gen_repl_a;
+NOTICE:  dropped replication slot "sub_gen_repl_a" on publisher
 DROP TABLE gen_pub_repl_a;
-
 \c - - - :worker_1_port
 SET search_path TO pg18_publication;
-
 DROP PUBLICATION pub_gen_repl_a;
 DROP TABLE gen_pub_repl_a;
-
 -- --------------------------
 -- Case B: column list excludes generated column b but publish_generated_columns=stored
 -- Expectation (precedence): b is NOT replicated because column list excludes it, so subscriber b stays NULL.
 -- --------------------------
-
 \c - - - :worker_1_port
 SET search_path TO pg18_publication;
-
 DROP PUBLICATION IF EXISTS pub_gen_repl_b;
+NOTICE:  publication "pub_gen_repl_b" does not exist, skipping
 DROP TABLE IF EXISTS gen_pub_repl_b;
-
+NOTICE:  table "gen_pub_repl_b" does not exist, skipping
 CREATE TABLE gen_pub_repl_b (
     id int PRIMARY KEY,
     a  int,
     b  int GENERATED ALWAYS AS (a * 10) STORED
 );
-
 INSERT INTO gen_pub_repl_b (id, a) VALUES (1, 2), (2, 7);
-
 SET citus.enable_ddl_propagation TO off;
 CREATE PUBLICATION pub_gen_repl_b
     FOR TABLE gen_pub_repl_b (id, a)
     WITH (publish = 'insert, update', publish_generated_columns = stored);
 RESET citus.enable_ddl_propagation;
-
 \c - - - :worker_2_port
 SET search_path TO pg18_publication;
-
 DROP SUBSCRIPTION IF EXISTS sub_gen_repl_b;
+NOTICE:  subscription "sub_gen_repl_b" does not exist, skipping
 DROP TABLE IF EXISTS gen_pub_repl_b;
-
+NOTICE:  table "gen_pub_repl_b" does not exist, skipping
 CREATE TABLE gen_pub_repl_b (
     id int PRIMARY KEY,
     a  int,
@@ -947,33 +1424,55 @@ CREATE SUBSCRIPTION sub_gen_repl_b
     CONNECTION :conninfo_w1
     PUBLICATION pub_gen_repl_b
     WITH (copy_data = true);
-
+NOTICE:  created replication slot "sub_gen_repl_b" on publisher
 SELECT wait_for_expected_rowcount_at_table('gen_pub_repl_b', 2);
+ wait_for_expected_rowcount_at_table
+---------------------------------------------------------------------
+
+(1 row)
+
 SELECT * FROM gen_pub_repl_b ORDER BY id;  -- expect b is NULL
+ id | a | b
+---------------------------------------------------------------------
+  1 | 2 |
+  2 | 7 |
+(2 rows)
 
 \c - - - :worker_1_port
 SET search_path TO pg18_publication;
-
 INSERT INTO gen_pub_repl_b (id, a) VALUES (3, 9);
 UPDATE gen_pub_repl_b SET a = 5 WHERE id = 1;
-
 \c - - - :worker_2_port
 SET search_path TO pg18_publication;
-
 SELECT wait_for_expected_rowcount_at_table('gen_pub_repl_b', 3);
+ wait_for_expected_rowcount_at_table
+---------------------------------------------------------------------
+
+(1 row)
+
 SELECT wait_for_expected_rowcount_at_query(
   $$SELECT COUNT(*) FROM gen_pub_repl_b WHERE id=1 AND a=5 AND b IS NULL$$, 1);
+ wait_for_expected_rowcount_at_query
+---------------------------------------------------------------------
+
+(1 row)
+
 SELECT * FROM gen_pub_repl_b ORDER BY id;
+ id | a | b
+---------------------------------------------------------------------
+  1 | 5 |
+  2 | 7 |
+  3 | 9 |
+(3 rows)
 
 -- Cleanup B
 DROP SUBSCRIPTION sub_gen_repl_b;
+NOTICE:  dropped replication slot "sub_gen_repl_b" on publisher
 DROP TABLE gen_pub_repl_b;
-
 \c - - - :worker_1_port
 SET search_path TO pg18_publication;
 DROP PUBLICATION pub_gen_repl_b;
 DROP TABLE gen_pub_repl_b;
-
 \c - - - :master_port
 SET search_path TO pg18_publication;
 SET client_min_messages TO ERROR;
@@ -981,7 +1480,6 @@ DROP SCHEMA pg18_publication CASCADE;
 RESET client_min_messages;
 SET search_path TO pg18_nn;
 -- END: PG18: verify publish_generated_columns is preserved for distributed tables
-
 -- PG18 Feature: FOREIGN KEY constraints can be specified as NOT ENFORCED
 -- PG18 commit: https://github.com/postgres/postgres/commit/eec0040c4
 CREATE TABLE customers(
@@ -989,10 +1487,12 @@ CREATE TABLE customers(
    customer_name VARCHAR(255) NOT NULL,
    PRIMARY KEY(customer_id)
 );
-
 SET citus.shard_replication_factor TO 1;
-
 SELECT create_distributed_table('customers', 'customer_id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
 
 CREATE TABLE contacts(
    contact_id INT GENERATED ALWAYS AS IDENTITY,
@@ -1005,185 +1505,269 @@ CREATE TABLE contacts(
 	  REFERENCES customers(customer_id)
 	  ON DELETE CASCADE NOT ENFORCED
 );
-
 -- The foreign key constraint is propagated to worker nodes.
 SELECT create_distributed_table('contacts', 'customer_id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
 
 SELECT pg_get_constraintdef(oid, true) AS "Definition" FROM  pg_constraint
 WHERE conrelid = 'contacts'::regclass AND conname = 'fk_customer';
+                                         Definition
+---------------------------------------------------------------------
+ FOREIGN KEY (customer_id) REFERENCES customers(customer_id) ON DELETE CASCADE NOT ENFORCED
+(1 row)
 
 INSERT INTO customers(customer_name)
 VALUES('BlueBird Inc'),
       ('Dolphin LLC');
-
 INSERT INTO contacts(customer_id, contact_name, phone, email)
 VALUES(1,'John Doe','(408)-111-1234','john.doe@example.com'),
       (1,'Jane Doe','(408)-111-1235','jane.doe@example.com'),
       (2,'David Wright','(408)-222-1234','david.wright@example.com');
-
 DELETE FROM customers WHERE customer_name = 'Dolphin LLC';
-
 -- After deleting 'Dolphin LLC' from customers, the corresponding contact
 -- 'David Wright' is not deleted from contacts due to the NOT ENFORCED.
 SELECT * FROM contacts ORDER BY contact_id;
+ contact_id | customer_id | contact_name |     phone      |          email
+---------------------------------------------------------------------
+          1 |           1 | John Doe     | (408)-111-1234 | john.doe@example.com
+          2 |           1 | Jane Doe     | (408)-111-1235 | jane.doe@example.com
+          3 |           2 | David Wright | (408)-222-1234 | david.wright@example.com
+(3 rows)
 
 -- Test that ALTER TABLE .. ADD CONSTRAINT .. FOREIGN KEY .. NOT ENFORCED
 -- is propagated to worker nodes. First drop the foreign key:
 ALTER TABLE contacts DROP CONSTRAINT fk_customer;
-
 SELECT pg_get_constraintdef(oid, true) AS "Definition" FROM  pg_constraint
 WHERE conrelid = 'contacts'::regclass AND conname = 'fk_customer';
+ Definition
+---------------------------------------------------------------------
+(0 rows)
 
 -- Now add the foreign key constraint back with NOT ENFORCED.
 ALTER TABLE contacts ADD CONSTRAINT fk_customer
      FOREIGN KEY(customer_id)
      REFERENCES customers(customer_id)
      ON DELETE CASCADE NOT ENFORCED;
-
 -- The foreign key is propagated to worker nodes.
 SELECT pg_get_constraintdef(oid, true) AS "Definition" FROM  pg_constraint
 WHERE conrelid = 'contacts'::regclass AND conname = 'fk_customer';
+                                         Definition
+---------------------------------------------------------------------
+ FOREIGN KEY (customer_id) REFERENCES customers(customer_id) ON DELETE CASCADE NOT ENFORCED
+(1 row)
 
 DELETE FROM customers WHERE customer_name = 'BlueBird Inc';
-
 -- The customers table is now empty but the contacts table still has
 -- the contacts due to the NOT ENFORCED foreign key.
 SELECT * FROM customers ORDER BY customer_id;
+ customer_id | customer_name
+---------------------------------------------------------------------
+(0 rows)
+
 SELECT * FROM contacts ORDER BY contact_id;
+ contact_id | customer_id | contact_name |     phone      |          email
+---------------------------------------------------------------------
+          1 |           1 | John Doe     | (408)-111-1234 | john.doe@example.com
+          2 |           1 | Jane Doe     | (408)-111-1235 | jane.doe@example.com
+          3 |           2 | David Wright | (408)-222-1234 | david.wright@example.com
+(3 rows)
 
 -- ALTER TABLE .. ALTER CONSTRAINT is not supported in Citus,
 -- so the following command should fail
 ALTER TABLE contacts ALTER CONSTRAINT fk_customer ENFORCED;
-
+ERROR:  alter table command is currently unsupported
+DETAIL:  Only ADD|DROP COLUMN, SET|DROP NOT NULL, SET|DROP DEFAULT, ADD|DROP|VALIDATE CONSTRAINT, SET (), RESET (), ENABLE|DISABLE|NO FORCE|FORCE ROW LEVEL SECURITY, ATTACH|DETACH PARTITION and TYPE subcommands are supported.
 -- PG18 Feature: ENFORCED / NOT ENFORCED check constraints
 -- PG18 commit: https://github.com/postgres/postgres/commit/ca87c415e
-
 -- In Citus, CHECK constraints are propagated on promoting a postgres table
 -- to a citus table, on adding a new CHECK constraint to a citus table, and
 -- on adding a node to a citus cluster. Postgres does not support altering a
 -- check constraint's enforcement status, so Citus does not either.
-
 CREATE TABLE NE_CHECK_TBL (x int, y int,
 	CONSTRAINT CHECK_X CHECK (x > 3) NOT ENFORCED,
   CONSTRAINT CHECK_Y CHECK (y < 20) ENFORCED
 );
-
 SET citus.next_shard_id TO 4754044;
 SELECT create_distributed_table('ne_check_tbl', 'x');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
 
 -- CHECK_X is NOT ENFORCED, so these inserts should succeed
 INSERT INTO NE_CHECK_TBL (x) VALUES (5), (4), (3), (2), (6), (1);
 SELECT x FROM NE_CHECK_TBL ORDER BY x;
+ x
+---------------------------------------------------------------------
+ 1
+ 2
+ 3
+ 4
+ 5
+ 6
+(6 rows)
 
 -- CHECK_Y is ENFORCED, so this insert should fail
 INSERT INTO NE_CHECK_TBL (x, y) VALUES (1, 15), (2, 25), (3, 10), (4, 30);
-
+ERROR:  new row for relation "ne_check_tbl_4754045" violates check constraint "check_y"
+DETAIL:  Failing row contains (4, 30).
+CONTEXT:  while executing command on localhost:xxxxx
 -- Test adding new constraints with enforcement status
 ALTER TABLE NE_CHECK_TBL
   ADD CONSTRAINT CHECK_Y2 CHECK (y > 10) NOT ENFORCED;
-
 -- CHECK_Y2 is NOT ENFORCED, so these inserts should succeed
 INSERT INTO NE_CHECK_TBL (x, y) VALUES (1, 8), (2, 9), (3, 10), (4, 11);
 SELECT x, y FROM NE_CHECK_TBL ORDER BY x, y;
+ x | y
+---------------------------------------------------------------------
+ 1 |  8
+ 1 |
+ 2 |  9
+ 2 |
+ 3 | 10
+ 3 |
+ 4 | 11
+ 4 |
+ 5 |
+ 6 |
+(10 rows)
 
 ALTER TABLE NE_CHECK_TBL
   ADD CONSTRAINT CHECK_X2 CHECK (x < 10) ENFORCED;
-
 -- CHECK_X2 is ENFORCED, so these inserts should fail
 INSERT INTO NE_CHECK_TBL (x) VALUES (5), (15), (8), (12);
-
+ERROR:  new row for relation "ne_check_tbl_4754044" violates check constraint "check_x2_4754044"
+DETAIL:  Failing row contains (15, null).
+CONTEXT:  while executing command on localhost:xxxxx
 -- PG18 Feature: dropping of constraints ONLY on partitioned tables
 -- PG18 commit: https://github.com/postgres/postgres/commit/4dea33ce7
-
 -- Here we verify that dropping constraints ONLY on partitioned tables
 -- works correctly in Citus. This is done by repeating the tests of the
 -- PG commit (4dea33ce7) on a table that is a distributed table in Citus,
 -- in addition to a Postgres partitioned table.
-
 CREATE TABLE partitioned_table (
 	a int,
 	b char(3)
 ) PARTITION BY LIST (a);
-
 SELECT create_distributed_table('partitioned_table', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
 
 -- check that violating rows are correctly reported
 CREATE TABLE part_2 (LIKE partitioned_table);
 INSERT INTO part_2 VALUES (3, 'aaa');
 ALTER TABLE partitioned_table ATTACH PARTITION part_2 FOR VALUES IN (2);
-
+NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$pg18_nn.part_2$$)
+ERROR:  partition constraint of relation "part_2" is violated by some row
 -- should be ok after deleting the bad row
 DELETE FROM part_2;
 ALTER TABLE partitioned_table ATTACH PARTITION part_2 FOR VALUES IN (2);
-
 -- PG18's "cannot add NOT NULL or check constraints to *only* the parent, when
 -- partitions exist" applies to Citus distributed tables as well.
-
 ALTER TABLE ONLY partitioned_table ALTER b SET NOT NULL;
+ERROR:  constraint must be added to child tables too
+HINT:  Do not specify the ONLY keyword.
 ALTER TABLE ONLY partitioned_table ADD CONSTRAINT check_b CHECK (b <> 'zzz');
-
+ERROR:  constraint must be added to child tables too
 -- Dropping constraints from parent should be ok
 ALTER TABLE partitioned_table ALTER b SET NOT NULL;
 ALTER TABLE ONLY partitioned_table ALTER b DROP NOT NULL;
 ALTER TABLE partitioned_table ADD CONSTRAINT check_b CHECK (b <> 'zzz');
 ALTER TABLE ONLY partitioned_table DROP CONSTRAINT check_b;
-
 -- ... and the partitions still have the NOT NULL constraint:
 select relname, attname, attnotnull
 from pg_class inner join pg_attribute on (oid=attrelid)
 where relname = 'part_2' and attname = 'b' ;
+ relname | attname | attnotnull
+---------------------------------------------------------------------
+ part_2  | b       | t
+(1 row)
+
 -- ... and the check_b constraint:
 select relname, conname, pg_get_expr(conbin, conrelid, true)
 from pg_class inner join pg_constraint on (pg_class.oid=conrelid)
 where relname = 'part_2' and conname = 'check_b' ;
+ relname | conname |    pg_get_expr
+---------------------------------------------------------------------
+ part_2  | check_b | b <> 'zzz'::bpchar
+(1 row)
 
 -- PG18 Feature: partitioned tables can have NOT VALID foreign keys
 -- PG18 commit: https://github.com/postgres/postgres/commit/b663b9436
-
 -- As with dropping constraints only on the partitioned tables, for
 -- NOT VALID foreign keys, we verify that foreign key declarations
 -- that use NOT VALID work correctly in Citus by repeating the tests
 -- of the PG commit (b663b9436) on a table that is a distributed
 -- table in Citus, in addition to a Postgres partitioned table.
-
 CREATE TABLE fk_notpartitioned_pk (a int, b int, PRIMARY KEY (a, b), c int);
 CREATE TABLE fk_partitioned_fk (b int, a int) PARTITION BY RANGE (a, b);
-
 SELECT create_reference_table('fk_notpartitioned_pk');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
 SELECT create_distributed_table('fk_partitioned_fk', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
 
 ALTER TABLE fk_partitioned_fk ADD FOREIGN KEY (a, b) REFERENCES fk_notpartitioned_pk NOT VALID;
-
 -- Attaching a child table with the same valid foreign key constraint.
 CREATE TABLE fk_partitioned_fk_1 (a int, b int);
 ALTER TABLE fk_partitioned_fk_1 ADD FOREIGN KEY (a, b) REFERENCES fk_notpartitioned_pk;
 ALTER TABLE fk_partitioned_fk ATTACH PARTITION fk_partitioned_fk_1 FOR VALUES FROM (0,0) TO (1000,1000);
-
 -- Child constraint will remain valid.
 SELECT conname, convalidated, conrelid::regclass FROM pg_constraint
 WHERE conrelid::regclass::text like 'fk_partitioned_fk%' ORDER BY oid;
+           conname            | convalidated |      conrelid
+---------------------------------------------------------------------
+ fk_partitioned_fk_a_b_fkey   | f            | fk_partitioned_fk
+ fk_partitioned_fk_1_a_b_fkey | t            | fk_partitioned_fk_1
+(2 rows)
 
 -- Validate the constraint
 ALTER TABLE fk_partitioned_fk VALIDATE CONSTRAINT fk_partitioned_fk_a_b_fkey;
-
 -- All constraints are now valid.
 SELECT conname, convalidated, conrelid::regclass FROM pg_constraint
 WHERE conrelid::regclass::text like 'fk_partitioned_fk%' ORDER BY oid;
+           conname            | convalidated |      conrelid
+---------------------------------------------------------------------
+ fk_partitioned_fk_a_b_fkey   | t            | fk_partitioned_fk
+ fk_partitioned_fk_1_a_b_fkey | t            | fk_partitioned_fk_1
+(2 rows)
 
 -- Attaching a child with a NOT VALID constraint.
 CREATE TABLE fk_partitioned_fk_2 (a int, b int);
 INSERT INTO fk_partitioned_fk_2 VALUES(1000, 1000); -- doesn't exist in referenced table
 ALTER TABLE fk_partitioned_fk_2 ADD FOREIGN KEY (a, b) REFERENCES fk_notpartitioned_pk NOT VALID;
-
 -- It will fail because the attach operation implicitly validates the data.
 ALTER TABLE fk_partitioned_fk ATTACH PARTITION fk_partitioned_fk_2 FOR VALUES FROM (1000,1000) TO (2000,2000);
-
+NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$pg18_nn.fk_partitioned_fk_2$$)
+ERROR:  insert or update on table "fk_partitioned_fk_2_4754072" violates foreign key constraint "fk_partitioned_fk_2_a_b_fkey_4754072"
+DETAIL:  Key (a, b)=(1000, 1000) is not present in table "fk_notpartitioned_pk_4754060".
+CONTEXT:  while executing command on localhost:xxxxx
 -- Remove the invalid data and try again.
 TRUNCATE fk_partitioned_fk_2;
 ALTER TABLE fk_partitioned_fk ATTACH PARTITION fk_partitioned_fk_2 FOR VALUES FROM (1000,1000) TO (2000,2000);
-
 -- The child constraint will also be valid.
 SELECT conname, convalidated FROM pg_constraint WHERE conrelid = 'fk_partitioned_fk_2'::regclass;
+           conname            | convalidated
+---------------------------------------------------------------------
+ fk_partitioned_fk_2_a_b_fkey | t
+(1 row)
 
 -- Test case where the child constraint is invalid, the grandchild constraint
 -- is valid, and the validation for the grandchild should be skipped when a
@@ -1191,46 +1775,77 @@ SELECT conname, convalidated FROM pg_constraint WHERE conrelid = 'fk_partitioned
 CREATE TABLE fk_partitioned_fk_3 (a int, b int) PARTITION BY RANGE (a, b);
 ALTER TABLE fk_partitioned_fk_3 ADD FOREIGN KEY (a, b) REFERENCES fk_notpartitioned_pk NOT VALID;
 SELECT create_distributed_table('fk_partitioned_fk_3', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
 
 CREATE TABLE fk_partitioned_fk_3_1 (a int, b int);
 ALTER TABLE fk_partitioned_fk_3_1 ADD FOREIGN KEY (a, b) REFERENCES fk_notpartitioned_pk;
 SELECT create_distributed_table('fk_partitioned_fk_3_1', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
 
 ALTER TABLE fk_partitioned_fk_3 ATTACH PARTITION fk_partitioned_fk_3_1 FOR VALUES FROM (2000,2000) TO (3000,3000);
-
 -- Fails because Citus does not support multi-level (grandchild) partitions
 ALTER TABLE fk_partitioned_fk ATTACH PARTITION fk_partitioned_fk_3 FOR VALUES FROM (2000,2000) TO (3000,3000);
-
+ERROR:  Citus doesn't support multi-level partitioned tables
+DETAIL:  Relation "fk_partitioned_fk_3" is partitioned table itself and it is also partition of relation "fk_partitioned_fk".
 -- All constraints are now valid, except for fk_partitioned_fk_3
 -- because the attach failed because of Citus not yet supporting
 -- multi-level partitions.
 SELECT conname, convalidated, conrelid::regclass FROM pg_constraint
 WHERE conrelid::regclass::text like 'fk_partitioned_fk%' ORDER BY oid;
+            conname             | convalidated |       conrelid
+---------------------------------------------------------------------
+ fk_partitioned_fk_a_b_fkey     | t            | fk_partitioned_fk
+ fk_partitioned_fk_1_a_b_fkey   | t            | fk_partitioned_fk_1
+ fk_partitioned_fk_2_a_b_fkey   | t            | fk_partitioned_fk_2
+ fk_partitioned_fk_3_a_b_fkey   | f            | fk_partitioned_fk_3
+ fk_partitioned_fk_3_1_a_b_fkey | t            | fk_partitioned_fk_3_1
+(5 rows)
 
 DROP TABLE fk_partitioned_fk, fk_notpartitioned_pk CASCADE;
-
+NOTICE:  drop cascades to constraint fk_partitioned_fk_3_a_b_fkey on table fk_partitioned_fk_3
 -- NOT VALID foreign key on a non-partitioned table referencing a partitioned table
 CREATE TABLE fk_partitioned_pk (a int, b int, PRIMARY KEY (a, b)) PARTITION BY RANGE (a, b);
 SELECT create_distributed_table('fk_partitioned_pk', 'a');
-CREATE TABLE fk_partitioned_pk_1 PARTITION OF fk_partitioned_pk FOR VALUES FROM (0,0) TO (1000,1000);
+ create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
+
+CREATE TABLE fk_partitioned_pk_1 PARTITION OF fk_partitioned_pk FOR VALUES FROM (0,0) TO (1000,1000);
 CREATE TABLE fk_notpartitioned_fk (b int, a int);
 SELECT create_distributed_table('fk_notpartitioned_fk', 'a');
-ALTER TABLE fk_notpartitioned_fk ADD FOREIGN KEY (a, b) REFERENCES fk_partitioned_pk NOT VALID;
+ create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
+
+ALTER TABLE fk_notpartitioned_fk ADD FOREIGN KEY (a, b) REFERENCES fk_partitioned_pk NOT VALID;
 -- Constraint will be invalid.
 SELECT conname, convalidated FROM pg_constraint WHERE conrelid = 'fk_notpartitioned_fk'::regclass;
+             conname             | convalidated
+---------------------------------------------------------------------
+ fk_notpartitioned_fk_a_b_fkey   | f
+ fk_notpartitioned_fk_a_b_fkey_1 | f
+(2 rows)
 
 ALTER TABLE fk_notpartitioned_fk VALIDATE CONSTRAINT fk_notpartitioned_fk_a_b_fkey;
-
 -- All constraints are now valid.
 SELECT conname, convalidated FROM pg_constraint WHERE conrelid = 'fk_notpartitioned_fk'::regclass;
+             conname             | convalidated
+---------------------------------------------------------------------
+ fk_notpartitioned_fk_a_b_fkey   | t
+ fk_notpartitioned_fk_a_b_fkey_1 | t
+(2 rows)
 
 DROP TABLE fk_notpartitioned_fk, fk_partitioned_pk;
-
 -- PG18 Feature: Generated Virtual Columns
 -- PG18 commit: https://github.com/postgres/postgres/commit/83ea6c540
-
 -- Verify that generated virtual columns are supported on distributed tables.
 CREATE TABLE v_reading (
     celsius DECIMAL(5,2),
@@ -1238,19 +1853,38 @@ CREATE TABLE v_reading (
     created_at TIMESTAMPTZ DEFAULT now(),
     device_id INT
 );
-
 -- Cannot distribute on a generated column (#4616) applies
 -- to VIRTUAL columns.
 SELECT create_distributed_table('v_reading', 'farenheit');
-
+ERROR:  cannot distribute relation: v_reading
+DETAIL:  Distribution column must not use GENERATED ALWAYS AS (...) VIRTUAL.
 SELECT create_distributed_table('v_reading', 'device_id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
 
 INSERT INTO v_reading (celsius, device_id) VALUES (0, 1), (100, 1), (37.5, 2), (25, 2), (-40, 3);
-
 SELECT device_id, celsius, farenheit FROM v_reading ORDER BY device_id;
+ device_id | celsius | farenheit
+---------------------------------------------------------------------
+         1 |    0.00 |     32.00
+         1 |  100.00 |    212.00
+         2 |   37.50 |     99.50
+         2 |   25.00 |     77.00
+         3 |  -40.00 |    -40.00
+(5 rows)
 
 ALTER TABLE v_reading ADD COLUMN kelvin DECIMAL(6, 2) GENERATED ALWAYS AS (celsius +  273.15) VIRTUAL;
 SELECT device_id, celsius, kelvin FROM v_reading ORDER BY device_id, celsius;
+ device_id | celsius | kelvin
+---------------------------------------------------------------------
+         1 |    0.00 | 273.15
+         1 |  100.00 | 373.15
+         2 |   25.00 | 298.15
+         2 |   37.50 | 310.65
+         3 |  -40.00 | 233.15
+(5 rows)
 
 -- Show all columns that are generated
   SELECT s.relname, a.attname, a.attgenerated
@@ -1258,6 +1892,11 @@ SELECT device_id, celsius, kelvin FROM v_reading ORDER BY device_id, celsius;
   JOIN pg_attribute a ON a.attrelid=s.oid
   WHERE s.relname LIKE 'v_reading%' and attgenerated::int != 0
   ORDER BY 1,2;
+  relname  |  attname  | attgenerated
+---------------------------------------------------------------------
+ v_reading | farenheit | v
+ v_reading | kelvin    | v
+(2 rows)
 
 -- Generated columns are virtual by default - repeat the test without VIRTUAL keyword
 CREATE TABLE d_reading (
@@ -1266,17 +1905,36 @@ CREATE TABLE d_reading (
     created_at TIMESTAMPTZ DEFAULT now(),
     device_id INT
 );
-
 SELECT create_distributed_table('d_reading', 'farenheit');
-
+ERROR:  cannot distribute relation: d_reading
+DETAIL:  Distribution column must not use GENERATED ALWAYS AS (...) VIRTUAL.
 SELECT create_distributed_table('d_reading', 'device_id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
 
 INSERT INTO d_reading (celsius, device_id) VALUES (0, 1), (100, 1), (37.5, 2), (25, 2), (-40, 3);
-
 SELECT device_id, celsius, farenheit FROM d_reading ORDER BY device_id;
+ device_id | celsius | farenheit
+---------------------------------------------------------------------
+         1 |    0.00 |     32.00
+         1 |  100.00 |    212.00
+         2 |   37.50 |     99.50
+         2 |   25.00 |     77.00
+         3 |  -40.00 |    -40.00
+(5 rows)
 
 ALTER TABLE d_reading ADD COLUMN kelvin DECIMAL(6, 2) GENERATED ALWAYS AS (celsius +  273.15) VIRTUAL;
 SELECT device_id, celsius, kelvin FROM d_reading ORDER BY device_id, celsius;
+ device_id | celsius | kelvin
+---------------------------------------------------------------------
+         1 |    0.00 | 273.15
+         1 |  100.00 | 373.15
+         2 |   25.00 | 298.15
+         2 |   37.50 | 310.65
+         3 |  -40.00 | 233.15
+(5 rows)
 
 -- Show all columns that are generated
   SELECT s.relname, a.attname, a.attgenerated
@@ -1284,45 +1942,39 @@ SELECT device_id, celsius, kelvin FROM d_reading ORDER BY device_id, celsius;
   JOIN pg_attribute a ON a.attrelid=s.oid
   WHERE s.relname LIKE 'd_reading%' and attgenerated::int != 0
   ORDER BY 1,2;
+  relname  |  attname  | attgenerated
+---------------------------------------------------------------------
+ d_reading | farenheit | v
+ d_reading | kelvin    | v
+(2 rows)
 
 -- COPY implementation needs to handle GENERATED ALWAYS AS (...) VIRTUAL columns.
 \COPY d_reading FROM STDIN WITH DELIMITER ','
-3.00,2025-11-24 09:46:17.390872+00,1
-6.00,2025-11-24 09:46:17.390872+00,5
-2.00,2025-11-24 09:46:17.390872+00,1
-22.00,2025-11-24 09:46:17.390872+00,5
-15.00,2025-11-24 09:46:17.390872+00,1
-13.00,2025-11-24 09:46:17.390872+00,5
-27.00,2025-11-24 09:46:17.390872+00,1
-14.00,2025-11-24 09:46:17.390872+00,5
-2.00,2025-11-24 09:46:17.390872+00,1
-23.00,2025-11-24 09:46:17.390872+00,5
-22.00,2025-11-24 09:46:17.390872+00,1
-3.00,2025-11-24 09:46:17.390872+00,5
-2.00,2025-11-24 09:46:17.390872+00,1
-7.00,2025-11-24 09:46:17.390872+00,5
-6.00,2025-11-24 09:46:17.390872+00,1
-21.00,2025-11-24 09:46:17.390872+00,5
-30.00,2025-11-24 09:46:17.390872+00,1
-1.00,2025-11-24 09:46:17.390872+00,5
-31.00,2025-11-24 09:46:17.390872+00,1
-22.00,2025-11-24 09:46:17.390872+00,5
-\.
-
 SELECT device_id, count(device_id) as count, round(avg(celsius), 2) as avg, min(farenheit), max(farenheit)
 FROM d_reading
 GROUP BY device_id
 ORDER BY count DESC;
+ device_id | count |  avg   |  min   |  max
+---------------------------------------------------------------------
+         1 |    12 |  20.00 |  32.00 | 212.00
+         5 |    10 |  13.20 |  33.80 |  73.40
+         2 |     2 |  31.25 |  77.00 |  99.50
+         3 |     1 | -40.00 | -40.00 | -40.00
+(4 rows)
 
 -- Test GROUP BY on tables with generated virtual columns - this requires
 -- special case handling in distributed planning. Test it out on some
 -- some queries involving joins and set operations.
-
 SELECT device_id, max(kelvin) as Kel
 FROM v_reading
 WHERE (device_id, celsius) NOT IN (SELECT device_id, max(celsius) FROM v_reading GROUP BY device_id)
 GROUP BY device_id
 ORDER BY device_id ASC;
+ device_id |  kel
+---------------------------------------------------------------------
+         1 | 273.15
+         2 | 298.15
+(2 rows)
 
 SELECT device_id, round(AVG( (d_farenheit + v_farenheit) / 2), 2) as Avg_Far
 FROM (SELECT *
@@ -1336,6 +1988,13 @@ FROM (SELECT *
     ) AS finalq
 GROUP BY device_id
 ORDER BY device_id ASC;
+ device_id | avg_far
+---------------------------------------------------------------------
+         1 |  140.00
+         2 |   93.88
+         3 |  -40.00
+         5 |   64.58
+(4 rows)
 
 SELECT device_id, MAX(farenheit) as farenheit
 FROM
@@ -1347,6 +2006,13 @@ UNION ALL (SELECT device_id, MAX(farenheit) AS farenheit
         GROUP BY device_id) ) AS unioned
 GROUP BY device_id
 ORDER BY device_id ASC;
+ device_id | farenheit
+---------------------------------------------------------------------
+         1 |    212.00
+         2 |     99.50
+         3 |    -40.00
+         5 |     73.40
+(4 rows)
 
 SELECT device_id, MAX(farenheit) as farenheit
 FROM
@@ -1358,6 +2024,10 @@ INTERSECT (SELECT device_id, MAX(farenheit) AS farenheit
         GROUP BY device_id) ) AS intersected
 GROUP BY device_id
 ORDER BY device_id ASC;
+ device_id | farenheit
+---------------------------------------------------------------------
+         3 |    -40.00
+(1 row)
 
 SELECT device_id, MAX(farenheit) as farenheit
 FROM
@@ -1369,42 +2039,94 @@ EXCEPT (SELECT device_id, MAX(farenheit) AS farenheit
         GROUP BY device_id) ) AS excepted
 GROUP BY device_id
 ORDER BY device_id ASC;
+ device_id | farenheit
+---------------------------------------------------------------------
+         1 |     68.00
+         2 |     88.25
+         5 |     55.76
+(3 rows)
 
 -- Ensure that UDFs such as alter_distributed_table, undistribute_table
 -- and add_local_table_to_metadata work fine with VIRTUAL columns. For
 -- this, PR #4616 changes are modified to handle VIRTUAL columns in
 -- addition to STORED columns.
-
 CREATE TABLE generated_stored_dist (
   col_1 int,
   "col\'_2" text,
   col_3 text generated always as (UPPER("col\'_2")) virtual
 );
-
 SELECT create_distributed_table ('generated_stored_dist', 'col_1');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
 
 INSERT INTO generated_stored_dist VALUES (1, 'text_1'), (2, 'text_2');
 SELECT * FROM generated_stored_dist ORDER BY 1,2,3;
+ col_1 | col\'_2 | col_3
+---------------------------------------------------------------------
+     1 | text_1  | TEXT_1
+     2 | text_2  | TEXT_2
+(2 rows)
 
 INSERT INTO generated_stored_dist VALUES (1, 'text_1'), (2, 'text_2');
 SELECT alter_distributed_table('generated_stored_dist', shard_count := 5, cascade_to_colocated := false);
+NOTICE:  creating a new table for pg18_nn.generated_stored_dist
+NOTICE:  moving the data of pg18_nn.generated_stored_dist
+NOTICE:  dropping the old pg18_nn.generated_stored_dist
+NOTICE:  renaming the new table to pg18_nn.generated_stored_dist
+ alter_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
 SELECT * FROM generated_stored_dist ORDER BY 1,2,3;
+ col_1 | col\'_2 | col_3
+---------------------------------------------------------------------
+     1 | text_1  | TEXT_1
+     1 | text_1  | TEXT_1
+     2 | text_2  | TEXT_2
+     2 | text_2  | TEXT_2
+(4 rows)
 
 CREATE TABLE generated_stored_local (
   col_1 int,
   "col\'_2" text,
   col_3 text generated always as (UPPER("col\'_2")) stored
 );
-
 SELECT citus_add_local_table_to_metadata('generated_stored_local');
+ citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
+(1 row)
 
 INSERT INTO generated_stored_local VALUES (1, 'text_1'), (2, 'text_2');
 SELECT * FROM generated_stored_local ORDER BY 1,2,3;
+ col_1 | col\'_2 | col_3
+---------------------------------------------------------------------
+     1 | text_1  | TEXT_1
+     2 | text_2  | TEXT_2
+(2 rows)
 
 SELECT create_distributed_table ('generated_stored_local', 'col_1');
+NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$pg18_nn.generated_stored_local$$)
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
 
 INSERT INTO generated_stored_local VALUES (1, 'text_1'), (2, 'text_2');
 SELECT * FROM generated_stored_local ORDER BY 1,2,3;
+ col_1 | col\'_2 | col_3
+---------------------------------------------------------------------
+     1 | text_1  | TEXT_1
+     1 | text_1  | TEXT_1
+     2 | text_2  | TEXT_2
+     2 | text_2  | TEXT_2
+(4 rows)
 
 CREATE TABLE generated_stored_ref (
   col_1 int,
@@ -1413,34 +2135,79 @@ CREATE TABLE generated_stored_ref (
   col_4 int,
   col_5 int generated always as (col_4*2-col_1) virtual
 );
-
 SELECT create_reference_table ('generated_stored_ref');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
 
 INSERT INTO generated_stored_ref (col_1, col_4) VALUES (1,2), (11,12);
 INSERT INTO generated_stored_ref (col_1, col_2, col_4) VALUES (100,101,102), (200,201,202);
-
 SELECT * FROM generated_stored_ref ORDER BY 1,2,3,4,5;
+ col_1 | col_2 | col_3 | col_4 | col_5
+---------------------------------------------------------------------
+     1 |       |       |     2 |     3
+    11 |       |       |    12 |    13
+   100 |   101 |   201 |   102 |   104
+   200 |   201 |   401 |   202 |   204
+(4 rows)
 
 BEGIN;
   SELECT undistribute_table('generated_stored_ref');
+NOTICE:  creating a new table for pg18_nn.generated_stored_ref
+NOTICE:  moving the data of pg18_nn.generated_stored_ref
+NOTICE:  dropping the old pg18_nn.generated_stored_ref
+NOTICE:  renaming the new table to pg18_nn.generated_stored_ref
+ undistribute_table
+---------------------------------------------------------------------
+
+(1 row)
+
   INSERT INTO generated_stored_ref (col_1, col_4) VALUES (11,12), (21,22);
   INSERT INTO generated_stored_ref (col_1, col_2, col_4) VALUES (200,201,202), (300,301,302);
   SELECT * FROM generated_stored_ref ORDER BY 1,2,3,4,5;
-ROLLBACK;
+ col_1 | col_2 | col_3 | col_4 | col_5
+---------------------------------------------------------------------
+     1 |       |       |     2 |     3
+    11 |       |       |    12 |    13
+    11 |       |       |    12 |    13
+    21 |       |       |    22 |    23
+   100 |   101 |   201 |   102 |   104
+   200 |   201 |   401 |   202 |   204
+   200 |   201 |   401 |   202 |   204
+   300 |   301 |   601 |   302 |   304
+(8 rows)
 
+ROLLBACK;
 BEGIN;
   -- drop some of the columns not having "generated always as virtual" expressions
   SET client_min_messages TO WARNING;
   ALTER TABLE generated_stored_ref DROP COLUMN col_1 CASCADE;
   RESET client_min_messages;
   ALTER TABLE generated_stored_ref DROP COLUMN col_4;
-
   -- show that undistribute_table works fine
   SELECT undistribute_table('generated_stored_ref');
+NOTICE:  creating a new table for pg18_nn.generated_stored_ref
+NOTICE:  moving the data of pg18_nn.generated_stored_ref
+NOTICE:  dropping the old pg18_nn.generated_stored_ref
+NOTICE:  renaming the new table to pg18_nn.generated_stored_ref
+ undistribute_table
+---------------------------------------------------------------------
+
+(1 row)
+
   INSERT INTO generated_stored_ref VALUES (5);
   SELECT * FROM generated_stored_REF ORDER BY 1;
-ROLLBACK;
+ col_2
+---------------------------------------------------------------------
+     5
+   101
+   201
 
+
+(5 rows)
+
+ROLLBACK;
 BEGIN;
   -- now drop all columns
   ALTER TABLE generated_stored_ref DROP COLUMN col_3;
@@ -1448,187 +2215,190 @@ BEGIN;
   ALTER TABLE generated_stored_ref DROP COLUMN col_1;
   ALTER TABLE generated_stored_ref DROP COLUMN col_2;
   ALTER TABLE generated_stored_ref DROP COLUMN col_4;
-
   -- show that undistribute_table works fine
   SELECT undistribute_table('generated_stored_ref');
+NOTICE:  creating a new table for pg18_nn.generated_stored_ref
+NOTICE:  moving the data of pg18_nn.generated_stored_ref
+NOTICE:  dropping the old pg18_nn.generated_stored_ref
+NOTICE:  renaming the new table to pg18_nn.generated_stored_ref
+ undistribute_table
+---------------------------------------------------------------------
+
+(1 row)
 
   SELECT * FROM generated_stored_ref;
-ROLLBACK;
+--
+(4 rows)
 
+ROLLBACK;
 -- PG18 Feature: VACUUM/ANALYZE support ONLY to limit processing to the parent.
 -- For Citus, ensure ONLY does not trigger shard propagation.
 -- PG18 commit: https://github.com/postgres/postgres/commit/62ddf7ee9
 CREATE SCHEMA pg18_vacuum_part;
 SET search_path TO pg18_vacuum_part;
-
 CREATE TABLE vac_analyze_only (a int);
 SELECT create_distributed_table('vac_analyze_only', 'a');
-INSERT INTO vac_analyze_only VALUES (1), (2), (3);
+ create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
+
+INSERT INTO vac_analyze_only VALUES (1), (2), (3);
 -- ANALYZE (no ONLY) should recurse into shard placements
 ANALYZE vac_analyze_only;
-
 \c - - - :worker_1_port
 SET search_path TO pg18_vacuum_part;
-
 SELECT coalesce(max(last_analyze), 'epoch'::timestamptz) AS analyze_before_only
 FROM pg_stat_user_tables
 WHERE schemaname = 'pg18_vacuum_part'
   AND relname LIKE 'vac_analyze_only_%'
 \gset
-
 \c - - - :master_port
 SET search_path TO pg18_vacuum_part;
-
 -- ANALYZE ONLY should not recurse into shard placements
 ANALYZE ONLY vac_analyze_only;
-
 \c - - - :worker_1_port
 SET search_path TO pg18_vacuum_part;
-
 SELECT max(last_analyze) = :'analyze_before_only'::timestamptz
        AS analyze_only_skipped
 FROM pg_stat_user_tables
 WHERE schemaname = 'pg18_vacuum_part'
   AND relname LIKE 'vac_analyze_only_%';
+ analyze_only_skipped
+---------------------------------------------------------------------
+ t
+(1 row)
 
 \c - - - :master_port
 SET search_path TO pg18_vacuum_part;
-
 -- VACUUM (no ONLY) should recurse into shard placements
 VACUUM vac_analyze_only;
-
 \c - - - :worker_1_port
 SET search_path TO pg18_vacuum_part;
-
 SELECT coalesce(max(last_vacuum), 'epoch'::timestamptz) AS vacuum_before_only
 FROM pg_stat_user_tables
 WHERE schemaname = 'pg18_vacuum_part'
   AND relname LIKE 'vac_analyze_only_%'
 \gset
-
 \c - - - :master_port
 SET search_path TO pg18_vacuum_part;
-
 -- VACUUM ONLY should not recurse into shard placements
 VACUUM ONLY vac_analyze_only;
-
 \c - - - :worker_1_port
 SET search_path TO pg18_vacuum_part;
-
 SELECT max(last_vacuum) = :'vacuum_before_only'::timestamptz
        AS vacuum_only_skipped
 FROM pg_stat_user_tables
 WHERE schemaname = 'pg18_vacuum_part'
   AND relname LIKE 'vac_analyze_only_%';
+ vacuum_only_skipped
+---------------------------------------------------------------------
+ t
+(1 row)
 
 \c - - - :master_port
 SET search_path TO pg18_vacuum_part;
-
 DROP SCHEMA pg18_vacuum_part CASCADE;
+NOTICE:  drop cascades to table vac_analyze_only
 SET search_path TO pg18_nn;
-
 -- END PG18 Feature: VACUUM/ANALYZE support ONLY to limit processing to the parent
-
 -- PG18 Feature: VACUUM/ANALYZE ONLY on a partitioned distributed table
 -- Ensure Citus does not recurse into shard placements when ONLY is used
 -- on the partitioned parent.
 -- PG18 commit: https://github.com/postgres/postgres/commit/62ddf7ee9
 CREATE SCHEMA pg18_vacuum_part_dist;
 SET search_path TO pg18_vacuum_part_dist;
-
 SET citus.shard_count = 2;
 SET citus.shard_replication_factor = 1;
-
 CREATE TABLE part_dist (id int, v int) PARTITION BY RANGE (id);
 CREATE TABLE part_dist_1 PARTITION OF part_dist FOR VALUES FROM (1) TO (100);
 CREATE TABLE part_dist_2 PARTITION OF part_dist FOR VALUES FROM (100) TO (200);
-
 SELECT create_distributed_table('part_dist', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
 
 INSERT INTO part_dist
 SELECT g, g FROM generate_series(1, 199) g;
-
 -- ANALYZE (no ONLY) should recurse into partitions and shard placements
 ANALYZE part_dist;
-
 \c - - - :worker_1_port
 SET search_path TO pg18_vacuum_part_dist;
-
 SELECT coalesce(max(last_analyze), 'epoch'::timestamptz) AS analyze_before_only
 FROM pg_stat_user_tables
 WHERE schemaname = 'pg18_vacuum_part_dist'
   AND relname LIKE 'part_dist_%'
 \gset
-
 \c - - - :master_port
 SET search_path TO pg18_vacuum_part_dist;
-
 -- ANALYZE ONLY should not recurse into shard placements
 ANALYZE ONLY part_dist;
-
 \c - - - :worker_1_port
 SET search_path TO pg18_vacuum_part_dist;
-
 SELECT max(last_analyze) = :'analyze_before_only'::timestamptz
        AS analyze_only_partitioned_skipped
 FROM pg_stat_user_tables
 WHERE schemaname = 'pg18_vacuum_part_dist'
   AND relname LIKE 'part_dist_%';
+ analyze_only_partitioned_skipped
+---------------------------------------------------------------------
+ t
+(1 row)
 
 \c - - - :master_port
 SET search_path TO pg18_vacuum_part_dist;
-
 -- VACUUM (no ONLY) should recurse into partitions and shard placements
 VACUUM part_dist;
-
 \c - - - :worker_1_port
 SET search_path TO pg18_vacuum_part_dist;
-
 SELECT coalesce(max(last_vacuum), 'epoch'::timestamptz) AS vacuum_before_only
 FROM pg_stat_user_tables
 WHERE schemaname = 'pg18_vacuum_part_dist'
   AND relname LIKE 'part_dist_%'
 \gset
-
 \c - - - :master_port
 SET search_path TO pg18_vacuum_part_dist;
-
 -- VACUUM ONLY parent: core warns and does no work; Citus must not
 -- propagate to shard placements.
 VACUUM ONLY part_dist;
-
+WARNING:  VACUUM ONLY of partitioned table "part_dist" has no effect
 \c - - - :worker_1_port
 SET search_path TO pg18_vacuum_part_dist;
-
 SELECT max(last_vacuum) = :'vacuum_before_only'::timestamptz
        AS vacuum_only_partitioned_skipped
 FROM pg_stat_user_tables
 WHERE schemaname = 'pg18_vacuum_part_dist'
   AND relname LIKE 'part_dist_%';
+ vacuum_only_partitioned_skipped
+---------------------------------------------------------------------
+ t
+(1 row)
 
 \c - - - :master_port
 SET search_path TO pg18_vacuum_part_dist;
-
 DROP SCHEMA pg18_vacuum_part_dist CASCADE;
+NOTICE:  drop cascades to table part_dist
 SET search_path TO pg18_nn;
-
 -- END PG18 Feature: VACUUM/ANALYZE ONLY on partitioned distributed table
-
 -- PG18 Feature: text search with nondeterministic collations
 -- PG18 commit: https://github.com/postgres/postgres/commit/329304c90
-
 -- This test verifies that the PG18 tests apply to Citus tables; Citus
 -- just passes through the collation info and text search queries to
 -- worker shards.
-
 CREATE COLLATION ignore_accents (provider = icu, locale = '@colStrength=primary;colCaseLevel=yes', deterministic = false);
+NOTICE:  using standard form "und-u-kc-ks-level1" for ICU locale "@colStrength=primary;colCaseLevel=yes"
 -- nondeterministic collations
 CREATE COLLATION ctest_det (provider = icu, locale = '', deterministic = true);
+NOTICE:  using standard form "und" for ICU locale ""
 CREATE COLLATION ctest_nondet (provider = icu, locale = '', deterministic = false);
-
+NOTICE:  using standard form "und" for ICU locale ""
 CREATE TABLE strtest1 (a int, b text);
 SELECT create_distributed_table('strtest1', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
 
 INSERT INTO strtest1 VALUES (1, U&'zy\00E4bc');
 INSERT INTO strtest1 VALUES (2, U&'zy\0061\0308bc');
@@ -1637,240 +2407,580 @@ INSERT INTO strtest1 VALUES (4, U&'ab\0061\0308cd');
 INSERT INTO strtest1 VALUES (5, U&'ab\00E4cd');
 INSERT INTO strtest1 VALUES (6, U&'ab\0061\0308cd');
 INSERT INTO strtest1 VALUES (7, U&'ab\00E4cd');
-
 SELECT * FROM strtest1 WHERE b = 'zyäbc' COLLATE ctest_det ORDER BY a;
+ a |   b
+---------------------------------------------------------------------
+ 1 | zyäbc
+(1 row)
+
 SELECT * FROM strtest1 WHERE b = 'zyäbc' COLLATE ctest_nondet ORDER BY a;
+ a |   b
+---------------------------------------------------------------------
+ 1 | zyäbc
+ 2 | zyäbc
+(2 rows)
 
 SELECT strpos(b COLLATE ctest_det, 'bc') FROM strtest1 ORDER BY a;
+ strpos
+---------------------------------------------------------------------
+      4
+      5
+      0
+      0
+      0
+      0
+      0
+(7 rows)
+
 SELECT strpos(b COLLATE ctest_nondet, 'bc') FROM strtest1 ORDER BY a;
+ strpos
+---------------------------------------------------------------------
+      4
+      5
+      0
+      0
+      0
+      0
+      0
+(7 rows)
 
 SELECT replace(b COLLATE ctest_det, U&'\00E4b', 'X') FROM strtest1 ORDER BY a;
+ replace
+---------------------------------------------------------------------
+ zyXc
+ zyäbc
+ abäcd
+ abäcd
+ abäcd
+ abäcd
+ abäcd
+(7 rows)
+
 SELECT replace(b COLLATE ctest_nondet, U&'\00E4b', 'X') FROM strtest1 ORDER BY a;
+ replace
+---------------------------------------------------------------------
+ zyXc
+ zyXc
+ abäcd
+ abäcd
+ abäcd
+ abäcd
+ abäcd
+(7 rows)
 
 SELECT a, split_part(b COLLATE ctest_det, U&'\00E4b', 2) FROM strtest1 ORDER BY a;
+ a | split_part
+---------------------------------------------------------------------
+ 1 | c
+ 2 |
+ 3 |
+ 4 |
+ 5 |
+ 6 |
+ 7 |
+(7 rows)
+
 SELECT a, split_part(b COLLATE ctest_nondet, U&'\00E4b', 2) FROM strtest1 ORDER BY a;
+ a | split_part
+---------------------------------------------------------------------
+ 1 | c
+ 2 | c
+ 3 |
+ 4 |
+ 5 |
+ 6 |
+ 7 |
+(7 rows)
+
 SELECT a, split_part(b COLLATE ctest_det, U&'\00E4b', -1) FROM strtest1 ORDER BY a;
+ a | split_part
+---------------------------------------------------------------------
+ 1 | c
+ 2 | zyäbc
+ 3 | abäcd
+ 4 | abäcd
+ 5 | abäcd
+ 6 | abäcd
+ 7 | abäcd
+(7 rows)
+
 SELECT a, split_part(b COLLATE ctest_nondet, U&'\00E4b', -1) FROM strtest1 ORDER BY a;
+ a | split_part
+---------------------------------------------------------------------
+ 1 | c
+ 2 | c
+ 3 | abäcd
+ 4 | abäcd
+ 5 | abäcd
+ 6 | abäcd
+ 7 | abäcd
+(7 rows)
 
 SELECT a, string_to_array(b COLLATE ctest_det, U&'\00E4b') FROM strtest1 ORDER BY a;
+ a | string_to_array
+---------------------------------------------------------------------
+ 1 | {zy,c}
+ 2 | {zyäbc}
+ 3 | {abäcd}
+ 4 | {abäcd}
+ 5 | {abäcd}
+ 6 | {abäcd}
+ 7 | {abäcd}
+(7 rows)
+
 SELECT a, string_to_array(b COLLATE ctest_nondet, U&'\00E4b') FROM strtest1 ORDER BY a;
+ a | string_to_array
+---------------------------------------------------------------------
+ 1 | {zy,c}
+ 2 | {zy,c}
+ 3 | {abäcd}
+ 4 | {abäcd}
+ 5 | {abäcd}
+ 6 | {abäcd}
+ 7 | {abäcd}
+(7 rows)
 
 SELECT * FROM strtest1 WHERE b LIKE 'zyäbc' COLLATE ctest_det ORDER BY a;
+ a |   b
+---------------------------------------------------------------------
+ 1 | zyäbc
+(1 row)
+
 SELECT * FROM strtest1 WHERE b LIKE 'zyäbc' COLLATE ctest_nondet ORDER BY a;
+ a |   b
+---------------------------------------------------------------------
+ 1 | zyäbc
+ 2 | zyäbc
+(2 rows)
 
 CREATE TABLE strtest2 (a int, b text);
 SELECT create_distributed_table('strtest2', 'a');
-INSERT INTO strtest2 VALUES (1, 'cote'), (2, 'côte'), (3, 'coté'), (4, 'côté');
+ create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
+
+INSERT INTO strtest2 VALUES (1, 'cote'), (2, 'côte'), (3, 'coté'), (4, 'côté');
 CREATE TABLE strtest2nfd (a int, b text);
 SELECT create_distributed_table('strtest2nfd', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
 INSERT INTO strtest2nfd VALUES (1, 'cote'), (2, 'côte'), (3, 'coté'), (4, 'côté');
-
 UPDATE strtest2nfd SET b = normalize(b, nfd);
-
 -- This shows why replace should be greedy.  Otherwise, in the NFD
 -- case, the match would stop before the decomposed accents, which
 -- would leave the accents in the results.
 SELECT a, b, replace(b COLLATE ignore_accents, 'co', 'ma') FROM strtest2 ORDER BY a, b;
+ a |  b   | replace
+---------------------------------------------------------------------
+ 1 | cote | mate
+ 2 | côte | mate
+ 3 | coté | maté
+ 4 | côté | maté
+(4 rows)
+
 SELECT a, b, replace(b COLLATE ignore_accents, 'co', 'ma') FROM strtest2nfd ORDER BY a, b;
+ a |  b   | replace
+---------------------------------------------------------------------
+ 1 | cote | mate
+ 2 | côte | mate
+ 3 | coté | maté
+ 4 | côté | maté
+(4 rows)
 
 -- PG18 Feature: LIKE support for non-deterministic collations
 -- PG18 commit: https://github.com/postgres/postgres/commit/85b7efa1c
-
 -- As with non-deterministic collation text search, we verify that
 -- LIKE with non-deterministic collation is passed through by Citus
 -- and expected results are returned by the queries.
-
 INSERT INTO strtest1 VALUES (8, U&'abc');
 INSERT INTO strtest1 VALUES (9, 'abc');
-
 SELECT a, b FROM strtest1
 WHERE b LIKE 'abc' COLLATE ctest_det
 ORDER BY a;
+ a |  b
+---------------------------------------------------------------------
+ 8 | abc
+ 9 | abc
+(2 rows)
 
 SELECT a, b FROM strtest1
 WHERE b LIKE 'a\bc' COLLATE ctest_det
 ORDER BY a;
+ a |  b
+---------------------------------------------------------------------
+ 8 | abc
+ 9 | abc
+(2 rows)
 
 SELECT a, b FROM strtest1
 WHERE b LIKE 'abc' COLLATE ctest_nondet
 ORDER BY a;
+ a |  b
+---------------------------------------------------------------------
+ 8 | abc
+ 9 | abc
+(2 rows)
 
 SELECT a, b FROM strtest1
 WHERE b LIKE 'a\bc' COLLATE ctest_nondet
 ORDER BY a;
+ a |  b
+---------------------------------------------------------------------
+ 8 | abc
+ 9 | abc
+(2 rows)
 
 CREATE COLLATION case_insensitive (provider = icu, locale = '@colStrength=secondary', deterministic = false);
-
+NOTICE:  using standard form "und-u-ks-level2" for ICU locale "@colStrength=secondary"
 SELECT a, b FROM strtest1
 WHERE b LIKE 'ABC' COLLATE case_insensitive
 ORDER BY a;
+ a |  b
+---------------------------------------------------------------------
+ 8 | abc
+ 9 | abc
+(2 rows)
 
 SELECT a, b FROM strtest1
 WHERE b LIKE 'ABC%' COLLATE case_insensitive
 ORDER BY a;
+ a |  b
+---------------------------------------------------------------------
+ 8 | abc
+ 9 | abc
+(2 rows)
 
 INSERT INTO strtest1 VALUES (10, U&'\00E4bc');
 INSERT INTO strtest1 VALUES (12, U&'\0061\0308bc');
-
 SELECT * FROM strtest1
 WHERE b LIKE 'äbc' COLLATE ctest_det
 ORDER BY a;
+ a  |  b
+---------------------------------------------------------------------
+ 10 | äbc
+(1 row)
 
 SELECT * FROM strtest1
 WHERE b LIKE 'äbc' COLLATE ctest_nondet
 ORDER BY a;
+ a  |  b
+---------------------------------------------------------------------
+ 10 | äbc
+ 12 | äbc
+(2 rows)
 
 -- Tests with ignore_accents collation. Taken from
 -- PG18 regress tests and applied to a Citus table.
-
 INSERT INTO strtest1 VALUES (10, U&'\0061\0308bc');
 INSERT INTO strtest1 VALUES (11, U&'\00E4bc');
 INSERT INTO strtest1 VALUES (12, U&'cb\0061\0308');
 INSERT INTO strtest1 VALUES (13, U&'\0308bc');
 INSERT INTO strtest1 VALUES (14, 'foox');
-
 SELECT a, b FROM strtest1
 WHERE b LIKE U&'\00E4_c' COLLATE ignore_accents ORDER BY a, b;
+ a  |  b
+---------------------------------------------------------------------
+  8 | abc
+  9 | abc
+ 10 | äbc
+ 10 | äbc
+ 11 | äbc
+ 12 | äbc
+(6 rows)
+
 -- and in reverse:
 SELECT a, b FROM strtest1
 WHERE b LIKE U&'\0061\0308_c' COLLATE ignore_accents ORDER BY a, b;
+ a  |  b
+---------------------------------------------------------------------
+  8 | abc
+  9 | abc
+ 10 | äbc
+ 10 | äbc
+ 11 | äbc
+ 12 | äbc
+(6 rows)
+
 -- inner % matches b:
 SELECT a, b FROM strtest1
 WHERE b LIKE U&'\00E4%c' COLLATE ignore_accents ORDER BY a, b;
+ a  |  b
+---------------------------------------------------------------------
+  8 | abc
+  9 | abc
+ 10 | äbc
+ 10 | äbc
+ 11 | äbc
+ 12 | äbc
+(6 rows)
+
 -- inner %% matches b then zero:
 SELECT a, b FROM strtest1
 WHERE b LIKE U&'\00E4%%c' COLLATE ignore_accents ORDER BY a, b;
+ a  |  b
+---------------------------------------------------------------------
+  8 | abc
+  9 | abc
+ 10 | äbc
+ 10 | äbc
+ 11 | äbc
+ 12 | äbc
+(6 rows)
+
 -- inner %% matches b then zero:
 SELECT a, b FROM strtest1
 WHERE b LIKE U&'c%%\00E4' COLLATE ignore_accents ORDER BY a, b;
+ a  |  b
+---------------------------------------------------------------------
+ 12 | cbä
+(1 row)
+
 -- trailing _ matches two codepoints that form one grapheme:
 SELECT a, b FROM strtest1
 WHERE b LIKE U&'cb_' COLLATE ignore_accents ORDER BY a, b;
+ a | b
+---------------------------------------------------------------------
+(0 rows)
+
 -- trailing __ matches two codepoints that form one grapheme:
 SELECT a, b FROM strtest1
 WHERE b LIKE U&'cb__' COLLATE ignore_accents ORDER BY a, b;
+ a  |  b
+---------------------------------------------------------------------
+ 12 | cbä
+(1 row)
+
 -- leading % matches zero:
 SELECT a, b FROM strtest1
 WHERE b LIKE U&'%\00E4bc' COLLATE ignore_accents
 ORDER BY a;
+ a  |   b
+---------------------------------------------------------------------
+  1 | zyäbc
+  2 | zyäbc
+  8 | abc
+  9 | abc
+ 10 | äbc
+ 10 | äbc
+ 11 | äbc
+ 12 | äbc
+(8 rows)
 
 -- leading % matches zero (with later %):
 SELECT a, b FROM strtest1
 WHERE b LIKE U&'%\00E4%c' COLLATE ignore_accents ORDER BY a, b;
+ a  |   b
+---------------------------------------------------------------------
+  1 | zyäbc
+  2 | zyäbc
+  8 | abc
+  9 | abc
+ 10 | äbc
+ 10 | äbc
+ 11 | äbc
+ 12 | äbc
+(8 rows)
+
 -- trailing % matches zero:
 SELECT a, b FROM strtest1
 WHERE b LIKE U&'\00E4bc%' COLLATE ignore_accents ORDER BY a, b;
+ a  |  b
+---------------------------------------------------------------------
+  8 | abc
+  9 | abc
+ 10 | äbc
+ 10 | äbc
+ 11 | äbc
+ 12 | äbc
+(6 rows)
+
 -- trailing % matches zero (with previous %):
 SELECT a, b FROM strtest1
 WHERE b LIKE U&'\00E4%c%' COLLATE ignore_accents ORDER BY a, b;
+ a  |   b
+---------------------------------------------------------------------
+  3 | abäcd
+  4 | abäcd
+  5 | abäcd
+  6 | abäcd
+  7 | abäcd
+  8 | abc
+  9 | abc
+ 10 | äbc
+ 10 | äbc
+ 11 | äbc
+ 12 | äbc
+(11 rows)
+
 -- _ versus two codepoints that form one grapheme:
 SELECT a, b FROM strtest1
 WHERE b LIKE U&'_bc' COLLATE ignore_accents ORDER BY a, b;
+ a  |  b
+---------------------------------------------------------------------
+  8 | abc
+  9 | abc
+ 10 | äbc
+ 10 | äbc
+ 11 | äbc
+ 12 | äbc
+ 13 | ̈bc
+(7 rows)
+
 -- (actually this matches because)
 SELECT a, b FROM strtest1
 WHERE b = 'bc' COLLATE ignore_accents ORDER BY a, b;
+ a  | b
+---------------------------------------------------------------------
+ 13 | ̈bc
+(1 row)
+
 -- __ matches two codepoints that form one grapheme:
 SELECT a, b FROM strtest1
 WHERE b LIKE U&'__bc' COLLATE ignore_accents ORDER BY a, b;
+ a  |  b
+---------------------------------------------------------------------
+ 10 | äbc
+ 12 | äbc
+(2 rows)
+
 -- _ matches one codepoint that forms half a grapheme:
 SELECT a, b FROM strtest1
 WHERE b LIKE U&'_\0308bc' COLLATE ignore_accents ORDER BY a, b;
+ a  |  b
+---------------------------------------------------------------------
+  8 | abc
+  9 | abc
+ 10 | äbc
+ 10 | äbc
+ 11 | äbc
+ 12 | äbc
+ 13 | ̈bc
+(7 rows)
+
 -- doesn't match because \00e4 doesn't match only \0308
 SELECT a, b FROM strtest1
 WHERE b LIKE U&'_\00e4bc' COLLATE ignore_accents ORDER BY a, b;
+ a | b
+---------------------------------------------------------------------
+(0 rows)
+
 -- escape character at end of pattern
 SELECT a, b FROM strtest1
 WHERE b LIKE 'foo\' COLLATE ignore_accents ORDER BY a, b;
-
+ERROR:  LIKE pattern must not end with escape character
+CONTEXT:  while executing command on localhost:xxxxx
 DROP TABLE strtest1;
 DROP COLLATION ignore_accents;
 DROP COLLATION ctest_det;
 DROP COLLATION ctest_nondet;
 DROP COLLATION case_insensitive;
-
 -- PG18 Feature: GUC for CREATE DATABASE file copy method
 -- PG18 commit: https://github.com/postgres/postgres/commit/f78ca6f3e
-
 -- Citus supports the wal_log strategy only for CREATE DATABASE.
 -- Here we show that the expected error (from PR #7249) occurs
 -- when the file_copy strategy is attempted.
-
 SET citus.enable_create_database_propagation=on;
-
 SHOW file_copy_method;
+ file_copy_method
+---------------------------------------------------------------------
+ copy
+(1 row)
 
 -- Error output is expected here
 CREATE DATABASE copied_db WITH strategy file_copy;
-
+ERROR:  Only wal_log is supported as strategy parameter for CREATE DATABASE
 SET file_copy_method TO clone;
-
 -- Also errors out, per #7249
 CREATE DATABASE cloned_db WITH strategy file_copy;
-
+ERROR:  Only wal_log is supported as strategy parameter for CREATE DATABASE
 RESET file_copy_method;
-
 -- This is okay
 CREATE DATABASE copied_db
     WITH strategy wal_log;
-
 -- Show that file_copy works for ALTER DATABASE ... SET TABLESPACE
-
 \set alter_db_tablespace :abs_srcdir '/tmp_check/ts3'
 CREATE TABLESPACE alter_db_tablespace LOCATION :'alter_db_tablespace';
-
 \c - - - :worker_1_port
 \set alter_db_tablespace :abs_srcdir '/tmp_check/ts4'
 CREATE TABLESPACE alter_db_tablespace LOCATION :'alter_db_tablespace';
-
 \c - - - :worker_2_port
 \set alter_db_tablespace :abs_srcdir '/tmp_check/ts5'
 CREATE TABLESPACE alter_db_tablespace LOCATION :'alter_db_tablespace';
-
 \c - - - :master_port
-
 SET citus.enable_create_database_propagation TO on;
 SET file_copy_method TO clone;
 SET citus.log_remote_commands TO true;
-
 SELECT datname, spcname
 FROM pg_database d, pg_tablespace t
 WHERE d.dattablespace = t.oid AND d.datname = 'copied_db';
+  datname  |  spcname
+---------------------------------------------------------------------
+ copied_db | pg_default
+(1 row)
 
 ALTER DATABASE copied_db SET TABLESPACE alter_db_tablespace;
-
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT citus_internal.acquire_citus_advisory_object_class_lock(26, 'copied_db')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE copied_db SET TABLESPACE alter_db_tablespace
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER DATABASE copied_db SET TABLESPACE alter_db_tablespace
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'on'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'on'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 SELECT datname, spcname
 FROM pg_database d, pg_tablespace t
 WHERE d.dattablespace = t.oid AND d.datname = 'copied_db';
+  datname  |       spcname
+---------------------------------------------------------------------
+ copied_db | alter_db_tablespace
+(1 row)
 
 RESET file_copy_method;
 RESET citus.log_remote_commands;
-
 -- Enable alter_db_tablespace to be dropped
 ALTER DATABASE copied_db SET TABLESPACE pg_default;
-
 DROP DATABASE copied_db;
-
 -- Done with DATABASE commands
 RESET citus.enable_create_database_propagation;
-
 SELECT result FROM run_command_on_all_nodes(
   $$
   DROP TABLESPACE "alter_db_tablespace"
   $$
 );
+     result
+---------------------------------------------------------------------
+ DROP TABLESPACE
+ DROP TABLESPACE
+ DROP TABLESPACE
+(3 rows)
 
 -- PG18 Feature: EXPLAIN (WAL) reports WAL buffers becoming full.
 -- PG18 commit: https://github.com/postgres/postgres/commit/320545bfc
 SET search_path TO pg18_nn;
 SET citus.explain_all_tasks TO true;
-
 CREATE TABLE wal_explain_dist(id int, payload text);
 SELECT create_distributed_table('wal_explain_dist', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
 
 INSERT INTO wal_explain_dist VALUES
   (1, 'one'), (2, 'two'), (3, 'three');
-
 -- Helper to capture distributed EXPLAIN ANALYZE (WAL) as JSON
 CREATE OR REPLACE FUNCTION explain_analyze_wal_json(query text)
 RETURNS jsonb
@@ -1883,87 +2993,119 @@ BEGIN
   RETURN result;
 END;
 $$ LANGUAGE plpgsql;
-
 CREATE TEMP TABLE wal_explain_plan(plan jsonb);
 INSERT INTO wal_explain_plan(plan)
 SELECT explain_analyze_wal_json($$SELECT count(*) FROM wal_explain_dist$$);
-
 -- Ensure Citus keeps distributed-task context in the WAL-aware EXPLAIN output
 SELECT jsonb_path_exists(plan, '$.**."Task Count"') AS wal_explain_distributed_plan
 FROM wal_explain_plan;
+ wal_explain_distributed_plan
+---------------------------------------------------------------------
+ t
+(1 row)
 
 -- New PG18 field: wal_buffers_full must survive the distributed EXPLAIN path
 SELECT jsonb_path_exists(plan, '$.**."WAL Buffers Full"') AS wal_buffers_full_present
 FROM wal_explain_plan;
+ wal_buffers_full_present
+---------------------------------------------------------------------
+ t
+(1 row)
 
 SELECT jsonb_path_query_first(plan, '$.**."WAL Buffers Full"') AS wal_buffers_full_value
 FROM wal_explain_plan;
+ wal_buffers_full_value
+---------------------------------------------------------------------
+ 0
+(1 row)
 
 DROP TABLE wal_explain_plan;
 SET citus.explain_all_tasks TO default;
-
 -- PG18 PG_MODULE_MAGIC_EXT MACRO
 -- and new function pg_get_loaded_modules
 -- Relevant PG18 commit: https://github.com/postgres/postgres/commit/9324c8c58
 SELECT * FROM pg_get_loaded_modules() WHERE file_name LIKE 'citus%' ORDER BY module_name;
+    module_name     |  version  |       file_name
+---------------------------------------------------------------------
+ citus              | 15.0devel | citus.so
+ citus_columnar     | 15.0devel | citus_columnar.so
+(2 rows)
 
 -- ============================================================
 -- PG18: MIN/MAX aggregate OID resolution
 -- ============================================================
-
 CREATE SCHEMA pg18_minmax;
 SET search_path TO pg18_minmax;
-
 -- ------------------------------------------------------------
 -- AGG_MATCH_EXACT
 -- declaredArgType == inputType (e.g., INT4OID)
 -- ------------------------------------------------------------
 CREATE TABLE exact_t (id int, v int);
 SELECT create_distributed_table('exact_t', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
 
 INSERT INTO exact_t VALUES (1, 10), (2, 3), (3, 7);
-
 SELECT
   min(v) AS exact_min,
   max(v) AS exact_max
 FROM exact_t;
--- expected: exact_min=3, exact_max=10
+ exact_min | exact_max
+---------------------------------------------------------------------
+         3 |        10
+(1 row)
 
+-- expected: exact_min=3, exact_max=10
 -- ------------------------------------------------------------
 -- AGG_MATCH_ARRAY_POLY
 -- declaredArgType == ANYARRAYOID, inputType is an array type (e.g., INT4ARRAYOID)
 -- ------------------------------------------------------------
 CREATE TABLE array_t (id int, v int[]);
 SELECT create_distributed_table('array_t', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
 
 INSERT INTO array_t VALUES
   (1, ARRAY[45, 52, 38]),
   (2, ARRAY[67, 71, 58]),
   (3, ARRAY[23, 28, 15]);
-
 SELECT
   min(v) AS array_min,
   max(v) AS array_max
 FROM array_t;
--- expected: array_min={23,28,15}, array_max={67,71,58}
+ array_min  | array_max
+---------------------------------------------------------------------
+ {23,28,15} | {67,71,58}
+(1 row)
 
+-- expected: array_min={23,28,15}, array_max={67,71,58}
 -- ------------------------------------------------------------
 -- AGG_MATCH_GENERAL_POLY
 -- declaredArgType == ANYENUMOID, inputType is an enum type (user-defined)
 -- ------------------------------------------------------------
 CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
-
 CREATE TABLE enum_t (id int, m mood);
 SELECT create_distributed_table('enum_t', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
 
 INSERT INTO enum_t VALUES (1, 'ok'), (2, 'happy'), (3, 'sad');
-
 SELECT
   min(m) AS enum_min,
   max(m) AS enum_max
 FROM enum_t;
--- expected: enum_min=sad, enum_max=happy
+ enum_min | enum_max
+---------------------------------------------------------------------
+ sad      | happy
+(1 row)
 
+-- expected: enum_min=sad, enum_max=happy
 -- ------------------------------------------------------------
 -- AGG_MATCH_RECORD
 -- declaredArgType == RECORDOID, inputType is a rowtype (product_rating)
@@ -1972,52 +3114,68 @@ CREATE TYPE product_rating AS (
     average_score DECIMAL(3,2),
     review_count INTEGER
 );
-
 CREATE TABLE product_ratings (
     id int,
     rating product_rating
 );
-
 SELECT create_distributed_table('product_ratings', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
 
 INSERT INTO product_ratings VALUES
     (1, ROW(4.5, 120)::product_rating),
     (2, ROW(4.2,  89)::product_rating),
     (3, ROW(4.8, 156)::product_rating);
-
 SELECT
     min(rating) AS record_min,
     max(rating) AS record_max
 FROM product_ratings;
--- expected: record_min=(4.20,89), record_max=(4.80,156)
+ record_min | record_max
+---------------------------------------------------------------------
+ (4.20,89)  | (4.80,156)
+(1 row)
 
+-- expected: record_min=(4.20,89), record_max=(4.80,156)
 -- ------------------------------------------------------------
 -- Aggref argTypeId == RECORDOID (anonymous row expression)
 -- The aggregate argument here is a row constructor (x,y), which has type RECORD.
 -- This hits the BlessRecordExpression(Aggref) branch where argTypeId == RECORDOID.
 -- ------------------------------------------------------------
-
 CREATE TABLE record_arg_t (id int, x int, y int);
 SELECT create_distributed_table('record_arg_t', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
 
 INSERT INTO record_arg_t VALUES
   (1, 1, 20),
   (2, 1, 10),
   (3, 2, 30);
-
 SELECT
   min((x, y)) AS record_arg_min,
   max((x, y)) AS record_arg_max
 FROM record_arg_t;
+ record_arg_min | record_arg_max
+---------------------------------------------------------------------
+ (1,10)         | (2,30)
+(1 row)
 
 -- expected:
 -- record_arg_min = (1,10)
 -- record_arg_max = (2,30)
-
 DROP SCHEMA pg18_minmax CASCADE;
+NOTICE:  drop cascades to 7 other objects
+DETAIL:  drop cascades to table exact_t
+drop cascades to table array_t
+drop cascades to type mood
+drop cascades to table enum_t
+drop cascades to type product_rating
+drop cascades to table product_ratings
+drop cascades to table record_arg_t
 -- END: PG18: MIN/MAX aggregate OID resolution for ANYARRAY and RECORD
-
-
 -- PG18: shard-local INSERT .. SELECT batching pushdown
 -- (citus.allow_unsafe_insert_select_pushdown). This mirrors a case from
 -- allow_unsafe_insert_select_pushdown.sql, which wraps EXPLAIN in
@@ -2030,22 +3188,34 @@ SET search_path TO pg18_insert_select_pushdown;
 SET citus.next_shard_id TO 14100000;
 SET citus.shard_count = 4;
 SET citus.shard_replication_factor = 1;
-
 CREATE TABLE dist(text_id int, text_col text);
 CREATE TABLE res(text_id int, val int);
 SELECT create_distributed_table('dist', 'text_id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
 SELECT create_distributed_table('res', 'text_id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
 
 INSERT INTO dist SELECT g, 't' || g FROM generate_series(1, 500) g;
-
 -- a batch UDF: returns one value per input, mimicking a batched API call.
 -- immutable + parallel safe, like a real batch UDF.
 CREATE FUNCTION batch_transform(t text[]) RETURNS int[]
 LANGUAGE sql IMMUTABLE PARALLEL SAFE AS $$ SELECT array_agg(length(x)) FROM unnest(t) x $$;
 SELECT create_distributed_function('batch_transform(text[])');
+NOTICE:  procedure pg18_insert_select_pushdown.batch_transform is already distributed
+DETAIL:  Citus distributes procedures with CREATE [PROCEDURE|FUNCTION|AGGREGATE] commands
+ create_distributed_function
+---------------------------------------------------------------------
+
+(1 row)
 
 SET citus.allow_unsafe_insert_select_pushdown TO on;
-
 -- the batching and batch UDF run on the shards; the raw PG18 plan
 -- includes the WindowAgg "Window:" line
 EXPLAIN (COSTS OFF) INSERT INTO res(text_id, val)
@@ -2055,12 +3225,31 @@ SELECT id, val FROM (
   FROM (SELECT text_id, text_col, (row_number() OVER () - 1) / 100 b FROM dist) q
   GROUP BY b
 ) s;
+                                   QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)
+   Task Count: 4
+   Tasks Shown: One of 4
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Insert on res_14100004 citus_table_alias
+               ->  Subquery Scan on s
+                     Filter: (s.id IS NOT NULL)
+                     ->  ProjectSet
+                           ->  HashAggregate
+                                 Group Key: ((row_number() OVER (?) - 1) / 100)
+                                 ->  WindowAgg
+                                       Window: w1 AS (ROWS UNBOUNDED PRECEDING)
+                                       ->  Seq Scan on dist_14100000 dist
+(14 rows)
 
 RESET citus.allow_unsafe_insert_select_pushdown;
 DROP SCHEMA pg18_insert_select_pushdown CASCADE;
+NOTICE:  drop cascades to 3 other objects
+DETAIL:  drop cascades to table dist
+drop cascades to table res
+drop cascades to function batch_transform(text[])
 SET search_path TO pg18_nn;
-
-
 -- cleanup with minimum verbosity
 SET client_min_messages TO ERROR;
 RESET search_path;
