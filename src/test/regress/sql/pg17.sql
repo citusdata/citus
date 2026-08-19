@@ -739,10 +739,15 @@ CREATE TABLE check_ign_err (n int, m int[], k int);
 SELECT create_distributed_table('check_ign_err', 'n');
 
 COPY check_ign_err FROM STDIN WITH (on_error stop);
+\.
 COPY check_ign_err FROM STDIN WITH (ON_ERROR ignore);
+\.
 COPY check_ign_err FROM STDIN WITH (on_error ignore, log_verbosity verbose);
+\.
 COPY check_ign_err FROM STDIN WITH (log_verbosity verbose, on_error ignore);
+\.
 COPY check_ign_err FROM STDIN WITH (log_verbosity verbose);
+\.
 
 -- End of Test for COPY ON_ERROR option
 

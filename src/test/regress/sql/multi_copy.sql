@@ -48,6 +48,7 @@ notinteger,customernot
 
 -- Test invalid option
 COPY customer_copy_hash (c_custkey,c_name) FROM STDIN (append_to_shard 1);
+\.
 
 -- Confirm that no data was copied
 SELECT count(*) FROM customer_copy_hash;
@@ -602,6 +603,7 @@ ALTER USER test_user WITH nologin;
 
 -- reissue copy, and it should fail
 COPY numbers_hash FROM STDIN WITH (FORMAT 'csv');
+\.
 
 -- verify shards in the none of the workers as marked invalid
 SELECT shardid, shardstate, nodename, nodeport
@@ -610,6 +612,7 @@ SELECT shardid, shardstate, nodename, nodeport
 
 -- try to insert into a reference table copy should fail
 COPY numbers_reference FROM STDIN WITH (FORMAT 'csv');
+\.
 
 -- verify shards for reference table are still valid
 SELECT shardid, shardstate, nodename, nodeport
@@ -621,6 +624,7 @@ SELECT shardid, shardstate, nodename, nodeport
 -- since it can not insert into either copies of a shard. shards are expected to
 -- stay valid since the operation is rolled back.
 COPY numbers_hash_other FROM STDIN WITH (FORMAT 'csv');
+\.
 
 -- verify shards for numbers_hash_other are still valid
 -- since copy has failed altogether

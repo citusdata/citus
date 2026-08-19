@@ -227,26 +227,18 @@ COPY the_table (a, b, z) FROM STDIN WITH CSV;
 ERROR:  COPY command to Citus tables is not allowed in read-only mode
 DETAIL:  the database is read-only
 HINT:  All COPY commands to citus tables happen via 2PC, and 2PC requires the database to be in a writable state.
-\.
-invalid command \.
 COPY the_replicated_table (a, b, z) FROM STDIN WITH CSV;
 ERROR:  writing to worker nodes is not currently allowed for replicated tables such as reference tables or hash distributed tables with replication factor greater than 1.
 DETAIL:  the database is read-only
 HINT:  All modifications to replicated tables happen via 2PC, and 2PC requires the database to be in a writable state.
-\.
-invalid command \.
 COPY reference_table (a, b, z) FROM STDIN WITH CSV;
 ERROR:  writing to worker nodes is not currently allowed for replicated tables such as reference tables or hash distributed tables with replication factor greater than 1.
 DETAIL:  the database is read-only
 HINT:  All modifications to replicated tables happen via 2PC, and 2PC requires the database to be in a writable state.
-\.
-invalid command \.
 COPY citus_local_table (a, b, z) FROM STDIN WITH CSV;
 ERROR:  COPY command to Citus tables is not allowed in read-only mode
 DETAIL:  the database is read-only
 HINT:  All COPY commands to citus tables happen via 2PC, and 2PC requires the database to be in a writable state.
-\.
-invalid command \.
 -- all multi-shard modifications require 2PC hence not supported
 INSERT INTO the_table (a, b, z) VALUES (2, 3, 4), (5, 6, 7);
 ERROR:  cannot assign TransactionIds during recovery
@@ -299,20 +291,14 @@ COPY the_table (a, b, z) FROM STDIN WITH CSV;
 ERROR:  COPY command to Citus tables is not allowed in read-only mode
 DETAIL:  the database is read-only
 HINT:  All COPY commands to citus tables happen via 2PC, and 2PC requires the database to be in a writable state.
-\.
-invalid command \.
 COPY reference_table (a, b, z) FROM STDIN WITH CSV;
 ERROR:  writing to worker nodes is not currently allowed for replicated tables such as reference tables or hash distributed tables with replication factor greater than 1.
 DETAIL:  the database is read-only
 HINT:  All modifications to replicated tables happen via 2PC, and 2PC requires the database to be in a writable state.
-\.
-invalid command \.
 COPY citus_local_table (a, b, z) FROM STDIN WITH CSV;
 ERROR:  COPY command to Citus tables is not allowed in read-only mode
 DETAIL:  the database is read-only
 HINT:  All COPY commands to citus tables happen via 2PC, and 2PC requires the database to be in a writable state.
-\.
-invalid command \.
 SELECT * FROM the_table ORDER BY a;
  a | b | z
 ---------------------------------------------------------------------
