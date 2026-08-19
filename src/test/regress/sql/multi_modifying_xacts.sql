@@ -996,6 +996,7 @@ COMMIT;
 
 BEGIN;
 COPY reference_failure_test FROM STDIN WITH (FORMAT 'csv');
+\.
 COMMIT;
 
 -- show that no data go through the table and shard states are good
@@ -1016,6 +1017,7 @@ ORDER BY s.logicalrelid, sp.shardstate;
 -- any failure rollbacks the transaction
 BEGIN;
 COPY numbers_hash_failure_test FROM STDIN WITH (FORMAT 'csv');
+\.
 ABORT;
 
 -- none of placements are invalid after abort
@@ -1036,6 +1038,7 @@ ORDER BY shardid, nodeport;
 -- all failures roll back the transaction
 BEGIN;
 COPY numbers_hash_failure_test FROM STDIN WITH (FORMAT 'csv');
+\.
 COMMIT;
 
 -- expect none of the placements to be market invalid after commit

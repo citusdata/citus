@@ -27,7 +27,6 @@ SET ROLE full_access;
 COPY customer_copy_hash (c_custkey,c_name) FROM STDIN;
 2	customer2
 \.
-;
 RESET ROLE;
 
 -- COPY FROM as user with SELECT access, should fail
@@ -35,7 +34,6 @@ SET ROLE read_access;
 COPY customer_copy_hash (c_custkey,c_name) FROM STDIN;
 3	customer3
 \.
-;
 RESET ROLE;
 
 -- COPY FROM as user with no access, should fail
@@ -43,7 +41,6 @@ SET ROLE no_access;
 COPY customer_copy_hash (c_custkey,c_name) FROM STDIN;
 4	customer4
 \.
-;
 RESET ROLE;
 
 

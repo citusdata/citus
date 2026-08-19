@@ -126,8 +126,6 @@ HINT:  Run the query on the parent table "collections" instead.
 COPY collections_1 FROM STDIN;
 ERROR:  modifications on partitions when replication factor is greater than 1 is not supported
 HINT:  Run the query on the parent table "collections" instead.
-\.
-invalid command \.
 -- DDLs are not allowed
 CREATE INDEX index_on_partition ON collections_1(key);
 ERROR:  modifications on partitions when replication factor is greater than 1 is not supported
