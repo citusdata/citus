@@ -512,6 +512,18 @@ def find_test_schedule_and_line(test_name, args):
 
 
 def test_dependencies(test_name, test_schedule, schedule_line, args):
+    if args["use_whole_schedule_line"]:
+        test_names = schedule_line.split()[1:]
+        dependencies = [
+            single_test_dependencies(name, test_schedule, schedule_line, args)
+            for name in test_names
+        ]
+        return merge_test_dependencies(dependencies)
+
+    return single_test_dependencies(test_name, test_schedule, schedule_line, args)
+
+
+def single_test_dependencies(test_name, test_schedule, schedule_line, args):
     if test_name in DEPS:
         return DEPS[test_name]
 
@@ -542,6 +554,50 @@ def test_dependencies(test_name, test_schedule, schedule_line, args):
         repeatable = True
 
     return TestDeps(default_base_schedule(test_schedule, args), repeatable=repeatable)
+
+
+def merge_test_dependencies(dependencies):
+    schedules = list(
+        OrderedDict.fromkeys(
+            dependency.schedule
+            for dependency in dependencies
+            if dependency.schedule is not None
+        )
+    )
+
+    if len(schedules) > 1:
+        compatible_schedule_families = (
+            ("minimal_schedule", "base_schedule"),
+            ("mx_minimal_schedule", "mx_base_schedule"),
+        )
+        for schedule_family in compatible_schedule_families:
+            if set(schedules).issubset(schedule_family):
+                schedules = [
+                    schedule
+                    for schedule in reversed(schedule_family)
+                    if schedule in schedules
+                ]
+                break
+        else:
+            raise Exception(
+                f"Tests on the same schedule line require incompatible setup schedules: "
+                f"{', '.join(schedules)}"
+            )
+
+    extra_tests = OrderedDict()
+    for dependency in dependencies:
+        for extra_test in dependency.direct_extra_tests:
+            extra_tests[extra_test] = True
+
+    return TestDeps(
+        schedules[0] if schedules else None,
+        list(extra_tests.keys()),
+        repeatable=all(dependency.repeatable for dependency in dependencies),
+        worker_count=max(dependency.worker_count for dependency in dependencies),
+        citus_upgrade_infra=any(
+            dependency.citus_upgrade_infra for dependency in dependencies
+        ),
+    )
 
 
 # Returns true if given test_schedule_line is of the form:
@@ -582,7 +638,7 @@ def tmp_schedule(test_name, dependencies, schedule_line, args):
 
 
 def needed_worker_count(test_name, dependencies):
-    worker_count = worker_count_for(test_name)
+    worker_count = max(worker_count_for(test_name), dependencies.worker_count)
     for dependency in dependencies.extra_tests():
         worker_count = max(worker_count_for(dependency), worker_count)
     return worker_count
