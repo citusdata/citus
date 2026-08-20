@@ -1214,7 +1214,7 @@ GetBackendDataForProc(PGPROC *proc, BackendData *result)
  * data with this information.
  */
 void
-CancelTransactionDueToDeadlock(PGPROC *proc)
+CancelTransactionDueToDeadlock(PGPROC *proc, DistributedTransactionId *transactionId)
 {
 	BackendData *backendData = &backendManagementShmemData->backends[getProcNo_compat(
 																		 proc)];
@@ -1227,8 +1227,29 @@ CancelTransactionDueToDeadlock(PGPROC *proc)
 
 	SpinLockAcquire(&backendData->mutex);
 
-	/* send a SIGINT only if the process is still in a distributed transaction */
-	if (backendData->transactionId.transactionNumber != 0)
+	DistributedTransactionId *backendXactId = &backendData->transactionId;
+
+	/*
+	 * Send a SIGINT only if the backend is still running the very distributed
+	 * transaction that we found to be part of the deadlock. The caller walks the
+	 * whole deadlock cycle to pick a victim after it looks the backend up, so the
+	 * backend may have finished that transaction and started an unrelated one in
+	 * between, and cancelling that one would be wrong.
+	 *
+	 * The initiator node has to be compared as well, because transaction numbers are
+	 * only unique per node. A transaction initiated on another node can therefore
+	 * share a number with a local one, and
+	 * AssociateDistributedTransactionWithBackendProc() matches on the number alone.
+	 *
+	 * The timestamp is not compared, even though DistributedTransactionIdCompare()
+	 * does consider it. That comparison sorts ids gathered from all nodes, whereas
+	 * we only compare against a single live backend: its transaction numbers come
+	 * from a monotonic counter, so a new transaction on it necessarily has a
+	 * different number, and reusing one requires a restart, which invalidates
+	 * this proc.
+	 */
+	if (backendXactId->transactionNumber == transactionId->transactionNumber &&
+		backendXactId->initiatorNodeIdentifier == transactionId->initiatorNodeIdentifier)
 	{
 		backendData->cancelledDueToDeadlock = true;
 		SpinLockRelease(&backendData->mutex);
