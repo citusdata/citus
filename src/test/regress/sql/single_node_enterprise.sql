@@ -292,6 +292,9 @@ SELECT * FROM view_created_before_shard_moves;
 
 -- and make sure that all the shards are remote
 BEGIN;
+	-- pin the pool size, otherwise the executor may open extra connections
+	-- for the multi-shard command below, making the output non-deterministic
+	SET LOCAL citus.max_adaptive_executor_pool_size TO 1;
 	SET LOCAL citus.log_remote_commands TO ON;
 	INSERT INTO test(x,y) VALUES (101,100);
 	INSERT INTO test(x,y) VALUES (102,100);
