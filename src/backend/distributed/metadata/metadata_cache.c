@@ -4974,7 +4974,14 @@ FlushDistTableCache(void)
 
 	while ((cacheSlot = (CitusTableCacheEntrySlot *) hash_seq_search(&status)) != NULL)
 	{
-		ResetCitusTableCacheEntry(cacheSlot->citusTableMetadata);
+		/*
+		 * Negative cache entries (non-Citus relations) have no metadata, so
+		 * skip them.
+		 */
+		if (cacheSlot->citusTableMetadata != NULL)
+		{
+			ResetCitusTableCacheEntry(cacheSlot->citusTableMetadata);
+		}
 	}
 
 	hash_destroy(DistTableCacheHash);
