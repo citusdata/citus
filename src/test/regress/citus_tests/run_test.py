@@ -73,6 +73,8 @@ def parse_arguments():
 
 
 class TestDeps:
+    # None means this test requires no prerequisite setup schedule. Other tests
+    # on the same schedule line can still require one.
     schedule: Optional[str]
     direct_extra_tests: list[str]
 
@@ -566,10 +568,7 @@ def merge_test_dependencies(dependencies):
     )
 
     if len(schedules) > 1:
-        compatible_schedule_families = (
-            ("minimal_schedule", "base_schedule"),
-            ("mx_minimal_schedule", "mx_base_schedule"),
-        )
+        compatible_schedule_families = (("minimal_schedule", "base_schedule"),)
         for schedule_family in compatible_schedule_families:
             if set(schedules).issubset(schedule_family):
                 schedules = [

@@ -27,6 +27,7 @@ def test_whole_schedule_line_merges_dependencies():
 
 def test_merged_dependencies_include_all_requirements():
     dependencies = [
+        Dependencies(None),
         Dependencies("minimal_schedule", ["first_setup"], worker_count=3),
         Dependencies(
             "base_schedule",
