@@ -16,6 +16,7 @@
 #include "catalog/objectaddress.h"
 #include "commands/extension.h"
 #include "storage/lmgr.h"
+#include "utils/inval.h"
 #include "utils/lsyscache.h"
 
 #include "distributed/commands.h"
@@ -24,6 +25,7 @@
 #include "distributed/listutils.h"
 #include "distributed/metadata/dependency.h"
 #include "distributed/metadata/distobject.h"
+#include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/multi_executor.h"
 #include "distributed/relation_access_tracking.h"
@@ -855,18 +857,37 @@ ShouldPropagateAnyObject(List *addresses)
 /*
  * FilterObjectAddressListByPredicate takes a list of ObjectAddress *'s and returns a list
  * only containing the ObjectAddress *'s for which the predicate returned true.
+ *
+ * When flushCaches is true, the caller opts into periodically flushing the coordinator
+ * caches that grow while the predicate opens each object.
  */
 List *
-FilterObjectAddressListByPredicate(List *objectAddressList, AddressPredicate predicate)
+FilterObjectAddressListByPredicate(List *objectAddressList, AddressPredicate predicate,
+								   bool flushCaches)
 {
 	List *result = NIL;
 
+	int64 processedCount = 0;
 	ObjectAddress *address = NULL;
 	foreach_declared_ptr(address, objectAddressList)
 	{
 		if (predicate(address))
 		{
 			result = lappend(result, address);
+		}
+
+		/*
+		 * This loop opens each Citus table (and its dependencies), which accumulates
+		 * postgres relcache/catcache and Citus metadata cache entries on the
+		 * coordinator. For a very large number of distributed objects this transient
+		 * cache growth can exhaust coordinator memory during metadata sync.
+		 *
+		 * Both the input and result lists only hold ObjectAddresses, so it's safe to
+		 * flush the caches.
+		 */
+		if (flushCaches && MetadataSyncCacheFlushIntervalReached(++processedCount))
+		{
+			FlushCachesForMetadataSync();
 		}
 	}
 

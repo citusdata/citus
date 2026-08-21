@@ -2199,6 +2199,23 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
+		"citus.metadata_sync_cache_flush_interval",
+		gettext_noop("Sets the number of distributed objects processed between "
+					 "backend cache flushes while syncing metadata to a node."),
+		gettext_noop("While activating a node, Citus opens each Citus table to "
+					 "build its shell table and metadata commands, which "
+					 "accumulates PostgreSQL relcache/catcache and Citus metadata "
+					 "cache entries on the coordinator. Citus flushes these caches "
+					 "once every this many objects so that syncing metadata for a "
+					 "very large number of Citus tables does not exhaust coordinator"
+					 "memory. Setting this to 0 disables the periodic flushing."),
+		&MetadataSyncCacheFlushInterval,
+		1000, 0, INT_MAX,
+		PGC_USERSET,
+		GUC_NOT_IN_SAMPLE,
+		NULL, NULL, NULL);
+
+	DefineCustomIntVariable(
 		"citus.metadata_sync_interval",
 		gettext_noop("Sets the time to wait between metadata syncs."),
 		gettext_noop("metadata sync needs to run every so often "

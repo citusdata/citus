@@ -30,6 +30,7 @@ typedef enum
 extern int MetadataSyncInterval;
 extern int MetadataSyncRetryInterval;
 extern int MetadataSyncTransMode;
+extern int MetadataSyncCacheFlushInterval;
 
 /*
  * MetadataSyncContext is used throughout metadata sync.
@@ -85,6 +86,8 @@ extern bool ShouldSyncTableMetadataViaCatalog(Oid relationId);
 extern Oid FetchRelationIdFromPgPartitionHeapTuple(HeapTuple heapTuple,
 												   TupleDesc tupleDesc);
 extern bool ShouldSyncSequenceMetadata(Oid relationId);
+extern bool MetadataSyncCacheFlushIntervalReached(int64 processedCount);
+extern void FlushCachesForMetadataSync(void);
 extern List * NodeMetadataCreateCommands(void);
 extern List * CitusTableMetadataCreateCommandList(Oid relationId);
 extern List * NodeMetadataDropCommands(void);

@@ -51,6 +51,7 @@
 #include "storage/lmgr.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
+#include "utils/inval.h"
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
 #include "utils/snapmgr.h"
@@ -99,6 +100,15 @@
 char *EnableManualMetadataChangesForUser = "";
 int MetadataSyncTransMode = METADATA_SYNC_TRANSACTIONAL;
 
+/*
+ * MetadataSyncCacheFlushInterval is the number of distributed objects we
+ * process between cache flushes while syncing metadata to a node. See
+ * FlushMetadataSyncCachesIfNeeded(), OrderObjectAddressListInDependencyOrder()
+ * and FilterObjectAddressListByPredicate().
+ * Set via citus.metadata_sync_cache_flush_interval; 0 disables the flushing.
+ */
+int MetadataSyncCacheFlushInterval = 1000;
+
 
 static void EnsureObjectMetadataIsSane(int distributionArgumentIndex,
 									   int colocationId);
@@ -113,6 +123,8 @@ static NodeMetadataSyncResult SyncNodeMetadataToNodesOptional(void);
 static bool ShouldSyncTableMetadataInternal(bool hashDistributed,
 											bool citusTableWithNoDistKey);
 static bool SyncNodeMetadataSnapshotToNode(WorkerNode *workerNode, bool raiseOnError);
+static void FlushMetadataSyncCachesIfNeeded(MetadataSyncContext *context,
+											int64 processedCount);
 static void DropMetadataSnapshotOnNode(WorkerNode *workerNode);
 static void FetchSequenceState(Oid sequenceId, int64 *lastValue, bool *isCalled);
 static char * CreateSequenceDependencyCommand(Oid relationId, Oid sequenceId,
@@ -633,6 +645,35 @@ ShouldSyncSequenceMetadata(Oid relationId)
 	ObjectAddressSet(*sequenceAddress, RelationRelationId, relationId);
 
 	return IsAnyObjectDistributed(list_make1(sequenceAddress));
+}
+
+
+/*
+ * MetadataSyncCacheFlushIntervalReached returns true if the number of processed
+ * distributed relations has reached the configured flush interval.
+ * See citus.metadata_sync_cache_flush_interval GUC.
+ */
+bool
+MetadataSyncCacheFlushIntervalReached(int64 processedCount)
+{
+	return MetadataSyncCacheFlushInterval > 0 &&
+		   processedCount % MetadataSyncCacheFlushInterval == 0;
+}
+
+
+/*
+ * FlushCachesForMetadataSync flushes the Citus distributed-table and distributed-object
+ * caches, as well as the postgres relcache/catcache entries.
+ */
+void
+FlushCachesForMetadataSync(void)
+{
+	/* free the Citus distributed-table and distributed-object caches built so far */
+	FlushDistTableCache();
+	FlushDistObjectCache();
+
+	/* free the PostgreSQL relcache/catcache entries built so far */
+	InvalidateSystemCaches();
 }
 
 
@@ -5350,9 +5391,10 @@ SendDependencyCreationCommands(MetadataSyncContext *context)
 	 * not be propagated by citus as they are 'not supported'.
 	 */
 	dependencies = FilterObjectAddressListByPredicate(dependencies,
-													  &SupportedDependencyByCitus);
+													  &SupportedDependencyByCitus,
+													  true);
 
-	dependencies = OrderObjectAddressListInDependencyOrder(dependencies);
+	dependencies = OrderObjectAddressListInDependencyOrder(dependencies, true);
 
 	/*
 	 * We need to create a subcontext as we reset the context after each dependency
@@ -5363,6 +5405,7 @@ SendDependencyCreationCommands(MetadataSyncContext *context)
 														  ALLOCSET_DEFAULT_SIZES);
 	MemoryContextSwitchTo(commandsContext);
 	ObjectAddress *dependency = NULL;
+	int64 processedCount = 0;
 	foreach_declared_ptr(dependency, dependencies)
 	{
 		if (!MetadataSyncCollectsCommands(context))
@@ -5370,19 +5413,26 @@ SendDependencyCreationCommands(MetadataSyncContext *context)
 			MemoryContextReset(commandsContext);
 		}
 
-		if (IsAnyObjectAddressOwnedByExtension(list_make1(dependency), NULL))
+		/*
+		 * We expect extension-owned objects to be created as a result
+		 * of the extension being created.
+		 */
+		if (!IsAnyObjectAddressOwnedByExtension(list_make1(dependency), NULL))
 		{
-			/*
-			 * We expect extension-owned objects to be created as a result
-			 * of the extension being created.
-			 */
-			continue;
+			/* dependency creation commands */
+			List *ddlCommands = GetAllDependencyCreateDDLCommands(list_make1(dependency));
+			SendOrCollectCommandListToActivatedNodes(context, ddlCommands);
 		}
 
-		/* dependency creation commands */
-		List *ddlCommands = GetAllDependencyCreateDDLCommands(list_make1(dependency));
-		SendOrCollectCommandListToActivatedNodes(context, ddlCommands);
+		/*
+		 * We flush the caches even when we skip the dependency creation commands
+		 * because we still opened catalog entries to reach this decision, so
+		 * advance the cache-flush counter and flush if needed on this skip path
+		 * too.
+		 */
+		FlushMetadataSyncCachesIfNeeded(context, ++processedCount);
 	}
+
 	MemoryContextSwitchTo(oldContext);
 
 	if (!MetadataSyncCollectsCommands(context))
@@ -5415,6 +5465,7 @@ SendDistTableMetadataCommands(MetadataSyncContext *context)
 
 	MemoryContext oldContext = MemoryContextSwitchTo(context->context);
 	HeapTuple nextTuple = NULL;
+	int64 processedCount = 0;
 	while (true)
 	{
 		ResetMetadataSyncMemoryContext(context);
@@ -5430,14 +5481,21 @@ SendDistTableMetadataCommands(MetadataSyncContext *context)
 		 * pg_dist_partition). Only Citus tables have shard metadata.
 		 */
 		Oid relationId = FetchRelationIdFromPgPartitionHeapTuple(nextTuple, tupleDesc);
-		if (!ShouldSyncTableMetadata(relationId))
+		if (ShouldSyncTableMetadata(relationId))
 		{
-			continue;
+			List *commandList = CitusTableMetadataCreateCommandList(relationId);
+			SendOrCollectCommandListToActivatedNodes(context, commandList);
 		}
 
-		List *commandList = CitusTableMetadataCreateCommandList(relationId);
-		SendOrCollectCommandListToActivatedNodes(context, commandList);
+		/*
+		 * We flush the caches even when we skip the dependency creation commands
+		 * because ShouldSyncTableMetadata still opened relation to reach this
+		 * decision, so advance the cache-flush counter and flush if needed on this
+		 * skip path too.
+		 */
+		FlushMetadataSyncCachesIfNeeded(context, ++processedCount);
 	}
+
 	MemoryContextSwitchTo(oldContext);
 
 	systable_endscan(scanDesc);
@@ -5464,6 +5522,7 @@ SendDistObjectCommands(MetadataSyncContext *context)
 
 	MemoryContext oldContext = MemoryContextSwitchTo(context->context);
 	HeapTuple nextTuple = NULL;
+	int64 processedCount = 0;
 	while (true)
 	{
 		ResetMetadataSyncMemoryContext(context);
@@ -5528,6 +5587,8 @@ SendDistObjectCommands(MetadataSyncContext *context)
 												list_make1_int(forceDelegation));
 		SendOrCollectCommandListToActivatedNodes(context,
 												 list_make1(workerMetadataUpdateCommand));
+
+		FlushMetadataSyncCachesIfNeeded(context, ++processedCount);
 	}
 	MemoryContextSwitchTo(oldContext);
 
@@ -5560,6 +5621,7 @@ SendInterTableRelationshipCommands(MetadataSyncContext *context)
 
 	MemoryContext oldContext = MemoryContextSwitchTo(context->context);
 	HeapTuple nextTuple = NULL;
+	int64 processedCount = 0;
 	while (true)
 	{
 		ResetMetadataSyncMemoryContext(context);
@@ -5570,23 +5632,23 @@ SendInterTableRelationshipCommands(MetadataSyncContext *context)
 			break;
 		}
 
+		/*
+		 * Skip foreign key and partition creation when the Citus table is
+		 * owned by an extension or when the table doesn't need to be synced.
+		 */
 		Oid relationId = FetchRelationIdFromPgPartitionHeapTuple(nextTuple, tupleDesc);
-		if (!ShouldSyncTableMetadata(relationId))
+		if (ShouldSyncTableMetadata(relationId) && !IsTableOwnedByExtension(relationId))
 		{
-			continue;
+			List *commandList = InterTableRelationshipOfRelationCommandList(relationId);
+			SendOrCollectCommandListToActivatedNodes(context, commandList);
 		}
 
 		/*
-		 * Skip foreign key and partition creation when the Citus table is
-		 * owned by an extension.
+		 * We flush the caches even when we skip the dependency creation commands
+		 * because we still opened catalog entries to reach this decision, so advance
+		 * the cache-flush counter and flush if needed on this skip path too.
 		 */
-		if (IsTableOwnedByExtension(relationId))
-		{
-			continue;
-		}
-
-		List *commandList = InterTableRelationshipOfRelationCommandList(relationId);
-		SendOrCollectCommandListToActivatedNodes(context, commandList);
+		FlushMetadataSyncCachesIfNeeded(context, ++processedCount);
 	}
 	MemoryContextSwitchTo(oldContext);
 
@@ -5595,4 +5657,32 @@ SendInterTableRelationshipCommands(MetadataSyncContext *context)
 
 	/* enable ddl propagation */
 	SendOrCollectCommandListToActivatedNodes(context, list_make1(ENABLE_DDL_PROPAGATION));
+}
+
+
+/*
+ * FlushMetadataSyncCachesIfNeeded drops the distributed-table cache, the
+ * distributed-object cache, and the postgres relation/catalog caches that
+ * accumulate while metadata sync opens each Citus table to build its
+ * DDL and metadata commands if needed.
+ *
+ * We flush caches when actually sending commands to workers, not while merely
+ * collecting.
+ *
+ * The caches are transparently rebuilt on the next access.
+ */
+static void
+FlushMetadataSyncCachesIfNeeded(MetadataSyncContext *context, int64 processedCount)
+{
+	if (MetadataSyncCollectsCommands(context))
+	{
+		return;
+	}
+
+	if (!MetadataSyncCacheFlushIntervalReached(processedCount))
+	{
+		return;
+	}
+
+	FlushCachesForMetadataSync();
 }
