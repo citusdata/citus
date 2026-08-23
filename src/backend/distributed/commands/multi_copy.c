@@ -2992,12 +2992,14 @@ ProcessCopyStmt(CopyStmt *copyStatement, QueryCompletion *completionTag, const
 				return NULL;
 			}
 			else if (copyStatement->filename == NULL && !copyStatement->is_program &&
-					 !CopyStatementHasFormat(copyStatement, "binary"))
+					 !CopyStatementHasFormat(copyStatement, "binary") &&
+					 !CopyStatementHasFormat(copyStatement, "json"))
 			{
 				/*
 				 * COPY table TO STDOUT is handled by specialized logic to
 				 * avoid buffering the table on the coordinator. This enables
-				 * pg_dump of large tables.
+				 * pg_dump of large tables. Formats with coordinator-owned
+				 * framing use the query path, which may batch or spill rows.
 				 */
 				CitusCopyTo(copyStatement, completionTag);
 				return NULL;
@@ -3033,19 +3035,17 @@ CitusCopySelect(CopyStmt *copyStatement)
 
 	Relation distributedRelation = table_openrv(copyStatement->relation, AccessShareLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(distributedRelation);
+	List *attributeNumberList = CopyGetAttnums(tupleDescriptor, distributedRelation,
+											   copyStatement->attlist);
 	List *targetList = NIL;
 
-	for (int i = 0; i < tupleDescriptor->natts; i++)
+	ListCell *attributeNumberCell = NULL;
+	foreach(attributeNumberCell, attributeNumberList)
 	{
-		Form_pg_attribute attr = TupleDescAttr(tupleDescriptor, i);
-
-		if (IsDroppedOrGenerated(attr))
-		{
-			continue;
-		}
-
+		int attributeNumber = lfirst_int(attributeNumberCell);
+		Form_pg_attribute attribute = TupleDescAttr(tupleDescriptor, attributeNumber - 1);
 		ColumnRef *column = makeNode(ColumnRef);
-		column->fields = list_make1(makeString(pstrdup(attr->attname.data)));
+		column->fields = list_make1(makeString(pstrdup(attribute->attname.data)));
 		column->location = -1;
 
 		ResTarget *selectTarget = makeNode(ResTarget);

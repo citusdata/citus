@@ -499,10 +499,215 @@ $$);
 DROP PUBLICATION publication_all_except_conv;
 DROP TABLE publication_conv_excluded;
 
+-- JSON COPY framing and protocol state must be owned by one coordinator COPY.
+CREATE TABLE json_copy_dist
+(
+    id int,
+    payload text,
+    optional text,
+    generated text GENERATED ALWAYS AS (payload) STORED
+);
+SELECT create_distributed_table('json_copy_dist', 'id',
+                                shard_count => 4, colocate_with => 'none');
+INSERT INTO json_copy_dist
+SELECT id, E'quote" slash\\ newline\n', NULL
+FROM (
+    SELECT DISTINCT ON (get_shard_id_for_distribution_column('json_copy_dist', id))
+           id
+    FROM generate_series(1, 100) id
+    ORDER BY get_shard_id_for_distribution_column('json_copy_dist', id), id
+    LIMIT 2
+) distinct_shards;
+
+SELECT count(DISTINCT get_shard_id_for_distribution_column('json_copy_dist', id)) = 2
+       AS rows_on_distinct_shards
+FROM json_copy_dist;
+
+COPY json_copy_dist (payload, optional) TO STDOUT
+    (FORMAT json, FORCE_ARRAY true);
+COPY json_copy_dist (payload) TO STDOUT
+    (FORMAT json, FORCE_ARRAY false);
+COPY json_copy_dist (payload) TO STDOUT
+    (FORMAT json, FORCE_ARRAY true, ENCODING 'UTF8', HEADER false);
+
+CREATE TABLE json_copy_empty (id int);
+SELECT create_distributed_table('json_copy_empty', 'id',
+                                shard_count => 4, colocate_with => 'none');
+COPY json_copy_empty TO STDOUT (FORMAT json, FORCE_ARRAY true);
+
+CREATE TABLE json_copy_single_shard (id int, payload text);
+SELECT create_distributed_table('json_copy_single_shard', NULL,
+                                colocate_with => 'none');
+INSERT INTO json_copy_single_shard VALUES (1, 'single shard');
+COPY json_copy_single_shard TO STDOUT (FORMAT json, FORCE_ARRAY true);
+
+CREATE TABLE json_copy_reference (id int PRIMARY KEY, payload text);
+SELECT create_reference_table('json_copy_reference');
+INSERT INTO json_copy_reference VALUES (1, 'reference');
+COPY json_copy_reference TO STDOUT (FORMAT json, FORCE_ARRAY true);
+
+CREATE TABLE json_copy_local
+(
+    id int,
+    payload text,
+    generated text GENERATED ALWAYS AS (payload) STORED
+);
+INSERT INTO json_copy_local VALUES (1, 'local');
+COPY json_copy_local TO STDOUT (FORMAT json, FORCE_ARRAY true);
+
+COPY json_copy_local (generated) TO STDOUT (FORMAT json);
+COPY json_copy_dist (generated) TO STDOUT (FORMAT json);
+COPY json_copy_local (ctid) TO STDOUT (FORMAT json);
+COPY json_copy_dist (ctid) TO STDOUT (FORMAT json);
+
+CREATE TABLE json_copy_citus_local (id int, payload text);
+SELECT citus_add_local_table_to_metadata('json_copy_citus_local');
+INSERT INTO json_copy_citus_local VALUES (1, 'Citus local');
+COPY json_copy_citus_local TO STDOUT (FORMAT json, FORCE_ARRAY true);
+
+COPY json_copy_dist TO STDOUT (FORMAT json, DELIMITER ',');
+COPY json_copy_dist TO STDOUT (FORMAT json, HEADER true);
+
+DROP TABLE json_copy_dist, json_copy_empty, json_copy_single_shard,
+           json_copy_reference, json_copy_local, json_copy_citus_local;
+
 SELECT citus_remove_node('localhost', :master_port);
 RESET client_min_messages;
 
 SET client_min_messages TO WARNING;
 DROP SCHEMA pg19_repack CASCADE;
+RESET client_min_messages;
+RESET search_path;
+
+--
+-- GRANTED BY on distributed tables.
+--
+-- PG19 (commit dd1398f1) lets a grant be attributed to any role whose
+-- privileges the current user inherits, instead of requiring the grantor to be
+-- current_user.  Citus must ship that grantor to the shards: without it every
+-- worker runs select_best_grantor() on its own and can pick a different
+-- eligible role, leaving shard ACLs that disagree with the coordinator.
+--
+-- Reproducing the divergence needs the named grantor to differ from the one a
+-- worker would pick by itself, so the table is owned by a third role and two
+-- separate roles hold SELECT WITH GRANT OPTION.
+--
+CREATE SCHEMA pg19_grantor;
+SET search_path TO pg19_grantor;
+
+SET citus.next_shard_id TO 1101000;
+SET citus.shard_count TO 2;
+SET citus.shard_replication_factor TO 1;
+
+CREATE ROLE pg19_owner;
+CREATE ROLE pg19_grantor_a;
+CREATE ROLE pg19_grantor_b;
+CREATE ROLE pg19_actor LOGIN;
+CREATE ROLE pg19_grantee;
+
+GRANT USAGE ON SCHEMA pg19_grantor TO pg19_actor;
+
+CREATE TABLE granted_by_test (a int, b int);
+SELECT create_distributed_table('granted_by_test', 'a');
+ALTER TABLE granted_by_test OWNER TO pg19_owner;
+
+GRANT SELECT ON granted_by_test TO pg19_grantor_a WITH GRANT OPTION;
+GRANT SELECT ON granted_by_test TO pg19_grantor_b WITH GRANT OPTION;
+GRANT pg19_grantor_a TO pg19_actor WITH INHERIT TRUE, ADMIN TRUE;
+GRANT pg19_grantor_b TO pg19_actor WITH INHERIT TRUE, ADMIN TRUE;
+
+-- name pg19_grantor_b explicitly; a worker left to itself picks pg19_grantor_a
+SET ROLE pg19_actor;
+GRANT SELECT ON granted_by_test TO pg19_grantee GRANTED BY pg19_grantor_b;
+RESET ROLE;
+
+SELECT DISTINCT a.grantor::regrole::text AS coordinator_grantor
+FROM pg_class c, aclexplode(c.relacl) a
+WHERE c.oid = 'granted_by_test'::regclass
+  AND a.grantee::regrole::text = 'pg19_grantee';
+
+-- every shard must record the grantor the coordinator recorded
+SELECT DISTINCT result AS shard_grantor
+FROM run_command_on_shards('granted_by_test', $cmd$
+    SELECT DISTINCT a.grantor::regrole::text
+    FROM pg_class c, aclexplode(c.relacl) a
+    WHERE c.oid = '%s'::regclass
+      AND a.grantee::regrole::text = 'pg19_grantee'
+$cmd$);
+
+SET ROLE pg19_actor;
+REVOKE SELECT ON granted_by_test FROM pg19_grantee GRANTED BY pg19_grantor_b;
+RESET ROLE;
+
+-- grant twice under different grantors and revoke only one of them: the
+-- coordinator keeps the surviving grant, and the shards have to agree with it.
+-- Otherwise the grantee reads fine on the coordinator but is denied on the
+-- shards, so its queries fail with a permission error.
+SET ROLE pg19_actor;
+GRANT SELECT ON granted_by_test TO pg19_grantee GRANTED BY pg19_grantor_a;
+GRANT SELECT ON granted_by_test TO pg19_grantee GRANTED BY pg19_grantor_b;
+REVOKE SELECT ON granted_by_test FROM pg19_grantee GRANTED BY pg19_grantor_a;
+RESET ROLE;
+
+SELECT has_table_privilege('pg19_grantee', 'granted_by_test', 'SELECT') AS coordinator_privilege;
+
+SELECT DISTINCT result AS shard_privilege
+FROM run_command_on_shards('granted_by_test', $cmd$
+    SELECT has_table_privilege('pg19_grantee', '%s', 'SELECT')
+$cmd$);
+
+-- A grantor whose name needs quoting goes through RoleSpecString(..., true), and
+-- the grant option shares a slot with the grantor clause in both deparse paths:
+-- GRANTED BY follows WITH GRANT OPTION on a grant, and follows the grantee list
+-- on a revoke.  Exercise all of it on a worker.
+CREATE ROLE "Grant Owner";
+CREATE ROLE pg19_grantee2;
+
+GRANT SELECT ON granted_by_test TO "Grant Owner" WITH GRANT OPTION;
+GRANT "Grant Owner" TO pg19_actor WITH INHERIT TRUE, ADMIN TRUE;
+
+SET ROLE pg19_actor;
+GRANT SELECT ON granted_by_test TO pg19_grantee2
+    WITH GRANT OPTION GRANTED BY "Grant Owner";
+RESET ROLE;
+
+SELECT a.grantor::regrole::text AS coordinator_grantor,
+       a.is_grantable AS coordinator_grantable
+FROM pg_class c, aclexplode(c.relacl) a
+WHERE c.oid = 'granted_by_test'::regclass
+  AND a.grantee::regrole::text = 'pg19_grantee2';
+
+SELECT DISTINCT result AS shard_grant_option
+FROM run_command_on_shards('granted_by_test', $cmd$
+    SELECT DISTINCT a.grantor::regrole::text || ', grantable=' || a.is_grantable::text
+    FROM pg_class c, aclexplode(c.relacl) a
+    WHERE c.oid = '%s'::regclass
+      AND a.grantee::regrole::text = 'pg19_grantee2'
+$cmd$);
+
+-- dropping only the grant option has to reach the same ACL entry on the shards
+SET ROLE pg19_actor;
+REVOKE GRANT OPTION FOR SELECT ON granted_by_test
+    FROM pg19_grantee2 GRANTED BY "Grant Owner";
+RESET ROLE;
+
+SELECT a.grantor::regrole::text AS coordinator_grantor,
+       a.is_grantable AS coordinator_grantable
+FROM pg_class c, aclexplode(c.relacl) a
+WHERE c.oid = 'granted_by_test'::regclass
+  AND a.grantee::regrole::text = 'pg19_grantee2';
+
+SELECT DISTINCT result AS shard_grant_option
+FROM run_command_on_shards('granted_by_test', $cmd$
+    SELECT DISTINCT a.grantor::regrole::text || ', grantable=' || a.is_grantable::text
+    FROM pg_class c, aclexplode(c.relacl) a
+    WHERE c.oid = '%s'::regclass
+      AND a.grantee::regrole::text = 'pg19_grantee2'
+$cmd$);
+
+SET client_min_messages TO WARNING;
+DROP SCHEMA pg19_grantor CASCADE;
+DROP ROLE pg19_owner, pg19_grantor_a, pg19_grantor_b, pg19_actor, pg19_grantee;
+DROP ROLE "Grant Owner", pg19_grantee2;
 RESET client_min_messages;
 RESET search_path;
