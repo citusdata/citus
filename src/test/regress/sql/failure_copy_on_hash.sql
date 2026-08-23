@@ -141,12 +141,7 @@ SELECT create_distributed_table('test_table_2','id');
 
 SELECT citus.mitmproxy('conn.kill()');
 
-SELECT :VERSION_NUM / 10000 = 19 AND :'VERSION_NAME' ~ '^19(beta([3-9]|[1-9][0-9]+)|rc[1-9][0-9]*|[.][0-9]+)?([[:space:]].*)?$' AS psql_version_ge_19beta3 \gset
-\if :psql_version_ge_19beta3
 \COPY test_table_2 FROM PROGRAM 'true' delimiter ',';
-\else
-\COPY test_table_2 FROM stdin delimiter ',';
-\endif
 
 SELECT citus.mitmproxy('conn.allow()');
 SELECT pds.logicalrelid, pdsd.shardid, pdsd.shardstate

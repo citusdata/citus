@@ -21,38 +21,24 @@ CREATE VIEW unhealthy_shard_count AS
   ON pdsp.shardid=pds.shardid
   WHERE logicalrelid='copy_reference_failure.test_table'::regclass AND shardstate != 1;
 
-SELECT :VERSION_NUM / 10000 = 19 AND :'VERSION_NAME' ~ '^19(beta([3-9]|[1-9][0-9]+)|rc[1-9][0-9]*|[.][0-9]+)?([[:space:]].*)?$' AS psql_version_ge_19beta3 \gset
-
 -- in the first test, kill just in the first
 -- response we get from the worker
 SELECT citus.mitmproxy('conn.kill()');
-\if :psql_version_ge_19beta3
 \copy test_table FROM PROGRAM 'true' DELIMITER ','
-\else
-\copy test_table FROM STDIN DELIMITER ','
-\endif
 SELECT citus.mitmproxy('conn.allow()');
 SELECT * FROM unhealthy_shard_count;
 SELECT count(*) FROM test_table;
 
 -- kill as soon as the coordinator sends begin
 SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED").kill()');
-\if :psql_version_ge_19beta3
 \copy test_table FROM PROGRAM 'true' DELIMITER ','
-\else
-\copy test_table FROM STDIN DELIMITER ','
-\endif
 SELECT citus.mitmproxy('conn.allow()');
 SELECT * FROM unhealthy_shard_count;
 SELECT count(*) FROM test_table;
 
 -- cancel as soon as the coordinator sends begin
 SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED").cancel(' ||  pg_backend_pid() || ')');
-\if :psql_version_ge_19beta3
 \copy test_table FROM PROGRAM 'true' DELIMITER ','
-\else
-\copy test_table FROM STDIN DELIMITER ','
-\endif
 SELECT citus.mitmproxy('conn.allow()');
 SELECT * FROM unhealthy_shard_count;
 SELECT count(*) FROM test_table;

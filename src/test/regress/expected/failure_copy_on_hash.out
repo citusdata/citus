@@ -270,7 +270,7 @@ SELECT citus.mitmproxy('conn.kill()');
 
 (1 row)
 
-\COPY test_table_2 FROM stdin delimiter ',';
+\COPY test_table_2 FROM PROGRAM 'true' delimiter ',';
 ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
