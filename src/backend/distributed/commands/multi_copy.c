@@ -114,7 +114,7 @@
 
 
 /* constant used in binary protocol */
-static const char BinarySignature[11] = "PGCOPY\n\377\r\n\0";
+static const char BinarySignature[11] pg_attribute_nonstring = "PGCOPY\n\377\r\n\0";
 
 /* if true, skip validation of JSONB columns during COPY */
 bool SkipJsonbValidationInCopy = true;
