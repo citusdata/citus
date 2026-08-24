@@ -4898,7 +4898,16 @@ SendOrCollectCommandListToActivatedNodes(MetadataSyncContext *context, List *com
 	else if (context->transactionMode == METADATA_SYNC_NON_TRANSACTIONAL)
 	{
 		List *workerConnections = context->activatedWorkerBareConnections;
-		SendCommandListToWorkerListWithBareConnections(workerConnections, commands);
+		if (MetadataSyncBatchingEnabled(context))
+		{
+			ExecuteRemoteCommandsInConnectionsInPipelineMode(workerConnections,
+															 commands);
+		}
+		else
+		{
+			SendCommandListToWorkerListWithBareConnections(workerConnections,
+														   commands);
+		}
 	}
 	else
 	{
