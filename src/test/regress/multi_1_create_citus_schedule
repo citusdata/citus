@@ -55,6 +55,7 @@ test: multi_drop_extension
 # ---
 test: multi_metadata_sync
 test: multi_metadata_sync_domain
+test: metadata_sync_batching
 
 test: grant_on_function_propagation
 test: grant_on_foreign_server_propagation
