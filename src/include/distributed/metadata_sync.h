@@ -31,6 +31,7 @@ extern int MetadataSyncInterval;
 extern int MetadataSyncRetryInterval;
 extern int MetadataSyncTransMode;
 extern int MetadataSyncCacheFlushInterval;
+extern int MetadataSyncBatchSize;
 
 /*
  * MetadataSyncContext is used throughout metadata sync.
@@ -44,6 +45,25 @@ typedef struct MetadataSyncContext
 	bool collectCommands; /* if we collect commands instead of sending and resetting */
 	List *collectedCommands; /* collected commands. (NIL if collectCommands == false) */
 	bool nodesAddedInSameTransaction; /* if the nodes are added just before activation */
+
+	/*
+	 * Batch state used by SendOrBatchCommandListToActivatedNodes(). While
+	 * batching, the commands of several distributed objects are accumulated in
+	 * batchedCommands and flushed to the activated nodes together once batchedCount
+	 * reaches citus.metadata_sync_batch_size.
+	 */
+	List *batchedCommands; /* commands accumulated for the current batch */
+	int batchedCount; /* number of distributed objects in the current batch */
+
+	/*
+	 * Memory context holding batchedCommands.
+	 *
+	 * This holds the batched command strings, which is reset only after each
+	 * flush. So, when preparing the commands for a single distributed object,
+	 * we use a separate function-local memory context that is reset after each
+	 * object.
+	 */
+	MemoryContext batchedCommandsContext;
 } MetadataSyncContext;
 
 typedef enum

@@ -2199,6 +2199,30 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
+		"citus.metadata_sync_batch_size",
+		gettext_noop("Sets the number of distributed objects whose metadata-sync "
+					 "commands are sent to a node in a single round-trip."),
+		gettext_noop("While activating a node, Citus builds and sends the shell "
+					 "table, metadata and dependency creation commands for each "
+					 "distributed object. Sending them one object at a time incurs "
+					 "a network round-trip - and, in nontransactional mode, a "
+					 "separate remote transaction - per object, which is slow when "
+					 "syncing metadata for a very large number of distributed "
+					 "tables. Citus instead accumulates the commands of this many "
+					 "objects and sends them together. Larger batches mean fewer "
+					 "round-trips but larger remote transactions in nontransactional "
+					 "mode, and the batch's transaction holds more locks at once "
+					 "(each object's creation commands take locks that are kept "
+					 "until the transaction ends), so a very large batch can exhaust "
+					 "the remote node's shared lock table (sized by "
+					 "max_locks_per_transaction). Setting this to 1 disables batching."),
+		&MetadataSyncBatchSize,
+		1000, 1, 10000,
+		PGC_SUSET,
+		GUC_NOT_IN_SAMPLE,
+		NULL, NULL, NULL);
+
+	DefineCustomIntVariable(
 		"citus.metadata_sync_cache_flush_interval",
 		gettext_noop("Sets the number of distributed objects processed between "
 					 "backend cache flushes while syncing metadata to a node."),

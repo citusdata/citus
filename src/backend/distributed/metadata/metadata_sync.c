@@ -109,6 +109,16 @@ int MetadataSyncTransMode = METADATA_SYNC_TRANSACTIONAL;
  */
 int MetadataSyncCacheFlushInterval = 1000;
 
+/*
+ * MetadataSyncBatchSize is the number of distributed objects whose
+ * metadata-sync commands we accumulate and send to the activated nodes in a single
+ * round-trip while syncing metadata to a node.
+ *
+ * Set via citus.metadata_sync_batch_size; 1 disables batching and restores the
+ * one-object-per-round-trip behavior.
+ */
+int MetadataSyncBatchSize = 1000;
+
 
 static void EnsureObjectMetadataIsSane(int distributionArgumentIndex,
 									   int colocationId);
@@ -125,6 +135,12 @@ static bool ShouldSyncTableMetadataInternal(bool hashDistributed,
 static bool SyncNodeMetadataSnapshotToNode(WorkerNode *workerNode, bool raiseOnError);
 static void FlushMetadataSyncCachesIfNeeded(MetadataSyncContext *context,
 											int64 processedCount);
+static bool MetadataSyncBatchingEnabled(MetadataSyncContext *context);
+static void InitializeActivatedNodeCommandBatch(MetadataSyncContext *context,
+												MemoryContext commandsContext);
+static void SendOrBatchCommandListToActivatedNodes(MetadataSyncContext *context,
+												   List *commandList);
+static void FlushBatchedCommandsToActivatedNodes(MetadataSyncContext *context);
 static void DropMetadataSnapshotOnNode(WorkerNode *workerNode);
 static void FetchSequenceState(Oid sequenceId, int64 *lastValue, bool *isCalled);
 static char * CreateSequenceDependencyCommand(Oid relationId, Oid sequenceId,
@@ -5397,21 +5413,30 @@ SendDependencyCreationCommands(MetadataSyncContext *context)
 	dependencies = OrderObjectAddressListInDependencyOrder(dependencies, true);
 
 	/*
-	 * We need to create a subcontext as we reset the context after each dependency
-	 * creation but we want to preserve all dependency objects at metadataSyncContext.
+	 * commandsContext holds the batched command strings until they are flushed.
+	 * It lives under context->context so the dependency objects gathered above
+	 * (which stay in context->context) are preserved across the per-flush resets
+	 * of this batch context.
 	 */
 	MemoryContext commandsContext = AllocSetContextCreate(context->context,
 														  "dependency commands context",
 														  ALLOCSET_DEFAULT_SIZES);
-	MemoryContextSwitchTo(commandsContext);
+
+	/*
+	 * Build each dependency's ddl commands in a per-object context that we reset
+	 * every iteration, so the deparse and catalog scratch does not accumulate in
+	 * the batch context until the batch is flushed.
+	 */
+	MemoryContext perObjectContext = AllocSetContextCreate(oldContext,
+														   "dependency commands per object context",
+														   ALLOCSET_DEFAULT_SIZES);
 	ObjectAddress *dependency = NULL;
 	int64 processedCount = 0;
+	InitializeActivatedNodeCommandBatch(context, commandsContext);
 	foreach_declared_ptr(dependency, dependencies)
 	{
-		if (!MetadataSyncCollectsCommands(context))
-		{
-			MemoryContextReset(commandsContext);
-		}
+		MemoryContextReset(perObjectContext);
+		MemoryContextSwitchTo(perObjectContext);
 
 		/*
 		 * We expect extension-owned objects to be created as a result
@@ -5421,7 +5446,7 @@ SendDependencyCreationCommands(MetadataSyncContext *context)
 		{
 			/* dependency creation commands */
 			List *ddlCommands = GetAllDependencyCreateDDLCommands(list_make1(dependency));
-			SendOrCollectCommandListToActivatedNodes(context, ddlCommands);
+			SendOrBatchCommandListToActivatedNodes(context, ddlCommands);
 		}
 
 		/*
@@ -5433,7 +5458,14 @@ SendDependencyCreationCommands(MetadataSyncContext *context)
 		FlushMetadataSyncCachesIfNeeded(context, ++processedCount);
 	}
 
+	MemoryContextSwitchTo(context->context);
+
+	/* send whatever remains in the final partial batch */
+	FlushBatchedCommandsToActivatedNodes(context);
+
 	MemoryContextSwitchTo(oldContext);
+
+	MemoryContextDelete(perObjectContext);
 
 	if (!MetadataSyncCollectsCommands(context))
 	{
@@ -5464,11 +5496,22 @@ SendDistTableMetadataCommands(MetadataSyncContext *context)
 											  scanKeyCount, scanKey);
 
 	MemoryContext oldContext = MemoryContextSwitchTo(context->context);
+
+	/*
+	 * Build each object's commands in a per-object context that we reset every
+	 * iteration, so the per-object deparse and catalog scratch does not pile up
+	 * in the batch context until the batch is flushed.
+	 */
+	MemoryContext perObjectContext = AllocSetContextCreate(oldContext,
+														   "dist table commands per object context",
+														   ALLOCSET_DEFAULT_SIZES);
 	HeapTuple nextTuple = NULL;
 	int64 processedCount = 0;
+	InitializeActivatedNodeCommandBatch(context, context->context);
 	while (true)
 	{
-		ResetMetadataSyncMemoryContext(context);
+		MemoryContextReset(perObjectContext);
+		MemoryContextSwitchTo(perObjectContext);
 
 		nextTuple = systable_getnext(scanDesc);
 		if (!HeapTupleIsValid(nextTuple))
@@ -5484,7 +5527,7 @@ SendDistTableMetadataCommands(MetadataSyncContext *context)
 		if (ShouldSyncTableMetadata(relationId))
 		{
 			List *commandList = CitusTableMetadataCreateCommandList(relationId);
-			SendOrCollectCommandListToActivatedNodes(context, commandList);
+			SendOrBatchCommandListToActivatedNodes(context, commandList);
 		}
 
 		/*
@@ -5496,7 +5539,14 @@ SendDistTableMetadataCommands(MetadataSyncContext *context)
 		FlushMetadataSyncCachesIfNeeded(context, ++processedCount);
 	}
 
+	MemoryContextSwitchTo(context->context);
+
+	/* send whatever remains in the final partial batch */
+	FlushBatchedCommandsToActivatedNodes(context);
+
 	MemoryContextSwitchTo(oldContext);
+
+	MemoryContextDelete(perObjectContext);
 
 	systable_endscan(scanDesc);
 	table_close(relation, AccessShareLock);
@@ -5521,11 +5571,22 @@ SendDistObjectCommands(MetadataSyncContext *context)
 											  scanKeyCount, scanKey);
 
 	MemoryContext oldContext = MemoryContextSwitchTo(context->context);
+
+	/*
+	 * Build each object's commands in a per-object context that we reset every
+	 * iteration, so the per-object deparse and catalog scratch does not pile up
+	 * in the batch context until the batch is flushed.
+	 */
+	MemoryContext perObjectContext = AllocSetContextCreate(oldContext,
+														   "dist object commands per object context",
+														   ALLOCSET_DEFAULT_SIZES);
 	HeapTuple nextTuple = NULL;
 	int64 processedCount = 0;
+	InitializeActivatedNodeCommandBatch(context, context->context);
 	while (true)
 	{
-		ResetMetadataSyncMemoryContext(context);
+		MemoryContextReset(perObjectContext);
+		MemoryContextSwitchTo(perObjectContext);
 
 		nextTuple = systable_getnext(scanDesc);
 		if (!HeapTupleIsValid(nextTuple))
@@ -5585,12 +5646,21 @@ SendDistObjectCommands(MetadataSyncContext *context)
 												list_make1_int(distributionArgumentIndex),
 												list_make1_int(colocationId),
 												list_make1_int(forceDelegation));
-		SendOrCollectCommandListToActivatedNodes(context,
-												 list_make1(workerMetadataUpdateCommand));
+
+		SendOrBatchCommandListToActivatedNodes(context,
+											   list_make1(workerMetadataUpdateCommand));
 
 		FlushMetadataSyncCachesIfNeeded(context, ++processedCount);
 	}
+
+	MemoryContextSwitchTo(context->context);
+
+	/* send whatever remains in the final partial batch */
+	FlushBatchedCommandsToActivatedNodes(context);
+
 	MemoryContextSwitchTo(oldContext);
+
+	MemoryContextDelete(perObjectContext);
 
 	systable_endscan(scanDesc);
 	relation_close(relation, NoLock);
@@ -5620,11 +5690,22 @@ SendInterTableRelationshipCommands(MetadataSyncContext *context)
 											  scanKeyCount, scanKey);
 
 	MemoryContext oldContext = MemoryContextSwitchTo(context->context);
+
+	/*
+	 * Build each object's commands in a per-object context that we reset every
+	 * iteration, so the per-object deparse and catalog scratch does not pile up
+	 * in the batch context until the batch is flushed.
+	 */
+	MemoryContext perObjectContext = AllocSetContextCreate(oldContext,
+														   "inter-table commands per object context",
+														   ALLOCSET_DEFAULT_SIZES);
 	HeapTuple nextTuple = NULL;
 	int64 processedCount = 0;
+	InitializeActivatedNodeCommandBatch(context, context->context);
 	while (true)
 	{
-		ResetMetadataSyncMemoryContext(context);
+		MemoryContextReset(perObjectContext);
+		MemoryContextSwitchTo(perObjectContext);
 
 		nextTuple = systable_getnext(scanDesc);
 		if (!HeapTupleIsValid(nextTuple))
@@ -5640,7 +5721,7 @@ SendInterTableRelationshipCommands(MetadataSyncContext *context)
 		if (ShouldSyncTableMetadata(relationId) && !IsTableOwnedByExtension(relationId))
 		{
 			List *commandList = InterTableRelationshipOfRelationCommandList(relationId);
-			SendOrCollectCommandListToActivatedNodes(context, commandList);
+			SendOrBatchCommandListToActivatedNodes(context, commandList);
 		}
 
 		/*
@@ -5650,7 +5731,15 @@ SendInterTableRelationshipCommands(MetadataSyncContext *context)
 		 */
 		FlushMetadataSyncCachesIfNeeded(context, ++processedCount);
 	}
+
+	MemoryContextSwitchTo(context->context);
+
+	/* send whatever remains in the final partial batch */
+	FlushBatchedCommandsToActivatedNodes(context);
+
 	MemoryContextSwitchTo(oldContext);
+
+	MemoryContextDelete(perObjectContext);
 
 	systable_endscan(scanDesc);
 	table_close(relation, AccessShareLock);
@@ -5685,4 +5774,97 @@ FlushMetadataSyncCachesIfNeeded(MetadataSyncContext *context, int64 processedCou
 	}
 
 	FlushCachesForMetadataSync();
+}
+
+
+/*
+ * MetadataSyncBatchingEnabled returns whether metadata sync should accumulate
+ * the commands of multiple distributed objects and send them to the activated
+ * nodes in batches.
+ *
+ * Note that we don't batch while merely collecting commands.
+ */
+static bool
+MetadataSyncBatchingEnabled(MetadataSyncContext *context)
+{
+	return !MetadataSyncCollectsCommands(context) && MetadataSyncBatchSize > 1;
+}
+
+
+/*
+ * InitializeActivatedNodeCommandBatch initializes the batch state that
+ * SendOrBatchCommandListToActivatedNodes() accumulates into. Callers invoke it
+ * once before the loop that produces the per-object command lists and pass the
+ * memory context that holds the batched command strings, which is reset after
+ * each flush.
+ */
+static void
+InitializeActivatedNodeCommandBatch(MetadataSyncContext *context,
+									MemoryContext commandsContext)
+{
+	context->batchedCommands = NIL;
+	context->batchedCount = 0;
+	context->batchedCommandsContext = commandsContext;
+}
+
+
+/*
+ * SendOrBatchCommandListToActivatedNodes accumulates commandList into the
+ * current batch and flushes it to the activated nodes once the batch reaches
+ * citus.metadata_sync_batch_size distributed objects.
+ *
+ * When batching is disabled (including while merely collecting commands) it uses
+ * an effective batch size of 1, i.e. it flushes after every distributed object.
+ *
+ * The finished command strings are copied into the batch memory context passed
+ * to InitializeActivatedNodeCommandBatch(), so the caller should use a short-living
+ * memory context that it resets after every object while generating commandList to
+ * keep peak memory bounded.
+ *
+ * After the loop, the caller must call FlushBatchedCommandsToActivatedNodes() to
+ * send any remaining partial batch.
+ */
+static void
+SendOrBatchCommandListToActivatedNodes(MetadataSyncContext *context, List *commandList)
+{
+	MemoryContext oldContext = MemoryContextSwitchTo(context->batchedCommandsContext);
+
+	char *command = NULL;
+	foreach_declared_ptr(command, commandList)
+	{
+		context->batchedCommands = lappend(context->batchedCommands, pstrdup(command));
+	}
+
+	MemoryContextSwitchTo(oldContext);
+
+	context->batchedCount++;
+
+	int batchSize = MetadataSyncBatchingEnabled(context) ? MetadataSyncBatchSize : 1;
+	if (context->batchedCount >= batchSize)
+	{
+		FlushBatchedCommandsToActivatedNodes(context);
+	}
+}
+
+
+/*
+ * FlushBatchedCommandsToActivatedNodes sends the commands accumulated by
+ * SendOrBatchCommandListToActivatedNodes() to the activated nodes and then
+ * resets the batch state and the memory context that held the commands.
+ */
+static void
+FlushBatchedCommandsToActivatedNodes(MetadataSyncContext *context)
+{
+	if (context->batchedCommands != NIL)
+	{
+		SendOrCollectCommandListToActivatedNodes(context, context->batchedCommands);
+	}
+
+	context->batchedCommands = NIL;
+	context->batchedCount = 0;
+
+	if (!MetadataSyncCollectsCommands(context))
+	{
+		MemoryContextReset(context->batchedCommandsContext);
+	}
 }
