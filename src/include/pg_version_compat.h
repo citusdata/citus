@@ -773,4 +773,17 @@ getStxstattarget_compat(HeapTuple tup)
 		" MINVALUE " INT64_FORMAT " MAXVALUE " INT64_FORMAT \
 		" START WITH " INT64_FORMAT " CACHE " INT64_FORMAT " %sCYCLE"
 
+/*
+ * pg_attribute_nonstring marks a character array that is not meant to be
+ * NUL-terminated, silencing -Wunterminated-string-initialization (GCC 15+).
+ * It was introduced in PostgreSQL 18, so provide a fallback for older versions.
+ */
+#ifndef pg_attribute_nonstring
+#if defined(__has_attribute) && __has_attribute(nonstring)
+#define pg_attribute_nonstring __attribute__((nonstring))
+#else
+#define pg_attribute_nonstring
+#endif
+#endif
+
 #endif   /* PG_VERSION_COMPAT_H */
