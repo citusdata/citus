@@ -282,6 +282,26 @@ JOIN rf_before b USING (shardid);
 (1 row)
 
 DROP TABLE IF EXISTS rf_before;
+-- lock ordering: the rejection must fire WITHOUT first waiting on an exclusive lock.
+-- PG19 defines REPACK (CONCURRENTLY) to hold only ShareUpdateExclusiveLock until the
+-- final swap, so Citus must not escalate to AccessExclusiveLock merely to reject the
+-- statement.  Park a conflicting AccessShareLock in a prepared transaction -- it
+-- conflicts with AccessExclusiveLock but not with ShareUpdateExclusiveLock -- and set a
+-- short lock_timeout: a correctly ordered rejection names the unsupported option, a late
+-- one is killed by the lock timeout instead.  DDL propagation is switched off around the
+-- LOCK so that it stays a local statement: otherwise it opens a coordinated transaction
+-- and PREPARE TRANSACTION is refused.
+SET citus.enable_ddl_propagation TO off;
+BEGIN;
+LOCK TABLE repack_test IN ACCESS SHARE MODE;
+PREPARE TRANSACTION 'repack_test_lock_holder';
+RESET citus.enable_ddl_propagation;
+SET lock_timeout = '2s';
+REPACK (CONCURRENTLY) repack_test USING INDEX repack_test_a_idx;
+ERROR:  cannot run REPACK command
+DETAIL:  CONCURRENTLY option is currently unsupported for distributed tables.
+RESET lock_timeout;
+ROLLBACK PREPARED 'repack_test_lock_holder';
 -- data is preserved by the ordinary REPACKs above
 SELECT count(*) AS rows_after_disabled_option_repack FROM repack_test;
  rows_after_disabled_option_repack
@@ -944,5 +964,26 @@ SET client_min_messages TO WARNING;
 DROP SCHEMA pg19_grantor CASCADE;
 DROP ROLE pg19_owner, pg19_grantor_a, pg19_grantor_b, pg19_actor, pg19_grantee;
 DROP ROLE "Grant Owner", pg19_grantee2;
+RESET client_min_messages;
+RESET search_path;
+-- PG19 REPACK (CONCURRENTLY) must not be escalated to AccessExclusiveLock by
+-- Citus: that blocks the repack decoding worker and hangs forever, even on a
+-- plain local table.  Bound the statement so that a regression shows up as a
+-- diff rather than as a CI timeout.
+CREATE SCHEMA pg19_repack;
+SET search_path TO pg19_repack;
+CREATE TABLE repack_local (a int PRIMARY KEY, b text);
+INSERT INTO repack_local SELECT i, 'v' || i FROM generate_series(1, 100) i;
+SET statement_timeout = '60s';
+REPACK (CONCURRENTLY) repack_local;
+RESET statement_timeout;
+SELECT count(*) FROM repack_local;
+ count
+---------------------------------------------------------------------
+   100
+(1 row)
+
+SET client_min_messages TO WARNING;
+DROP SCHEMA pg19_repack CASCADE;
 RESET client_min_messages;
 RESET search_path;
