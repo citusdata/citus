@@ -288,7 +288,7 @@ SafeBsearch(const void *key, const void *ptr, rsize_t count, rsize_t size,
 	 * does. We cannot use bsearch_s as a replacement, since it's not available
 	 * in safestringlib.
 	 */
-	return bsearch(key, ptr, count, size, comp); /* IGNORE-BANNED */
+	return (void *) bsearch(key, ptr, count, size, comp); /* IGNORE-BANNED */
 }
 
 
