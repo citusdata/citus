@@ -34,6 +34,8 @@ SELECT citus.mitmproxy('conn.kill()');
 
 (1 row)
 
+-- Deliberately use zero-row input for the next three failures; modern psql
+-- drains failed COPY input through the next \. (#8780).
 \copy test_table FROM PROGRAM 'true' DELIMITER ','
 ERROR:  failure on connection marked as essential: localhost:xxxxx
 SELECT citus.mitmproxy('conn.allow()');

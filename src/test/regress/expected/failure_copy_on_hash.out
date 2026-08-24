@@ -270,6 +270,8 @@ SELECT citus.mitmproxy('conn.kill()');
 
 (1 row)
 
+-- Deliberately use zero-row input; modern psql drains failed COPY input
+-- through the next \. (#8780).
 \COPY test_table_2 FROM PROGRAM 'true' delimiter ',';
 ERROR:  connection to the remote node postgres@localhost:xxxxx failed with the following error: connection not open
 SELECT citus.mitmproxy('conn.allow()');

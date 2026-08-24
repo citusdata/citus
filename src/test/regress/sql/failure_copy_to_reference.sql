@@ -24,6 +24,8 @@ CREATE VIEW unhealthy_shard_count AS
 -- in the first test, kill just in the first
 -- response we get from the worker
 SELECT citus.mitmproxy('conn.kill()');
+-- Deliberately use zero-row input for the next three failures; modern psql
+-- drains failed COPY input through the next \. (#8780).
 \copy test_table FROM PROGRAM 'true' DELIMITER ','
 SELECT citus.mitmproxy('conn.allow()');
 SELECT * FROM unhealthy_shard_count;
