@@ -292,6 +292,7 @@ SELECT * FROM view_created_before_shard_moves;
 
 -- and make sure that all the shards are remote
 BEGIN;
+	SET LOCAL citus.max_adaptive_executor_pool_size TO 1;
 	SET LOCAL citus.log_remote_commands TO ON;
 	INSERT INTO test(x,y) VALUES (101,100);
 	INSERT INTO test(x,y) VALUES (102,100);
