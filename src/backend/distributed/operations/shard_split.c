@@ -1385,9 +1385,12 @@ ErrorIfOutputPluginNotAllowed(MultiConnection *connection, char *outputPlugin)
 	StringInfo command = makeStringInfo();
 	appendStringInfo(command,
 					 "SELECT current_setting('output_plugin_libraries', true), "
-					 "coalesce(bool_or(btrim(name, ' \"') = %s), false) "
-					 "FROM unnest(string_to_array(coalesce("
-					 "current_setting('output_plugin_libraries', true), %s), ',')) name",
+					 "coalesce(bool_or(CASE WHEN name LIKE '\"%%\"' THEN "
+					 "replace(substring(name, 2, length(name) - 2), '\"\"', '\"') "
+					 "ELSE name END = %s), false) "
+					 "FROM (SELECT btrim(elem, E' \\t\\n\\r\\f') AS name FROM unnest("
+					 "string_to_array(coalesce(current_setting("
+					 "'output_plugin_libraries', true), %s), ',')) elem) s",
 					 quote_literal_cstr(outputPlugin),
 					 quote_literal_cstr(outputPlugin));
 
