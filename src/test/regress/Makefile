@@ -132,6 +132,10 @@ check-custom-schedule: all
 	$(pg_regress_multi_check) --load-extension=citus --worker-count=$(WORKERCOUNT) \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/$(SCHEDULE) $(EXTRA_TESTS)
 
+check-follower-custom-schedule: all
+	$(pg_regress_multi_check) --load-extension=citus --follower-cluster --worker-count=$(WORKERCOUNT) \
+	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/$(SCHEDULE) $(EXTRA_TESTS)
+
 check-failure-custom-schedule: all
 	$(pg_regress_multi_check) --load-extension=citus --mitmproxy --worker-count=$(WORKERCOUNT) \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/$(SCHEDULE) $(EXTRA_TESTS)
@@ -142,6 +146,12 @@ check-isolation-custom-schedule: all  $(isolation_test_files)
 
 check-custom-schedule-vg: all
 	$(pg_regress_multi_check) --load-extension=citus \
+	--valgrind --pg_ctl-timeout=360 --connection-timeout=500000 --worker-count=$(WORKERCOUNT) \
+	--valgrind-path=valgrind --valgrind-log-file=$(CITUS_VALGRIND_LOG_FILE) \
+	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/$(SCHEDULE) $(EXTRA_TESTS)
+
+check-follower-custom-schedule-vg: all
+	$(pg_regress_multi_check) --load-extension=citus --follower-cluster \
 	--valgrind --pg_ctl-timeout=360 --connection-timeout=500000 --worker-count=$(WORKERCOUNT) \
 	--valgrind-path=valgrind --valgrind-log-file=$(CITUS_VALGRIND_LOG_FILE) \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/$(SCHEDULE) $(EXTRA_TESTS)
