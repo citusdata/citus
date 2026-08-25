@@ -5,6 +5,7 @@ from run_test import (
     run_schedule_with_multiregress,
 )
 from run_test import test_dependencies as get_test_dependencies
+from run_test import tmp_schedule
 
 
 def test_whole_schedule_line_merges_dependencies():
@@ -79,3 +80,51 @@ def test_follower_schedule_selects_follower_custom_target(monkeypatch):
     assert "check-follower-custom-schedule" in commands[0]
     assert "WORKERCOUNT=2" in commands[0]
     assert "SCHEDULE='tmp_schedule'" in commands[0]
+
+
+def test_multiuser_copy_uses_required_enterprise_setup():
+    args = {
+        "use_base_schedule": False,
+        "use_whole_schedule_line": True,
+    }
+    dependencies = get_test_dependencies(
+        "multi_multiuser_copy",
+        "enterprise_schedule",
+        "test: multi_multiuser_copy\n",
+        args,
+    )
+
+    assert dependencies.schedule == "enterprise_minimal_schedule"
+    assert dependencies.extra_tests() == ["multi_create_table", "multi_create_users"]
+    assert dependencies.repeatable
+
+
+def test_multiuser_copy_setup_precedes_repetitions(tmp_path, monkeypatch):
+    args = {
+        "use_base_schedule": False,
+        "use_whole_schedule_line": True,
+        "repeat": 8,
+    }
+    dependencies = get_test_dependencies(
+        "multi_multiuser_copy",
+        "enterprise_schedule",
+        "test: multi_multiuser_copy\n",
+        args,
+    )
+    monkeypatch.setattr("run_test.REGRESS_DIR", tmp_path)
+    (tmp_path / "enterprise_minimal_schedule").write_text("test: enterprise_setup\n")
+
+    with tmp_schedule(
+        "multi_multiuser_copy",
+        dependencies,
+        "test: multi_multiuser_copy\n",
+        args,
+    ) as schedule:
+        schedule_lines = (tmp_path / schedule).read_text().splitlines()
+
+    assert schedule_lines == [
+        "test: enterprise_setup",
+        "test: multi_create_table",
+        "test: multi_create_users",
+        *(["test: multi_multiuser_copy"] * 8),
+    ]
