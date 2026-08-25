@@ -216,8 +216,10 @@ BEGIN;
 COMMIT;
 
 \c -reuse-previous=off regression - - :master_port
+DROP TABLE the_replicated_table;
 DROP TABLE the_table;
 DROP TABLE reference_table;
 DROP TABLE citus_local_table;
 DROP TABLE dist_on_coord;
+DROP TABLE local;
 SELECT master_remove_node('localhost', :master_port);
