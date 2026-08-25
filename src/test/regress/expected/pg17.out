@@ -1496,15 +1496,15 @@ SELECT create_distributed_table('check_ign_err', 'n');
 
 (1 row)
 
-COPY check_ign_err FROM STDIN WITH (on_error stop);
+\copy check_ign_err FROM PROGRAM 'true' WITH (on_error stop)
 ERROR:  Citus does not support COPY FROM with ON_ERROR option.
-COPY check_ign_err FROM STDIN WITH (ON_ERROR ignore);
+\copy check_ign_err FROM PROGRAM 'true' WITH (ON_ERROR ignore)
 ERROR:  Citus does not support COPY FROM with ON_ERROR option.
-COPY check_ign_err FROM STDIN WITH (on_error ignore, log_verbosity verbose);
+\copy check_ign_err FROM PROGRAM 'true' WITH (on_error ignore, log_verbosity verbose)
 ERROR:  Citus does not support COPY FROM with ON_ERROR option.
-COPY check_ign_err FROM STDIN WITH (log_verbosity verbose, on_error ignore);
+\copy check_ign_err FROM PROGRAM 'true' WITH (log_verbosity verbose, on_error ignore)
 ERROR:  Citus does not support COPY FROM with ON_ERROR option.
-COPY check_ign_err FROM STDIN WITH (log_verbosity verbose);
+\copy check_ign_err FROM PROGRAM 'true' WITH (log_verbosity verbose)
 ERROR:  Citus does not support COPY FROM with LOG_VERBOSITY option.
 -- End of Test for COPY ON_ERROR option
 -- Test FORCE_NOT_NULL and FORCE_NULL options
