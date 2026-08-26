@@ -2,6 +2,11 @@
 -- MULTI_MULTIUSER_COPY
 --
 
+-- Make this test re-runnable within the same cluster.
+SET client_min_messages TO WARNING;
+DROP TABLE IF EXISTS customer_copy_hash;
+RESET client_min_messages;
+
 -- Create a new hash-partitioned table into which to COPY
 CREATE TABLE customer_copy_hash (
         c_custkey integer,
