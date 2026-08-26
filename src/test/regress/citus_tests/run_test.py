@@ -253,6 +253,10 @@ DEPS = {
         ["multi_create_table", "multi_create_users", "multi_multiuser_load_data"],
         repeatable=False,
     ),
+    "multi_multiuser_copy": TestDeps(
+        "enterprise_minimal_schedule",
+        ["multi_create_table", "multi_create_users"],
+    ),
     "multi_prepare_plsql": TestDeps("base_schedule"),
     "multi_utility_statements": TestDeps("base_schedule"),
     "pg15": TestDeps("base_schedule"),
