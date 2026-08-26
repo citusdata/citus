@@ -366,9 +366,9 @@ INSERT INTO ref SELECT i, i*2 FROM generate_series(100,150)i;
 -- the first insert goes to a shard on the worker
 -- the second insert goes to a shard on the coordinator
 BEGIN;
+	SET LOCAL citus.grep_remote_commands TO '%single_node_ent.test_%';
 	SET LOCAL citus.log_remote_commands TO ON;
 	INSERT INTO test(x,y) VALUES (101,100);
-NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
 NOTICE:  issuing INSERT INTO single_node_ent.test_90730501 (x, y) VALUES (101, 100)
 	INSERT INTO test(x,y) VALUES (102,100);
 NOTICE:  issuing INSERT INTO single_node_ent.test_90730502 (x, y) VALUES (102, 100)
@@ -386,13 +386,12 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM single_nod
 (1 row)
 
 ROLLBACK;
-NOTICE:  issuing ROLLBACK
 -- the first insert goes to a shard on the coordinator
 -- the second insert goes to a shard on the worker
 BEGIN;
+	SET LOCAL citus.grep_remote_commands TO '%single_node_ent.test_%';
 	SET LOCAL citus.log_remote_commands TO ON;
 	INSERT INTO test(x,y) VALUES (102,100);
-NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
 NOTICE:  issuing INSERT INTO single_node_ent.test_90730502 (x, y) VALUES (102, 100)
 	INSERT INTO test(x,y) VALUES (101,100);
 NOTICE:  issuing INSERT INTO single_node_ent.test_90730501 (x, y) VALUES (101, 100)
@@ -410,7 +409,6 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM single_nod
 (1 row)
 
 ROLLBACK;
-NOTICE:  issuing ROLLBACK
 SET citus.shard_replication_factor TO 1;
 -- now, lets move all the shards of distributed tables out of the coordinator
 -- block writes is much faster for the sake of the test timings we prefer it
@@ -459,9 +457,9 @@ SELECT * FROM view_created_before_shard_moves;
 
 -- and make sure that all the shards are remote
 BEGIN;
+	SET LOCAL citus.grep_remote_commands TO '%single_node_ent.test_%';
 	SET LOCAL citus.log_remote_commands TO ON;
 	INSERT INTO test(x,y) VALUES (101,100);
-NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
 NOTICE:  issuing INSERT INTO single_node_ent.test_90730501 (x, y) VALUES (101, 100)
 	INSERT INTO test(x,y) VALUES (102,100);
 NOTICE:  issuing INSERT INTO single_node_ent.test_90730502 (x, y) VALUES (102, 100)
@@ -479,7 +477,6 @@ NOTICE:  issuing SELECT count(*) AS count FROM single_node_ent.test_90731506 tes
 (1 row)
 
 ROLLBACK;
-NOTICE:  issuing ROLLBACK
 -- should fail as only read access is allowed
 SET ROLE read_access_single_node;
 INSERT INTO test VALUES (1, 1, (95, 'citus9.5')::new_type);
