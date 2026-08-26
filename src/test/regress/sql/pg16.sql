@@ -259,19 +259,25 @@ TRUNCATE copy_default;
 
 -- DEFAULT cannot be used in binary mode
 COPY copy_default FROM stdin WITH (format binary, default '\D');
+\.
 
 -- DEFAULT cannot be new line nor carriage return
 COPY copy_default FROM stdin WITH (default E'\n');
+\.
 COPY copy_default FROM stdin WITH (default E'\r');
+\.
 
 -- DELIMITER cannot appear in DEFAULT spec
 COPY copy_default FROM stdin WITH (delimiter ';', default 'test;test');
+\.
 
 -- CSV quote cannot appear in DEFAULT spec
 COPY copy_default FROM stdin WITH (format csv, quote '"', default 'test"test');
+\.
 
 -- NULL and DEFAULT spec must be different
 COPY copy_default FROM stdin WITH (default '\N');
+\.
 
 -- cannot use DEFAULT marker in column that has no DEFAULT value
 COPY copy_default FROM stdin WITH (default '\D');
