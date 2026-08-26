@@ -5,7 +5,9 @@ from run_test import (
     run_schedule_with_multiregress,
 )
 from run_test import test_dependencies as get_test_dependencies
-from run_test import tmp_schedule
+from run_test import (
+    tmp_schedule,
+)
 
 
 def test_whole_schedule_line_merges_dependencies():
