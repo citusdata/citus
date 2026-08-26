@@ -2033,6 +2033,57 @@ There are three main scenarios:
 
 + When user modifies an object, Citus acts only when the object is distributed. For non-distributed object, Citus gives the control back to Postgres.
 
+## Metadata sync batching and transport
+
+Activating a node (`citus_add_node()`, or `start_metadata_sync_to_node()` /
+`citus_activate_node()` for an already-added node) has to (re)create, on the
+target node, every shell table plus all of the objects those shell tables depend
+on (schemas, roles, types, functions, sequences, ...) together with their
+`pg_dist_object` / `pg_dist_*` metadata. On a cluster with millions of
+distributed objects this is the dominant cost of adding a node, so how the
+creation commands are sent matters a lot.
+
+### Batching: `citus.metadata_sync_batch_size`
+
+Historically Citus sent the creation commands one object at a time. In
+nontransactional metadata-sync mode (`citus.metadata_sync_mode = 'nontransactional'`)
+each object was additionally wrapped in its own remote transaction, so
+activation paid a network round-trip *and* a `BEGIN`/`COMMIT` per object -- tens
+of millions of round-trips on a large cluster.
+
+`citus.metadata_sync_batch_size` (default 1000) makes activation accumulate the
+commands for that many objects and send them together. Larger batches mean fewer
+round-trips, but a larger remote transaction that holds more locks at once;
+setting it to 1 restores the old one-object-at-a-time behavior. The GUC is
+`PGC_SUSET` because an oversized batch can exhaust the *remote* node's shared
+lock table, which affects other sessions on that node.
+
+### Pipelined transport
+
+Even within a batch, sending command #2 only after reading the result of command
+#1 would serialize on network latency. Instead the batch is sent using libpq's
+pipeline mode (extended query protocol): all commands of the batch are queued, a
+single `PQpipelineSync()` closes the batch, and only then are the results
+drained. The transport lives in
+`ExecuteRemoteCommandsInConnectionsInPipelineMode()` and its helpers
+(`SendCommandsToConnectionInPipelineMode()` /
+`ReceiveResultsFromConnectionInPipelineMode()`) in
+`connection/remote_commands.c`.
+
+Queueing a whole batch before reading any result is the pattern libpq's docs
+warn can deadlock: if both the local and remote send buffers fill, each side can
+block writing while waiting to be read. `FinishConnectionIO()` avoids this by
+never waiting write-only while a result is already buffered -- it hands that
+result back so we keep draining the peer.
+
+### Cache flushing: `citus.metadata_sync_cache_flush_interval`
+
+Building a shell table's commands opens the corresponding Citus table, which
+populates backend caches. Over millions of objects those caches grow without
+bound. `citus.metadata_sync_cache_flush_interval` bounds that by flushing the
+relevant caches every N objects during activation, trading a little rebuild work
+for a flat memory profile.
+
 ## Foreign keys
 
 Citus relies fully on Postgres to enforce foreign keys. To provide that, Citus requires the relevant shards to be colocated. That’s also why the foreign keys between distributed tables should always include the distribution key. When reference tables / citus local tables involved, Citus can relax some of the restrictions. [Onder’s talk Demystifying Postgres Foreign Key Constraints on Citus](https://www.youtube.com/watch?v=xReWGcSg7sc) at CitusCon discusses all the supported foreign key combinations within Citus.
