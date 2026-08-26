@@ -2100,7 +2100,7 @@ CreateReplicaIdentitiesForDummyShards(HTAB *mapOfDummyShardToPlacement)
  * as a part of nonblocking split workflow.
  */
 static uint64
-GetNextShardIdForSplitChild()
+GetNextShardIdForSplitChild(void)
 {
 	uint64 shardId = 0;
 

@@ -2458,7 +2458,7 @@ CheckInstalledVersion(int elevel)
  * returns false, otherwise returns true.
  */
 bool
-InstalledAndAvailableVersionsSame()
+InstalledAndAvailableVersionsSame(void)
 {
 	char *installedVersion = InstalledExtensionVersion();
 	char *availableVersion = AvailableExtensionVersion();
@@ -5184,7 +5184,7 @@ InvalidateConnParamsCacheCallback(Datum argument, Oid relationId)
  * to extend beyond that scope.
  */
 void
-CitusTableCacheFlushInvalidatedEntries()
+CitusTableCacheFlushInvalidatedEntries(void)
 {
 	if (DistTableCacheHash != NULL && DistTableCacheExpired != NIL)
 	{

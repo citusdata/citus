@@ -24,7 +24,7 @@
  * We set search_path to "pg_catalog" instead of "" to expose useful utilities.
  */
 int
-PushEmptySearchPath()
+PushEmptySearchPath(void)
 {
 	int saveNestLevel = NewGUCNestLevel();
 	(void) set_config_option("search_path", "pg_catalog",

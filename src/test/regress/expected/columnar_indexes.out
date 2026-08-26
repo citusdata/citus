@@ -574,6 +574,48 @@ BEGIN;
   SET LOCAL max_parallel_workers_per_gather = 4;
   create index on events (event_id);
 COMMIT;
+-- Same scenario as the "events" test above, but exercising REINDEX instead
+-- of CREATE INDEX.  REINDEX on a columnar table must also fall back to a
+-- serial index build: otherwise flushing the pending writes during the
+-- (parallel) reindex would try to update the stripe reservation entry and
+-- error out with "cannot update tuples during a parallel operation".
+create table reindex_events (event_id bigserial, event_time timestamptz default now(), payload text) using columnar;
+-- build the index up front, without any pending writes
+create index on reindex_events (event_id);
+BEGIN;
+  -- this wouldn't flush any data
+  insert into reindex_events (payload) select 'hello-'||s from generate_series(1, 10) s;
+  SET LOCAL debug_parallel_query = regress;
+  SET LOCAL min_parallel_table_scan_size = 1;
+  SET LOCAL parallel_tuple_cost = 0;
+  SET LOCAL max_parallel_workers = 4;
+  SET LOCAL max_parallel_workers_per_gather = 4;
+  REINDEX TABLE reindex_events;
+COMMIT;
+DROP TABLE reindex_events;
+-- Show that the transient max_parallel_maintenance_workers override that we
+-- apply while building/reindexing an index on a columnar table is properly
+-- restored to the user-set value afterwards (both for CREATE INDEX and
+-- REINDEX).
+SET max_parallel_maintenance_workers = 4;
+CREATE TABLE guc_restore_test(a int) USING columnar;
+INSERT INTO guc_restore_test SELECT i FROM generate_series(1,10) i;
+CREATE INDEX ON guc_restore_test (a);
+SHOW max_parallel_maintenance_workers;
+ max_parallel_maintenance_workers
+---------------------------------------------------------------------
+ 4
+(1 row)
+
+REINDEX TABLE guc_restore_test;
+SHOW max_parallel_maintenance_workers;
+ max_parallel_maintenance_workers
+---------------------------------------------------------------------
+ 4
+(1 row)
+
+RESET max_parallel_maintenance_workers;
+DROP TABLE guc_restore_test;
 CREATE TABLE pending_index_scan(i INT UNIQUE) USING columnar;
 BEGIN;
   INSERT INTO pending_index_scan SELECT generate_series(1,100);
