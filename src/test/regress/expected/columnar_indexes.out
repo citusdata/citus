@@ -596,10 +596,11 @@ DROP TABLE reindex_events;
 -- Show that the transient max_parallel_maintenance_workers override that we
 -- apply while building/reindexing an index on a columnar table is properly
 -- restored to the user-set value afterwards (both for CREATE INDEX and
--- REINDEX).
+-- REINDEX). The table's parallel_workers setting makes these builds parallel
+-- eligible unless the columnar planner/utility guards keep them serial.
 SET max_parallel_maintenance_workers = 4;
-CREATE TABLE guc_restore_test(a int) USING columnar;
-INSERT INTO guc_restore_test SELECT i FROM generate_series(1,10) i;
+CREATE TABLE guc_restore_test(a int) USING columnar WITH (parallel_workers = 4);
+INSERT INTO guc_restore_test SELECT i FROM generate_series(1,10000) i;
 CREATE INDEX ON guc_restore_test (a);
 SHOW max_parallel_maintenance_workers;
  max_parallel_maintenance_workers
@@ -607,11 +608,27 @@ SHOW max_parallel_maintenance_workers;
  4
 (1 row)
 
+SELECT reltuples = 10000
+FROM pg_class
+WHERE oid = 'guc_restore_test_a_idx'::regclass;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
 REINDEX TABLE guc_restore_test;
 SHOW max_parallel_maintenance_workers;
  max_parallel_maintenance_workers
 ---------------------------------------------------------------------
  4
+(1 row)
+
+SELECT reltuples = 10000
+FROM pg_class
+WHERE oid = 'guc_restore_test_a_idx'::regclass;
+ ?column?
+---------------------------------------------------------------------
+ t
 (1 row)
 
 RESET max_parallel_maintenance_workers;

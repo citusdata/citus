@@ -1536,13 +1536,13 @@ columnar_index_build_range_scan(Relation columnarRelation,
 
 	if (scan)
 	{
-		/*
-		 * Starting with PG19 the planner may hand us a parallel scan descriptor
-		 * even for tables (like columnar) whose AM only supports serial scans.
-		 * Discard it: columnar never partitions index-build work across workers
-		 * and always starts its own serial scan below.  This mirrors how the
-		 * existing serial path ignores any externally supplied scan.
-		 */
+		if (scan->rs_parallel != NULL)
+		{
+			ereport(ERROR,
+					(errmsg("parallel scans on columnar tables are not supported")));
+		}
+
+		table_endscan(scan);
 		scan = NULL;
 	}
 
