@@ -191,3 +191,4 @@ SELECT count(*) FROM test_table;
 
 DROP SCHEMA copy_reference_failure CASCADE;
 SET search_path TO default;
+

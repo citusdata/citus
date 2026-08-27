@@ -7,8 +7,6 @@ SELECT create_distributed_table('the_replicated_table', 'a');
 
 (1 row)
 
-
-
 SET citus.shard_replication_factor TO 1;
 CREATE TABLE the_table (a int, b int, z bigserial);
 SELECT create_distributed_table('the_table', 'a');
@@ -499,3 +497,4 @@ SELECT master_remove_node('localhost', :master_port);
 ---------------------------------------------------------------------
 
 (1 row)
+
