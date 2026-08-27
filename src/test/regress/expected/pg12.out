@@ -86,7 +86,7 @@ select create_distributed_table('cptest', 'id');
 
 (1 row)
 
-copy cptest from STDIN with csv where val < 4;
+\copy cptest from PROGRAM 'true' with csv where val < 4
 ERROR:  Citus does not support COPY FROM with WHERE
 select sum(id), sum(val) from cptest;
  sum | sum

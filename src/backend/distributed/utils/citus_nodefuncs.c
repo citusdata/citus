@@ -334,6 +334,17 @@ GetRangeTblKind(RangeTblEntry *rte)
 		}
 
 		#endif
+
+		#if PG_VERSION_NUM >= PG_VERSION_19
+
+		/* new in PG19: GRAPH_TABLE RTE, just map it straight through */
+		case RTE_GRAPH_TABLE:
+		{
+			rteKind = (CitusRTEKind) rte->rtekind;
+			break;
+		}
+
+		#endif
 		case RTE_FUNCTION:
 		{
 			/*

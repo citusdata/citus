@@ -123,7 +123,7 @@ INSERT INTO collections_1 SELECT * FROM collections_1 OFFSET 0;
 ERROR:  modifications on partitions when replication factor is greater than 1 is not supported
 HINT:  Run the query on the parent table "collections" instead.
 -- COPY is not allowed
-COPY collections_1 FROM STDIN;
+\copy collections_1 FROM PROGRAM 'true'
 ERROR:  modifications on partitions when replication factor is greater than 1 is not supported
 HINT:  Run the query on the parent table "collections" instead.
 -- DDLs are not allowed

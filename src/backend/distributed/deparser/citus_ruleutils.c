@@ -1664,13 +1664,19 @@ simple_quote_literal(StringInfo buf, const char *val)
 	 * We form the string literal according to the prevailing setting of
 	 * standard_conforming_strings; we never use E''. User is responsible for
 	 * making sure result is used correctly.
+	 *
+	 * Read the setting once before the loop: on PG19 standard_conforming_strings
+	 * is a macro that calls GetConfigOption(), so evaluating it per character
+	 * would turn this into a GUC lookup for every byte of the literal.
 	 */
+	bool standardConformingStrings = standard_conforming_strings;
+
 	appendStringInfoChar(buf, '\'');
 	for (const char *valptr = val; *valptr; valptr++)
 	{
 		char ch = *valptr;
 
-		if (SQL_STR_DOUBLE(ch, !standard_conforming_strings))
+		if (SQL_STR_DOUBLE(ch, !standardConformingStrings))
 		{
 			appendStringInfoChar(buf, ch);
 		}

@@ -35,6 +35,13 @@ static void AppendCreatePublicationStmt(StringInfo buf, CreatePublicationStmt *s
 static bool AppendPublicationObjects(StringInfo buf, List *publicationObjects,
 									 bool whereClauseNeedsTransform,
 									 bool includeLocalTables);
+#if PG_VERSION_NUM >= PG_VERSION_19
+static bool AppendPublicationAllObjects(StringInfo buf, bool forAllTables,
+										bool forAllSequences,
+										List *publicationObjects,
+										bool whereClauseNeedsTransform,
+										bool includeLocalTables);
+#endif
 static void AppendWhereClauseExpression(StringInfo buf, RangeVar *tableName,
 										Node *whereClause,
 										bool whereClauseNeedsTransform);
@@ -99,9 +106,27 @@ AppendCreatePublicationStmt(StringInfo buf, CreatePublicationStmt *stmt,
 	appendStringInfo(buf, "CREATE PUBLICATION %s",
 					 quote_identifier(stmt->pubname));
 
-	if (stmt->for_all_tables)
+	if (stmt->for_all_tables
+#if PG_VERSION_NUM >= PG_VERSION_19
+		|| stmt->for_all_sequences
+#endif
+		)
 	{
+#if PG_VERSION_NUM >= PG_VERSION_19
+
+		/*
+		 * PG19 keeps ALL TABLES and ALL SEQUENCES in separate flags, and stores
+		 * the ALL TABLES EXCEPT relations in pubobjects.
+		 */
+		appendStringInfoString(buf, " FOR");
+		AppendPublicationAllObjects(buf, stmt->for_all_tables,
+									stmt->for_all_sequences,
+									stmt->pubobjects,
+									whereClauseNeedsTransform,
+									includeLocalTables);
+#else
 		appendStringInfoString(buf, " FOR ALL TABLES");
+#endif
 	}
 	else if (stmt->pubobjects != NIL)
 	{
@@ -166,7 +191,11 @@ AppendPublicationObjects(StringInfo buf, List *publicationObjects,
 
 	foreach_declared_ptr(publicationObject, publicationObjects)
 	{
-		if (publicationObject->pubobjtype == PUBLICATIONOBJ_TABLE)
+		if (publicationObject->pubobjtype == PUBLICATIONOBJ_TABLE
+#if PG_VERSION_NUM >= PG_VERSION_19
+			|| publicationObject->pubobjtype == PUBLICATIONOBJ_EXCEPT_TABLE
+#endif
+			)
 		{
 			/* FOR TABLE ... */
 			PublicationTable *publicationTable = publicationObject->pubtable;
@@ -241,6 +270,52 @@ AppendPublicationObjects(StringInfo buf, List *publicationObjects,
 
 	return appendedObject;
 }
+
+
+#if PG_VERSION_NUM >= PG_VERSION_19
+
+/*
+ * AppendPublicationAllObjects appends the object list for a PG19
+ * ALL TABLES/ALL SEQUENCES publication.
+ */
+static bool
+AppendPublicationAllObjects(StringInfo buf, bool forAllTables,
+							bool forAllSequences, List *publicationObjects,
+							bool whereClauseNeedsTransform,
+							bool includeLocalTables)
+{
+	bool appendedObject = false;
+
+	if (forAllTables)
+	{
+		appendStringInfoString(buf, " ALL TABLES");
+		appendedObject = true;
+
+		StringInfoData exceptObjects = { 0 };
+		initStringInfo(&exceptObjects);
+
+		if (AppendPublicationObjects(&exceptObjects, publicationObjects,
+									 whereClauseNeedsTransform,
+									 includeLocalTables))
+		{
+			appendStringInfo(buf, " EXCEPT (%s)", exceptObjects.data + 1);
+		}
+
+		pfree(exceptObjects.data);
+	}
+
+	if (forAllSequences)
+	{
+		appendStringInfoString(buf, appendedObject ? ", ALL SEQUENCES" :
+							   " ALL SEQUENCES");
+		appendedObject = true;
+	}
+
+	return appendedObject;
+}
+
+
+#endif
 
 
 /*
@@ -355,6 +430,16 @@ AppendAlterPublicationStmt(StringInfo buf, AlterPublicationStmt *stmt,
 	}
 
 	AppendAlterPublicationAction(buf, stmt->action);
+#if PG_VERSION_NUM >= PG_VERSION_19
+	if (stmt->for_all_tables || stmt->for_all_sequences)
+	{
+		return AppendPublicationAllObjects(buf, stmt->for_all_tables,
+										   stmt->for_all_sequences,
+										   stmt->pubobjects,
+										   whereClauseNeedsTransform,
+										   includeLocalTables);
+	}
+#endif
 	return AppendPublicationObjects(buf, stmt->pubobjects, whereClauseNeedsTransform,
 									includeLocalTables);
 }

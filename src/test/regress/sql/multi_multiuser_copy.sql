@@ -36,16 +36,12 @@ RESET ROLE;
 
 -- COPY FROM as user with SELECT access, should fail
 SET ROLE read_access;
-COPY customer_copy_hash (c_custkey,c_name) FROM STDIN;
-3	customer3
-\.
+\copy customer_copy_hash (c_custkey,c_name) FROM PROGRAM 'true'
 RESET ROLE;
 
 -- COPY FROM as user with no access, should fail
 SET ROLE no_access;
-COPY customer_copy_hash (c_custkey,c_name) FROM STDIN;
-4	customer4
-\.
+\copy customer_copy_hash (c_custkey,c_name) FROM PROGRAM 'true'
 RESET ROLE;
 
 

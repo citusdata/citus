@@ -7,6 +7,7 @@ SELECT create_distributed_table('the_replicated_table', 'a');
 
 (1 row)
 
+
 SET citus.shard_replication_factor TO 1;
 CREATE TABLE the_table (a int, b int, z bigserial);
 SELECT create_distributed_table('the_table', 'a');
@@ -223,19 +224,19 @@ ERROR:  cannot execute modification on a hot standby for a shard placement that 
 DETAIL:  citus.writable_standby_coordinator forwards writes to primary nodes, but the targeted shard has a placement on the local node, whose storage is read-only during recovery.
 HINT:  Place the affected shards on primary worker nodes only, or fail over this node to perform writes.
 -- COPY is not possible because Citus user 2PC
-COPY the_table (a, b, z) FROM STDIN WITH CSV;
+\copy the_table (a, b, z) FROM PROGRAM 'true' WITH CSV
 ERROR:  COPY command to Citus tables is not allowed in read-only mode
 DETAIL:  the database is read-only
 HINT:  All COPY commands to citus tables happen via 2PC, and 2PC requires the database to be in a writable state.
-COPY the_replicated_table (a, b, z) FROM STDIN WITH CSV;
+\copy the_replicated_table (a, b, z) FROM PROGRAM 'true' WITH CSV
 ERROR:  writing to worker nodes is not currently allowed for replicated tables such as reference tables or hash distributed tables with replication factor greater than 1.
 DETAIL:  the database is read-only
 HINT:  All modifications to replicated tables happen via 2PC, and 2PC requires the database to be in a writable state.
-COPY reference_table (a, b, z) FROM STDIN WITH CSV;
+\copy reference_table (a, b, z) FROM PROGRAM 'true' WITH CSV
 ERROR:  writing to worker nodes is not currently allowed for replicated tables such as reference tables or hash distributed tables with replication factor greater than 1.
 DETAIL:  the database is read-only
 HINT:  All modifications to replicated tables happen via 2PC, and 2PC requires the database to be in a writable state.
-COPY citus_local_table (a, b, z) FROM STDIN WITH CSV;
+\copy citus_local_table (a, b, z) FROM PROGRAM 'true' WITH CSV
 ERROR:  COPY command to Citus tables is not allowed in read-only mode
 DETAIL:  the database is read-only
 HINT:  All COPY commands to citus tables happen via 2PC, and 2PC requires the database to be in a writable state.
@@ -287,15 +288,15 @@ ERROR:  cannot execute modification on a hot standby for a shard placement that 
 DETAIL:  citus.writable_standby_coordinator forwards writes to primary nodes, but the targeted shard has a placement on the local node, whose storage is read-only during recovery.
 HINT:  Place the affected shards on primary worker nodes only, or fail over this node to perform writes.
 -- multi-shard COPY is not possible due to 2PC
-COPY the_table (a, b, z) FROM STDIN WITH CSV;
+\copy the_table (a, b, z) FROM PROGRAM 'true' WITH CSV
 ERROR:  COPY command to Citus tables is not allowed in read-only mode
 DETAIL:  the database is read-only
 HINT:  All COPY commands to citus tables happen via 2PC, and 2PC requires the database to be in a writable state.
-COPY reference_table (a, b, z) FROM STDIN WITH CSV;
+\copy reference_table (a, b, z) FROM PROGRAM 'true' WITH CSV
 ERROR:  writing to worker nodes is not currently allowed for replicated tables such as reference tables or hash distributed tables with replication factor greater than 1.
 DETAIL:  the database is read-only
 HINT:  All modifications to replicated tables happen via 2PC, and 2PC requires the database to be in a writable state.
-COPY citus_local_table (a, b, z) FROM STDIN WITH CSV;
+\copy citus_local_table (a, b, z) FROM PROGRAM 'true' WITH CSV
 ERROR:  COPY command to Citus tables is not allowed in read-only mode
 DETAIL:  the database is read-only
 HINT:  All COPY commands to citus tables happen via 2PC, and 2PC requires the database to be in a writable state.
@@ -497,4 +498,3 @@ SELECT master_remove_node('localhost', :master_port);
 ---------------------------------------------------------------------
 
 (1 row)
-

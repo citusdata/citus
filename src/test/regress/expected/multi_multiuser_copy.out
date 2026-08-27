@@ -32,12 +32,12 @@ COPY customer_copy_hash (c_custkey,c_name) FROM STDIN;
 RESET ROLE;
 -- COPY FROM as user with SELECT access, should fail
 SET ROLE read_access;
-COPY customer_copy_hash (c_custkey,c_name) FROM STDIN;
+\copy customer_copy_hash (c_custkey,c_name) FROM PROGRAM 'true'
 ERROR:  permission denied for table customer_copy_hash
 RESET ROLE;
 -- COPY FROM as user with no access, should fail
 SET ROLE no_access;
-COPY customer_copy_hash (c_custkey,c_name) FROM STDIN;
+\copy customer_copy_hash (c_custkey,c_name) FROM PROGRAM 'true'
 ERROR:  permission denied for table customer_copy_hash
 RESET ROLE;
 -- COPY TO as superuser

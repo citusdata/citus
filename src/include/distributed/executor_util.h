@@ -15,6 +15,8 @@
 #include "nodes/params.h"
 #include "nodes/pg_list.h"
 
+#include "pg_version_compat.h"
+
 #include "distributed/multi_physical_planner.h"
 
 

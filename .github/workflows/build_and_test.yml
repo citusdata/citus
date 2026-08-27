@@ -118,6 +118,7 @@ jobs:
           - ${{ needs.params.outputs.pg16_version }}
           - ${{ needs.params.outputs.pg17_version }}
           - ${{ needs.params.outputs.pg18_version }}
+          - ${{ needs.params.outputs.pg19_version }}
     runs-on: ubuntu-latest
     container:
       image: "${{ matrix.image_name }}:${{ fromJson(matrix.pg_version).full }}${{ matrix.image_suffix }}"
@@ -147,7 +148,8 @@ jobs:
         [
           ${{ needs.params.outputs.pg16_version }},
           ${{ needs.params.outputs.pg17_version }},
-          ${{ needs.params.outputs.pg18_version }}
+          ${{ needs.params.outputs.pg18_version }},
+          ${{ needs.params.outputs.pg19_version }}
         ]
       make_targets: '["check-split", "check-split-output-plugin-denied", "check-multi", "check-multi-1", "check-multi-1-create-citus", "check-multi-mx", "check-vanilla", "check-isolation", "check-operations", "check-follower-cluster", "check-add-backup-node", "check-columnar", "check-columnar-isolation", "check-enterprise", "check-enterprise-isolation", "check-enterprise-isolation-logicalrep-1", "check-enterprise-isolation-logicalrep-2", "check-enterprise-isolation-logicalrep-3", "check-tap"]'
       image_suffix: ${{ needs.params.outputs.image_suffix }}
@@ -165,7 +167,8 @@ jobs:
         [
           ${{ needs.params.outputs.pg16_version }},
           ${{ needs.params.outputs.pg17_version }},
-          ${{ needs.params.outputs.pg18_version }}
+          ${{ needs.params.outputs.pg18_version }},
+          ${{ needs.params.outputs.pg19_version }}
         ]
       make_targets: '["check-failure", "check-enterprise-failure", "check-pytest", "check-query-generator"]'
       image_suffix: ${{ needs.params.outputs.image_suffix }}
@@ -183,7 +186,8 @@ jobs:
         [
           ${{ needs.params.outputs.pg16_version }},
           ${{ needs.params.outputs.pg17_version }},
-          ${{ needs.params.outputs.pg18_version }}
+          ${{ needs.params.outputs.pg18_version }},
+          ${{ needs.params.outputs.pg19_version }}
         ]
       make_targets: '["installcheck"]'
       image_suffix: ${{ needs.params.outputs.image_suffix }}
@@ -209,6 +213,7 @@ jobs:
           - ${{ needs.params.outputs.pg16_version }}
           - ${{ needs.params.outputs.pg17_version }}
           - ${{ needs.params.outputs.pg18_version }}
+          - ${{ needs.params.outputs.pg19_version }}
         parallel: [0,1,2,3,4,5] # workaround for running 6 parallel jobs
     steps:
     - uses: actions/checkout@v5
@@ -259,6 +264,10 @@ jobs:
             new_pg_major: 18
           - old_pg_major: 16
             new_pg_major: 18
+          - old_pg_major: 18
+            new_pg_major: 19
+          - old_pg_major: 16
+            new_pg_major: 19
     env:
       old_pg_major: ${{ matrix.old_pg_major }}
       new_pg_major: ${{ matrix.new_pg_major }}
