@@ -3813,8 +3813,11 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 
 			case AT_DetachPartitionFinalize:
 			{
-				ereport(ERROR, (errmsg("ALTER TABLE .. DETACH PARTITION .. FINALIZE "
-									   "commands are currently unsupported.")));
+				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+								errmsg("ALTER TABLE ... DETACH PARTITION ... FINALIZE "
+									   "commands are currently unsupported"),
+								errdetail("Citus does not propagate detached partition "
+										  "finalization to shards.")));
 				break;
 			}
 
@@ -3834,7 +3837,8 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 
 				if (partitionCommand->concurrent)
 				{
-					ereport(ERROR, (errmsg("ALTER TABLE .. DETACH PARTITION .. "
+					ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+									errmsg("ALTER TABLE .. DETACH PARTITION .. "
 										   "CONCURRENTLY commands are currently "
 										   "unsupported.")));
 				}
@@ -3917,6 +3921,16 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 				 * ALTER TABLE .. VALIDATE CONSTRAINT ..
 				 * ALTER TABLE .. ALTER COLUMN .. SET COMPRESSION ..
 				 */
+				break;
+			}
+
+			case AT_AlterConstraint:
+			{
+				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+								errmsg("ALTER TABLE ... ALTER CONSTRAINT commands "
+									   "are currently unsupported"),
+								errdetail("Citus does not propagate constraint "
+										  "property changes to shards.")));
 				break;
 			}
 
