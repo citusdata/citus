@@ -36,7 +36,7 @@ step "s3_cancel"
 	  AND query LIKE
 		'%ALTER TABLE detach_parent DETACH PARTITION detach_child CONCURRENTLY%';
 }
-step "s3_pending"
+step "s3_coordinator_attached"
 {
 	SELECT inhdetachpending
 	FROM pg_inherits
@@ -53,9 +53,9 @@ step "s3_workers_attached"
 	$$)
 	ORDER BY result;
 }
-step "s3_finalize"
+step "s3_retry"
 {
-	ALTER TABLE detach_parent DETACH PARTITION detach_child FINALIZE;
+	ALTER TABLE detach_parent DETACH PARTITION detach_child CONCURRENTLY;
 }
 step "s3_done"
 {
@@ -80,9 +80,9 @@ permutation
 	s1_read
 	s2_detach(s3_cancel)
 	s3_cancel
-	s3_pending
+	s3_coordinator_attached
 	s3_workers_attached
 	s1_commit
-	s3_finalize
+	s3_retry
 	s3_done
 	s3_workers_done
