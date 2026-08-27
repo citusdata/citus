@@ -253,6 +253,7 @@ INSERT INTO ref SELECT i, i*2 FROM generate_series(100,150)i;
 -- the first insert goes to a shard on the worker
 -- the second insert goes to a shard on the coordinator
 BEGIN;
+	SET LOCAL citus.grep_remote_commands TO '%single_node_ent.test_%';
 	SET LOCAL citus.log_remote_commands TO ON;
 	INSERT INTO test(x,y) VALUES (101,100);
 	INSERT INTO test(x,y) VALUES (102,100);
@@ -264,6 +265,7 @@ ROLLBACK;
 -- the first insert goes to a shard on the coordinator
 -- the second insert goes to a shard on the worker
 BEGIN;
+	SET LOCAL citus.grep_remote_commands TO '%single_node_ent.test_%';
 	SET LOCAL citus.log_remote_commands TO ON;
 	INSERT INTO test(x,y) VALUES (102,100);
 	INSERT INTO test(x,y) VALUES (101,100);
@@ -292,6 +294,7 @@ SELECT * FROM view_created_before_shard_moves;
 
 -- and make sure that all the shards are remote
 BEGIN;
+	SET LOCAL citus.grep_remote_commands TO '%single_node_ent.test_%';
 	SET LOCAL citus.log_remote_commands TO ON;
 	INSERT INTO test(x,y) VALUES (101,100);
 	INSERT INTO test(x,y) VALUES (102,100);
