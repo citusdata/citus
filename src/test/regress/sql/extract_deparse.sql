@@ -5,18 +5,21 @@
 CREATE SCHEMA extract_deparse;
 SET search_path TO extract_deparse;
 
--- EXTRACT accepts any string as its field name. Verify Citus quotes that field
--- when deparsing task SQL, so text resembling a second statement remains data.
 CREATE TABLE extract_deparse_source (id int, ts timestamp);
 SELECT create_distributed_table('extract_deparse_source', 'id',
 								shard_count => 1, colocate_with => 'none');
 INSERT INTO extract_deparse_source VALUES (1, timestamp '2026-01-01');
 
+-- EXTRACT accepts any string as its field name. Verify Citus quotes that field
+-- when deparsing task SQL, so text resembling a second statement remains data.
+-- PG19 has equivalent coverage in pg19.sql.
 DO $$
 BEGIN
-	PERFORM EXTRACT('year FROM timestamp ''2000-01-01''); CREATE TABLE injected(); --' FROM ts)
-	FROM extract_deparse_source
-	WHERE id = 1;
+	IF current_setting('server_version_num')::int < 190000 THEN
+		PERFORM EXTRACT('year FROM timestamp ''2000-01-01''); CREATE TABLE injected(); --' FROM ts)
+		FROM extract_deparse_source
+		WHERE id = 1;
+	END IF;
 EXCEPTION
 	WHEN invalid_parameter_value THEN NULL;
 END
@@ -27,9 +30,6 @@ FROM run_command_on_workers($$
 	SELECT to_regclass('extract_deparse.injected') IS NULL
 $$);
 
-\set VERBOSITY terse
-SET client_min_messages TO WARNING;
+SET client_min_messages TO ERROR;
 DROP SCHEMA extract_deparse CASCADE;
-RESET search_path;
 RESET client_min_messages;
-\set VERBOSITY default
