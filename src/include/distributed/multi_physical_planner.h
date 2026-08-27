@@ -350,6 +350,9 @@ typedef struct Task
 
 	Const *partitionKeyValue;
 	int colocationId;
+
+	/* if it's granted this task nested statements are safe to be executed */
+	bool safeToPush;
 } Task;
 
 

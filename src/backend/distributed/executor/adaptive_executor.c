@@ -1696,7 +1696,7 @@ StartDistributedExecution(DistributedExecution *execution)
 	if (execution->remoteTaskList != NIL)
 	{
 		bool isRemote = true;
-		EnsureTaskExecutionAllowed(isRemote);
+		EnsureTaskExecutionAllowed(isRemote, true);
 	}
 
 	/*

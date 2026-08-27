@@ -333,6 +333,7 @@ test: distributed_procedure
 test: distributed_collations_conflict
 test: view_propagation
 test: check_mx
+test: functions_pushdown
 
 # ---------
 # deparsing logic tests
