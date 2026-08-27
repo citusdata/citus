@@ -1,0 +1,17 @@
+# ----------
+# post_citus14_schedule
+#
+# Tests for features introduced after Citus 14. These tests are expected
+# to fail in n/n-1 mode since the worker nodes run the previous major
+# version which does not have these features.
+#
+# This schedule is meant to be run standalone (not appended to multi_1_schedule)
+# so it includes the minimal cluster setup as its first tests.
+# ----------
+
+# --- cluster setup (same as minimal_schedule) ---
+test: minimal_cluster_management
+test: multi_test_helpers multi_test_helpers_superuser multi_create_fdw multi_test_catalog_views tablespace
+
+# --- post-citus-14 feature tests ---
+test: auto_distribution_columns
