@@ -502,7 +502,7 @@ UserHasPermissionToViewStatsOf(Oid currentUserId, Oid backendOwnedId)
 		return true;
 	}
 
-	if (is_member_of_role(currentUserId,
+	if (has_privs_of_role(currentUserId,
 						  ROLE_PG_READ_ALL_STATS))
 	{
 		return true;
