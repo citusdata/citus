@@ -26,7 +26,9 @@
 extern void _PG_output_plugin_init(OutputPluginCallbacks *cb);
 static LogicalDecodeChangeCB pgOutputPluginChangeCB;
 
+#ifndef InvalidRepOriginId
 #define InvalidRepOriginId 0
+#endif
 
 static HTAB *SourceToDestinationShardMap = NULL;
 static bool replication_origin_filter_cb(LogicalDecodingContext *ctx, RepOriginId

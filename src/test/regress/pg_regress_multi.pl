@@ -570,6 +570,10 @@ if (-e $hll_control)
 }
 push(@pgOptions, "shared_preload_libraries='${sharedPreloadLibraries}'");
 
+if ($majorversion >= "19") {
+    push(@pgOptions, "output_plugin_libraries='pgoutput,citus'");
+}
+
 if ($vanillatest) {
     # use the default used in vanilla tests
     push(@pgOptions, "max_parallel_workers_per_gather=2");
@@ -586,7 +590,7 @@ push(@pgOptions, "wal_level='logical'");
 
 # Faster logical replication status update so tests with logical replication
 # run faster
-push(@pgOptions, "wal_receiver_status_interval=0");
+push(@pgOptions, "wal_receiver_status_interval=1");
 
 # Faster logical replication apply worker launch so tests with logical
 # replication run faster. This is used in ApplyLauncherMain in

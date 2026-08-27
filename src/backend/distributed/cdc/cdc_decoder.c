@@ -22,6 +22,7 @@
 #include "utils/rel.h"
 #include "utils/typcache.h"
 
+#include "pg_version_compat.h"
 #include "pg_version_constants.h"
 
 PG_MODULE_MAGIC;
@@ -183,7 +184,7 @@ cdc_change_cb(LogicalDecodingContext *ctx, ReorderBufferTXN *txn,
  * translate the changes in the shard table to the changes in the distributed table.
  */
 static void
-InitShardToDistributedTableMap()
+InitShardToDistributedTableMap(void)
 {
 	HASHCTL info;
 	memset(&info, 0, sizeof(info));

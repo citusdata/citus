@@ -46,6 +46,9 @@
 #include "utils/rel.h"
 #include "utils/relcache.h"
 #include "utils/syscache.h"
+#include "utils/timestamp.h"
+#include "utils/tuplesort.h"
+#include "utils/tuplestore.h"
 
 #include "citus_version.h"
 #include "pg_version_compat.h"
@@ -409,29 +412,42 @@ ErrorIfInvalidRowNumber(uint64 rowNumber)
 }
 
 
+/*
+ * Columnar scans are always serial regardless of the parallel scan descriptor
+ * (rs_parallel is stored but never read by the columnar scan path).  We still
+ * provide working parallelscan callbacks so that callers that unconditionally
+ * size and initialize a parallel scan descriptor (for example, PG19's parallel
+ * btree index build path) do not abort.  Delegating to the heap block helpers
+ * is safe: columnar never partitions work using the descriptor, so any state
+ * written there is simply unused.
+ */
 static Size
 columnar_parallelscan_estimate(Relation rel)
 {
-	elog(ERROR, "columnar_parallelscan_estimate not implemented");
+	return table_block_parallelscan_estimate(rel);
 }
 
 
 static Size
 columnar_parallelscan_initialize(Relation rel, ParallelTableScanDesc pscan)
 {
-	elog(ERROR, "columnar_parallelscan_initialize not implemented");
+	return table_block_parallelscan_initialize(rel, pscan);
 }
 
 
 static void
 columnar_parallelscan_reinitialize(Relation rel, ParallelTableScanDesc pscan)
 {
-	elog(ERROR, "columnar_parallelscan_reinitialize not implemented");
+	table_block_parallelscan_reinitialize(rel, pscan);
 }
 
 
 static IndexFetchTableData *
+#if PG_VERSION_NUM >= PG_VERSION_19
+columnar_index_fetch_begin(Relation rel, uint32 flags)
+#else
 columnar_index_fetch_begin(Relation rel)
+#endif
 {
 	CheckCitusColumnarVersion(ERROR);
 
@@ -716,7 +732,11 @@ columnar_index_delete_tuples(Relation rel,
 
 static void
 columnar_tuple_insert(Relation relation, TupleTableSlot *slot, CommandId cid,
+#if PG_VERSION_NUM >= PG_VERSION_19
+					  uint32 options, BulkInsertState bistate)
+#else
 					  int options, BulkInsertState bistate)
+#endif
 {
 	CheckCitusColumnarVersion(ERROR);
 
@@ -749,7 +769,11 @@ columnar_tuple_insert(Relation relation, TupleTableSlot *slot, CommandId cid,
 
 static void
 columnar_tuple_insert_speculative(Relation relation, TupleTableSlot *slot,
+#if PG_VERSION_NUM >= PG_VERSION_19
+								  CommandId cid, uint32 options,
+#else
 								  CommandId cid, int options,
+#endif
 								  BulkInsertState bistate, uint32 specToken)
 {
 	elog(ERROR, "columnar_tuple_insert_speculative not implemented");
@@ -766,7 +790,11 @@ columnar_tuple_complete_speculative(Relation relation, TupleTableSlot *slot,
 
 static void
 columnar_multi_insert(Relation relation, TupleTableSlot **slots, int ntuples,
+#if PG_VERSION_NUM >= PG_VERSION_19
+					  CommandId cid, uint32 options, BulkInsertState bistate)
+#else
 					  CommandId cid, int options, BulkInsertState bistate)
+#endif
 {
 	CheckCitusColumnarVersion(ERROR);
 
@@ -806,19 +834,32 @@ columnar_multi_insert(Relation relation, TupleTableSlot **slots, int ntuples,
 
 
 static TM_Result
+#if PG_VERSION_NUM >= PG_VERSION_19
+columnar_tuple_delete(Relation relation, ItemPointer tid, CommandId cid,
+					  uint32 options, Snapshot snapshot, Snapshot crosscheck,
+					  bool wait, TM_FailureData *tmfd)
+#else
 columnar_tuple_delete(Relation relation, ItemPointer tid, CommandId cid,
 					  Snapshot snapshot, Snapshot crosscheck, bool wait,
-					  TM_FailureData *tmfd, bool changingPart)
+					  TM_FailureData * tmfd, bool changingPart)
+#endif
 {
 	elog(ERROR, "columnar_tuple_delete not implemented");
 }
 
 
 static TM_Result
+#if PG_VERSION_NUM >= PG_VERSION_19
 columnar_tuple_update(Relation relation, ItemPointer otid, TupleTableSlot *slot,
-					  CommandId cid, Snapshot snapshot, Snapshot crosscheck,
-					  bool wait, TM_FailureData *tmfd,
+					  CommandId cid, uint32 options, Snapshot snapshot,
+					  Snapshot crosscheck, bool wait, TM_FailureData *tmfd,
 					  LockTupleMode *lockmode, TU_UpdateIndexes *update_indexes)
+#else
+columnar_tuple_update(Relation relation, ItemPointer otid, TupleTableSlot * slot,
+					  CommandId cid, Snapshot snapshot, Snapshot crosscheck,
+					  bool wait, TM_FailureData * tmfd,
+					  LockTupleMode * lockmode, TU_UpdateIndexes * update_indexes)
+#endif
 {
 	elog(ERROR, "columnar_tuple_update not implemented");
 }
@@ -835,7 +876,11 @@ columnar_tuple_lock(Relation relation, ItemPointer tid, Snapshot snapshot,
 
 
 static void
+#if PG_VERSION_NUM >= PG_VERSION_19
+columnar_finish_bulk_insert(Relation relation, uint32 options)
+#else
 columnar_finish_bulk_insert(Relation relation, int options)
+#endif
 {
 	/*
 	 * Nothing to do here. We keep write states live until transaction end.
@@ -928,6 +973,9 @@ static void
 columnar_relation_copy_for_cluster(Relation OldHeap, Relation NewHeap,
 								   Relation OldIndex, bool use_sort,
 								   TransactionId OldestXmin,
+#if PG_VERSION_NUM >= PG_VERSION_19
+								   Snapshot clusterSnapshot,
+#endif
 								   TransactionId *xid_cutoff,
 								   MultiXactId *multi_cutoff,
 								   double *num_tuples,
@@ -1050,8 +1098,13 @@ ColumnarTableTupleCount(Relation relation)
  * columnar_vacuum_rel implements VACUUM without FULL option.
  */
 static void
-columnar_vacuum_rel(Relation rel, VacuumParams *params,
+#if PG_VERSION_NUM >= PG_VERSION_19
+columnar_vacuum_rel(Relation rel, const VacuumParams *params,
 					BufferAccessStrategy bstrategy)
+#else
+columnar_vacuum_rel(Relation rel, VacuumParams * params,
+					BufferAccessStrategy bstrategy)
+#endif
 {
 	if (!CheckCitusColumnarVersion(WARNING))
 	{
@@ -1136,7 +1189,18 @@ columnar_vacuum_rel(Relation rel, VacuumParams *params,
 						false);
 #endif
 
-#if PG_VERSION_NUM >= PG_VERSION_18
+#if PG_VERSION_NUM >= PG_VERSION_19
+
+	/*
+	 * PG19 changed pgstat_report_vacuum signature to take the Relation
+	 * directly and dropped the shared-table flag, plus reordered args.
+	 * See upstream commit removing the (Oid, bool, ...) form.
+	 */
+	pgstat_report_vacuum(rel,
+						 Max(new_live_tuples, 0),  /* live tuples */
+						 0,                        /* dead tuples */
+						 GetCurrentTimestamp());   /* start time */
+#elif PG_VERSION_NUM >= PG_VERSION_18
 	pgstat_report_vacuum(RelationGetRelid(rel),
 						 rel->rd_rel->relisshared,
 						 Max(new_live_tuples, 0), /* live tuples */
@@ -1408,9 +1472,15 @@ columnar_scan_analyze_next_block(TableScanDesc scan,
 
 
 static bool
-columnar_scan_analyze_next_tuple(TableScanDesc scan, TransactionId OldestXmin,
+#if PG_VERSION_NUM >= PG_VERSION_19
+columnar_scan_analyze_next_tuple(TableScanDesc scan,
 								 double *liverows, double *deadrows,
 								 TupleTableSlot *slot)
+#else
+columnar_scan_analyze_next_tuple(TableScanDesc scan, TransactionId OldestXmin,
+								 double * liverows, double * deadrows,
+								 TupleTableSlot * slot)
+#endif
 {
 	/*
 	 * Currently we don't do anything smart to reduce number of rows returned
@@ -1459,11 +1529,14 @@ columnar_index_build_range_scan(Relation columnarRelation,
 
 	if (scan)
 	{
-		/*
-		 * Parallel scans on columnar tables are already discardad by
-		 * ColumnarGetRelationInfoHook but be on the safe side.
-		 */
-		elog(ERROR, "parallel scans on columnar are not supported");
+		if (scan->rs_parallel != NULL)
+		{
+			ereport(ERROR,
+					(errmsg("parallel scans on columnar tables are not supported")));
+		}
+
+		table_endscan(scan);
+		scan = NULL;
 	}
 
 	/*
@@ -1984,7 +2057,7 @@ ColumnarSubXactCallback(SubXactEvent event, SubTransactionId mySubid,
 
 
 void
-columnar_tableam_init()
+columnar_tableam_init(void)
 {
 	RegisterXactCallback(ColumnarXactCallback, NULL);
 	RegisterSubXactCallback(ColumnarSubXactCallback, NULL);
@@ -2247,6 +2320,7 @@ ColumnarProcessUtility(PlannedStmt *pstmt,
 
 	RangeVar *columnarRangeVar = NULL;
 	List *columnarOptions = NIL;
+	bool indexBuildOnColumnar = false;
 
 	switch (nodeTag(parsetree))
 	{
@@ -2269,9 +2343,59 @@ ColumnarProcessUtility(PlannedStmt *pstmt,
 										   "index on columnar table %s",
 										   RelationGetRelationName(rel))));
 				}
+
+				/*
+				 * Columnar does not support parallel index build (its scan path is
+				 * always serial and writes during the build would violate parallel
+				 * mode).  Force max_parallel_maintenance_workers to 0 for this
+				 * statement so PG does not spawn workers.  Starting with PG19 the
+				 * default of 2 caused CREATE INDEX on a columnar table to fail.
+				 */
+				indexBuildOnColumnar = true;
 			}
 
 			RelationClose(rel);
+			break;
+		}
+
+		case T_ReindexStmt:
+		{
+			ReindexStmt *reindexStmt = castNode(ReindexStmt, parsetree);
+
+			/*
+			 * REINDEX on a columnar table rebuilds its index(es) and, just
+			 * like CREATE INDEX, first flushes any pending writes -- which
+			 * updates the stripe reservation entry in columnar.stripe.  That
+			 * update is disallowed inside a parallel operation, so we must
+			 * force a serial build here too (see the T_IndexStmt case above).
+			 *
+			 * Only REINDEX {TABLE,INDEX} target a single relation and can run
+			 * inside a transaction block (hence may carry pending writes).
+			 * REINDEX {SCHEMA,DATABASE,SYSTEM} cannot run in a transaction
+			 * block, so they never have pending writes to flush and need no
+			 * special handling here.
+			 */
+			if (reindexStmt->relation != NULL &&
+				(reindexStmt->kind == REINDEX_OBJECT_TABLE ||
+				 reindexStmt->kind == REINDEX_OBJECT_INDEX))
+			{
+				Oid relationId = RangeVarGetRelid(reindexStmt->relation,
+												  AccessShareLock, true);
+
+				if (OidIsValid(relationId))
+				{
+					Oid heapRelationId =
+						(reindexStmt->kind == REINDEX_OBJECT_INDEX) ?
+						IndexGetRelation(relationId, true) :
+						relationId;
+
+					if (OidIsValid(heapRelationId) &&
+						IsColumnarTableAmTable(heapRelationId))
+					{
+						indexBuildOnColumnar = true;
+					}
+				}
+			}
 			break;
 		}
 
@@ -2359,8 +2483,28 @@ ColumnarProcessUtility(PlannedStmt *pstmt,
 		CheckCitusColumnarAlterExtensionStmt(parsetree);
 	}
 
-	PrevProcessUtilityHook(pstmt, queryString, false, context,
-						   params, queryEnv, dest, completionTag);
+	int saveNestLevel = -1;
+	if (indexBuildOnColumnar)
+	{
+		saveNestLevel = NewGUCNestLevel();
+		set_config_option("max_parallel_maintenance_workers", "0",
+						  PGC_USERSET, PGC_S_SESSION,
+						  GUC_ACTION_SAVE, true, 0, false);
+	}
+
+	PG_TRY();
+	{
+		PrevProcessUtilityHook(pstmt, queryString, false, context,
+							   params, queryEnv, dest, completionTag);
+	}
+	PG_FINALLY();
+	{
+		if (saveNestLevel >= 0)
+		{
+			AtEOXact_GUC(true, saveNestLevel);
+		}
+	}
+	PG_END_TRY();
 
 	if (columnarOptions != NIL)
 	{
@@ -2559,7 +2703,7 @@ detoast_values(TupleDesc tupleDesc, Datum *orig_values, bool *isnull)
 	for (int i = 0; i < tupleDesc->natts; i++)
 	{
 		if (!isnull[i] && TupleDescAttr(tupleDesc, i)->attlen == -1 &&
-			VARATT_IS_EXTENDED(values[i]))
+			VARATT_IS_EXTENDED(DatumGetPointer(values[i])))
 		{
 			/* make a copy */
 			if (values == orig_values)

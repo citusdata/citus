@@ -94,7 +94,11 @@ fake_scan_getnextslot(TableScanDesc sscan, ScanDirection direction,
  * ------------------------------------------------------------------------
  */
 static IndexFetchTableData *
+#if PG_VERSION_NUM >= PG_VERSION_19
+fake_index_fetch_begin(Relation rel, uint32 flags)
+#else
 fake_index_fetch_begin(Relation rel)
+#endif
 {
 	elog(ERROR, "fake_index_fetch_begin not implemented");
 	return NULL;
@@ -182,8 +186,13 @@ fake_index_delete_tuples(Relation rel,
  * ----------------------------------------------------------------------------
  */
 static void
+#if PG_VERSION_NUM >= PG_VERSION_19
 fake_tuple_insert(Relation relation, TupleTableSlot *slot,
+				  CommandId cid, uint32 options, BulkInsertState bistate)
+#else
+fake_tuple_insert(Relation relation, TupleTableSlot * slot,
 				  CommandId cid, int options, BulkInsertState bistate)
+#endif
 {
 	ereport(WARNING, (errmsg("fake_tuple_insert")));
 
@@ -211,10 +220,17 @@ fake_tuple_insert(Relation relation, TupleTableSlot *slot,
 
 
 static void
+#if PG_VERSION_NUM >= PG_VERSION_19
 fake_tuple_insert_speculative(Relation relation, TupleTableSlot *slot,
+							  CommandId cid, uint32 options,
+							  BulkInsertState bistate,
+							  uint32 specToken)
+#else
+fake_tuple_insert_speculative(Relation relation, TupleTableSlot * slot,
 							  CommandId cid, int options,
 							  BulkInsertState bistate,
 							  uint32 specToken)
+#endif
 {
 	elog(ERROR, "fake_tuple_insert_speculative not implemented");
 }
@@ -229,9 +245,15 @@ fake_tuple_complete_speculative(Relation relation, TupleTableSlot *slot,
 
 
 static void
+#if PG_VERSION_NUM >= PG_VERSION_19
 fake_multi_insert(Relation relation, TupleTableSlot **slots,
+				  int ntuples, CommandId cid, uint32 options,
+				  BulkInsertState bistate)
+#else
+fake_multi_insert(Relation relation, TupleTableSlot ** slots,
 				  int ntuples, CommandId cid, int options,
 				  BulkInsertState bistate)
+#endif
 {
 	ereport(WARNING, (errmsg("fake_multi_insert")));
 
@@ -240,20 +262,34 @@ fake_multi_insert(Relation relation, TupleTableSlot **slots,
 
 
 static TM_Result
+#if PG_VERSION_NUM >= PG_VERSION_19
+fake_tuple_delete(Relation relation, ItemPointer tid, CommandId cid,
+				  uint32 options, Snapshot snapshot, Snapshot crosscheck,
+				  bool wait, TM_FailureData *tmfd)
+#else
 fake_tuple_delete(Relation relation, ItemPointer tid, CommandId cid,
 				  Snapshot snapshot, Snapshot crosscheck, bool wait,
-				  TM_FailureData *tmfd, bool changingPart)
+				  TM_FailureData * tmfd, bool changingPart)
+#endif
 {
 	elog(ERROR, "fake_tuple_delete not implemented");
 }
 
 
 static TM_Result
+#if PG_VERSION_NUM >= PG_VERSION_19
 fake_tuple_update(Relation relation, ItemPointer otid,
-				  TupleTableSlot *slot, CommandId cid,
+				  TupleTableSlot *slot, CommandId cid, uint32 options,
 				  Snapshot snapshot, Snapshot crosscheck,
 				  bool wait, TM_FailureData *tmfd,
 				  LockTupleMode *lockmode, TU_UpdateIndexes *update_indexes)
+#else
+fake_tuple_update(Relation relation, ItemPointer otid,
+				  TupleTableSlot * slot, CommandId cid,
+				  Snapshot snapshot, Snapshot crosscheck,
+				  bool wait, TM_FailureData * tmfd,
+				  LockTupleMode * lockmode, TU_UpdateIndexes * update_indexes)
+#endif
 {
 	elog(ERROR, "fake_tuple_update not implemented");
 }
@@ -270,7 +306,11 @@ fake_tuple_lock(Relation relation, ItemPointer tid, Snapshot snapshot,
 
 
 static void
+#if PG_VERSION_NUM >= PG_VERSION_19
+fake_finish_bulk_insert(Relation relation, uint32 options)
+#else
 fake_finish_bulk_insert(Relation relation, int options)
+#endif
 {
 	/* nothing to do here */
 }
@@ -353,6 +393,9 @@ static void
 fake_copy_for_cluster(Relation OldTable, Relation NewTable,
 					  Relation OldIndex, bool use_sort,
 					  TransactionId OldestXmin,
+#if PG_VERSION_NUM >= PG_VERSION_19
+					  Snapshot snapshot,
+#endif
 					  TransactionId *xid_cutoff,
 					  MultiXactId *multi_cutoff,
 					  double *num_tuples,
@@ -364,8 +407,13 @@ fake_copy_for_cluster(Relation OldTable, Relation NewTable,
 
 
 static void
-fake_vacuum(Relation onerel, VacuumParams *params,
+#if PG_VERSION_NUM >= PG_VERSION_19
+fake_vacuum(Relation onerel, const VacuumParams *params,
 			BufferAccessStrategy bstrategy)
+#else
+fake_vacuum(Relation onerel, VacuumParams * params,
+			BufferAccessStrategy bstrategy)
+#endif
 {
 	elog(WARNING, "fake_copy_for_cluster not implemented");
 }
@@ -381,9 +429,15 @@ fake_scan_analyze_next_block(TableScanDesc scan,
 
 
 static bool
-fake_scan_analyze_next_tuple(TableScanDesc scan, TransactionId OldestXmin,
+#if PG_VERSION_NUM >= PG_VERSION_19
+fake_scan_analyze_next_tuple(TableScanDesc scan,
 							 double *liverows, double *deadrows,
 							 TupleTableSlot *slot)
+#else
+fake_scan_analyze_next_tuple(TableScanDesc scan, TransactionId OldestXmin,
+							 double * liverows, double * deadrows,
+							 TupleTableSlot * slot)
+#endif
 {
 	elog(ERROR, "fake_scan_analyze_next_tuple not implemented");
 }

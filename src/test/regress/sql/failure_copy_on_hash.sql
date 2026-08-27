@@ -141,7 +141,9 @@ SELECT create_distributed_table('test_table_2','id');
 
 SELECT citus.mitmproxy('conn.kill()');
 
-\COPY test_table_2 FROM stdin delimiter ',';
+-- Deliberately use zero-row input; modern psql drains failed COPY input
+-- through the next \. (#8780).
+\COPY test_table_2 FROM PROGRAM 'true' delimiter ',';
 
 SELECT citus.mitmproxy('conn.allow()');
 SELECT pds.logicalrelid, pdsd.shardid, pdsd.shardstate

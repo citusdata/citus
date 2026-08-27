@@ -3938,7 +3938,7 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 				}
 			}
 
-			/* fallthrough */
+				pg_fallthrough;
 
 			default:
 			{

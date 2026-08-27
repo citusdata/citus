@@ -188,7 +188,7 @@ PG_FUNCTION_INFO_V1(citus_remove_clone_node_with_nodeid);
  * sane defaults, e.g. nodeRack = WORKER_DEFAULT_RACK.
  */
 static NodeMetadata
-DefaultNodeMetadata()
+DefaultNodeMetadata(void)
 {
 	NodeMetadata nodeMetadata;
 
@@ -2320,7 +2320,7 @@ FindNodeWithNodeId(int nodeId, bool missingOk)
  * FindCoordinatorNodeId returns the node id of the coordinator node
  */
 int
-FindCoordinatorNodeId()
+FindCoordinatorNodeId(void)
 {
 	bool includeNodesFromOtherClusters = false;
 	List *nodeList = ReadDistNode(includeNodesFromOtherClusters);
@@ -3128,7 +3128,7 @@ GetNodeByNodeId(int32 nodeId)
  * on an internal sequence created in initdb to generate unique identifiers.
  */
 int32
-GetNextGroupId()
+GetNextGroupId(void)
 {
 	text *sequenceName = cstring_to_text(GROUPID_SEQUENCE_NAME);
 	Oid sequenceId = ResolveRelationId(sequenceName, false);
@@ -3160,7 +3160,7 @@ GetNextGroupId()
  * on an internal sequence created in initdb to generate unique identifiers.
  */
 int
-GetNextNodeId()
+GetNextNodeId(void)
 {
 	text *sequenceName = cstring_to_text(NODEID_SEQUENCE_NAME);
 	Oid sequenceId = ResolveRelationId(sequenceName, false);

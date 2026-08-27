@@ -534,7 +534,7 @@ PostprocessAlterExtensionCitusUpdateStmt(Node *node)
  * pg_dist_object if we had created them in new version of Citus to pg_dist_object.
  */
 static void
-MarkExistingObjectDependenciesDistributedIfSupported()
+MarkExistingObjectDependenciesDistributedIfSupported(void)
 {
 	/* resulting object addresses to be marked as distributed */
 	List *resultingObjectAddresses = NIL;
