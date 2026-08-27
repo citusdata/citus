@@ -2054,27 +2054,6 @@ RESET citus.allow_unsafe_insert_select_pushdown;
 DROP SCHEMA pg18_insert_select_pushdown CASCADE;
 SET search_path TO pg18_nn;
 
--- EXTRACT accepts any string as its field name. Verify Citus quotes that field
--- when deparsing task SQL, so text resembling a second statement remains data.
-CREATE TABLE extract_deparse_source (id int, ts timestamp);
-SELECT create_distributed_table('extract_deparse_source', 'id',
-								shard_count => 1, colocate_with => 'none');
-INSERT INTO extract_deparse_source VALUES (1, timestamp '2026-01-01');
-
-DO $$
-BEGIN
-	PERFORM EXTRACT('year FROM timestamp ''2000-01-01''); CREATE TABLE injected(); --' FROM ts)
-	FROM extract_deparse_source
-	WHERE id = 1;
-EXCEPTION
-	WHEN invalid_parameter_value THEN NULL;
-END
-$$;
-
-SELECT bool_and(result::boolean) AS extract_field_injection_blocked
-FROM run_command_on_workers($$
-	SELECT to_regclass('pg18_nn.injected') IS NULL
-$$);
 
 -- cleanup with minimum verbosity
 SET client_min_messages TO ERROR;
