@@ -13,7 +13,7 @@ CREATE TABLE reference_table (key int PRIMARY KEY);
 SELECT create_reference_table('reference_table');
 
 CREATE TABLE distributed_table (key int PRIMARY KEY , value text, age bigint CHECK (age > 10), FOREIGN KEY (key) REFERENCES reference_table(key) ON DELETE CASCADE);
-SELECT create_distributed_table('distributed_table','key');
+SELECT create_distributed_table('distributed_table','key', colocate_with => 'none');
 
 CREATE TABLE second_distributed_table (key int PRIMARY KEY , value text, FOREIGN KEY (key) REFERENCES distributed_table(key) ON DELETE CASCADE);
 SELECT create_distributed_table('second_distributed_table','key');
@@ -33,7 +33,7 @@ CREATE TABLE collections_list (
 	PRIMARY KEY(key, collection_id)
 ) PARTITION BY LIST (collection_id );
 
-SELECT create_distributed_table('collections_list', 'key');
+SELECT create_distributed_table('collections_list', 'key', colocate_with => 'none');
 
 CREATE TABLE collections_list_0
 	PARTITION OF collections_list (key, ser, ts, collection_id, value)
@@ -60,7 +60,7 @@ INSERT INTO accounts (id) VALUES ('foo');
 INSERT INTO stats (account_id, spent) VALUES ('foo', 100);
 
 CREATE TABLE abcd(a int, b int, c int, d int);
-SELECT create_distributed_table('abcd', 'b');
+SELECT create_distributed_table('abcd', 'b', colocate_with => 'none');
 
 INSERT INTO abcd VALUES (1,2,3,4);
 INSERT INTO abcd VALUES (2,3,4,5);
@@ -943,7 +943,7 @@ CREATE TABLE event_responses (
   primary key (event_id, user_id)
 );
 
-SELECT create_distributed_table('event_responses', 'event_id');
+SELECT create_distributed_table('event_responses', 'event_id', colocate_with => 'none');
 
 INSERT INTO event_responses VALUES (1, 1, 'yes'), (2, 2, 'yes'), (3, 3, 'no'), (4, 4, 'no');
 
@@ -954,7 +954,7 @@ CREATE TABLE event_responses_no_pkey (
   response invite_resp
 );
 
-SELECT create_distributed_table('event_responses_no_pkey', 'event_id');
+SELECT create_distributed_table('event_responses_no_pkey', 'event_id', colocate_with => 'event_responses');
 
 
 
@@ -1437,10 +1437,35 @@ ALTER SYSTEM SET citus.local_hostname TO 'foobar';
 SELECT pg_reload_conf();
 SELECT pg_sleep(0.1); -- wait to make sure the config has changed before running the GUC
 SET citus.enable_local_execution TO false; -- force a connection to the dummy placements
+SET citus.enable_single_task_execution TO false; -- use adaptive executor for predictable error messages
 
 -- run queries that use dummy placements for local execution
-SELECT * FROM event_responses WHERE FALSE;
-WITH cte_1 AS (SELECT * FROM event_responses LIMIT 1) SELECT count(*) FROM cte_1;
+-- The exact error format depends on DNS resolution timing (pool timeout vs
+-- immediate connection failure), so we catch the error and verify it mentions foobar.
+DO $$
+BEGIN
+    PERFORM * FROM event_responses WHERE FALSE;
+    RAISE NOTICE 'ERROR: should have failed when connecting to foobar';
+EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM LIKE '%foobar%' THEN
+        RAISE NOTICE 'correctly attempted connection to foobar';
+    ELSE
+        RAISE NOTICE 'ERROR: unexpected error: %', SQLERRM;
+    END IF;
+END;
+$$;
+DO $$
+BEGIN
+    EXECUTE 'WITH cte_1 AS (SELECT * FROM event_responses LIMIT 1) SELECT count(*) FROM cte_1';
+    RAISE NOTICE 'ERROR: should have failed when connecting to foobar';
+EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM LIKE '%foobar%' THEN
+        RAISE NOTICE 'correctly attempted connection to foobar';
+    ELSE
+        RAISE NOTICE 'ERROR: unexpected error: %', SQLERRM;
+    END IF;
+END;
+$$;
 
 ALTER SYSTEM RESET citus.local_hostname;
 SELECT pg_reload_conf();

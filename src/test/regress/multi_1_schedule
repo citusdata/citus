@@ -226,10 +226,11 @@ test: pg_dump
 # ---------
 test: multi_copy fast_path_router_modify
 test: multi_router_planner
-# These 2 tests have prepared statements which sometimes get invalidated by concurrent tests,
-# changing the debug output. We should not run them in parallel with others
+# These tests have prepared statements which sometimes get invalidated by concurrent tests,
+# changing the debug output. We should not run them in parallel with others or each other.
 test: null_parameters
 test: multi_router_planner_fast_path
+test: single_task_execution
 
 # ----------
 # multi_large_shardid loads more lineitem data using high shard identifiers
