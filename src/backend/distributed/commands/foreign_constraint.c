@@ -59,6 +59,19 @@
 typedef bool (*CheckRelationFunc)(Oid);
 
 
+/*
+ * GUC controlling whether foreign keys between distributed tables require the
+ * two relations to be colocated. Defaults to true (enforce). When set to false,
+ * the "relations are not colocated" error is downgraded to a warning so that a
+ * foreign key can be created even if the referencing/referenced tables have
+ * (transiently) landed in different colocation groups -- e.g. during a
+ * mixed-version upgrade before citus_finish_citus_upgrade() has run. Note the
+ * foreign key cannot actually be enforced across non-colocated shards, so this
+ * should only be used as a temporary migration aid.
+ */
+bool EnforceForeignKeyColocation = true;
+
+
 /* Local functions forward declarations */
 static void EnsureReferencingTableNotReplicated(Oid referencingTableId);
 static void EnsureSupportedFKeyOnDistKey(Form_pg_constraint constraintForm);
@@ -335,7 +348,8 @@ ErrorIfUnsupportedForeignConstraintExists(Relation relation, char referencingDis
 				referencingColocationId == INVALID_COLOCATION_ID ||
 				referencingColocationId != referencedColocationId))
 		{
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+			int colocationErrorLevel = EnforceForeignKeyColocation ? ERROR : WARNING;
+			ereport(colocationErrorLevel, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 							errmsg("cannot create foreign key constraint since "
 								   "relations are not colocated or not referencing "
 								   "a reference table"),

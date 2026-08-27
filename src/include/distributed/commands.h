@@ -36,6 +36,13 @@ extern bool EnableLocalReferenceForeignKeys;
  */
 extern bool AllowUnsafeConstraints;
 
+/*
+ * GUC that controls whether distributed-to-distributed foreign keys require the
+ * two relations to be colocated. When false, the colocation requirement is
+ * downgraded from an error to a warning (migration aid; FK is not enforced).
+ */
+extern bool EnforceForeignKeyColocation;
+
 extern bool EnableUnsafeTriggers;
 
 extern int MaxMatViewSizeToAutoRecreate;
