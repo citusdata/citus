@@ -1405,6 +1405,7 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 				SwitchToSequentialAndLocalExecutionIfConstraintNameTooLong(
 					leftRelationId, constraint);
 			}
+
 			/*
 			 * When constraint->indexname is not NULL we are handling an
 			 * ADD {PRIMARY KEY, UNIQUE} USING INDEX command. In this case
@@ -1596,6 +1597,7 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 				}
 			}
 		}
+
 		/*
 		 * We check for ALTER COLUMN .. SET/DROP DEFAULT
 		 * we should not propagate anything to shards
@@ -2879,6 +2881,7 @@ PostprocessAlterTableStmt(AlterTableStmt *alterTableStatement)
 				}
 			}
 		}
+
 		/*
 		 * We check for ALTER COLUMN .. SET DEFAULT nextval('user_defined_seq')
 		 * we should make sure that the type of the column that uses
@@ -3032,6 +3035,7 @@ FixAlterTableStmtIndexNames(AlterTableStmt *alterTableStatement)
 
 			FixPartitionShardIndexNames(relationId, parentIndexOid);
 		}
+
 		/*
 		 * If this is an ALTER TABLE .. ATTACH PARTITION command
 		 * we have wrong index names generated on indexes of shards of
