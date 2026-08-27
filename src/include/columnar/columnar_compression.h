@@ -30,5 +30,5 @@ extern bool CompressBuffer(StringInfo inputBuffer,
 						   int compressionLevel);
 extern StringInfo DecompressBuffer(StringInfo buffer, CompressionType compressionType,
 								   uint64 decompressedSize);
-
+extern int GetMaxCompressedLength(int size, CompressionType compressionType);
 #endif /* COLUMNAR_COMPRESSION_H */
