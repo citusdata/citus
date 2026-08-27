@@ -468,3 +468,9 @@ s/local_table_5_col_1_fkey_([0-9]+)/local_table_5_col_1_fkey1_\1/g
 # these rules can be removed when PG19 is the minimum supported version
 /^([[:space:]]*)139264$/ s/139264$/131072/
 /^([[:space:]]*[0-9]+[[:space:]]+[|][[:space:]]+)139264$/ s/139264$/131072/
+
+# PG19 adds the IO option to EXPLAIN. Citus spells every option out, so remote
+# EXPLAIN commands carry a no-op "IO FALSE" that earlier versions do not send.
+# these rules can be removed when PG19 is the minimum supported version
+s/, IO FALSE,/,/g
+s/"io": false, //g
