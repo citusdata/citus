@@ -126,3 +126,4 @@ test: citus_cluster_changes_block
 # part of the N-1 test matrix. Move back to multi_schedule at Citus 14.
 # ----------
 test: allow_unsafe_insert_select_pushdown
+test: extract_deparse
