@@ -117,7 +117,7 @@ static List * CreateRightShardListForInterShardDDLTask(Oid rightRelationId,
 													   Oid leftRelationId,
 													   List *leftShardList);
 static List * ConcurrentDetachPartitionTaskList(Oid parentRelationId,
-												 Oid partitionRelationId);
+												Oid partitionRelationId);
 static void SetInterShardDDLTaskPlacementList(Task *task,
 											  ShardInterval *leftShardInterval,
 											  ShardInterval *rightShardInterval);
@@ -1405,7 +1405,6 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 				SwitchToSequentialAndLocalExecutionIfConstraintNameTooLong(
 					leftRelationId, constraint);
 			}
-
 			/*
 			 * When constraint->indexname is not NULL we are handling an
 			 * ADD {PRIMARY KEY, UNIQUE} USING INDEX command. In this case
@@ -1597,7 +1596,6 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 				}
 			}
 		}
-
 		/*
 		 * We check for ALTER COLUMN .. SET/DROP DEFAULT
 		 * we should not propagate anything to shards
@@ -1681,7 +1679,8 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 			alterTableCommand = psprintf("ALTER TABLE %s DETACH PARTITION %s "
 										 "CONCURRENTLY",
 										 generate_qualified_relation_name(leftRelationId),
-										 generate_qualified_relation_name(rightRelationId));
+										 generate_qualified_relation_name(rightRelationId)
+										 );
 		}
 		else if (AlterTableCommandTypeIsTrigger(alterTableType))
 		{
@@ -1728,13 +1727,13 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 			if (concurrentPartitionDetach)
 			{
 				ddlJob->taskList = ConcurrentDetachPartitionTaskList(leftRelationId,
-															 rightRelationId);
+																	 rightRelationId);
 				ddlJob->warnForPartialFailure = true;
 			}
 			else
 			{
 				ddlJob->taskList = InterShardDDLTaskList(leftRelationId, rightRelationId,
-													 alterTableCommand);
+														 alterTableCommand);
 			}
 		}
 	}
@@ -2880,7 +2879,6 @@ PostprocessAlterTableStmt(AlterTableStmt *alterTableStatement)
 				}
 			}
 		}
-
 		/*
 		 * We check for ALTER COLUMN .. SET DEFAULT nextval('user_defined_seq')
 		 * we should make sure that the type of the column that uses
@@ -3034,7 +3032,6 @@ FixAlterTableStmtIndexNames(AlterTableStmt *alterTableStatement)
 
 			FixPartitionShardIndexNames(relationId, parentIndexOid);
 		}
-
 		/*
 		 * If this is an ALTER TABLE .. ATTACH PARTITION command
 		 * we have wrong index names generated on indexes of shards of
@@ -4182,7 +4179,8 @@ ConcurrentDetachPartitionTaskList(Oid parentRelationId, Oid partitionRelationId)
 	uint64 jobId = INVALID_JOB_ID;
 	int taskId = 1;
 	char *parentSchemaName = get_namespace_name(get_rel_namespace(parentRelationId));
-	char *partitionSchemaName = get_namespace_name(get_rel_namespace(partitionRelationId));
+	char *partitionSchemaName = get_namespace_name(get_rel_namespace(partitionRelationId))
+	;
 	char *parentRelationName = get_rel_name(parentRelationId);
 	char *partitionRelationName = get_rel_name(partitionRelationId);
 
@@ -4203,10 +4201,11 @@ ConcurrentDetachPartitionTaskList(Oid parentRelationId, Oid partitionRelationId)
 		task->taskId = taskId++;
 		task->taskType = DDL_TASK;
 		SetTaskQueryString(task,
-			psprintf("ALTER TABLE %s DETACH PARTITION %s CONCURRENTLY",
-					 quote_qualified_identifier(parentSchemaName, parentShardName),
-					 quote_qualified_identifier(partitionSchemaName,
-											partitionShardName)));
+						   psprintf("ALTER TABLE %s DETACH PARTITION %s CONCURRENTLY",
+									quote_qualified_identifier(parentSchemaName,
+															   parentShardName),
+									quote_qualified_identifier(partitionSchemaName,
+															   partitionShardName)));
 		task->replicationModel = REPLICATION_MODEL_INVALID;
 		task->anchorShardId = parentShard->shardId;
 		task->cannotBeExecutedInTransaction = true;
