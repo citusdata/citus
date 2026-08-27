@@ -51,6 +51,7 @@
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/reference_table_utils.h"
 #include "distributed/relation_access_tracking.h"
+#include "distributed/relay_utility.h"
 #include "distributed/resource_lock.h"
 #include "distributed/tenant_schema_metadata.h"
 #include "distributed/version_compat.h"
@@ -115,6 +116,8 @@ static void ErrorIfUnsupportedAlterAddConstraintStmt(AlterTableStmt *alterTableS
 static List * CreateRightShardListForInterShardDDLTask(Oid rightRelationId,
 													   Oid leftRelationId,
 													   List *leftShardList);
+static List * ConcurrentDetachPartitionTaskList(Oid parentRelationId,
+												 Oid partitionRelationId);
 static void SetInterShardDDLTaskPlacementList(Task *task,
 											  ShardInterval *leftShardInterval,
 											  ShardInterval *rightShardInterval);
@@ -1336,6 +1339,7 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 	 */
 	bool deparseAT = false;
 	bool propagateCommandToRemoteNodes = true;
+	bool concurrentPartitionDetach = false;
 
 	/*
 	 * Sometimes we want to run a different DDL Command string on remote MX workers
@@ -1666,6 +1670,18 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 			Assert(list_length(commandList) <= 1);
 
 			rightRelationId = RangeVarGetRelid(partitionCommand->name, NoLock, false);
+			concurrentPartitionDetach = partitionCommand->concurrent;
+		}
+		else if (alterTableType == AT_DetachPartitionFinalize)
+		{
+			PartitionCmd *partitionCommand = (PartitionCmd *) command->def;
+
+			rightRelationId = RangeVarGetRelid(partitionCommand->name, NoLock, false);
+			concurrentPartitionDetach = true;
+			alterTableCommand = psprintf("ALTER TABLE %s DETACH PARTITION %s "
+										 "CONCURRENTLY",
+										 generate_qualified_relation_name(leftRelationId),
+										 generate_qualified_relation_name(rightRelationId));
 		}
 		else if (AlterTableCommandTypeIsTrigger(alterTableType))
 		{
@@ -1709,8 +1725,17 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 		else
 		{
 			/* if foreign key or attaching partition index related, use specialized task list function ... */
-			ddlJob->taskList = InterShardDDLTaskList(leftRelationId, rightRelationId,
+			if (concurrentPartitionDetach)
+			{
+				ddlJob->taskList = ConcurrentDetachPartitionTaskList(leftRelationId,
+															 rightRelationId);
+				ddlJob->warnForPartialFailure = true;
+			}
+			else
+			{
+				ddlJob->taskList = InterShardDDLTaskList(leftRelationId, rightRelationId,
 													 alterTableCommand);
+			}
 		}
 	}
 	else
@@ -3813,8 +3838,6 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 
 			case AT_DetachPartitionFinalize:
 			{
-				ereport(ERROR, (errmsg("ALTER TABLE .. DETACH PARTITION .. FINALIZE "
-									   "commands are currently unsupported.")));
 				break;
 			}
 
@@ -3828,15 +3851,6 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 										   "with other subcommands"),
 									errhint("You can issue each subcommand "
 											"separately.")));
-				}
-
-				PartitionCmd *partitionCommand = (PartitionCmd *) command->def;
-
-				if (partitionCommand->concurrent)
-				{
-					ereport(ERROR, (errmsg("ALTER TABLE .. DETACH PARTITION .. "
-										   "CONCURRENTLY commands are currently "
-										   "unsupported.")));
 				}
 
 				break;
@@ -4144,6 +4158,60 @@ InterShardDDLTaskList(Oid leftRelationId, Oid rightRelationId,
 		SetInterShardDDLTaskPlacementList(task, leftShardInterval, rightShardInterval);
 		SetInterShardDDLTaskRelationShardList(task, leftShardInterval,
 											  rightShardInterval);
+
+		taskList = lappend(taskList, task);
+	}
+
+	return taskList;
+}
+
+
+/*
+ * Build top-level commands for DETACH PARTITION CONCURRENTLY.  Unlike other
+ * inter-shard DDL, these commands cannot run through
+ * worker_apply_inter_shard_ddl_command(), because PostgreSQL implements the
+ * detach using multiple transactions.
+ */
+static List *
+ConcurrentDetachPartitionTaskList(Oid parentRelationId, Oid partitionRelationId)
+{
+	List *parentShardList = LoadShardIntervalList(parentRelationId);
+	List *partitionShardList = CreateRightShardListForInterShardDDLTask(
+		partitionRelationId, parentRelationId, parentShardList);
+	List *taskList = NIL;
+	uint64 jobId = INVALID_JOB_ID;
+	int taskId = 1;
+	char *parentSchemaName = get_namespace_name(get_rel_namespace(parentRelationId));
+	char *partitionSchemaName = get_namespace_name(get_rel_namespace(partitionRelationId));
+	char *parentRelationName = get_rel_name(parentRelationId);
+	char *partitionRelationName = get_rel_name(partitionRelationId);
+
+	LockShardListMetadata(parentShardList, ShareLock);
+
+	ShardInterval *parentShard = NULL;
+	ShardInterval *partitionShard = NULL;
+	forboth_ptr(parentShard, parentShardList, partitionShard, partitionShardList)
+	{
+		char *parentShardName = pstrdup(parentRelationName);
+		char *partitionShardName = pstrdup(partitionRelationName);
+		Task *task = CitusMakeNode(Task);
+
+		AppendShardIdToName(&parentShardName, parentShard->shardId);
+		AppendShardIdToName(&partitionShardName, partitionShard->shardId);
+
+		task->jobId = jobId;
+		task->taskId = taskId++;
+		task->taskType = DDL_TASK;
+		SetTaskQueryString(task,
+			psprintf("ALTER TABLE %s DETACH PARTITION %s CONCURRENTLY",
+					 quote_qualified_identifier(parentSchemaName, parentShardName),
+					 quote_qualified_identifier(partitionSchemaName,
+											partitionShardName)));
+		task->replicationModel = REPLICATION_MODEL_INVALID;
+		task->anchorShardId = parentShard->shardId;
+		task->cannotBeExecutedInTransaction = true;
+		SetInterShardDDLTaskPlacementList(task, parentShard, partitionShard);
+		SetInterShardDDLTaskRelationShardList(task, parentShard, partitionShard);
 
 		taskList = lappend(taskList, task);
 	}
