@@ -1,6 +1,13 @@
 -- citus--14.0-1--15.0-1
 -- bump version to 15.0-1
 
+-- CDC decoder helpers in src/backend/distributed/cdc/cdc_decoder_utils.c scan
+-- these three catalogs under historic snapshots. Future decoder catalog scans
+-- must also update this migration and catalog accessibility.
+ALTER TABLE pg_catalog.pg_dist_partition SET (user_catalog_table = true);
+ALTER TABLE pg_catalog.pg_dist_shard SET (user_catalog_table = true);
+ALTER TABLE pg_catalog.pg_dist_local_group SET (user_catalog_table = true);
+
 #include "udfs/citus_internal_get_next_colocation_id/15.0-1.sql"
 
 -- drop the legacy version that we kept for backward compatibility at Citus 13 and 14

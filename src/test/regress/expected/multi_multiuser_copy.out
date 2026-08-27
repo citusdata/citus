@@ -29,27 +29,16 @@ COPY customer_copy_hash (c_custkey,c_name) FROM STDIN;
 -- COPY FROM as user with ALL access
 SET ROLE full_access;
 COPY customer_copy_hash (c_custkey,c_name) FROM STDIN;
-;
 RESET ROLE;
 -- COPY FROM as user with SELECT access, should fail
 SET ROLE read_access;
-COPY customer_copy_hash (c_custkey,c_name) FROM STDIN;
+\copy customer_copy_hash (c_custkey,c_name) FROM PROGRAM 'true'
 ERROR:  permission denied for table customer_copy_hash
-3	customer3
-\.
-invalid command \.
-;
-ERROR:  syntax error at or near "3"
 RESET ROLE;
 -- COPY FROM as user with no access, should fail
 SET ROLE no_access;
-COPY customer_copy_hash (c_custkey,c_name) FROM STDIN;
+\copy customer_copy_hash (c_custkey,c_name) FROM PROGRAM 'true'
 ERROR:  permission denied for table customer_copy_hash
-4	customer4
-\.
-invalid command \.
-;
-ERROR:  syntax error at or near "4"
 RESET ROLE;
 -- COPY TO as superuser
 COPY (SELECT * FROM customer_copy_hash ORDER BY 1) TO STDOUT;

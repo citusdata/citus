@@ -132,6 +132,10 @@ citus.enable_change_data_capture = on
 log_statement = 'all'
 citus.override_table_visibility = off";
 
+    if ($pg_major_version >= 19) {
+        $citus_config_options = $citus_config_options . "\noutput_plugin_libraries = 'pgoutput, wal2json, citus'";
+    }
+
     if ($config ne "") {
         $citus_config_options = $citus_config_options . $config
     }
@@ -328,4 +332,3 @@ sub drop_cdc_client_subscriptions {
         $i++;
     }
 }
-

@@ -149,12 +149,11 @@ ClusterChangesBlockShmemInit(void)
 
 	if (!alreadyInitialized)
 	{
-		ClusterChangesBlockControl->trancheId = LWLockNewTrancheId();
 		strlcpy(ClusterChangesBlockControl->lockTrancheName,
 				"Citus Cluster Changes Block",
 				NAMEDATALEN);
-		LWLockRegisterTranche(ClusterChangesBlockControl->trancheId,
-							  ClusterChangesBlockControl->lockTrancheName);
+		ClusterChangesBlockControl->trancheId =
+			LWLockNewTrancheIdCompat(ClusterChangesBlockControl->lockTrancheName);
 		LWLockInitialize(&ClusterChangesBlockControl->lock,
 						 ClusterChangesBlockControl->trancheId);
 

@@ -54,6 +54,11 @@ jobs:
           - almalinux-8
           - almalinux-9
         POSTGRES_VERSION: ${{ fromJson(needs.get_postgres_versions_from_file.outputs.pg_versions) }}
+        exclude:
+          - packaging_docker_image: oraclelinux-8
+            POSTGRES_VERSION: 19
+          - packaging_docker_image: almalinux-8
+            POSTGRES_VERSION: 19
 
     container:
       image: citus/packaging:${{ matrix.packaging_docker_image }}-pg${{ matrix.POSTGRES_VERSION }}
@@ -126,9 +131,11 @@ jobs:
 
         POSTGRES_VERSION: ${{ fromJson(needs.get_postgres_versions_from_file.outputs.pg_versions) }}
         exclude:
-          # PG18 is not supported on Ubuntu focal
+          # PG18 and PG19 are not supported on Ubuntu focal
           - packaging_docker_image: ubuntu-focal-all
             POSTGRES_VERSION: 18
+          - packaging_docker_image: ubuntu-focal-all
+            POSTGRES_VERSION: 19
 
     container:
       image: citus/packaging:${{ matrix.packaging_docker_image }}

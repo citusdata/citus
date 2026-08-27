@@ -248,7 +248,7 @@ $$, true);
    ->  Task
          Node: host=localhost port=xxxxx dbname=regression
          ->  Insert on res_14000004 citus_table_alias
-               ->  Subquery Scan on "*SELECT*"
+               ->  Subquery Scan on "ANY_subquery"
                      ->  WindowAgg
                            ->  Sort
                                  Sort Key: dist.text_col

@@ -187,9 +187,14 @@ DEPS = {
     "multi_mx_modifying_xacts": TestDeps(None, ["multi_mx_create_table"]),
     "multi_mx_router_planner": TestDeps(None, ["multi_mx_create_table"]),
     "multi_mx_copy_data": TestDeps(None, ["multi_mx_create_table"]),
+    "multi_mx_explain": TestDeps(None, ["multi_mx_copy_data"]),
     "multi_mx_modifications": TestDeps(None, ["multi_mx_create_table"]),
     "multi_mx_schema_support": TestDeps(None, ["multi_mx_copy_data"]),
     "multi_simple_queries": TestDeps("base_schedule"),
+    # These share a schedule line that needs both TPC-H and behavioral data.
+    "multi_array_agg": TestDeps("base_schedule"),
+    "multi_limit_clause": TestDeps("base_schedule"),
+    "multi_orderby_limit_pushdown": TestDeps("base_schedule"),
     "create_single_shard_table": TestDeps("minimal_schedule"),
     "isolation_schema_based_sharding_from_any_node": TestDeps(
         None, ["isolation_setup"]
