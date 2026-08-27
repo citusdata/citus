@@ -271,6 +271,9 @@ PgGetObjectAddress(char *ttype, ArrayType *namearr, ArrayType *argsarr)
 		case OBJECT_TABCONSTRAINT:
 		case OBJECT_OPCLASS:
 		case OBJECT_OPFAMILY:
+#if PG_VERSION_NUM >= PG_VERSION_19
+		case OBJECT_PROPGRAPH:
+#endif
 		{
 			objnode = (Node *) name;
 			break;

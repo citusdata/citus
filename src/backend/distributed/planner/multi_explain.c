@@ -458,11 +458,21 @@ ExtractAnalyzeStats(DistributedSubPlan *subPlan, PlanState *planState)
 		return;
 	}
 
+#if PG_VERSION_NUM >= PG_VERSION_19
+	NodeInstrumentation *instr = planState->instrument;
+#else
 	Instrumentation *instr = planState->instrument;
+#endif
 	if (!IsA(planState, CustomScanState))
 	{
+#if PG_VERSION_NUM >= PG_VERSION_19
+		NodeInstrumentation *nodeInstr = planState->instrument;
+		nodeInstr->ntuples = subPlan->ntuples;
+		nodeInstr->nloops = 1; /* subplan nodes are executed only once */
+#else
 		instr->ntuples = subPlan->ntuples;
 		instr->nloops = 1; /* subplan nodes are executed only once */
+#endif
 		return;
 	}
 
@@ -477,7 +487,7 @@ ExtractAnalyzeStats(DistributedSubPlan *subPlan, PlanState *planState)
 	int tasksOutput = 0;
 	double tasksNtuples = 0;
 	double tasksNloops = 0;
-	memset(instr, 0, sizeof(Instrumentation));
+	memset(instr, 0, sizeof(*instr));
 	DistributedPlan *newdistributedPlan =
 		((CitusScanState *) planState)->distributedPlan;
 
@@ -519,8 +529,16 @@ ExtractAnalyzeStats(DistributedSubPlan *subPlan, PlanState *planState)
 		tasksOutput++;
 	}
 
+#if PG_VERSION_NUM >= PG_VERSION_19
+	{
+		NodeInstrumentation *nodeInstr = planState->instrument;
+		nodeInstr->ntuples = tasksNtuples;
+		nodeInstr->nloops = tasksNloops;
+	}
+#else
 	instr->ntuples = tasksNtuples;
 	instr->nloops = tasksNloops;
+#endif
 }
 
 
@@ -1735,6 +1753,7 @@ CreateExplainAnlyzeDestination(Task *task, TupleDestination *taskDest)
 	TupleDescInitEntry(lastSavedExplainAnalyzeTupDesc, 2, "duration", FLOAT8OID, 0, 0);
 	TupleDescInitEntry(lastSavedExplainAnalyzeTupDesc, 3, "ntuples", FLOAT8OID, 0, 0);
 	TupleDescInitEntry(lastSavedExplainAnalyzeTupDesc, 4, "nloops", FLOAT8OID, 0, 0);
+	TupleDescFinalize(lastSavedExplainAnalyzeTupDesc);
 
 	tupleDestination->lastSavedExplainAnalyzeTupDesc = lastSavedExplainAnalyzeTupDesc;
 
@@ -2483,7 +2502,11 @@ ExplainWorkerPlan(PlannedStmt *plannedstmt, DistributedSubPlan *subPlan, DestRec
 
 	if (executeQuery)
 	{
+#if PG_VERSION_NUM >= PG_VERSION_19
+		NodeInstrumentation *instr = queryDesc->planstate->instrument;
+#else
 		Instrumentation *instr = queryDesc->planstate->instrument;
+#endif
 		*executionTuples = instr->ntuples;
 		*executionLoops = instr->nloops;
 	}

@@ -243,8 +243,12 @@ typedef struct CitusCustomScanPath
 extern PlannedStmt * distributed_planner(Query *parse,
 										 const char *query_string,
 										 int cursorOptions,
+#if PG_VERSION_NUM >= PG_VERSION_19
+										 ParamListInfo boundParams,
+										 struct ExplainState *es);
+#else
 										 ParamListInfo boundParams);
-
+#endif
 
 /*
  * Common hint message to workaround using postgres local and citus local tables
@@ -261,6 +265,10 @@ extern void multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOp
 											Index restrictionIndex, RangeTblEntry *rte);
 extern void multi_get_relation_info_hook(PlannerInfo *root, Oid relationObjectId, bool
 										 inhparent, RelOptInfo *rel);
+#if PG_VERSION_NUM >= PG_VERSION_19
+extern void multi_build_simple_rel_hook(PlannerInfo *root, RelOptInfo *rel,
+										RangeTblEntry *rte);
+#endif
 extern void multi_join_restriction_hook(PlannerInfo *root,
 										RelOptInfo *joinrel,
 										RelOptInfo *outerrel,

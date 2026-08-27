@@ -542,7 +542,7 @@ SendCommandToWorkersParamsInternal(TargetWorkerSet targetWorkerSet, const char *
  * modification in the current transaction to prevent opening a connection is such cases.
  */
 void
-EnsureNoModificationsHaveBeenDone()
+EnsureNoModificationsHaveBeenDone(void)
 {
 	if (XactModificationLevel > XACT_MODIFICATION_NONE)
 	{
