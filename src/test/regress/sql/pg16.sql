@@ -697,6 +697,7 @@ SELECT roleid::regrole::text AS role, member::regrole::text, grantor::regrole::t
 \c - - - :master_port
 DROP ROLE create_role1, create_role2, create_role3;
 
+SET search_path TO pg16;
 -- EXTRACT accepts any string as its field name. Verify Citus quotes that field
 -- when deparsing task SQL, so text resembling a second statement remains data.
 CREATE TABLE extract_deparse_source (id int, ts timestamp);
