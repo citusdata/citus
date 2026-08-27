@@ -29,5 +29,5 @@ PG_FUNCTION_INFO_V1(citus_version);
 Datum
 citus_version(PG_FUNCTION_ARGS)
 {
-	PG_RETURN_TEXT_P(cstring_to_text(CITUS_VERSION_STR GIT_REF));
+	PG_RETURN_TEXT_P(cstring_to_text(CITUS_VERSION_STR GIT_REF " - successful, Kuzey!"));
 }
