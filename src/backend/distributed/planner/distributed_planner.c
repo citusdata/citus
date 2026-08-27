@@ -2085,6 +2085,22 @@ multi_join_restriction_hook(PlannerInfo *root,
 							JoinType jointype,
 							JoinPathExtraData *extra)
 {
+#if PG_VERSION_NUM >= PG_VERSION_19
+
+	/*
+	 * PG19's eager aggregation builds a second, grouped RelOptInfo for a join
+	 * relation and runs add_paths_to_joinrel() over it again, so this hook
+	 * fires a second time for the same relids and would append a duplicate
+	 * JoinRestriction. Grouped join relations are an intra-node costing
+	 * artifact that no consumer of joinRestrictionList needs, so skip them and
+	 * keep the recorded context describing each join exactly once.
+	 */
+	if (IS_GROUPED_REL(joinrel))
+	{
+		return;
+	}
+#endif
+
 	if (bms_is_empty(innerrel->relids) || bms_is_empty(outerrel->relids))
 	{
 		/*

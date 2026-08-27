@@ -749,3 +749,45 @@ SET client_min_messages TO WARNING;
 DROP SCHEMA pg19_repack CASCADE;
 RESET client_min_messages;
 RESET search_path;
+
+-- PG19 eager aggregation can build a second, grouped RelOptInfo for a join
+-- relation and re-run path generation over it, which makes the Citus join
+-- restriction hook fire twice for the same relids. Citus skips those grouped
+-- rels; make sure queries that reach that path still return correct results.
+CREATE SCHEMA pg19_eager_agg;
+SET search_path TO pg19_eager_agg;
+SET citus.shard_count TO 4;
+CREATE TABLE eager_a (id int, bid int, val int);
+CREATE TABLE eager_b (id int, cid int);
+CREATE TABLE eager_c (id int, c int);
+SELECT create_distributed_table('eager_a', 'id');
+SELECT create_distributed_table('eager_b', 'id');
+SELECT create_distributed_table('eager_c', 'id');
+CREATE TABLE eager_ref (id int, label text);
+SELECT create_reference_table('eager_ref');
+INSERT INTO eager_a SELECT i, i % 50, i FROM generate_series(1, 500) i;
+INSERT INTO eager_b SELECT i, i % 10 FROM generate_series(1, 500) i;
+INSERT INTO eager_c SELECT i, i % 5 FROM generate_series(1, 500) i;
+INSERT INTO eager_ref SELECT i, 'l' || (i % 3) FROM generate_series(1, 50) i;
+-- min_eager_agg_group_size = 0 removes the eligibility gate, so the planner
+-- builds grouped join relations it would otherwise skip.
+SET enable_eager_aggregate TO on;
+SET min_eager_agg_group_size TO 0;
+-- colocated three-way join with grouping
+SELECT c.c, count(*) AS n, sum(a.val) AS s
+FROM eager_a a JOIN eager_b b ON a.id = b.id JOIN eager_c c ON b.id = c.id
+GROUP BY c.c ORDER BY c.c;
+-- join against a reference table
+SELECT r.label, count(*) AS n
+FROM eager_a a JOIN eager_b b ON a.id = b.id JOIN eager_ref r ON a.bid = r.id
+GROUP BY r.label ORDER BY r.label;
+-- outer join must keep the same restriction context
+SELECT c.c, count(b.id) AS n
+FROM eager_c c LEFT JOIN eager_b b ON c.id = b.id
+GROUP BY c.c ORDER BY c.c;
+RESET min_eager_agg_group_size;
+RESET enable_eager_aggregate;
+SET client_min_messages TO WARNING;
+DROP SCHEMA pg19_eager_agg CASCADE;
+RESET client_min_messages;
+RESET search_path;
