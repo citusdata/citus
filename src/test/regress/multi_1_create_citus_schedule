@@ -127,3 +127,10 @@ test: citus_cluster_changes_block
 # part of the N-1 test matrix. Move back to multi_schedule at Citus 15.
 # ----------
 test: allow_unsafe_insert_select_pushdown
+
+# ----------
+# extract_deparse covers deparser behavior introduced in 14.3; not present in the
+# N-1 (14.2-1) Citus binary. Run it only under check-multi-1-create-citus, which
+# is not part of the N-1 test matrix. Move back to multi_schedule at Citus 15.
+# ----------
+test: extract_deparse
