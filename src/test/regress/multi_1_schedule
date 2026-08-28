@@ -359,6 +359,7 @@ test: check_mx
 # deparsing logic tests
 # ---------
 test: multi_deparse_function multi_deparse_procedure
+test: extract_deparse
 
 # --------
 # cannot be run in parallel with any other tests as it checks
