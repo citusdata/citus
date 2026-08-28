@@ -249,6 +249,14 @@ from (t5 right outer join t6
     on (t5.c10 = t6.vkey))
 where exists (select * from t6);
 
+-- citus.enable_outer_joins_with_pseudoconstant_quals_pre_pg17 restored the pre-PG17
+-- behaviour of the outer joins exercised above. It only ever applied to PG16, which
+-- Citus no longer supports, so the GUC is now inert. It is still accepted so that
+-- existing configurations keep loading, but setting it must emit a deprecation
+-- warning. Removal is tracked in https://github.com/citusdata/citus/issues/8751.
+SET citus.enable_outer_joins_with_pseudoconstant_quals_pre_pg17 TO true;
+RESET citus.enable_outer_joins_with_pseudoconstant_quals_pre_pg17;
+
 -- issue https://github.com/citusdata/citus/issues/7119
 -- this test was removed in
 -- https://github.com/citusdata/citus/commit/a5ce601c0
