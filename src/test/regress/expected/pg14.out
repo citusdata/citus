@@ -237,7 +237,7 @@ SELECT create_distributed_table('par','a');
 ALTER TABLE par DETACH PARTITION par_2 CONCURRENTLY;
 ERROR:  ALTER TABLE .. DETACH PARTITION .. CONCURRENTLY commands are currently unsupported.
 ALTER TABLE par DETACH PARTITION par_2 FINALIZE;
-ERROR:  ALTER TABLE .. DETACH PARTITION .. FINALIZE commands are currently unsupported.
+ERROR:  ALTER TABLE ... DETACH PARTITION ... FINALIZE commands are currently unsupported
 -- test column compression propagation in distribution
 SET citus.shard_replication_factor TO 1;
 CREATE TABLE col_compression (a TEXT COMPRESSION pglz, b TEXT);
