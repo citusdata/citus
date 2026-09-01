@@ -479,3 +479,36 @@ jobs:
       if: always()
       with:
         folder: test_flakyness_parallel_${{ matrix.id }}
+  # Single aggregate gate for branch protection. Its name is deliberately
+  # constant across main and every release branch, so that the required status
+  # check list never has to be updated when the Postgres matrix changes.
+  #
+  # Only blocking jobs belong in "needs". Advisory jobs (flakyness detection,
+  # benchmarks, N-1 suites) are intentionally left out: they still run and stay
+  # visible, but they must not gate a merge.
+  #
+  # NOTE: adding a new blocking job to this workflow requires adding it here too,
+  # otherwise it will not be enforced by branch protection.
+  ci-gate:
+    name: CI
+    if: always()
+    needs:
+    - params
+    - check-sql-snapshots
+    - check-style
+    - build
+    - test-citus
+    - test-citus-failure
+    - test-citus-cdc
+    - test-arbitrary-configs
+    - test-pg-upgrade
+    - test-citus-upgrade
+    runs-on: ubuntu-latest
+    steps:
+    - name: Show results of required jobs
+      run: echo '${{ toJSON(needs) }}'
+    - name: Fail if any required job did not succeed
+      if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'skipped') }}
+      run: |
+        echo "At least one required job did not succeed." >&2
+        exit 1
