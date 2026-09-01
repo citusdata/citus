@@ -421,12 +421,7 @@ fake_vacuum(Relation onerel, VacuumParams * params,
 
 static bool
 fake_scan_analyze_next_block(TableScanDesc scan,
-#if PG_VERSION_NUM >= PG_VERSION_17
 							 ReadStream *stream)
-#else
-							 BlockNumber blockno,
-							 BufferAccessStrategy bstrategy)
-#endif
 {
 	/* we don't support analyze, so return false */
 	return false;
