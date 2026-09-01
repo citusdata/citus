@@ -36,7 +36,7 @@ jobs:
       style_checker_image_name: "ghcr.io/citusdata/stylechecker"
       style_checker_tools_version: "0.8.33"
       sql_snapshot_pg_version: "18.6"
-      image_suffix: "-dev-aeb145c"
+      image_suffix: "-vdba9cbb"
       pg17_version: '{ "major": "17", "full": "17.11" }'
       pg18_version: '{ "major": "18", "full": "18.6" }'
       pg19_version: '{ "major": "19", "full": "19beta3" }'
@@ -314,6 +314,7 @@ jobs:
       matrix:
         pg_version:
           - ${{ needs.params.outputs.pg17_version }}
+          - ${{ needs.params.outputs.pg18_version }}
     steps:
     - uses: actions/checkout@v5
     - uses: "./.github/actions/setup_extension"
