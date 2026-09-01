@@ -419,15 +419,19 @@ jobs:
         detected_changes=$(git diff origin/main... --name-only --diff-filter=AM | (grep 'src/test/regress/sql/.*\.sql\|src/test/regress/spec/.*\.spec\|src/test/regress/citus_tests/test/test_.*\.py' || true))
         tests=${detected_changes}
 
-        # split the tests to be skipped --today we only skip upgrade tests
-        # and snapshot based node addition tests.
+        # split the tests to be skipped --today we only skip upgrade tests,
+        # snapshot based node addition tests and the output plugin allowlist
+        # test.
+        # split_output_plugin_denied only reports its expected error when the
+        # cluster starts without "citus" in output_plugin_libraries, which only
+        # the check-split-output-plugin-denied target arranges.
         # snapshot based node addition tests are not flaky, as they promote
         # the streaming replica (clone) to a PostgreSQL primary node that is one way
         # operation
         skipped_tests=""
         not_skipped_tests=""
         for test in $tests; do
-            if [[ $test =~ ^src/test/regress/sql/upgrade_ ]] || [[ $test =~ ^src/test/regress/sql/multi_add_node_from_backup ]]; then
+            if [[ $test =~ ^src/test/regress/sql/upgrade_ ]] || [[ $test =~ ^src/test/regress/sql/multi_add_node_from_backup ]] || [[ $test =~ ^src/test/regress/sql/split_output_plugin_denied ]]; then
                 skipped_tests="$skipped_tests $test"
             else
                 not_skipped_tests="$not_skipped_tests $test"
