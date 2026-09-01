@@ -1,9 +1,6 @@
 --
 -- PG17
 --
-SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int >= 17 AS server_version_ge_17
-\gset
 
 SET client_min_messages TO WARNING;
 CREATE EXTENSION IF NOT EXISTS citus_columnar;
@@ -252,6 +249,14 @@ from (t5 right outer join t6
     on (t5.c10 = t6.vkey))
 where exists (select * from t6);
 
+-- citus.enable_outer_joins_with_pseudoconstant_quals_pre_pg17 restored the pre-PG17
+-- behaviour of the outer joins exercised above. It only ever applied to PG16, which
+-- Citus no longer supports, so the GUC is now inert. It is still accepted so that
+-- existing configurations keep loading, but setting it must emit a deprecation
+-- warning. Removal is tracked in https://github.com/citusdata/citus/issues/8751.
+SET citus.enable_outer_joins_with_pseudoconstant_quals_pre_pg17 TO true;
+RESET citus.enable_outer_joins_with_pseudoconstant_quals_pre_pg17;
+
 -- issue https://github.com/citusdata/citus/issues/7119
 -- this test was removed in
 -- https://github.com/citusdata/citus/commit/a5ce601c0
@@ -294,11 +299,6 @@ SET citus.next_shard_id TO 20240023;
 SET client_min_messages TO ERROR;
 DROP SCHEMA pg17_outerjoin CASCADE;
 RESET client_min_messages;
-
-\if :server_version_ge_17
-\else
-\q
-\endif
 
 -- PG17-specific tests go here.
 --

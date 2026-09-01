@@ -256,6 +256,8 @@ jobs:
             new_pg_major: 18
           - old_pg_major: 18
             new_pg_major: 19
+          - old_pg_major: 17
+            new_pg_major: 19
     env:
       old_pg_major: ${{ matrix.old_pg_major }}
       new_pg_major: ${{ matrix.new_pg_major }}
