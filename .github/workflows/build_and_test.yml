@@ -37,11 +37,10 @@ jobs:
       style_checker_tools_version: "0.8.33"
       sql_snapshot_pg_version: "18.6"
       image_suffix: "-dev-aeb145c"
-      pg16_version: '{ "major": "16", "full": "16.15" }'
       pg17_version: '{ "major": "17", "full": "17.11" }'
       pg18_version: '{ "major": "18", "full": "18.6" }'
       pg19_version: '{ "major": "19", "full": "19beta3" }'
-      upgrade_pg_versions: "16.15-17.11-18.6-19beta3"
+      upgrade_pg_versions: "17.11-18.6-19beta3"
     steps:
       # Since GHA jobs need at least one step we use a noop step here.
       - name: Set up parameters
@@ -115,7 +114,6 @@ jobs:
         image_suffix:
           - ${{ needs.params.outputs.image_suffix}}
         pg_version:
-          - ${{ needs.params.outputs.pg16_version }}
           - ${{ needs.params.outputs.pg17_version }}
           - ${{ needs.params.outputs.pg18_version }}
           - ${{ needs.params.outputs.pg19_version }}
@@ -146,7 +144,6 @@ jobs:
     with:
       pg_versions: >
         [
-          ${{ needs.params.outputs.pg16_version }},
           ${{ needs.params.outputs.pg17_version }},
           ${{ needs.params.outputs.pg18_version }},
           ${{ needs.params.outputs.pg19_version }}
@@ -165,7 +162,6 @@ jobs:
     with:
       pg_versions: >
         [
-          ${{ needs.params.outputs.pg16_version }},
           ${{ needs.params.outputs.pg17_version }},
           ${{ needs.params.outputs.pg18_version }},
           ${{ needs.params.outputs.pg19_version }}
@@ -184,7 +180,6 @@ jobs:
     with:
       pg_versions: >
         [
-          ${{ needs.params.outputs.pg16_version }},
           ${{ needs.params.outputs.pg17_version }},
           ${{ needs.params.outputs.pg18_version }},
           ${{ needs.params.outputs.pg19_version }}
@@ -210,7 +205,6 @@ jobs:
         image_name:
           - ${{ needs.params.outputs.fail_test_image_name }}
         pg_version:
-          - ${{ needs.params.outputs.pg16_version }}
           - ${{ needs.params.outputs.pg17_version }}
           - ${{ needs.params.outputs.pg18_version }}
           - ${{ needs.params.outputs.pg19_version }}
@@ -258,15 +252,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - old_pg_major: 16
-            new_pg_major: 17
           - old_pg_major: 17
-            new_pg_major: 18
-          - old_pg_major: 16
             new_pg_major: 18
           - old_pg_major: 18
             new_pg_major: 19
-          - old_pg_major: 16
+          - old_pg_major: 17
             new_pg_major: 19
     env:
       old_pg_major: ${{ matrix.old_pg_major }}
@@ -323,7 +313,6 @@ jobs:
       fail-fast: false
       matrix:
         pg_version:
-          - ${{ needs.params.outputs.pg16_version }}
           - ${{ needs.params.outputs.pg17_version }}
     steps:
     - uses: actions/checkout@v5

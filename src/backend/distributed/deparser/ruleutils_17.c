@@ -9,7 +9,7 @@
  *
  *
  * IDENTIFICATION
- *	  src/backend/distributed/deparser/ruleutils_16.c
+ *	  src/backend/distributed/deparser/ruleutils_17.c
  *
  * This needs to be closely in sync with the core code.
  *-------------------------------------------------------------------------

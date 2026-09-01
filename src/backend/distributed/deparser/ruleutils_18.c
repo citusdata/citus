@@ -10357,4 +10357,4 @@ get_insert_column_names_list(List *targetList, StringInfo buf,
 
 	return strippedexprs;
 }
-#endif /* (PG_VERSION_NUM >= PG_VERSION_17) && (PG_VERSION_NUM < PG_VERSION_18) */
+#endif /* (PG_VERSION_NUM >= PG_VERSION_18) && (PG_VERSION_NUM < PG_VERSION_19) */
