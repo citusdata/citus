@@ -570,10 +570,6 @@ if (-e $hll_control)
 }
 push(@pgOptions, "shared_preload_libraries='${sharedPreloadLibraries}'");
 
-if ($majorversion >= "19") {
-    push(@pgOptions, "output_plugin_libraries='pgoutput,citus'");
-}
-
 if ($vanillatest) {
     # use the default used in vanilla tests
     push(@pgOptions, "max_parallel_workers_per_gather=2");
@@ -588,8 +584,8 @@ push(@pgOptions, "log_error_verbosity = 'verbose'");
 # Allow CREATE SUBSCRIPTION to work
 push(@pgOptions, "wal_level='logical'");
 
-# PostgreSQL 14.24, 15.19, 16.15, 17.11 and 18.6 restrict logical decoding to
-# the output plugins listed in output_plugin_libraries. Citus uses "citus" for
+# PostgreSQL 14.24, 15.19, 16.15, 17.11, 18.6 and 19 restrict logical decoding
+# to the plugins listed in output_plugin_libraries. Citus uses "citus" for
 # non-blocking shard splits and "wal2json" in some CDC tests. Setting an unknown
 # GUC is fatal, so only set it when the installed PostgreSQL knows about it.
 if (!$ENV{CITUS_TEST_SKIP_OUTPUT_PLUGIN_ALLOWLIST} &&
