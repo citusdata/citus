@@ -2851,7 +2851,6 @@ CopyStatementHasFormat(CopyStmt *copyStatement, char *formatName)
 static void
 ErrorIfCopyHasOnErrorLogVerbosity(CopyStmt *copyStatement)
 {
-#if PG_VERSION_NUM >= PG_VERSION_17
 	bool log_verbosity = false;
 	foreach_ptr(DefElem, option, copyStatement->options)
 	{
@@ -2878,7 +2877,6 @@ ErrorIfCopyHasOnErrorLogVerbosity(CopyStmt *copyStatement)
 		ereport(ERROR, (errmsg("Citus does not support "
 							   "COPY FROM with LOG_VERBOSITY option.")));
 	}
-#endif
 }
 
 

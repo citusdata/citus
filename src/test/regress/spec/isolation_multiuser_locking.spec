@@ -1,7 +1,3 @@
-// Two alternative test outputs:
-// isolation_multiuser_locking_0.out for PG16 and before
-// isolation_multiuser_locking.out for PG17
-//
 // REINDEX TABLE now requires table ownership (PostgreSQL commit ecb0fd337).
 // UPDATE statements include <waiting ...> to reflect new lock waiting behavior.
 // Previous behavior: Transactions failed with "current transaction is aborted".

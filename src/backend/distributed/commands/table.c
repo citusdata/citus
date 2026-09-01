@@ -3889,7 +3889,6 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 				break;
 			}
 
-#if PG_VERSION_NUM >= PG_VERSION_17
 			case AT_SetExpression:
 			{
 				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -3898,7 +3897,6 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 									"are currently unsupported.")));
 				break;
 			}
-#endif
 
 			case AT_SetAccessMethod:
 			{
