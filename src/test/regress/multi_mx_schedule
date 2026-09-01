@@ -69,6 +69,7 @@ test: local_shard_execution_dropped_column
 test: metadata_sync_helpers
 
 test: issue_6592
+test: issue_7896
 test: executor_local_failure
 test: local_execution_local_plan
 
