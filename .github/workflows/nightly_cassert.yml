@@ -233,7 +233,6 @@ jobs:
             const label = 'nightly-cassert';
             const url = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
 
-            // Failure signature = sorted set of failed job names in this run.
             const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, {
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -241,64 +240,46 @@ jobs:
               per_page: 100,
             });
             const failed = jobs.filter(j => j.conclusion === 'failure').map(j => j.name).sort();
-            const signature = JSON.stringify(failed);
-            const marker = `<!-- cassert-failures: ${signature} -->`;
 
-            // Existing open issues and the failure sets they already track.
-            const open = await github.paginate(github.rest.issues.listForRepo, {
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              state: 'open',
-              labels: label,
-            });
-            const sigOf = (i) => {
-              const m = (i.body || '').match(/<!-- cassert-failures: (.*?) -->/);
-              if (!m) return null;
-              try { return JSON.stringify(JSON.parse(m[1]).sort()); } catch { return null; }
-            };
-
-            const intro = [
-              'Nightly full-cassert run failed.',
-              '',
+            const report = [
               `Run: ${url}`,
               '',
               'Failing jobs:',
               ...failed.map(n => `- ${n}`),
             ].join('\n');
 
-            // Same failing set as an open issue -> append; otherwise open a new issue.
-            const match = open.find(i => sigOf(i) === signature);
-            if (match) {
+            // One rolling issue per label. Deduping on the exact set of failing job names split a
+            // single recurring flake across many issues, because the jobs that happen to fail
+            // alongside it differ every night. Appending instead keeps one triage timeline; close
+            // the issue once the nightly is green and the next failure opens a fresh one.
+            const open = (await github.paginate(github.rest.issues.listForRepo, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: label,
+            })).filter(i => !i.pull_request);
+
+            if (open.length) {
+              const target = open.reduce((a, b) => (b.number > a.number ? b : a));
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                issue_number: match.number,
-                body: `Same failing set recurred (${day}).\n\nRun: ${url}`,
+                issue_number: target.number,
+                body: `Nightly cassert failed again (${day}).\n\n${report}`,
               });
               return;
             }
 
-            // New/different set: highlight failures not already tracked by any open issue.
-            const tracked = new Set();
-            for (const i of open) {
-              const s = sigOf(i);
-              if (s) for (const n of JSON.parse(s)) tracked.add(n);
-            }
-            const newOnes = failed.filter(n => !tracked.has(n));
-            const newSection = (tracked.size && newOnes.length)
-              ? ['', 'New failures not previously tracked:', ...newOnes.map(n => `- ${n}`)].join('\n')
-              : '';
-
             await github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              title: `Nightly cassert failures (${day})`,
+              title: `Nightly cassert failures (since ${day})`,
               body: [
-                intro,
-                newSection,
+                'Nightly full-cassert run failed.',
+                '',
+                report,
                 '',
                 'First runs are EXPECTED red as pre-existing PG-core and Citus asserts surface.',
-                marker,
               ].join('\n'),
               labels: [label],
             });
