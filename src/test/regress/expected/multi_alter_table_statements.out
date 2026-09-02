@@ -140,6 +140,16 @@ SELECT int_column1, count(*) FROM lineitem_alter GROUP BY int_column1;
 -- Verify that SET|DROP DEFAULT works
 ALTER TABLE lineitem_alter ALTER COLUMN float_column SET DEFAULT 1;
 ALTER TABLE lineitem_alter ALTER COLUMN int_column1 DROP DEFAULT;
+CREATE TABLE range_default_expr_table(c0 int, c1 boolean);
+SELECT create_distributed_table('range_default_expr_table', 'c0');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+ALTER TABLE range_default_expr_table
+	ALTER c1 SET DEFAULT (NOT ((((('[-1,-1]'::int4range) * ('[1,1]'::int4range))) >
+							 ((('[-2,-2)'::int4range) * ('[2,2)'::int4range)))))) IS TRUE;
 -- COPY to verify that default values take effect
 SELECT master_create_empty_shard('lineitem_alter') as shardid \gset
 copy lineitem_alter (l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment) FROM :'lineitem_1_data_file' with (delimiter '|', append_to_shard :shardid);

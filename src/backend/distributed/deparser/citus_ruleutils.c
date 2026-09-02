@@ -1473,7 +1473,62 @@ contain_nextval_expression_walker(Node *node, void *context)
 			return true;
 		}
 	}
-	return expression_tree_walker(node, contain_nextval_expression_walker, context);
+
+	/* raw parse tree case for defaults parsed as FuncCall(nextval) */
+	if (IsA(node, FuncCall))
+	{
+		FuncCall *funcCall = (FuncCall *) node;
+		Node *lastFunctionNameNode = llast(funcCall->funcname);
+
+		if (lastFunctionNameNode != NULL && IsA(lastFunctionNameNode, String) &&
+			strcmp(strVal(lastFunctionNameNode), "nextval") == 0)
+		{
+			return true;
+		}
+	}
+
+	/*
+	 * A default expression may reach this point either as a raw
+	 * (not-yet-analyzed) parse tree, as happens for some
+	 * ALTER COLUMN ... SET DEFAULT commands, or as a fully analyzed expression
+	 * tree, as the planner and executor pass in. The two kinds of trees must be
+	 * traversed with different walkers; calling the wrong one raises an
+	 * "unrecognized node type" error. Raw grammar nodes (and the primitive
+	 * value nodes they contain) are descended with raw_expression_tree_walker,
+	 * while shared and fully analyzed nodes go through expression_tree_walker.
+	 */
+	switch (nodeTag(node))
+	{
+		case T_ColumnRef:
+		case T_ParamRef:
+		case T_A_Expr:
+		case T_A_Const:
+		case T_TypeCast:
+		case T_TypeName:
+		case T_FuncCall:
+		case T_A_Star:
+		case T_A_Indices:
+		case T_A_Indirection:
+		case T_A_ArrayExpr:
+		case T_CollateClause:
+		case T_String:
+		case T_Integer:
+		case T_Float:
+		case T_Boolean:
+		case T_BitString:
+		{
+			return raw_expression_tree_walker(node,
+											  contain_nextval_expression_walker,
+											  context);
+		}
+
+		default:
+		{
+			return expression_tree_walker(node,
+										  contain_nextval_expression_walker,
+										  context);
+		}
+	}
 }
 
 
