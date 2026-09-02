@@ -35,9 +35,9 @@ jobs:
     name: Initialize parameters
     runs-on: ubuntu-latest
     outputs:
-      pg_versions: '[{ "major": "16", "full": "16.13" }, { "major": "17", "full": "17.9" }, { "major": "18", "full": "18.3" }]'
-      pg_upgrade_pairs: '[{ "old": "16", "old_full": "16.13", "new": "17", "new_full": "17.9" }, { "old": "17", "old_full": "17.9", "new": "18", "new_full": "18.3" }]'
-      citus_upgrade_pg: '[{ "major": "16", "full": "16.13" }, { "major": "17", "full": "17.9" }]'
+      pg_versions: '[{ "major": "16", "full": "16.13" }, { "major": "17", "full": "17.11" }, { "major": "18", "full": "18.6" }]'
+      pg_upgrade_pairs: '[{ "old": "16", "old_full": "16.13", "new": "17", "new_full": "17.11" }, { "old": "17", "old_full": "17.11", "new": "18", "new_full": "18.6" }]'
+      citus_upgrade_pg: '[{ "major": "16", "full": "16.13" }, { "major": "17", "full": "17.11" }]'
       citus_old_version: "v14.0.1"  # 14.0-1 chains to MASTER (15.0); 14.1 has no path to 15.0 yet
     steps:
       - name: Set up parameters
