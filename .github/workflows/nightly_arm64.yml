@@ -43,7 +43,7 @@ jobs:
     name: Initialize parameters
     runs-on: ubuntu-latest
     outputs:
-      pg_versions: '[{ "major": "17", "full": "17.9" }, { "major": "18", "full": "18.3" }]'
+      pg_versions: '[{ "major": "17", "full": "17.11" }, { "major": "18", "full": "18.6" }]'
     steps:
       - name: Set up parameters
         run: echo 'noop'
