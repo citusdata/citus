@@ -742,6 +742,16 @@ static DeferredErrorMessage *
 ModifyPartialQuerySupported(Query *queryTree, bool multiShardQuery,
 							Oid *distributedTableIdOutput)
 {
+#if PG_VERSION_NUM >= PG_VERSION_19
+	if (queryTree->forPortionOf != NULL)
+	{
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "Citus cannot preserve temporal leftover-row semantics "
+							 "for FOR PORTION OF",
+							 NULL, NULL);
+	}
+#endif
+
 	DeferredErrorMessage *deferredError = DeferErrorIfModifyView(queryTree);
 	if (deferredError != NULL)
 	{
