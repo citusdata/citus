@@ -168,3 +168,23 @@ BEGIN
   EXECUTE format('EXPLAIN (FORMAT JSON, COSTS OFF, ANALYZE OFF) %s', q) INTO j;
   RETURN j;
 END $$;
+
+CREATE OR REPLACE FUNCTION test_columnar_metadata_xmin_aborted(
+    entry_xmin xid,
+    xmin_committed boolean,
+    xmin_invalid boolean)
+RETURNS boolean
+LANGUAGE C STRICT
+AS 'citus', $$test_columnar_metadata_xmin_aborted$$;
+
+-- XID 2147485000 belongs to pg_xact segment 0800, which does not exist in a
+-- fresh regression cluster. Tuple hint bits must therefore be sufficient to
+-- determine the status without consulting pg_xact.
+SELECT test_columnar_metadata_xmin_aborted('2147485000'::xid, true, false)
+       AS committed_xmin_aborted;
+SELECT test_columnar_metadata_xmin_aborted('2147485000'::xid, false, true)
+       AS invalid_xmin_aborted;
+SELECT test_columnar_metadata_xmin_aborted('2147485000'::xid, true, true)
+       AS frozen_xmin_aborted;
+
+RESET search_path;
