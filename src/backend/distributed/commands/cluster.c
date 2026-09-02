@@ -64,7 +64,17 @@ PreprocessClusterStmt(Node *node, const char *clusterCommand,
 
 	/* PostgreSQL uses access exclusive lock for CLUSTER command */
 #if PG_VERSION_NUM >= PG_VERSION_19
+
+	/*
+	 * PostgreSQL deliberately runs REPACK (CONCURRENTLY) under
+	 * ShareUpdateExclusiveLock instead (RepackLockLevel() in repack.c).  Taking
+	 * AccessExclusiveLock here would block the repack decoding worker when it
+	 * locks the relation to export its logical snapshot, so the command would
+	 * wait forever on RepackWorkerExport.  Match PostgreSQL's lock level.
+	 */
+	bool concurrently = RepackStmtOptionEnabled(clusterStmt, "concurrently");
 	Oid relationId = RangeVarGetRelid(clusterStmt->relation->relation,
+									  concurrently ? ShareUpdateExclusiveLock :
 									  AccessExclusiveLock, missingOK);
 #else
 	Oid relationId = RangeVarGetRelid(clusterStmt->relation, AccessExclusiveLock,
@@ -125,7 +135,7 @@ PreprocessClusterStmt(Node *node, const char *clusterCommand,
 	 * worker_apply_shard_ddl_command, and ANALYZE has no defined per-shard
 	 * semantics yet.  Reject both here, before any shard placement is touched.
 	 */
-	if (RepackStmtOptionEnabled(clusterStmt, "concurrently"))
+	if (concurrently)
 	{
 		ereport(ERROR, (errmsg("cannot run %s command", commandName),
 						errdetail("CONCURRENTLY option is currently unsupported "
