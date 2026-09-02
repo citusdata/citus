@@ -1,11 +1,12 @@
 #ifndef LOCAL_PLAN_CACHE
 #define LOCAL_PLAN_CACHE
 
-extern bool IsLocalPlanCachingSupported(Job *currentJob,
-										DistributedPlan *originalDistributedPlan);
-extern PlannedStmt * GetCachedLocalPlan(Task *task, DistributedPlan *distributedPlan);
-extern void CacheLocalPlanForShardQuery(Task *task,
-										DistributedPlan *originalDistributedPlan,
-										ParamListInfo paramListInfo);
+extern LocalPlannedStatement * GetCachedLocalPlan(Task *task,
+												  DistributedPlan *distributedPlan);
+extern LocalPlannedStatement * CacheLocalPlanForShardQuery(Job *currentJob,
+														   DistributedPlan *
+														   originalDistributedPlan,
+														   ParamListInfo paramListInfo,
+														   bool *planAddedToCached);
 
 #endif /* LOCAL_PLAN_CACHE */

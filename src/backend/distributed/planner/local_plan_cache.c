@@ -24,34 +24,69 @@
 #include "distributed/multi_executor.h"
 #include "distributed/version_compat.h"
 
-
+static bool IsLocalPlanCachingSupported(Job *currentJob,
+										DistributedPlan *originalDistributedPlan);
 static Query * GetLocalShardQueryForCache(Query *jobQuery, Task *task,
 										  ParamListInfo paramListInfo);
 static char * DeparseLocalShardQuery(Query *jobQuery, List *relationShardList,
 									 Oid anchorDistributedTableId, int64 anchorShardId);
 static int ExtractParameterTypesForParamListInfo(ParamListInfo originalParamListInfo,
 												 Oid **parameterTypes);
+static bool IsJobEligibleForPlanCache(Job *job);
+
+static LocalPlannedStatement * FindCachedLocalPlannedStatement(Task *task,
+															   DistributedPlan *
+															   distributedPlan);
+static List * AddLocalPlanToCache(List **localPlannedStatementsList,
+								  LocalPlannedStatement *localPlannedStatement);
+static LocalPlannedStatement * CreatePlanForLocalCache(Job *currentJob,
+													   DistributedPlan *
+													   originalDistributedPlan,
+													   ParamListInfo paramListInfo);
+
+/* Check if the job has a single task */
+static inline bool
+JobHasSingleTask(const Job *job)
+{
+	return list_length(job->taskList) == 1;
+}
+
+
+/* Check if the job has multiple tasks */
+static inline bool
+JobHasMultipleTasks(const Job *job)
+{
+	return list_length(job->taskList) > 1;
+}
+
 
 /*
  * CacheLocalPlanForShardQuery replaces the relation OIDs in the job query
  * with shard relation OIDs and then plans the query and caches the result
  * in the originalDistributedPlan (which may be preserved across executions).
  */
-void
-CacheLocalPlanForShardQuery(Task *task, DistributedPlan *originalDistributedPlan,
-							ParamListInfo paramListInfo)
+LocalPlannedStatement *
+CacheLocalPlanForShardQuery(Job *currentJob, DistributedPlan *originalDistributedPlan,
+							ParamListInfo paramListInfo, bool *planAddedToCache)
 {
-	PlannedStmt *localPlan = GetCachedLocalPlan(task, originalDistributedPlan);
-	if (localPlan != NULL)
+	Assert(planAddedToCache);
+
+	if (!IsLocalPlanCachingSupported(currentJob, originalDistributedPlan))
 	{
-		/* we already have a local plan */
-		return;
+		/* Local plan caching is not supported for this job and plan */
+		*planAddedToCache = false;
+		return NULL;
 	}
 
-	if (list_length(task->relationShardList) == 0)
+	Task *task = linitial(currentJob->taskList);
+	LocalPlannedStatement *localPlannedStatement = FindCachedLocalPlannedStatement(task,
+																				   originalDistributedPlan);
+
+	if (localPlannedStatement != NULL)
 	{
-		/* zero shard plan, no need to cache */
-		return;
+		/* we already have a local plan */
+		*planAddedToCache = false;
+		return localPlannedStatement;
 	}
 
 	/*
@@ -61,11 +96,35 @@ CacheLocalPlanForShardQuery(Task *task, DistributedPlan *originalDistributedPlan
 	MemoryContext oldContext =
 		MemoryContextSwitchTo(GetMemoryChunkContext(originalDistributedPlan));
 
+	localPlannedStatement = CreatePlanForLocalCache(currentJob, originalDistributedPlan,
+													paramListInfo);
+
+	if (localPlannedStatement)
+	{
+		*planAddedToCache = true;
+		AddLocalPlanToCache(&originalDistributedPlan->workerJob->localPlannedStatements,
+							localPlannedStatement);
+	}
+	else
+	{
+		*planAddedToCache = false;
+	}
+
+	MemoryContextSwitchTo(oldContext);
+	return localPlannedStatement;
+}
+
+
+static LocalPlannedStatement *
+CreatePlanForLocalCache(Job *currentJob, DistributedPlan *originalDistributedPlan,
+						ParamListInfo paramListInfo)
+{
 	/*
 	 * We prefer to use jobQuery (over task->query) because we don't want any
 	 * functions/params to have been evaluated in the cached plan.
 	 */
 	Query *jobQuery = copyObject(originalDistributedPlan->workerJob->jobQuery);
+	Task *task = linitial(currentJob->taskList);
 
 	Query *localShardQuery = GetLocalShardQueryForCache(jobQuery, task, paramListInfo);
 
@@ -82,23 +141,21 @@ CacheLocalPlanForShardQuery(Task *task, DistributedPlan *originalDistributedPlan
 	{
 		pfree(jobQuery);
 		pfree(localShardQuery);
-		MemoryContextSwitchTo(oldContext);
-		return;
+
+		return NULL;
 	}
 
 	LockRelationOid(rangeTableEntry->relid, lockMode);
 
+	PlannedStmt *localPlan = NULL;
 	LocalPlannedStatement *localPlannedStatement = CitusMakeNode(LocalPlannedStatement);
+
 	localPlan = planner(localShardQuery, NULL, 0, NULL);
 	localPlannedStatement->localPlan = localPlan;
 	localPlannedStatement->shardId = task->anchorShardId;
 	localPlannedStatement->localGroupId = GetLocalGroupId();
 
-	originalDistributedPlan->workerJob->localPlannedStatements =
-		lappend(originalDistributedPlan->workerJob->localPlannedStatements,
-				localPlannedStatement);
-
-	MemoryContextSwitchTo(oldContext);
+	return localPlannedStatement;
 }
 
 
@@ -226,13 +283,7 @@ ExtractParameterTypesForParamListInfo(ParamListInfo originalParamListInfo,
 }
 
 
-/*
- * GetCachedLocalPlan is a helper function which return the cached
- * plan in the distributedPlan for the given task if exists.
- *
- * Otherwise, the function returns NULL.
- */
-PlannedStmt *
+LocalPlannedStatement *
 GetCachedLocalPlan(Task *task, DistributedPlan *distributedPlan)
 {
 	if (distributedPlan == NULL || distributedPlan->workerJob == NULL)
@@ -240,12 +291,32 @@ GetCachedLocalPlan(Task *task, DistributedPlan *distributedPlan)
 		return NULL;
 	}
 
-	if (list_length(distributedPlan->workerJob->taskList) != 1)
+	if (JobHasMultipleTasks(distributedPlan->workerJob))
 	{
-		/* we only support plan caching for single shard queries */
+		/*
+		 * If there are multiple tasks in the job; i.e. multishard query,
+		 * we do not cache the local plan.
+		 */
 		return NULL;
 	}
 
+	return FindCachedLocalPlannedStatement(task, distributedPlan);
+}
+
+
+/*
+ * FindCachedLocalPlannedStatement is a helper function which return the
+ * cached plan in the distributedPlan for the given task if exists.
+ *
+ * It's the caller's duty to ensure if the job is eligible for plan
+ * caching before calling this function. This function is simply
+ * scanning and matching the plan in the cache list.
+ *
+ * If found, returns the plan otherwise returns NULL.
+ */
+static LocalPlannedStatement *
+FindCachedLocalPlannedStatement(Task *task, DistributedPlan *distributedPlan)
+{
 	List *cachedPlanList = distributedPlan->workerJob->localPlannedStatements;
 	LocalPlannedStatement *localPlannedStatement = NULL;
 
@@ -257,7 +328,7 @@ GetCachedLocalPlan(Task *task, DistributedPlan *distributedPlan)
 			localPlannedStatement->localGroupId == localGroupId)
 		{
 			/* already have a cached plan, no need to continue */
-			return localPlannedStatement->localPlan;
+			return localPlannedStatement;
 		}
 	}
 
@@ -265,23 +336,28 @@ GetCachedLocalPlan(Task *task, DistributedPlan *distributedPlan)
 }
 
 
-/*
- * IsLocalPlanCachingSupported returns whether (part of) the task can be planned
- * and executed locally and whether caching is supported (single shard, no volatile
- * functions).
- */
-bool
-IsLocalPlanCachingSupported(Job *currentJob, DistributedPlan *originalDistributedPlan)
+static List *
+AddLocalPlanToCache(List **localPlannedStatementsList,
+					LocalPlannedStatement *localPlannedStatement)
 {
-	if (originalDistributedPlan->numberOfTimesExecuted < 1)
-	{
-		/*
-		 * Only cache if a plan is being reused (via a prepared statement).
-		 */
-		return false;
-	}
+	*localPlannedStatementsList =
+		lappend(*localPlannedStatementsList,
+				localPlannedStatement);
 
-	if (!currentJob->deferredPruning)
+	return *localPlannedStatementsList;
+}
+
+
+/*
+ * IsJobEligibleForPlanCache checks whether the given job is eligible for local
+ * plan caching.
+ */
+static bool
+IsJobEligibleForPlanCache(Job *job)
+{
+	Assert(job);
+
+	if (!job->deferredPruning)
 	{
 		/*
 		 * When not using deferred pruning we may have already replaced distributed
@@ -296,23 +372,78 @@ IsLocalPlanCachingSupported(Job *currentJob, DistributedPlan *originalDistribute
 		return false;
 	}
 
-	List *taskList = currentJob->taskList;
-	if (list_length(taskList) != 1)
+	if (!JobHasSingleTask(job))
 	{
 		/* we only support plan caching for single shard queries */
 		return false;
 	}
 
-	Task *task = linitial(taskList);
+	Task *task = linitial(job->taskList);
 	if (!TaskAccessesLocalNode(task))
 	{
 		/* not a local task */
 		return false;
 	}
 
+	if (list_length(task->relationShardList) == 0)
+	{
+		/* zero shard plan, no need to cache */
+		return false;
+	}
+
+	return true;
+}
+
+
+/*
+ * IsLocalPlanCachingSupported returns whether (part of) the task can be planned
+ * and executed locally and whether caching is supported (single shard, no volatile
+ * functions).
+ */
+static bool
+IsLocalPlanCachingSupported(Job *currentJob, DistributedPlan *originalDistributedPlan)
+{
+	Assert(originalDistributedPlan);
+	Assert(originalDistributedPlan->workerJob);
+	Assert(originalDistributedPlan->workerJob->jobQuery);
+
+	/*
+	 * It's sensible to make this the fist validation criteria because if
+	 * local execution is disabled, there's no point in checking further.
+	 */
 	if (!EnableLocalExecution)
 	{
 		/* user requested not to use local execution */
+		return false;
+	}
+
+	/* Checking Plan Job */
+	if (JobHasMultipleTasks(originalDistributedPlan->workerJob))
+	{
+		/*
+		 * More than one task means a genuinely multi-shard execution; do not
+		 * reuse a single-shard cached plan for it (citusdata/citus#8330). A
+		 * length of 0 must still fall through to the lookup below: for
+		 * deferred-pruning jobs, the persistent originalDistributedPlan's
+		 * workerJob->taskList is never populated (only the per-execution
+		 * copy's is regenerated), so 0 here says nothing about the number
+		 * of tasks in the current execution.
+		 */
+		return false;
+	}
+
+	/* Checking current job - not the same as the original distributed plan's worker job */
+	if (!IsJobEligibleForPlanCache(currentJob))
+	{
+		/* Job is not eligible for local plan caching */
+		return false;
+	}
+
+	if (originalDistributedPlan->numberOfTimesExecuted < 1)
+	{
+		/*
+		 * Only cache if a plan is being reused (via a prepared statement).
+		 */
 		return false;
 	}
 
