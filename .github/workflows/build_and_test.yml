@@ -35,12 +35,12 @@ jobs:
       pgupgrade_image_name: "ghcr.io/citusdata/pgupgradetester"
       style_checker_image_name: "ghcr.io/citusdata/stylechecker"
       style_checker_tools_version: "0.8.33"
-      sql_snapshot_pg_version: "18.4"
-      image_suffix: "-v609733f"
-      pg17_version: '{ "major": "17", "full": "17.10" }'
-      pg18_version: '{ "major": "18", "full": "18.4" }'
+      sql_snapshot_pg_version: "18.6"
+      image_suffix: "-vdba9cbb"
+      pg17_version: '{ "major": "17", "full": "17.11" }'
+      pg18_version: '{ "major": "18", "full": "18.6" }'
       pg19_version: '{ "major": "19", "full": "19beta3" }'
-      upgrade_pg_versions: "17.10-18.4-19beta3"
+      upgrade_pg_versions: "17.11-18.6-19beta3"
     steps:
       # Since GHA jobs need at least one step we use a noop step here.
       - name: Set up parameters
@@ -148,7 +148,7 @@ jobs:
           ${{ needs.params.outputs.pg18_version }},
           ${{ needs.params.outputs.pg19_version }}
         ]
-      make_targets: '["check-split", "check-multi", "check-multi-1", "check-multi-1-create-citus", "check-multi-mx", "check-vanilla", "check-isolation", "check-operations", "check-follower-cluster", "check-add-backup-node", "check-columnar", "check-columnar-isolation", "check-enterprise", "check-enterprise-isolation", "check-enterprise-isolation-logicalrep-1", "check-enterprise-isolation-logicalrep-2", "check-enterprise-isolation-logicalrep-3", "check-tap"]'
+      make_targets: '["check-split", "check-split-output-plugin-denied", "check-multi", "check-multi-1", "check-multi-1-create-citus", "check-multi-mx", "check-vanilla", "check-isolation", "check-operations", "check-follower-cluster", "check-add-backup-node", "check-columnar", "check-columnar-isolation", "check-enterprise", "check-enterprise-isolation", "check-enterprise-isolation-logicalrep-1", "check-enterprise-isolation-logicalrep-2", "check-enterprise-isolation-logicalrep-3", "check-tap"]'
       image_suffix: ${{ needs.params.outputs.image_suffix }}
       image_name: ${{ needs.params.outputs.test_image_name }}
     secrets:
@@ -314,6 +314,7 @@ jobs:
       matrix:
         pg_version:
           - ${{ needs.params.outputs.pg17_version }}
+          - ${{ needs.params.outputs.pg18_version }}
     steps:
     - uses: actions/checkout@v5
     - uses: "./.github/actions/setup_extension"
@@ -418,15 +419,19 @@ jobs:
         detected_changes=$(git diff origin/main... --name-only --diff-filter=AM | (grep 'src/test/regress/sql/.*\.sql\|src/test/regress/spec/.*\.spec\|src/test/regress/citus_tests/test/test_.*\.py' || true))
         tests=${detected_changes}
 
-        # split the tests to be skipped --today we only skip upgrade tests
-        # and snapshot based node addition tests.
+        # split the tests to be skipped --today we only skip upgrade tests,
+        # snapshot based node addition tests and the output plugin allowlist
+        # test.
+        # split_output_plugin_denied only reports its expected error when the
+        # cluster starts without "citus" in output_plugin_libraries, which only
+        # the check-split-output-plugin-denied target arranges.
         # snapshot based node addition tests are not flaky, as they promote
         # the streaming replica (clone) to a PostgreSQL primary node that is one way
         # operation
         skipped_tests=""
         not_skipped_tests=""
         for test in $tests; do
-            if [[ $test =~ ^src/test/regress/sql/upgrade_ ]] || [[ $test =~ ^src/test/regress/sql/multi_add_node_from_backup ]]; then
+            if [[ $test =~ ^src/test/regress/sql/upgrade_ ]] || [[ $test =~ ^src/test/regress/sql/multi_add_node_from_backup ]] || [[ $test =~ ^src/test/regress/sql/split_output_plugin_denied ]]; then
                 skipped_tests="$skipped_tests $test"
             else
                 not_skipped_tests="$not_skipped_tests $test"

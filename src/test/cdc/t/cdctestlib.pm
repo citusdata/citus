@@ -146,6 +146,16 @@ max_wal_senders = 100
 max_replication_slots = 100
 ";
     $node->init(allows_streaming => 'logical');
+
+    # PostgreSQL 14.24, 15.19, 16.15, 17.11 and 18.6 restrict logical decoding
+    # to the output plugins listed in output_plugin_libraries. Setting an
+    # unknown GUC is fatal, so only set it when initdb wrote it out.
+    if (open(my $conf_fh, '<', $node->data_dir . "/postgresql.conf")) {
+        $citus_config_options = $citus_config_options .
+            "\noutput_plugin_libraries = 'pgoutput, test_decoding, wal2json, citus'"
+            if grep { /output_plugin_libraries/ } <$conf_fh>;
+        close($conf_fh);
+    }
     if ($node_type == $NODE_TYPE_COORDINATOR || $node_type == $NODE_TYPE_WORKER) {
         $node->append_conf("postgresql.conf",$citus_config_options);
     } else {
