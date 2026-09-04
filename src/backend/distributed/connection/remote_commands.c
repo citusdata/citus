@@ -577,6 +577,67 @@ SendRemoteCommand(MultiConnection *connection, const char *command)
 
 
 /*
+ * SendRemotePrepare wraps PQprepare() to prepare a statement on a worker
+ * connection. This is a synchronous call that blocks until the prepare
+ * completes. Returns 1 on success, 0 on failure.
+ */
+int
+SendRemotePrepare(MultiConnection *connection, const char *stmtName,
+				  const char *query, int nParams, const Oid *paramTypes)
+{
+	PGconn *pgConn = connection->pgConn;
+
+	LogRemoteCommand(connection, query);
+
+	if (!pgConn || PQstatus(pgConn) != CONNECTION_OK)
+	{
+		return 0;
+	}
+
+	PGresult *result = PQprepare(pgConn, stmtName, query, nParams, paramTypes);
+	if (PQresultStatus(result) != PGRES_COMMAND_OK)
+	{
+		ReportResultError(connection, result, WARNING);
+		PQclear(result);
+		return 0;
+	}
+
+	PQclear(result);
+	return 1;
+}
+
+
+/*
+ * SendRemotePreparedQuery wraps PQsendQueryPrepared() to asynchronously
+ * execute a previously prepared statement on a worker connection. Follows
+ * the same pattern as SendRemoteCommandParams(). Returns the result of
+ * PQsendQueryPrepared (1 on success, 0 on failure).
+ */
+int
+SendRemotePreparedQuery(MultiConnection *connection, const char *stmtName,
+						int nParams, const char *const *paramValues,
+						bool binaryResults)
+{
+	PGconn *pgConn = connection->pgConn;
+
+	/* log the statement name for debugging */
+	LogRemoteCommand(connection, stmtName);
+
+	if (!pgConn || PQstatus(pgConn) != CONNECTION_OK)
+	{
+		return 0;
+	}
+
+	Assert(PQisnonblocking(pgConn));
+
+	int rc = PQsendQueryPrepared(pgConn, stmtName, nParams, paramValues,
+								 NULL, NULL, binaryResults ? 1 : 0);
+
+	return rc;
+}
+
+
+/*
  * ExecuteRemoteCommandAndCheckResult executes the given command in the remote node and
  * checks if the result is equal to the expected result. If the result is equal to the
  * expected result, the function returns true, otherwise it returns false.

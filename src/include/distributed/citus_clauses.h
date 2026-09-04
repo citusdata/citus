@@ -28,6 +28,9 @@ typedef enum CoordinatorEvaluationMode
 	/* evaluate only external parameters */
 	EVALUATE_PARAMS,
 
+	/* evaluate functions/expressions but leave Param nodes untouched */
+	EVALUATE_FUNCTIONS,
+
 	/* evaluate both the functions/expressions and the external paramaters */
 	EVALUATE_FUNCTIONS_PARAMS
 } CoordinatorEvaluationMode;
@@ -48,6 +51,7 @@ extern void ExecuteCoordinatorEvaluableExpressions(Query *query, PlanState *plan
 extern Node * PartiallyEvaluateExpression(Node *expression,
 										  CoordinatorEvaluationContext *
 										  coordinatorEvaluationContext);
+extern void ExecuteCoordinatorEvaluableFunctions(Query *query, PlanState *planState);
 extern bool CitusIsVolatileFunction(Node *node);
 extern bool CitusIsMutableFunction(Node *node);
 

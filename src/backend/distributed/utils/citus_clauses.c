@@ -85,6 +85,25 @@ ExecuteCoordinatorEvaluableExpressions(Query *query, PlanState *planState)
 
 
 /*
+ * ExecuteCoordinatorEvaluableFunctions evaluates function calls on the
+ * coordinator (e.g. now(), nextval()) but leaves Param nodes untouched.
+ * This is used for prepared statement caching where we need to evaluate
+ * volatile/stable functions but preserve parameter placeholders for the
+ * prepared statement template.
+ */
+void
+ExecuteCoordinatorEvaluableFunctions(Query *query, PlanState *planState)
+{
+	CoordinatorEvaluationContext coordinatorEvaluationContext;
+
+	coordinatorEvaluationContext.planState = planState;
+	coordinatorEvaluationContext.evaluationMode = EVALUATE_FUNCTIONS;
+
+	PartiallyEvaluateExpression((Node *) query, &coordinatorEvaluationContext);
+}
+
+
+/*
  * PartiallyEvaluateExpression descends into an expression tree to evaluate
  * expressions that can be resolved to a constant on the master. Expressions
  * containing a Var are skipped, since the value of the Var is not known
@@ -112,6 +131,13 @@ PartiallyEvaluateExpression(Node *expression,
 	{
 		Assert(((Param *) expression)->paramkind != PARAM_MULTIEXPR &&
 			   ((Param *) expression)->paramkind != PARAM_SUBLINK);
+
+		/* in EVALUATE_FUNCTIONS mode, leave Param nodes untouched */
+		if (coordinatorEvaluationContext->evaluationMode == EVALUATE_FUNCTIONS)
+		{
+			return expression;
+		}
+
 		return (Node *) citus_evaluate_expr((Expr *) expression,
 											exprType(expression),
 											exprTypmod(expression),
@@ -224,7 +250,8 @@ ShouldEvaluateFunctions(CoordinatorEvaluationContext *evaluationContext)
 		return true;
 	}
 
-	return evaluationContext->evaluationMode == EVALUATE_FUNCTIONS_PARAMS;
+	return evaluationContext->evaluationMode == EVALUATE_FUNCTIONS_PARAMS ||
+		   evaluationContext->evaluationMode == EVALUATE_FUNCTIONS;
 }
 
 
