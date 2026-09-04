@@ -189,3 +189,24 @@ jobs:
         run: |
           echo "Postgres version: ${POSTGRES_VERSION}"
           ./.github/packaging/validate_build_output.sh "deb"
+
+  # Single aggregate gate for branch protection. See the "CI" job in
+  # build_and_test.yml for the rationale; the name is kept constant across
+  # main and every release branch so that the required status check list does
+  # not depend on the Postgres matrix.
+  packaging-gate:
+    name: Packaging
+    if: always()
+    needs:
+      - get_postgres_versions_from_file
+      - rpm_build_tests
+      - deb_build_tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Show results of required jobs
+        run: echo '${{ toJSON(needs) }}'
+      - name: Fail if any required job did not succeed
+        if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'skipped') }}
+        run: |
+          echo "At least one required job did not succeed." >&2
+          exit 1
