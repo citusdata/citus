@@ -436,6 +436,15 @@ INSERT INTO referenced VALUES (0, 1), (0, 2), (1, 2);
 \c - - - :worker_2_port
 SET search_path TO citus_stat_tenants;
 
+SET citus.enable_metadata_sync TO OFF;
+CREATE FUNCTION local_plan_cache_entry_count(text)
+RETURNS integer
+AS 'citus', $$local_plan_cache_entry_count$$
+LANGUAGE C STRICT;
+RESET citus.enable_metadata_sync;
+
+SET plan_cache_mode TO force_generic_plan;
+
 PREPARE prep_stmt (bigint, int, bigint, int) AS INSERT INTO referencing (shard_key, other_key) VALUES ($1, $2), ($3, $4);
 
 EXECUTE prep_stmt(0, 1, 0, 2);
@@ -445,12 +454,25 @@ EXECUTE prep_stmt(0, 1, 0, 2);
 EXECUTE prep_stmt(0, 1, 0, 2);
 EXECUTE prep_stmt(0, 1, 0, 2);
 EXECUTE prep_stmt(0, 1, 0, 2);
+
+-- Repeated executions for the same shard should reuse one local plan.
+SELECT local_plan_cache_entry_count('prep_stmt');
+
 EXECUTE prep_stmt(0, 1, 1, 2);  -- multi-shard query shouldn't use local cache and fail
+
+-- A multi-shard execution should not add or reuse a single-shard local plan.
+SELECT local_plan_cache_entry_count('prep_stmt');
 
 SELECT shard_key, other_key, count(1)
 FROM referencing
 GROUP BY shard_key, other_key
 ORDER BY shard_key, other_key;
+
+DEALLOCATE prep_stmt;
+RESET plan_cache_mode;
+SET citus.enable_metadata_sync TO OFF;
+DROP FUNCTION local_plan_cache_entry_count(text);
+RESET citus.enable_metadata_sync;
 
 \c - - - :master_port
 SET client_min_messages TO ERROR;
