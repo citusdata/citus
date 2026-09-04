@@ -50,17 +50,14 @@ CREATE STATISTICS s2 (mcv) ON a, b FROM tbl1;
 CREATE STATISTICS s3 (ndistinct) ON date_trunc('month', a), date_trunc('day', a) FROM tbl1;
 set citus.log_remote_commands to off;
 
--- error out in case of ALTER TABLE .. DETACH PARTITION .. CONCURRENTLY/FINALIZE
--- only if it's a distributed partitioned table
+-- concurrent detach works for distributed partitioned tables
 CREATE TABLE par (a INT UNIQUE) PARTITION BY RANGE(a);
 CREATE TABLE par_1 PARTITION OF par FOR VALUES FROM (1) TO (4);
 CREATE TABLE par_2 PARTITION OF par FOR VALUES FROM (5) TO (8);
--- works as it's not distributed
 ALTER TABLE par DETACH PARTITION par_1 CONCURRENTLY;
--- errors out
 SELECT create_distributed_table('par','a');
 ALTER TABLE par DETACH PARTITION par_2 CONCURRENTLY;
-ALTER TABLE par DETACH PARTITION par_2 FINALIZE;
+SELECT relispartition FROM pg_class WHERE oid = 'par_2'::regclass;
 
 
 -- test column compression propagation in distribution
