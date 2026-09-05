@@ -208,7 +208,8 @@ CheckForDistributedDeadlocks(void)
 			/* we found the deadlock and its associated proc exists */
 			if (youngestAliveTransaction)
 			{
-				CancelTransactionDueToDeadlock(youngestAliveTransaction->initiatorProc);
+				CancelTransactionDueToDeadlock(youngestAliveTransaction->initiatorProc,
+											   &youngestAliveTransaction->transactionId);
 				LogCancellingBackend(youngestAliveTransaction);
 
 				hash_seq_term(&status);
