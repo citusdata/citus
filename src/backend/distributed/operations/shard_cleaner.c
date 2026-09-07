@@ -1118,7 +1118,7 @@ RelationHasPublication(MultiConnection *connection, char *qualifiedRelationName)
 	{
 		ereport(WARNING, (errmsg("failed to determine if relation %s is part of any "
 								 "publication because of an invalid result from the "
-								 "check",
+								 "check, assuming the relation has publication",
 								 qualifiedRelationName)));
 	}
 
