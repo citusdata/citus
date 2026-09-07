@@ -249,6 +249,8 @@ test: multi_drop_extension
 # multi_unsupported_worker_operations tests that unsupported operations error out on metadata workers
 # ----------
 test: multi_metadata_sync
+test: metadata_sync_placement_less_shard
+test: metadata_sync_snapshot_batch_parity
 test: multi_unsupported_worker_operations
 
 test: grant_on_function_propagation

@@ -1,0 +1,56 @@
+-- Regression test for command-collecting snapshot stability (finding M1).
+--
+-- activate_node_snapshot() runs in command-collecting mode. Its output must be
+-- per-object and independent of citus.metadata_sync_set_batch_size, which is a
+-- transport-only optimization for the real send path. SendDistObjectCommands() and
+-- SendDistTableMetadataCommands() used to honor the batch size while collecting, so
+-- the collected pg_dist_object / pg_dist_shard / pg_dist_placement commands changed
+-- shape with the GUC; the colocation and tenant-schema senders already forced a
+-- batch size of one while collecting.
+--
+-- Only the add_object / add_shard / add_placement command subset is compared, so the
+-- assertion is insensitive to unrelated snapshot non-determinism (the background
+-- maintenance daemon toggling pg_dist_node.metadatasynced, role password content).
+SET citus.enable_metadata_sync TO OFF;
+CREATE OR REPLACE FUNCTION activate_node_snapshot()
+  RETURNS text[] LANGUAGE C STRICT AS 'citus';
+RESET citus.enable_metadata_sync;
+
+SET client_min_messages TO ERROR;
+CREATE SCHEMA "Snapshot Stability";
+SET search_path TO "Snapshot Stability", public;
+SET citus.shard_replication_factor TO 1;
+SET citus.shard_count TO 4;
+
+CREATE SEQUENCE "Weird Seq!";
+CREATE TABLE dist_a (id int PRIMARY KEY, s bigint DEFAULT nextval('"Snapshot Stability"."Weird Seq!"'));
+CREATE TABLE dist_b (id int PRIMARY KEY, v text);
+CREATE TABLE dist_c (id int PRIMARY KEY, v text);
+SELECT create_distributed_table('"Snapshot Stability".dist_a', 'id', colocate_with := 'none');
+SELECT create_distributed_table('"Snapshot Stability".dist_b', 'id', colocate_with := 'none');
+SELECT create_distributed_table('"Snapshot Stability".dist_c', 'id', colocate_with := 'none');
+
+SET citus.metadata_sync_set_batch_size TO 1;
+CREATE TEMP TABLE snap_one AS
+SELECT command FROM unnest(activate_node_snapshot()) AS s(command)
+WHERE command LIKE '%Snapshot Stability%'
+  AND (command LIKE '%citus_internal_add_object_metadata%'
+    OR command LIKE '%citus_internal_add_shard_metadata%');
+
+SET citus.metadata_sync_set_batch_size TO 1000;
+CREATE TEMP TABLE snap_batched AS
+SELECT command FROM unnest(activate_node_snapshot()) AS s(command)
+WHERE command LIKE '%Snapshot Stability%'
+  AND (command LIKE '%citus_internal_add_object_metadata%'
+    OR command LIKE '%citus_internal_add_shard_metadata%');
+
+RESET citus.metadata_sync_set_batch_size;
+
+-- Oracle: the object / shard command multiset for this schema is identical at
+-- set_batch_size = 1 and = 1000 (transport batching does not leak into the snapshot).
+SELECT (SELECT count(*) FROM (SELECT * FROM snap_one EXCEPT ALL SELECT * FROM snap_batched) d) = 0
+   AND (SELECT count(*) FROM (SELECT * FROM snap_batched EXCEPT ALL SELECT * FROM snap_one) d) = 0
+   AS snapshot_is_batch_size_independent;
+
+DROP SCHEMA "Snapshot Stability" CASCADE;
+DROP FUNCTION activate_node_snapshot();

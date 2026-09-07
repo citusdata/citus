@@ -1,0 +1,66 @@
+-- Regression test for the set-batched shard-metadata sender (finding H2).
+--
+-- AppendShardMetadataBatchRows() must emit a pg_dist_shard row for every shard
+-- interval of a relation, even a shard whose ActiveShardPlacementList() is empty,
+-- as long as the relation has at least one active placement somewhere. Placement
+-- rows are emitted only for active placements. This mirrors the per-relation
+-- ShardListInsertCommand the batched sender replaced.
+--
+-- A shard is made placement-less by DELETING its pg_dist_placement row, because
+-- ActiveShardPlacementList() filters on the worker node's isActive flag, not on
+-- pg_dist_placement.shardstate, so flipping shardstate would NOT empty it.
+SET citus.enable_metadata_sync TO OFF;
+CREATE OR REPLACE FUNCTION activate_node_snapshot()
+  RETURNS text[] LANGUAGE C STRICT AS 'citus';
+RESET citus.enable_metadata_sync;
+
+SET client_min_messages TO ERROR;
+CREATE SCHEMA mps;
+SET search_path TO mps, public;
+SET citus.shard_replication_factor TO 1;
+SET citus.shard_count TO 2;
+
+CREATE TABLE mixed_placement (a int);
+SELECT create_distributed_table('mps.mixed_placement', 'a', colocate_with := 'none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+
+-- Make exactly one shard placement-less; the other keeps its active placement.
+DELETE FROM pg_dist_placement
+WHERE shardid = (SELECT min(shardid) FROM pg_dist_shard
+                 WHERE logicalrelid = 'mps.mixed_placement'::regclass);
+
+-- Oracle 1: every pg_dist_shard row of the table appears in an
+-- add_shard_metadata snapshot command (the placement-less shard included).
+SELECT bool_and(EXISTS (
+         SELECT 1 FROM unnest(activate_node_snapshot()) AS s(command)
+         WHERE command LIKE '%citus_internal_add_shard_metadata%'
+           AND command ~ ('(^|[^0-9])' || sh.shardid::text || '([^0-9]|$)')
+       )) AS all_pg_dist_shard_rows_emitted
+FROM pg_dist_shard sh
+WHERE sh.logicalrelid = 'mps.mixed_placement'::regclass;
+ all_pg_dist_shard_rows_emitted
+---------------------------------------------------------------------
+ t
+(1 row)
+
+
+-- Oracle 2: the placement-less shard has NO placement row in the snapshot.
+SELECT NOT EXISTS (
+         SELECT 1 FROM unnest(activate_node_snapshot()) AS s(command)
+         WHERE command LIKE '%citus_internal_add_placement_metadata%'
+           AND command LIKE '%(' ||
+               (SELECT min(shardid) FROM pg_dist_shard
+                WHERE logicalrelid = 'mps.mixed_placement'::regclass)::text || ', %'
+       ) AS placement_less_shard_has_no_placement_row;
+ placement_less_shard_has_no_placement_row
+---------------------------------------------------------------------
+ t
+(1 row)
+
+
+DROP SCHEMA mps CASCADE;
+DROP FUNCTION activate_node_snapshot();
