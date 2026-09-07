@@ -43,6 +43,7 @@
 #include "nodes/makefuncs.h"
 #include "nodes/pg_list.h"
 #include "parser/parse_type.h"
+#include "portability/instr_time.h"
 #include "postmaster/bgworker.h"
 #include "postmaster/postmaster.h"
 #include "storage/lmgr.h"
@@ -55,6 +56,7 @@
 #include "utils/snapmgr.h"
 #include "utils/syscache.h"
 
+#include "distributed/adaptive_executor.h"
 #include "distributed/argutils.h"
 #include "distributed/backend_data.h"
 #include "distributed/citus_ruleutils.h"
@@ -62,6 +64,7 @@
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
 #include "distributed/coordinator_protocol.h"
+#include "distributed/deparse_shard_query.h"
 #include "distributed/deparser.h"
 #include "distributed/distribution_column.h"
 #include "distributed/listutils.h"
@@ -71,6 +74,7 @@
 #include "distributed/metadata/pg_dist_object.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
+#include "distributed/metadata_sync_pool.h"
 #include "distributed/metadata_utility.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_join_order.h"
@@ -106,25 +110,56 @@ int MetadataSyncTransMode = METADATA_SYNC_TRANSACTIONAL;
 int MetadataSyncCacheFlushInterval = 1000;
 
 /*
+ * MetadataSyncPoolTaskSize is the number of distributed objects whose creation
+ * commands we pack into a single pool task when the metadata-sync connection pool
+ * is enabled (citus.metadata_sync_use_pool). Set via
+ * citus.metadata_sync_pool_task_size.
+ *
  * MetadataSyncSetBatchSize is the number of distributed objects whose per-object
  * metadata rows we fold into a single set-based citus_internal_add_*_metadata
  * statement on the serial metadata connection.
  * Set via citus.metadata_sync_set_batch_size; 1 restores one statement per object.
  */
+int MetadataSyncPoolTaskSize = 1000;
 int MetadataSyncSetBatchSize = 1000;
 
 /*
- * MetadataSyncReleaseDeparseLocks controls whether the metadata sync paths that
- * deparse per-object command bundles do so inside an internal subtransaction
+ * MetadataSyncUsePool controls whether the shell table creation step of
+ * metadata sync uses a pool of parallel connections to the activated node
+ * (driven by the adaptive executor) instead of the serial single-connection
+ * path.
+ *
+ * Set via citus.metadata_sync_use_pool; default false (serial path, no behavior
+ * change). Only takes effect in nontransactional mode, where the parallel
+ * connections cannot share one distributed transaction anyway.
+ */
+bool MetadataSyncUsePool = false;
+
+/*
+ * MetadataSyncReleaseDeparseLocks controls whether the pooled metadata sync
+ * path deparses each object's command bundle inside an internal subtransaction
  * that is rolled back once the command strings are copied out. Rolling the
  * subtransaction back releases the AccessShareLocks and relcache pins that the
- * deparse helpers acquire (and would otherwise hold to top-transaction end), so
- * the coordinator lock table and backend memory stay bounded to a single object
- * instead of growing linearly with the number of distributed objects.
+ * deparse helpers acquire (and normally hold to top-transaction end), so the
+ * coordinator lock table and backend memory stay bounded to a single object
+ * instead of growing linearly with the number of distributed objects. Only the
+ * pooled path consults this; the serial path is unchanged.
  *
  * Set via citus.metadata_sync_release_deparse_locks; default true.
  */
 bool MetadataSyncReleaseDeparseLocks = true;
+
+/*
+ * MetadataSyncPoolSkipExecute is a DEBUG-only switch: when true, the pooled
+ * metadata sync phases build (deparse) each wave's command strings but skip the
+ * ExecuteTaskListOutsideTransaction() call that would run them on the worker.
+ * It exists purely to isolate coordinator-side deparse cost/locking from the
+ * worker-side execution when diagnosing the sync; it produces an incomplete
+ * worker and must never be set in production.
+ *
+ * Set via citus.metadata_sync_pool_skip_execute; default false.
+ */
+bool MetadataSyncPoolSkipExecute = false;
 
 
 static void EnsureObjectMetadataIsSane(int distributionArgumentIndex,
@@ -137,22 +172,112 @@ static void CreateTableMetadataOnWorkers(Oid relationId);
 static void CreateDependingViewsOnWorkers(Oid relationId);
 static void AddTableToPublications(Oid relationId);
 static NodeMetadataSyncResult SyncNodeMetadataToNodesOptional(void);
+static bool MetadataSyncShellTablePoolEnabled(MetadataSyncContext *context);
+static bool IsCitusShellTableDependency(const ObjectAddress *dependency);
+static bool IsDependentOnShellTableObject(const ObjectAddress *dependency);
+static void SendDeferredDependentCreationCommands(MetadataSyncContext *context);
+static void LogMetadataSyncPhaseBoundary(const char *state, const char *phase);
+static void LogMetadataSyncProgress(const char *label, int64 previousCount,
+									int64 currentCount, int64 totalCount);
+typedef List *(*NodeTargetedPoolDeparseFn)(HeapTuple tuple, TupleDesc tupleDesc,
+										   MetadataSyncContext *context);
+static void RunNodeTargetedPoolPhase(MetadataSyncContext *context,
+									 WorkerNode *workerNode, Oid scanRelationId,
+									 NodeTargetedPoolDeparseFn deparseFn,
+									 const char *objectLabel,
+									 bool wrapObjectInTransaction);
+static List * DeparseObjectIntoTaskCommandList(HeapTuple heapTuple,
+											   TupleDesc tupleDesc,
+											   MetadataSyncContext *context,
+											   NodeTargetedPoolDeparseFn deparseFn,
+											   MemoryContext perObjectContext,
+											   MemoryContext waveContext,
+											   List *taskCommandList,
+											   bool wrapObjectInTransaction,
+											   bool *appended);
+static List * DistTableMetadataPoolDeparse(HeapTuple tuple, TupleDesc tupleDesc,
+										   MetadataSyncContext *context);
+static List * DistObjectMarkPoolDeparse(HeapTuple tuple, TupleDesc tupleDesc,
+										MetadataSyncContext *context);
+static List * CreateNodeTargetedPoolTaskList(List *commandListPerTask,
+											 WorkerNode *workerNode);
+
+/* HTAB entry mapping an ObjectAddress to its task (HASH_BLOBS over ObjectAddress) */
+typedef struct MetadataSyncPoolTaskEntry
+{
+	ObjectAddress key;
+	MetadataSyncPoolTask *task;
+} MetadataSyncPoolTaskEntry;
+
+static void SendDependencyCreationCommandsViaPool(MetadataSyncContext *context,
+												  List *dependencies, List *edgeList);
+static List * ClassifyDependencyPoolTasks(MetadataSyncContext *context,
+										  List *dependencies);
+static void OpenStreamingLeafSource(MetadataSyncPool *pool, Oid scanRelationId,
+									Oid (*extractOid)(HeapTuple, TupleDesc),
+									List *(*builder)(Oid));
+static void MetadataSyncPoolRegisterTasks(MetadataSyncPool *pool,
+										  List *taskAddresses);
+static void MetadataSyncPoolApplyEdges(MetadataSyncPool *pool,
+									   List *edgeList);
+static void EdgeGatedSeed(MetadataSyncPool *pool);
+static MetadataSyncPoolTask * EdgeGatedPullReady(MetadataSyncPool *pool);
+static List * EdgeGatedDeparse(MetadataSyncPool *pool, MetadataSyncPoolTask *task);
+static void EdgeGatedOnComplete(MetadataSyncPool *pool, MetadataSyncPoolTask *task);
+static void EdgeGatedOnDrained(MetadataSyncPool *pool);
+static MetadataSyncPoolTask * StreamingLeafPullReady(MetadataSyncPool *pool);
+static List * StreamingLeafDeparse(MetadataSyncPool *pool, MetadataSyncPoolTask *task);
+static void StreamingLeafOnComplete(MetadataSyncPool *pool, MetadataSyncPoolTask *task);
+static void StreamingLeafClose(MetadataSyncPool *pool);
+static Oid ShellTableStreamExtractOid(HeapTuple tuple, TupleDesc tupleDesc);
+static List * ShellTableStreamBuilder(Oid relationId);
+static Oid SequenceStreamExtractOid(HeapTuple tuple, TupleDesc tupleDesc);
+static List * SequenceStreamBuilder(Oid sequenceId);
+
+static const MetadataSyncTaskSourceOps EdgeGatedSourceOps = {
+	.seed = EdgeGatedSeed,
+	.pullReady = EdgeGatedPullReady,
+	.deparse = EdgeGatedDeparse,
+	.onComplete = EdgeGatedOnComplete,
+	.onDrained = EdgeGatedOnDrained,
+	.close = NULL,
+};
+
+static const MetadataSyncTaskSourceOps StreamingLeafSourceOps = {
+	.seed = NULL,
+	.pullReady = StreamingLeafPullReady,
+	.deparse = StreamingLeafDeparse,
+	.onComplete = StreamingLeafOnComplete,
+	.onDrained = NULL,
+	.close = StreamingLeafClose,
+};
+
 static bool ShouldSyncTableMetadataInternal(bool hashDistributed,
 											bool citusTableWithNoDistKey);
 static bool SyncNodeMetadataSnapshotToNode(WorkerNode *workerNode, bool raiseOnError);
 static void FlushMetadataSyncCachesIfNeeded(MetadataSyncContext *context,
 											int64 processedCount);
+static List * BuildRelationCommandsWithOptionalLockRelease(Oid relationId,
+														   List *(*builder)(Oid));
+static List * InterTableRelationshipCommandsForRelation(Oid relationId);
 static void AppendRelationMetadataBatchRowsWithOptionalLockRelease(Oid relationId,
-																	 StringInfo shardValues,
-																	 StringInfo placementValues);
+																   StringInfo
+																   partitionValues,
+																   StringInfo shardValues,
+																   StringInfo
+																   placementValues);
 static void AppendRelationMetadataBatchRows(Oid relationId,
+											StringInfo partitionValues,
+											StringInfo shardValues,
+											StringInfo placementValues);
+static void AppendDistributionMetadataBatchRow(StringInfo partitionValues,
+											   CitusTableCacheEntry *cacheEntry);
+static void AppendShardMetadataBatchRows(StringInfo shardValues,
+										 StringInfo placementValues,
+										 List *shardIntervalList);
+static List * DistTableMetadataBatchCommandList(StringInfo partitionValues,
 												StringInfo shardValues,
 												StringInfo placementValues);
-static void AppendShardMetadataBatchRows(StringInfo shardValues,
-												 StringInfo placementValues,
-												 List *shardIntervalList);
-static List * DistTableMetadataBatchCommandList(StringInfo shardValues,
-													  StringInfo placementValues);
 static char * ColocationMetadataBatchCommand(List *valueRows);
 static char * TenantSchemaMetadataBatchCommand(List *valueRows);
 static void DropMetadataSnapshotOnNode(WorkerNode *workerNode, bool dropShellTables);
@@ -233,6 +358,13 @@ static bool got_SIGTERM = false;
 static bool got_SIGALRM = false;
 
 #define METADATA_SYNC_APP_NAME "Citus Metadata Sync Daemon"
+
+/*
+ * Emit a metadata-sync progress LOG line once each time a long per-object loop's
+ * running count crosses a multiple of this interval. Purely observational; it does
+ * not affect batching or memory.
+ */
+#define METADATA_SYNC_PROGRESS_LOG_INTERVAL 1000
 
 
 /*
@@ -1353,6 +1485,47 @@ DistributionCreateCommand(CitusTableCacheEntry *cacheEntry)
 					 replicationModel);
 
 	return insertDistributionCommand->data;
+}
+
+
+/*
+ * ShouldBundlePartitionMetadataWithShellTable returns true when relationId's
+ * pg_dist_partition entry is (re)created together with the shell table's DDL
+ * bundle (see ShellTableCreationCommandList), rather than by the per-table
+ * metadata sender (SendDistTableMetadataCommands).
+ *
+ * Bundling the pg_dist_partition insert with the shell table CREATE keeps the
+ * "a pg_dist_partition row exists on the worker iff its shell table exists"
+ * invariant: both are (re)created in the same remote transaction, so an
+ * interrupted metadata sync can never leave a shell table without its
+ * pg_dist_partition row (or vice versa). That invariant is what lets the
+ * pg_dist_partition-driven shell table drop-and-recreate on the next sync
+ * actually reach (and heal) a drifted shell table.
+ *
+ * Two classes of tables are excluded here, and for them the pg_dist_partition
+ * row is synced by SendDistTableMetadataCommands instead:
+ *   - tables whose metadata we do not sync at all (ShouldSyncTableMetadata is
+ *     false); neither the bundle nor the per-table sender emits their row, and
+ *   - extension-owned shell tables, which are (re)created by CREATE EXTENSION on
+ *     the worker rather than by our shell table bundle, so there is no bundle to
+ *     attach the row to (ShellTablePoolDeparse likewise skips them).
+ */
+bool
+ShouldBundlePartitionMetadataWithShellTable(Oid relationId)
+{
+	if (!ShouldSyncTableMetadata(relationId))
+	{
+		return false;
+	}
+
+	ObjectAddress tableAddress = { 0 };
+	ObjectAddressSet(tableAddress, RelationRelationId, relationId);
+	if (IsAnyObjectAddressOwnedByExtension(list_make1(&tableAddress), NULL))
+	{
+		return false;
+	}
+
+	return true;
 }
 
 
@@ -4742,7 +4915,8 @@ SendOrCollectCommandListToActivatedNodes(MetadataSyncContext *context, List *com
 	else if (context->transactionMode == METADATA_SYNC_NON_TRANSACTIONAL)
 	{
 		List *workerConnections = context->activatedWorkerBareConnections;
-		SendCommandListToWorkerListWithBareConnections(workerConnections, commands);
+		SendCommandListToWorkerListWithBareConnections(workerConnections,
+													   commands);
 	}
 	else
 	{
@@ -4928,7 +5102,9 @@ SyncDistributedObjects(MetadataSyncContext *context)
 	Assert(ShouldPropagate());
 
 	/* Send systemwide objects, only roles for now */
+	LogMetadataSyncPhaseBoundary("starting", "node-wide objects");
 	SendNodeWideObjectsSyncCommands(context);
+	LogMetadataSyncPhaseBoundary("finished", "node-wide objects");
 
 	/*
 	 * Break dependencies between sequences-shell tables, then remove shell tables,
@@ -4936,23 +5112,105 @@ SyncDistributedObjects(MetadataSyncContext *context)
 	 * We should delete shell tables before metadata entries as we look inside
 	 * pg_dist_partition to figure out shell tables.
 	 */
+	LogMetadataSyncPhaseBoundary("starting", "shell table deletion");
 	SendShellTableDeletionCommands(context);
+	LogMetadataSyncPhaseBoundary("finished", "shell table deletion");
+
+	LogMetadataSyncPhaseBoundary("starting", "metadata deletion");
 	SendMetadataDeletionCommands(context);
+	LogMetadataSyncPhaseBoundary("finished", "metadata deletion");
 
 	/*
 	 * Commands to insert pg_dist_colocation entries.
 	 * Replicating dist objects and their metadata depends on this step.
 	 */
+	LogMetadataSyncPhaseBoundary("starting", "colocation metadata");
 	SendColocationMetadataCommands(context);
+	LogMetadataSyncPhaseBoundary("finished", "colocation metadata");
 
 	/*
 	 * Replicate all objects of the pg_dist_object to the remote node and
 	 * create metadata entries for Citus tables (pg_dist_shard, pg_dist_shard_placement,
 	 * pg_dist_partition, pg_dist_object).
 	 */
+	LogMetadataSyncPhaseBoundary("starting", "dependency creation");
 	SendDependencyCreationCommands(context);
+	LogMetadataSyncPhaseBoundary("finished", "dependency creation");
+
+	/*
+	 * When the pool path is enabled, SendDependencyCreationCommands above also
+	 * skips the distributed sequences; (re)create them here in parallel over a
+	 * pool of connections, before the shell tables so each shell table's column
+	 * defaults can be re-associated with an already-created sequence. Sequences
+	 * are an embarrassingly parallel leaf class (no intra-class edges) whose
+	 * upward dependencies (roles, schemas) were just created above, so the phase
+	 * barrier holds.
+	 */
+	if (MetadataSyncShellTablePoolEnabled(context))
+	{
+		LogMetadataSyncPhaseBoundary("starting", "parallel sequence creation");
+		SendSequenceCreationCommandsViaPool(context);
+		LogMetadataSyncPhaseBoundary("finished", "parallel sequence creation");
+	}
+
+	/*
+	 * When the pool path is enabled, SendDependencyCreationCommands above skips
+	 * the Citus shell tables and we (re)create them here in parallel over a pool
+	 * of connections to each activated node. Shell tables have no dependencies
+	 * on each other, so they are embarrassingly parallel; all of their upward
+	 * dependencies (roles, schemas, types, functions, sequences, ...) were just
+	 * created by SendDependencyCreationCommands and the sequence pool phase, so
+	 * the phase barrier holds.
+	 */
+	if (MetadataSyncShellTablePoolEnabled(context))
+	{
+		LogMetadataSyncPhaseBoundary("starting", "parallel shell table creation");
+		SendShellTableCreationCommandsViaPool(context);
+		LogMetadataSyncPhaseBoundary("finished", "parallel shell table creation");
+	}
+
+	/*
+	 * (Re)create the objects that depend on shell tables (views, materialized
+	 * views, publications) which SendDependencyCreationCommands deferred because
+	 * their target shell tables were just created above in the pool phase. This
+	 * matches the stock dependency order (these objects come after their tables
+	 * and before the per-table metadata below). In the serial path the deferred
+	 * list is empty, so this is a no-op.
+	 */
+	LogMetadataSyncPhaseBoundary("starting", "deferred dependent object creation");
+	SendDeferredDependentCreationCommands(context);
+	LogMetadataSyncPhaseBoundary("finished", "deferred dependent object creation");
+
+	/*
+	 * The per-table shard/partition metadata (pg_dist_shard, pg_dist_shard_
+	 * placement, pg_dist_partition) and the pg_dist_object marks are independent
+	 * across objects, so in principle they can be (re)created over the connection
+	 * pool as well (SendDist*CommandsViaPool(), retained for A/B measurement). In
+	 * practice, however, these two layers are *cheap per object* (a few small
+	 * catalog inserts each), so the pool's only advantage -- K-way worker
+	 * concurrency -- buys little because no single object is heavy enough to
+	 * saturate a worker backend. What actually dominated these layers was the
+	 * per-object round-trip and remote commit, and the serial senders remove that
+	 * by set-batching: SendDistTableMetadataCommands and SendDistObjectCommands
+	 * accumulate up to citus.metadata_sync_set_batch_size objects and emit a few
+	 * set-based statements per batch (one citus_internal_add_partition_metadata /
+	 * add_shard_metadata / add_placement_metadata over a VALUES list, and one
+	 * citus_internal_add_object_metadata over a VALUES list), each sent as one
+	 * round-trip and committed once per batch. The catalog scan stays
+	 * bounded-memory (per-batch context reset; it never materializes a whole-
+	 * cluster list). So we keep these two layers on the serial set-batched path
+	 * even when the pool is enabled -- it is simpler (one connection, no
+	 * nontransactional-only constraint) and competitive with the pool here -- and
+	 * reserve the pool for the shell-table and sequence layers, where per-object
+	 * worker CPU dominates and K-way concurrency wins.
+	 */
+	LogMetadataSyncPhaseBoundary("starting", "dist table metadata");
 	SendDistTableMetadataCommands(context);
+	LogMetadataSyncPhaseBoundary("finished", "dist table metadata");
+
+	LogMetadataSyncPhaseBoundary("starting", "dist object metadata");
 	SendDistObjectCommands(context);
+	LogMetadataSyncPhaseBoundary("finished", "dist object metadata");
 
 	/*
 	 * Commands to insert pg_dist_schema entries.
@@ -4960,13 +5218,66 @@ SyncDistributedObjects(MetadataSyncContext *context)
 	 * Need to be done after syncing distributed objects because the schemas
 	 * need to exist on the worker.
 	 */
+	LogMetadataSyncPhaseBoundary("starting", "tenant schema metadata");
 	SendTenantSchemaMetadataCommands(context);
+	LogMetadataSyncPhaseBoundary("finished", "tenant schema metadata");
 
 	/*
 	 * After creating each table, handle the inter table relationship between
 	 * those tables.
 	 */
+	LogMetadataSyncPhaseBoundary("starting", "inter-table relationship");
 	SendInterTableRelationshipCommands(context);
+	LogMetadataSyncPhaseBoundary("finished", "inter-table relationship");
+}
+
+
+/*
+ * LogMetadataSyncPhaseBoundary emits a single log line before and after each
+ * major metadata-sync phase in SyncDistributedObjects, so an operator can see
+ * which phase a long-running sync is currently in without attaching a debugger.
+ * state is "starting" or "finished"; phase names the step (e.g. "colocation
+ * metadata").
+ */
+static void
+LogMetadataSyncPhaseBoundary(const char *state, const char *phase)
+{
+	ereport(DEBUG1, (errmsg("metadata sync: %s %s", state, phase)));
+}
+
+
+/*
+ * LogMetadataSyncProgress emits a periodic LOG line from the long per-object loops
+ * of metadata sync, once each time the running count crosses a multiple of
+ * METADATA_SYNC_PROGRESS_LOG_INTERVAL. previousCount/currentCount are the running
+ * counts before and after the current step (currentCount - previousCount is 1 for
+ * per-object loops and a whole batch for the set-batched loops), so the crossing
+ * check fires exactly once per interval regardless of the step size. When
+ * totalCount is positive it is shown as the denominator ("X / Y"); pass a
+ * non-positive value for the streaming loops whose total is not known up front
+ * (materializing it would defeat the bounded-memory scan).
+ */
+static void
+LogMetadataSyncProgress(const char *label, int64 previousCount, int64 currentCount,
+						int64 totalCount)
+{
+	int64 interval = METADATA_SYNC_PROGRESS_LOG_INTERVAL;
+
+	if (currentCount / interval == previousCount / interval)
+	{
+		return;
+	}
+
+	if (totalCount > 0)
+	{
+		ereport(DEBUG2, (errmsg("metadata sync: processed %ld / %ld %s",
+							 (long) currentCount, (long) totalCount, label)));
+	}
+	else
+	{
+		ereport(DEBUG2, (errmsg("metadata sync: processed %ld %s",
+							 (long) currentCount, label)));
+	}
 }
 
 
@@ -5157,8 +5468,11 @@ SendColocationMetadataCommands(MetadataSyncContext *context)
 			MemoryContextSwitchTo(prev);
 
 			SendOrCollectCommandListToActivatedNodes(context, commandList);
+			int64 previousCount = processedCount;
 			processedCount += batchCount;
 			FlushMetadataSyncCachesIfNeeded(context, processedCount);
+			LogMetadataSyncProgress("colocation groups", previousCount,
+									processedCount, -1);
 
 			MemoryContextReset(batchContext);
 			valueRows = NIL;
@@ -5175,8 +5489,11 @@ SendColocationMetadataCommands(MetadataSyncContext *context)
 		MemoryContextSwitchTo(prev);
 
 		SendOrCollectCommandListToActivatedNodes(context, commandList);
+		int64 previousCount = processedCount;
 		processedCount += batchCount;
 		FlushMetadataSyncCachesIfNeeded(context, processedCount);
+		LogMetadataSyncProgress("colocation groups", previousCount,
+								processedCount, -1);
 	}
 
 	MemoryContextSwitchTo(oldContext);
@@ -5269,15 +5586,18 @@ SendTenantSchemaMetadataCommands(MetadataSyncContext *context)
 			MemoryContext prev = MemoryContextSwitchTo(buildContext);
 			char *command = collecting ?
 							psprintf(
-								"SELECT pg_catalog.citus_internal_add_tenant_schema%s",
-								(char *) linitial(valueRows)) :
+				"SELECT pg_catalog.citus_internal_add_tenant_schema%s",
+				(char *) linitial(valueRows)) :
 							TenantSchemaMetadataBatchCommand(valueRows);
 			List *commandList = list_make1(command);
 			MemoryContextSwitchTo(prev);
 
 			SendOrCollectCommandListToActivatedNodes(context, commandList);
+			int64 previousCount = processedCount;
 			processedCount += batchCount;
 			FlushMetadataSyncCachesIfNeeded(context, processedCount);
+			LogMetadataSyncProgress("tenant schemas", previousCount,
+									processedCount, -1);
 
 			MemoryContextReset(batchContext);
 			valueRows = NIL;
@@ -5292,15 +5612,18 @@ SendTenantSchemaMetadataCommands(MetadataSyncContext *context)
 		MemoryContext prev = MemoryContextSwitchTo(buildContext);
 		char *command = collecting ?
 						psprintf(
-							"SELECT pg_catalog.citus_internal_add_tenant_schema%s",
-							(char *) linitial(valueRows)) :
+			"SELECT pg_catalog.citus_internal_add_tenant_schema%s",
+			(char *) linitial(valueRows)) :
 						TenantSchemaMetadataBatchCommand(valueRows);
 		List *commandList = list_make1(command);
 		MemoryContextSwitchTo(prev);
 
 		SendOrCollectCommandListToActivatedNodes(context, commandList);
+		int64 previousCount = processedCount;
 		processedCount += batchCount;
 		FlushMetadataSyncCachesIfNeeded(context, processedCount);
+		LogMetadataSyncProgress("tenant schemas", previousCount,
+								processedCount, -1);
 	}
 
 	MemoryContextSwitchTo(oldContext);
@@ -5397,8 +5720,26 @@ SendDependencyCreationCommands(MetadataSyncContext *context)
 
 	MemoryContext oldContext = MemoryContextSwitchTo(context->context);
 
+	/*
+	 * When the pool path is enabled, Citus shell tables AND distributed
+	 * sequences are created later over pools of parallel connections
+	 * (SendSequenceCreationCommandsViaPool() then
+	 * SendShellTableCreationCommandsViaPool()). Exclude both from the dependency
+	 * list *at scan time* so the millions of shell tables and sequences on a
+	 * large cluster are never materialized here, never filtered, and --
+	 * crucially -- never fed into the per-object pg_depend traversal in
+	 * OrderObjectAddressListInDependencyOrder() below, whose cost and peak
+	 * memory would otherwise be proportional to the number of distributed
+	 * tables/sequences and dominate sync wall time on the single coordinator
+	 * backend. Both classes are embarrassingly parallel (no intra-class edges),
+	 * so no dependency ordering is lost by removing them from this phase.
+	 */
+	bool poolShellTables = MetadataSyncShellTablePoolEnabled(context);
+
 	/* collect all dependencies in creation order and get their ddl commands */
-	List *dependencies = GetDistributedObjectAddressList();
+	List *dependencies = poolShellTables ?
+						 GetDistributedObjectAddressListWithoutShellTablesAndSequences() :
+						 GetDistributedObjectAddressList();
 
 	/*
 	 * Depending on changes in the environment, such as the enable_metadata_sync guc
@@ -5409,24 +5750,63 @@ SendDependencyCreationCommands(MetadataSyncContext *context)
 													  &SupportedDependencyByCitus,
 													  true);
 
-	dependencies = OrderObjectAddressListInDependencyOrder(dependencies, true);
+	/*
+	 * In the pool path we also need the dependency graph edges (not just a flat
+	 * topological order) so the connection pool can gate: create an object only
+	 * once all of its prerequisites that are themselves tasks have been created.
+	 * OrderObjectAddressListInDependencyOrderWithEdges() returns the same ordered
+	 * list as OrderObjectAddressListInDependencyOrder() plus the direct
+	 * prerequisite -> dependent edges discovered during the traversal.
+	 */
+	List *edgeList = NIL;
+	dependencies = poolShellTables ?
+				   OrderObjectAddressListInDependencyOrderWithEdges(dependencies, true,
+																	&edgeList) :
+				   OrderObjectAddressListInDependencyOrder(dependencies, true);
+
+	if (poolShellTables)
+	{
+		/*
+		 * Parallel path: schedule the prerequisite object classes over a pool of
+		 * connections, respecting the dependency edges, instead of creating them
+		 * one-object-per-round-trip on the single shared metadata connection.
+		 */
+		SendDependencyCreationCommandsViaPool(context, dependencies, edgeList);
+
+		MemoryContextSwitchTo(oldContext);
+
+		ResetMetadataSyncMemoryContext(context);
+
+		/* enable ddl propagation */
+		SendOrCollectCommandListToActivatedNodes(context,
+												 list_make1(ENABLE_DDL_PROPAGATION));
+		return;
+	}
 
 	/*
-	 * We need to create a subcontext as we reset the context after each dependency
-	 * creation but we want to preserve all dependency objects at metadataSyncContext.
+	 * Build each dependency's ddl commands in a per-object context that we reset
+	 * every iteration, so the deparse and catalog scratch does not accumulate in
+	 * the batch context until the batch is flushed.
 	 */
-	MemoryContext commandsContext = AllocSetContextCreate(context->context,
-														  "dependency commands context",
-														  ALLOCSET_DEFAULT_SIZES);
-	MemoryContextSwitchTo(commandsContext);
+	MemoryContext perObjectContext = AllocSetContextCreate(oldContext,
+														   "dependency commands per object context",
+														   ALLOCSET_DEFAULT_SIZES);
 	ObjectAddress *dependency = NULL;
 	int64 processedCount = 0;
+	int64 totalDependencies = list_length(dependencies);
 	foreach_ptr(dependency, dependencies)
 	{
-		if (!MetadataSyncCollectsCommands(context))
-		{
-			MemoryContextReset(commandsContext);
-		}
+		/*
+		 * Advance the processed counter once at the top so all paths below (the
+		 * two pool-defer skips and the main creation path) share one count, and
+		 * emit a periodic progress line.
+		 */
+		processedCount++;
+		LogMetadataSyncProgress("dependency objects", processedCount - 1,
+								processedCount, totalDependencies);
+
+		MemoryContextReset(perObjectContext);
+		MemoryContextSwitchTo(perObjectContext);
 
 		/*
 		 * We expect extension-owned objects to be created as a result
@@ -5445,16 +5825,1386 @@ SendDependencyCreationCommands(MetadataSyncContext *context)
 		 * advance the cache-flush counter and flush if needed on this skip path
 		 * too.
 		 */
-		FlushMetadataSyncCachesIfNeeded(context, ++processedCount);
+		FlushMetadataSyncCachesIfNeeded(context, processedCount);
 	}
 
 	MemoryContextSwitchTo(oldContext);
 
-	if (!MetadataSyncCollectsCommands(context))
-	{
-		MemoryContextDelete(commandsContext);
-	}
+	MemoryContextDelete(perObjectContext);
+
 	ResetMetadataSyncMemoryContext(context);
+
+	/* enable ddl propagation */
+	SendOrCollectCommandListToActivatedNodes(context, list_make1(ENABLE_DDL_PROPAGATION));
+}
+
+
+/*
+ * SendDependencyCreationCommandsViaPool creates the prerequisite object classes
+ * (roles, schemas, types, domains, collations, functions, text-search objects,
+ * publications, extensions) on every activated node over a pool of parallel
+ * connections, respecting the dependency edges discovered during dependency
+ * ordering, instead of the serial one-object-per-round-trip path.
+ *
+ * dependencies is the topologically ordered object list and edgeList is the set
+ * of direct prerequisite -> dependent edges over it (both produced by
+ * OrderObjectAddressListInDependencyOrderWithEdges()). The classification of which
+ * objects become pool tasks (and which are skipped or deferred) is node
+ * independent, so it is computed once and reused for each activated node.
+ *
+ * Runs only in the pool path, which is nontransactional: each object's DDL is sent
+ * as one implicit worker transaction that autocommits, so there is no single
+ * distributed transaction spanning the phase. Idempotency (worker_create_or_replace_object
+ * / IF NOT EXISTS) makes a re-run after partial failure safe.
+ */
+static void
+SendDependencyCreationCommandsViaPool(MetadataSyncContext *context, List *dependencies,
+									  List *edgeList)
+{
+	/*
+	 * Classify the ordered dependency list into the set of objects the pool will
+	 * create (skipping shell tables, extension-owned objects, and stashing
+	 * shell-table-dependent objects for the later deferred phase). This is node
+	 * independent, so do it once.
+	 */
+	List *taskAddresses = ClassifyDependencyPoolTasks(context, dependencies);
+
+	if (taskAddresses == NIL)
+	{
+		/* nothing to create in this phase */
+		return;
+	}
+
+	int poolSize = MaxAdaptiveExecutorPoolSize;
+	if (poolSize < 1)
+	{
+		poolSize = 1;
+	}
+
+	int connectionCount = Min(poolSize, list_length(taskAddresses));
+
+	WorkerNode *workerNode = NULL;
+	foreach_ptr(workerNode, context->activatedWorkerNodeList)
+	{
+		MetadataSyncPool *pool =
+			OpenMetadataSyncPool(context, workerNode, connectionCount,
+								 &EdgeGatedSourceOps, "dependency objects");
+
+		MetadataSyncPoolRegisterTasks(pool, taskAddresses);
+		MetadataSyncPoolApplyEdges(pool, edgeList);
+
+		RunMetadataSyncPool(pool);
+
+		CloseMetadataSyncPool(pool);
+	}
+}
+
+
+/*
+ * ClassifyDependencyPoolTasks walks the topologically ordered dependency list and
+ * returns the subset of objects the dependency pool should create, applying the
+ * same skip/defer rules the serial pool path applies inline:
+ *
+ *   - Citus shell tables are created later over their own pool, so skip them here
+ *     (defensive: they are already excluded at scan time in the pool path).
+ *   - Objects that DEPEND ON a shell table (views/matviews over a distributed
+ *     table, publications FOR TABLE a distributed table) are stashed in dependency
+ *     order into context->deferredDependentObjectAddresses and (re)created in
+ *     SendDeferredDependentCreationCommands() once the shell tables exist.
+ *   - Extension-owned objects are created as a side effect of their extension.
+ *
+ * The returned list reuses the ObjectAddress pointers from the input list (no
+ * copies); it is allocated in context->context so it outlives the per-node pools.
+ */
+static List *
+ClassifyDependencyPoolTasks(MetadataSyncContext *context, List *dependencies)
+{
+	MemoryContext oldContext = MemoryContextSwitchTo(context->context);
+	List *taskAddresses = NIL;
+	MemoryContextSwitchTo(oldContext);
+
+	MemoryContext perObjectContext =
+		AllocSetContextCreate(CurrentMemoryContext,
+							  "dependency pool classification per object context",
+							  ALLOCSET_DEFAULT_SIZES);
+
+	ObjectAddress *dependency = NULL;
+	int64 processedCount = 0;
+	foreach_ptr(dependency, dependencies)
+	{
+		processedCount++;
+
+		MemoryContextReset(perObjectContext);
+		MemoryContextSwitchTo(perObjectContext);
+
+		if (IsCitusShellTableDependency(dependency))
+		{
+			FlushMetadataSyncCachesIfNeeded(context, processedCount);
+			continue;
+		}
+
+		if (IsDependentOnShellTableObject(dependency))
+		{
+			MemoryContext stashContext = MemoryContextSwitchTo(TopTransactionContext);
+			ObjectAddress *deferredAddress = palloc0(sizeof(ObjectAddress));
+			*deferredAddress = *dependency;
+			context->deferredDependentObjectAddresses =
+				lappend(context->deferredDependentObjectAddresses, deferredAddress);
+			MemoryContextSwitchTo(stashContext);
+
+			FlushMetadataSyncCachesIfNeeded(context, processedCount);
+			continue;
+		}
+
+		if (IsAnyObjectAddressOwnedByExtension(list_make1(dependency), NULL))
+		{
+			FlushMetadataSyncCachesIfNeeded(context, processedCount);
+			continue;
+		}
+
+		/* this object is a pool task; keep the input pointer */
+		MemoryContext appendContext = MemoryContextSwitchTo(context->context);
+		taskAddresses = lappend(taskAddresses, dependency);
+		MemoryContextSwitchTo(appendContext);
+
+		FlushMetadataSyncCachesIfNeeded(context, processedCount);
+	}
+
+	MemoryContextSwitchTo(oldContext);
+	MemoryContextDelete(perObjectContext);
+
+	return taskAddresses;
+}
+
+
+/*
+ * OpenStreamingLeafSource turns a pool into a STREAMING_LEAF source over the
+ * catalog relation scanRelationId. It opens the relation with an AccessShareLock
+ * and starts a full sequential systable scan whose cursor lives in the pool's
+ * (parent-transaction-owned) resource owner, so it survives the per-object
+ * deparse subtransaction that BuildRelationCommandsWithOptionalLockRelease rolls
+ * back on each dispatch (the same interleaving the serial
+ * SendInterTableRelationshipCommands already relies on).
+ *
+ * extractOid maps a scanned tuple to the OID of the object to create (or
+ * InvalidOid to skip the tuple, e.g. a pg_dist_object row that is not a
+ * distributed sequence); builder maps that OID to the object's DDL command list.
+ * The scan is closed by CloseMetadataSyncPool.
+ */
+static void
+OpenStreamingLeafSource(MetadataSyncPool *pool, Oid scanRelationId,
+						Oid (*extractOid)(HeapTuple, TupleDesc),
+						List *(*builder)(Oid))
+{
+	ScanKeyData scanKey[1];
+	int scanKeyCount = 0;
+
+	pool->streamRelation = table_open(scanRelationId, AccessShareLock);
+	pool->streamTupleDesc = RelationGetDescr(pool->streamRelation);
+	pool->streamScan = systable_beginscan(pool->streamRelation, InvalidOid, false,
+										  NULL, scanKeyCount, scanKey);
+	pool->streamDone = false;
+	pool->streamExtractOid = extractOid;
+	pool->streamBuilder = builder;
+}
+
+
+/*
+ * MetadataSyncPoolRegisterTasks creates one MetadataSyncPoolTask per
+ * distinct object address in taskAddresses and registers it in the pool's
+ * address -> task hash. All tasks start with in-degree 0; edges are layered on
+ * afterwards by MetadataSyncPoolApplyEdges.
+ */
+static void
+MetadataSyncPoolRegisterTasks(MetadataSyncPool *pool,
+							  List *taskAddresses)
+{
+	MemoryContext oldContext = MemoryContextSwitchTo(pool->poolContext);
+
+	if (pool->taskByAddress == NULL)
+	{
+		HASHCTL info;
+		memset(&info, 0, sizeof(info));
+		info.keysize = sizeof(ObjectAddress);
+		info.entrysize = sizeof(MetadataSyncPoolTaskEntry);
+		info.hcxt = pool->poolContext;
+		int hashFlags = (HASH_ELEM | HASH_BLOBS | HASH_CONTEXT);
+		pool->taskByAddress = hash_create("metadata sync pool tasks",
+										  32, &info, hashFlags);
+	}
+
+	ObjectAddress *address = NULL;
+	foreach_ptr(address, taskAddresses)
+	{
+		bool found = false;
+		MetadataSyncPoolTaskEntry *entry =
+			hash_search(pool->taskByAddress, address, HASH_ENTER, &found);
+		if (found)
+		{
+			/* duplicate address in the ordered list; one task is enough */
+			continue;
+		}
+
+		MetadataSyncPoolTask *task = palloc0(sizeof(MetadataSyncPoolTask));
+		task->objectAddress = *address;
+		task->inDegree = 0;
+		task->successors = NIL;
+		task->dispatched = false;
+		task->done = false;
+
+		entry->task = task;
+		pool->taskList = lappend(pool->taskList, task);
+	}
+
+	pool->totalTasks = list_length(pool->taskList);
+	pool->remainingTasks = pool->totalTasks;
+
+	MemoryContextSwitchTo(oldContext);
+}
+
+
+/*
+ * MetadataSyncPoolApplyEdges layers the dependency edges onto the registered tasks:
+ * for every prereq -> dependent edge it appends the dependent to the prerequisite's
+ * successor list and increments the dependent's in-degree, but only after resolving
+ * BOTH endpoints to the task that actually creates them.
+ *
+ * An address that is itself a task resolves to that task. An address that is not a
+ * task but is owned by an extension resolves to the OWNING EXTENSION's task, because
+ * extension-owned objects are created as a side effect of CREATE EXTENSION rather than
+ * as their own pool task -- so the real creation-order constraint runs through the
+ * extension. Resolving both endpoints matters in two ways:
+ *
+ *   - a prerequisite reached only THROUGH an extension-owned intermediary (a
+ *     distributed function whose signature uses an extension-owned type) collapses the
+ *     edge onto that extension, so the dependent waits for CREATE EXTENSION; and
+ *   - an edge whose DEPENDENT is extension-owned (an object the extension itself
+ *     creates that depends on another scheduled object) collapses onto the extension,
+ *     so CREATE EXTENSION still runs after that prerequisite.
+ *
+ * An endpoint that resolves to neither a task nor an extension task is created out of
+ * band before this phase and its edge is dropped, exactly as the serial path assumes.
+ * Self-edges, including ones that become self-edges after the extension collapse, are
+ * ignored so a task can never block on itself.
+ */
+static void
+MetadataSyncPoolApplyEdges(MetadataSyncPool *pool, List *edgeList)
+{
+	ObjectDependencyEdge *edge = NULL;
+	foreach_ptr(edge, edgeList)
+	{
+		if (memcmp(&edge->prereq, &edge->dependent, sizeof(ObjectAddress)) == 0)
+		{
+			/* self-edge, ignore */
+			continue;
+		}
+
+		/*
+		 * Resolve each endpoint to a scheduled task, following an extension-owned
+		 * object to its owning extension task (see the function comment).
+		 */
+		MetadataSyncPoolTask *endpointTask[2] = { NULL, NULL };
+		ObjectAddress *endpointAddress[2] = { &edge->prereq, &edge->dependent };
+		for (int endpoint = 0; endpoint < 2; endpoint++)
+		{
+			ObjectAddress *address = endpointAddress[endpoint];
+
+			bool found = false;
+			MetadataSyncPoolTaskEntry *entry =
+				hash_search(pool->taskByAddress, address, HASH_FIND, &found);
+			if (!found)
+			{
+				ObjectAddress extensionAddress = { 0 };
+				if (IsAnyObjectAddressOwnedByExtension(list_make1(address),
+													   &extensionAddress))
+				{
+					entry = hash_search(pool->taskByAddress, &extensionAddress,
+										HASH_FIND, &found);
+				}
+			}
+
+			endpointTask[endpoint] = found ? entry->task : NULL;
+		}
+
+		MetadataSyncPoolTask *prereqTask = endpointTask[0];
+		MetadataSyncPoolTask *dependentTask = endpointTask[1];
+
+		if (prereqTask == NULL || dependentTask == NULL)
+		{
+			/* an endpoint is created out of band; drop the edge */
+			continue;
+		}
+
+		if (prereqTask == dependentTask)
+		{
+			/* both endpoints resolve to the same task (e.g. after the extension
+			 * collapse); ignore this self-edge */
+			continue;
+		}
+
+		MemoryContext oldContext = MemoryContextSwitchTo(pool->poolContext);
+		prereqTask->successors = lappend(prereqTask->successors, dependentTask);
+		MemoryContextSwitchTo(oldContext);
+
+		dependentTask->inDegree++;
+	}
+}
+
+
+/*
+ * EdgeGatedSeed seeds the edge-gated ready queue with every in-degree-0 task, so
+ * the drain can begin dispatching them to idle connections.
+ */
+static void
+EdgeGatedSeed(MetadataSyncPool *pool)
+{
+	MemoryContext oldContext = MemoryContextSwitchTo(pool->poolContext);
+	MetadataSyncPoolTask *task = NULL;
+	foreach_ptr(task, pool->taskList)
+	{
+		if (task->inDegree == 0)
+		{
+			pool->readyQueue = lappend(pool->readyQueue, task);
+		}
+	}
+	MemoryContextSwitchTo(oldContext);
+}
+
+
+/*
+ * EdgeGatedPullReady pops the next in-degree-0 task off the edge-gated ready
+ * queue, or returns NULL if the queue is currently empty.
+ */
+static MetadataSyncPoolTask *
+EdgeGatedPullReady(MetadataSyncPool *pool)
+{
+	if (pool->readyQueue == NIL)
+	{
+		return NULL;
+	}
+
+	MetadataSyncPoolTask *task = linitial(pool->readyQueue);
+
+	MemoryContext queueContext = MemoryContextSwitchTo(pool->poolContext);
+	pool->readyQueue = list_delete_first(pool->readyQueue);
+	MemoryContextSwitchTo(queueContext);
+
+	return task;
+}
+
+
+/*
+ * EdgeGatedDeparse deparses an edge-gated task's create commands from the
+ * dependency machinery.
+ */
+static List *
+EdgeGatedDeparse(MetadataSyncPool *pool, MetadataSyncPoolTask *task)
+{
+	return GetAllDependencyCreateDDLCommands(list_make1(&task->objectAddress));
+}
+
+
+/*
+ * EdgeGatedOnComplete records an edge-gated task as done, advances the progress
+ * and cache-flush bookkeeping, and decrements each successor's in-degree,
+ * enqueuing any successor that becomes ready (in-degree 0). Used both when a
+ * task's DDL was executed on a connection and when an object with no commands is
+ * completed inline.
+ */
+static void
+EdgeGatedOnComplete(MetadataSyncPool *pool, MetadataSyncPoolTask *task)
+{
+	task->done = true;
+	pool->remainingTasks--;
+	pool->completedTasks++;
+
+	FlushMetadataSyncCachesIfNeeded(pool->context, pool->completedTasks);
+	LogMetadataSyncProgress(pool->objectLabel, pool->completedTasks - 1,
+							pool->completedTasks, pool->totalTasks);
+
+	MetadataSyncPoolTask *successor = NULL;
+	foreach_ptr(successor, task->successors)
+	{
+		successor->inDegree--;
+
+		if (successor->inDegree == 0 && !successor->dispatched && !successor->done)
+		{
+			MemoryContext oldContext = MemoryContextSwitchTo(pool->poolContext);
+			pool->readyQueue = lappend(pool->readyQueue, successor);
+			MemoryContextSwitchTo(oldContext);
+		}
+	}
+}
+
+
+/*
+ * EdgeGatedOnDrained is called when the edge-gated pool goes idle with nothing in
+ * flight. Unreaped tasks with an empty ready queue mean a dependency cycle, so it
+ * raises rather than letting the drain end silently.
+ */
+static void
+EdgeGatedOnDrained(MetadataSyncPool *pool)
+{
+	if (pool->remainingTasks > 0)
+	{
+		ereport(ERROR, (errmsg("metadata sync pool stalled with "
+							   "%ld object(s) remaining", pool->remainingTasks),
+						errdetail("This indicates a dependency cycle among the "
+								  "objects being synced.")));
+	}
+}
+
+
+/*
+ * StreamingLeafPullReady advances the pool's catalog scan cursor to the next
+ * object it should create, allocating a fresh in-degree-0 task in the pool
+ * context, or returns NULL once the scan is exhausted. Tuples whose extractOid
+ * yields InvalidOid (rows that do not correspond to an object this pool creates,
+ * e.g. non-sequence pg_dist_object rows) are skipped.
+ *
+ * systable_getnext runs in the parent transaction's resource owner here (no
+ * per-object subtransaction is active at pull time), so the scan's buffer pins
+ * survive the per-object deparse subtransaction that StreamingLeafDeparse rolls
+ * back -- the same interleaving SendInterTableRelationshipCommands relies on.
+ */
+static MetadataSyncPoolTask *
+StreamingLeafPullReady(MetadataSyncPool *pool)
+{
+	while (!pool->streamDone)
+	{
+		HeapTuple tuple = systable_getnext(pool->streamScan);
+		if (!HeapTupleIsValid(tuple))
+		{
+			pool->streamDone = true;
+			return NULL;
+		}
+
+		Oid objectId = pool->streamExtractOid(tuple, pool->streamTupleDesc);
+		if (!OidIsValid(objectId))
+		{
+			/* not an object this pool creates; skip it */
+			continue;
+		}
+
+		MemoryContext oldContext = MemoryContextSwitchTo(pool->poolContext);
+		MetadataSyncPoolTask *task = palloc0(sizeof(MetadataSyncPoolTask));
+		ObjectAddressSet(task->objectAddress, RelationRelationId, objectId);
+		task->inDegree = 0;
+		task->successors = NIL;
+		task->dispatched = false;
+		task->done = false;
+		MemoryContextSwitchTo(oldContext);
+
+		return task;
+	}
+
+	return NULL;
+}
+
+
+/*
+ * StreamingLeafDeparse builds a streaming-leaf task's DDL command list through
+ * BuildRelationCommandsWithOptionalLockRelease (which wraps the build in a
+ * per-object subtransaction so deparse-time relation locks are released
+ * immediately).
+ */
+static List *
+StreamingLeafDeparse(MetadataSyncPool *pool, MetadataSyncPoolTask *task)
+{
+	return BuildRelationCommandsWithOptionalLockRelease(
+		task->objectAddress.objectId, pool->streamBuilder);
+}
+
+
+/*
+ * StreamingLeafOnComplete records a streaming-leaf task as done. The task has no
+ * successors, so it just counts it, fires the periodic cache flush, logs
+ * progress, and frees the task (bounding the number of live streaming-task
+ * allocations to at most one per connection).
+ */
+static void
+StreamingLeafOnComplete(MetadataSyncPool *pool, MetadataSyncPoolTask *task)
+{
+	task->done = true;
+	pool->completedTasks++;
+
+	FlushMetadataSyncCachesIfNeeded(pool->context, pool->completedTasks);
+	LogMetadataSyncProgress(pool->objectLabel, pool->completedTasks - 1,
+							pool->completedTasks, 0);
+
+	pfree(task);
+}
+
+
+/*
+ * StreamingLeafClose ends the pool's catalog scan and releases the scanned
+ * relation before the pool's connections are closed.
+ */
+static void
+StreamingLeafClose(MetadataSyncPool *pool)
+{
+	if (pool->streamScan != NULL)
+	{
+		systable_endscan(pool->streamScan);
+		table_close(pool->streamRelation, AccessShareLock);
+		pool->streamScan = NULL;
+		pool->streamRelation = NULL;
+	}
+}
+
+
+/*
+ * NodeTargetedPoolDeparseFn builds, for a single catalog tuple encountered during
+ * a pool phase scan, the list of command strings that (re)create the corresponding
+ * object on the activated node -- or returns NIL to skip this tuple. It runs in a
+ * per-object memory context that the driver resets after each tuple, so callbacks
+ * may allocate freely. tupleDesc describes the scanned relation's tuples.
+ */
+typedef List *(*NodeTargetedPoolDeparseFn)(HeapTuple tuple, TupleDesc tupleDesc,
+										   MetadataSyncContext *context);
+
+
+/*
+ * RunNodeTargetedPoolPhase drives one parallel metadata-sync phase over a pool of
+ * connections to a single activated node, using the adaptive executor.
+ *
+ * It scans scanRelationId (pg_dist_partition or pg_dist_object) streaming-style
+ * and, for every tuple, calls deparseFn to obtain that object's (re)creation
+ * command list (or NIL to skip). The commands are chunked into waves to bound
+ * memory: batch_size objects' commands are bundled into one executor task,
+ * pool_size tasks are gathered into one wave, the wave is executed (blocking)
+ * over pool_size parallel connections, and its memory is reset before the next
+ * wave. Peak coordinator memory is therefore ~one wave, never the whole cluster,
+ * and the phase never materializes a dependency-ordered list of all objects --
+ * every class driven this way is a leaf class with no intra-class edges.
+ *
+ * This is the shared engine behind all metadata-sync pool phases (shell tables,
+ * sequences, per-table shard/partition metadata, pg_dist_object marks); each
+ * phase differs only in which relation it scans and in its deparseFn.
+ *
+ * When wrapObjectInTransaction is true, each object's command bundle is framed
+ * with an explicit remote BEGIN/COMMIT so that the whole bundle commits (or rolls
+ * back) atomically on the worker. This is required for the shell-table phase,
+ * where the CREATE and the pg_dist_partition insert must be one unit: the
+ * adaptive executor sends the task's commands as separate autocommitting simple
+ * queries in nontransactional mode, so without the wrap an interrupted sync could
+ * leave a shell table with no pg_dist_partition row (or vice versa), the exact
+ * partial-state drift the bundling is meant to prevent. Phases whose per-object
+ * command is a single idempotent statement (sequences, the metadata pool
+ * variants) pass false and keep plain per-statement autocommit.
+ */
+static void
+RunNodeTargetedPoolPhase(MetadataSyncContext *context, WorkerNode *workerNode,
+						 Oid scanRelationId, NodeTargetedPoolDeparseFn deparseFn,
+						 const char *objectLabel, bool wrapObjectInTransaction)
+{
+	int poolSize = MaxAdaptiveExecutorPoolSize;
+	if (poolSize < 1)
+	{
+		poolSize = 1;
+	}
+
+	/* number of objects whose commands are bundled into one executor task */
+	int objectsPerTask = MetadataSyncPoolTaskSize;
+
+	/* number of tasks dispatched together in one blocking executor call (a wave) */
+	int tasksPerWave = poolSize;
+
+	Relation relation = table_open(scanRelationId, AccessShareLock);
+	TupleDesc tupleDesc = RelationGetDescr(relation);
+	SysScanDesc scanDesc = systable_beginscan(relation, InvalidOid, false, NULL, 0, NULL);
+
+	MemoryContext oldContext = CurrentMemoryContext;
+
+	/*
+	 * perObjectContext holds the transient deparse/catalog scratch for a single
+	 * object's command bundle; it is reset after each object. waveContext holds
+	 * the current wave's task query strings and Task structs; it is reset after
+	 * the wave executes. Peak memory is bounded to one wave.
+	 */
+	MemoryContext perObjectContext =
+		AllocSetContextCreate(oldContext, "node targeted pool per object context",
+							  ALLOCSET_DEFAULT_SIZES);
+	MemoryContext waveContext =
+		AllocSetContextCreate(oldContext, "node targeted pool wave context",
+							  ALLOCSET_DEFAULT_SIZES);
+
+	/*
+	 * Track the coordinator-side deparse cost (building each wave's command
+	 * strings, single-threaded) separately from the worker-side execution cost
+	 * (running the wave over the connection pool), and report both in the
+	 * completion LOG line below. ExecuteTaskListOutsideTransaction blocks per
+	 * wave so the two phases do not overlap; surfacing the split makes it
+	 * observable whether a given pool phase is worker-bound (parallelism helps)
+	 * or coordinator-deparse-bound (parallelism is capped).
+	 */
+	instr_time deparseTime;
+	instr_time executeTime;
+	INSTR_TIME_SET_ZERO(deparseTime);
+	INSTR_TIME_SET_ZERO(executeTime);
+
+	int64 objectCount = 0;
+	int64 waveCount = 0;
+	int64 processedCount = 0;
+
+	/* list of per-task command lists making up the current wave, in waveContext */
+	List *waveTaskCommandLists = NIL;
+
+	/* current task's command list (individual statements), in waveContext */
+	List *taskCommandList = NIL;
+	int objectsInTask = 0;
+
+	instr_time deparseStart;
+	INSTR_TIME_SET_CURRENT(deparseStart);
+
+	while (true)
+	{
+		HeapTuple heapTuple = systable_getnext(scanDesc);
+		bool scanDone = !HeapTupleIsValid(heapTuple);
+
+		if (!scanDone)
+		{
+			bool appended = false;
+
+			if (MetadataSyncReleaseDeparseLocks)
+			{
+				/*
+				 * Deparse the object inside an internal subtransaction and roll
+				 * it back once the command strings have been copied into the
+				 * (parent-owned) waveContext. The deparse helpers open catalog
+				 * and user relations with AccessShareLock and close them with
+				 * NoLock, so those locks and relcache pins would otherwise be
+				 * held until the enclosing ActivateNodeList transaction commits,
+				 * growing the coordinator lock table and backend memory linearly
+				 * with the number of distributed objects (the "lock wall" that
+				 * caps sync of clusters with millions of tables). Rolling the
+				 * subtransaction back releases them per object, bounding peak
+				 * locks/memory to a single object.
+				 *
+				 * systable_getnext() is intentionally called in the parent
+				 * transaction (above), never inside this subtransaction: the
+				 * open catalog scan's lock, buffer pin and snapshot are owned by
+				 * the parent resource owner and must survive the rollback. Only
+				 * the deparse (which reads the already-fetched heapTuple and
+				 * opens other relations) runs in the subtransaction.
+				 */
+				MemoryContext savedContext = CurrentMemoryContext;
+				ResourceOwner savedOwner = CurrentResourceOwner;
+
+				BeginInternalSubTransaction(NULL);
+				MemoryContextSwitchTo(savedContext);
+
+				PG_TRY();
+				{
+					taskCommandList =
+						DeparseObjectIntoTaskCommandList(heapTuple, tupleDesc,
+														 context, deparseFn,
+														 perObjectContext,
+														 waveContext,
+														 taskCommandList,
+														 wrapObjectInTransaction,
+														 &appended);
+
+					RollbackAndReleaseCurrentSubTransaction();
+					MemoryContextSwitchTo(savedContext);
+					CurrentResourceOwner = savedOwner;
+				}
+				PG_CATCH();
+				{
+					MemoryContextSwitchTo(savedContext);
+					RollbackAndReleaseCurrentSubTransaction();
+					MemoryContextSwitchTo(savedContext);
+					CurrentResourceOwner = savedOwner;
+					PG_RE_THROW();
+				}
+				PG_END_TRY();
+			}
+			else
+			{
+				taskCommandList =
+					DeparseObjectIntoTaskCommandList(heapTuple, tupleDesc,
+													 context, deparseFn,
+													 perObjectContext,
+													 waveContext,
+													 taskCommandList,
+													 wrapObjectInTransaction,
+													 &appended);
+			}
+
+			if (appended)
+			{
+				objectsInTask++;
+				objectCount++;
+			}
+
+			MemoryContextSwitchTo(waveContext);
+			MemoryContextReset(perObjectContext);
+
+			/*
+			 * The deparseFn opened catalog entries to reach its decision, so
+			 * advance the cache-flush counter like the other per-object scan
+			 * loops do (bounds coordinator relcache growth on clusters with
+			 * millions of objects).
+			 */
+			FlushMetadataSyncCachesIfNeeded(context, ++processedCount);
+
+			/*
+			 * Emit a periodic progress line for this node's phase. objectCount
+			 * advances by exactly one per appended object, so the modulo fires
+			 * once every METADATA_SYNC_PROGRESS_LOG_INTERVAL objects. The total
+			 * is not known up front (the scan is streaming, by design), so only
+			 * the running count and wave count are reported here; the completion
+			 * LOG below prints the final totals.
+			 */
+			if (appended &&
+				objectCount % METADATA_SYNC_PROGRESS_LOG_INTERVAL == 0)
+			{
+				ereport(DEBUG2, (errmsg("metadata sync: %s on node %s:%d in "
+									 "progress: %ld objects, %ld waves",
+									 objectLabel, workerNode->workerName,
+									 workerNode->workerPort,
+									 (long) objectCount, (long) waveCount)));
+			}
+		}
+
+		MemoryContextSwitchTo(waveContext);
+
+		/* close off the current task when it is full or the scan is done */
+		bool taskFull = (objectsInTask >= objectsPerTask);
+		if (taskCommandList != NIL && (taskFull || scanDone))
+		{
+			waveTaskCommandLists = lappend(waveTaskCommandLists, taskCommandList);
+			taskCommandList = NIL;
+			objectsInTask = 0;
+		}
+
+		/* dispatch the wave when it is full or the scan is done */
+		bool waveFull = (list_length(waveTaskCommandLists) >= tasksPerWave);
+		if (waveTaskCommandLists != NIL && (waveFull || scanDone))
+		{
+			List *taskList = CreateNodeTargetedPoolTaskList(waveTaskCommandLists,
+															workerNode);
+
+			instr_time deparseEnd;
+			INSTR_TIME_SET_CURRENT(deparseEnd);
+			INSTR_TIME_ACCUM_DIFF(deparseTime, deparseEnd, deparseStart);
+
+			instr_time executeStart;
+			INSTR_TIME_SET_CURRENT(executeStart);
+			if (!MetadataSyncPoolSkipExecute)
+			{
+				ExecuteTaskListOutsideTransaction(ROW_MODIFY_NONE, taskList,
+												  poolSize, NIL);
+			}
+			instr_time executeEnd;
+			INSTR_TIME_SET_CURRENT(executeEnd);
+			INSTR_TIME_ACCUM_DIFF(executeTime, executeEnd, executeStart);
+
+			waveCount++;
+
+			/* free the wave's task strings and Task structs before the next wave */
+			MemoryContextReset(waveContext);
+			waveTaskCommandLists = NIL;
+			taskCommandList = NIL;
+			objectsInTask = 0;
+
+			/* resume the deparse timer for the next wave */
+			INSTR_TIME_SET_CURRENT(deparseStart);
+		}
+
+		if (scanDone)
+		{
+			break;
+		}
+	}
+
+	MemoryContextSwitchTo(oldContext);
+
+	systable_endscan(scanDesc);
+	table_close(relation, AccessShareLock);
+
+	MemoryContextDelete(perObjectContext);
+	MemoryContextDelete(waveContext);
+
+	ereport(DEBUG1, (errmsg("parallel %s on node %s:%d completed: "
+						 "%ld objects in %ld waves (pool size %d, batch size %d); "
+						 "coordinator deparse %.0f ms, worker execute %.0f ms",
+						 objectLabel,
+						 workerNode->workerName, workerNode->workerPort,
+						 (long) objectCount, (long) waveCount, poolSize,
+						 objectsPerTask,
+						 INSTR_TIME_GET_MILLISEC(deparseTime),
+						 INSTR_TIME_GET_MILLISEC(executeTime))));
+}
+
+
+/*
+ * DeparseObjectIntoTaskCommandList deparses a single catalog tuple via deparseFn
+ * (in perObjectContext) and, if it produced any commands, copies them as
+ * pstrdup'd strings into the caller's taskCommandList (in waveContext), prefixed
+ * with a DISABLE_DDL_PROPAGATION SET when the task is empty. It returns the
+ * (possibly newly allocated) taskCommandList and sets *appended to whether this
+ * object contributed any commands.
+ *
+ * The string copy is done here (not by the caller) so the whole deparse +
+ * copy-out step can run inside an internal subtransaction that the caller rolls
+ * back to release the AccessShareLocks/relcache pins taken during deparse: the
+ * strings are pstrdup'd into waveContext, which is created in the parent
+ * transaction and therefore survives the subtransaction rollback, while the
+ * transient deparse scratch left in perObjectContext is reset by the caller.
+ */
+static List *
+DeparseObjectIntoTaskCommandList(HeapTuple heapTuple, TupleDesc tupleDesc,
+								 MetadataSyncContext *context,
+								 NodeTargetedPoolDeparseFn deparseFn,
+								 MemoryContext perObjectContext,
+								 MemoryContext waveContext,
+								 List *taskCommandList,
+								 bool wrapObjectInTransaction, bool *appended)
+{
+	*appended = false;
+
+	MemoryContextSwitchTo(perObjectContext);
+
+	List *objectCommands = deparseFn(heapTuple, tupleDesc, context);
+
+	if (objectCommands != NIL)
+	{
+		MemoryContextSwitchTo(waveContext);
+
+		if (taskCommandList == NIL)
+		{
+			/*
+			 * Disable DDL propagation on the worker backend so the DDL is not
+			 * re-propagated to the other nodes. This SET is kept OUTSIDE the
+			 * per-object BEGIN/COMMIT below (it is the task's first statement
+			 * and autocommits) so it is a session GUC that persists across all
+			 * of the task's statements on that connection, even if an object's
+			 * transaction rolls back.
+			 *
+			 * The commands are attached to the task as a query string list (one
+			 * statement per element) rather than a single concatenated string:
+			 * the adaptive executor sends and accounts for results one query at
+			 * a time, so bundling several row-returning statements (e.g. the
+			 * SELECT worker_*()/citus_internal_*() calls used here) into one
+			 * string would desynchronize its per-query result bookkeeping
+			 * (task->queryCount).
+			 */
+			taskCommandList = list_make1(pstrdup(DISABLE_DDL_PROPAGATION));
+		}
+
+		/*
+		 * Frame this object's command bundle with an explicit remote
+		 * BEGIN/COMMIT when the caller requires the bundle to be atomic on the
+		 * worker (the shell-table phase, where CREATE + pg_dist_partition insert
+		 * must commit together). The executor sends each list element as a
+		 * separate simple query with no wrapping transaction in nontransactional
+		 * mode, so these plain BEGIN/COMMIT statements open and close a real
+		 * transaction block spanning the object's statements on that connection.
+		 * They return no rows, so they do not disturb the per-query result
+		 * bookkeeping.
+		 */
+		if (wrapObjectInTransaction)
+		{
+			taskCommandList = lappend(taskCommandList, pstrdup("BEGIN"));
+		}
+
+		char *command = NULL;
+		foreach_ptr(command, objectCommands)
+		{
+			taskCommandList = lappend(taskCommandList, pstrdup(command));
+		}
+
+		if (wrapObjectInTransaction)
+		{
+			taskCommandList = lappend(taskCommandList, pstrdup("COMMIT"));
+		}
+
+		*appended = true;
+	}
+
+	return taskCommandList;
+}
+
+
+/*
+ * ShellTableStreamExtractOid maps a pg_dist_partition tuple to the OID of the
+ * distributed table whose shell table should be created on the target node. It is
+ * the STREAMING_LEAF source extractor for the shell-table pool phase.
+ */
+static Oid
+ShellTableStreamExtractOid(HeapTuple tuple, TupleDesc tupleDesc)
+{
+	return FetchRelationIdFromPgPartitionHeapTuple(tuple, tupleDesc);
+}
+
+
+/*
+ * ShellTableStreamBuilder returns the shell table creation command bundle for a
+ * distributed table, or NIL for extension-owned tables (which are created with
+ * their extension, exactly as the serial dependency path skips them). It is the
+ * STREAMING_LEAF source builder for the shell-table pool phase.
+ */
+static List *
+ShellTableStreamBuilder(Oid relationId)
+{
+	ObjectAddress tableAddress = { 0 };
+	ObjectAddressSet(tableAddress, RelationRelationId, relationId);
+	if (IsAnyObjectAddressOwnedByExtension(list_make1(&tableAddress), NULL))
+	{
+		return NIL;
+	}
+
+	return ShellTableCreationCommandList(relationId);
+}
+
+
+/*
+ * SequenceStreamExtractOid maps a pg_dist_object tuple to the OID of the
+ * distributed sequence to create, or InvalidOid when the tuple is not a
+ * distributed sequence. It is the STREAMING_LEAF source extractor for the
+ * sequence pool phase.
+ *
+ * It uses the same predicate (IsPgDistObjectRowDistributedSequence) that excludes
+ * distributed sequences from the serial dependency ordering phase, keeping the
+ * "excluded there == created here" invariant in one place.
+ */
+static Oid
+SequenceStreamExtractOid(HeapTuple tuple, TupleDesc tupleDesc)
+{
+	Form_pg_dist_object distObjectForm = (Form_pg_dist_object) GETSTRUCT(tuple);
+	Oid classId = distObjectForm->classid;
+	Oid objId = distObjectForm->objid;
+
+	if (!IsPgDistObjectRowDistributedSequence(classId, objId))
+	{
+		return InvalidOid;
+	}
+
+	return objId;
+}
+
+
+/*
+ * SequenceStreamBuilder returns the CREATE bundle for a distributed sequence, or
+ * NIL when the sequence is extension-owned. It is the STREAMING_LEAF source
+ * builder for the sequence pool phase.
+ */
+static List *
+SequenceStreamBuilder(Oid sequenceId)
+{
+	ObjectAddress seqAddress = { 0 };
+	ObjectAddressSet(seqAddress, RelationRelationId, sequenceId);
+	if (IsAnyObjectAddressOwnedByExtension(list_make1(&seqAddress), NULL))
+	{
+		return NIL;
+	}
+
+	return DDLCommandsForSequence(sequenceId, TableOwner(sequenceId));
+}
+
+
+/*
+ * DistTableMetadataPoolDeparse (NodeTargetedPoolDeparseFn) returns the Citus
+ * table metadata command list (pg_dist_shard, pg_dist_shard_placement,
+ * pg_dist_partition entries) for the distributed table described by a
+ * pg_dist_partition tuple, or NIL for tables whose metadata should not be
+ * synced. It mirrors the per-tuple body of the serial
+ * SendDistTableMetadataCommands().
+ */
+static List *
+DistTableMetadataPoolDeparse(HeapTuple tuple, TupleDesc tupleDesc,
+							 MetadataSyncContext *context)
+{
+	Oid relationId = FetchRelationIdFromPgPartitionHeapTuple(tuple, tupleDesc);
+
+	if (!ShouldSyncTableMetadata(relationId))
+	{
+		return NIL;
+	}
+
+	return CitusTableMetadataCreateCommandList(relationId);
+}
+
+
+/*
+ * DistObjectMarkPoolDeparse (NodeTargetedPoolDeparseFn) returns the single
+ * command that (re)creates the pg_dist_object mark for the object described by a
+ * pg_dist_object tuple. It mirrors the per-tuple body of the serial
+ * SendDistObjectCommands(): every pg_dist_object row is marked, so it never
+ * skips.
+ */
+static List *
+DistObjectMarkPoolDeparse(HeapTuple tuple, TupleDesc tupleDesc,
+						  MetadataSyncContext *context)
+{
+	Form_pg_dist_object distObjectForm = (Form_pg_dist_object) GETSTRUCT(tuple);
+
+	ObjectAddress *address = palloc(sizeof(ObjectAddress));
+	ObjectAddressSubSet(*address, distObjectForm->classid, distObjectForm->objid,
+						distObjectForm->objsubid);
+
+	bool distributionArgumentIndexIsNull = false;
+	Datum distributionArgumentIndexDatum =
+		heap_getattr(tuple, Anum_pg_dist_object_distribution_argument_index,
+					 tupleDesc, &distributionArgumentIndexIsNull);
+	int32 distributionArgumentIndex = DatumGetInt32(distributionArgumentIndexDatum);
+
+	bool colocationIdIsNull = false;
+	Datum colocationIdDatum =
+		heap_getattr(tuple, Anum_pg_dist_object_colocationid, tupleDesc,
+					 &colocationIdIsNull);
+	int32 colocationId = DatumGetInt32(colocationIdDatum);
+
+	bool forceDelegationIsNull = false;
+	Datum forceDelegationDatum =
+		heap_getattr(tuple, Anum_pg_dist_object_force_delegation, tupleDesc,
+					 &forceDelegationIsNull);
+	bool forceDelegation = DatumGetBool(forceDelegationDatum);
+
+	if (distributionArgumentIndexIsNull)
+	{
+		distributionArgumentIndex = INVALID_DISTRIBUTION_ARGUMENT_INDEX;
+	}
+
+	if (colocationIdIsNull)
+	{
+		colocationId = INVALID_COLOCATION_ID;
+	}
+
+	if (forceDelegationIsNull)
+	{
+		forceDelegation = NO_FORCE_PUSHDOWN;
+	}
+
+	char *command =
+		MarkObjectsDistributedCreateCommand(list_make1(address),
+											list_make1_int(distributionArgumentIndex),
+											list_make1_int(colocationId),
+											list_make1_int(forceDelegation));
+
+	return list_make1(command);
+}
+
+
+/*
+ * SendShellTableCreationCommandsViaPool creates the shell tables of all Citus
+ * tables on the activated nodes using the wave-less connection pool in
+ * STREAMING_LEAF mode: it scans pg_dist_partition and deparses each shell table's
+ * creation bundle on dispatch, so it never materializes a list of the (up to
+ * ~10M) tables or their command strings -- only one task per connection is live.
+ *
+ * This is the parallel counterpart of the shell table creation that
+ * SendDependencyCreationCommands() performs serially over the single metadata
+ * connection. It is only reached in nontransactional mode with
+ * citus.metadata_sync_use_pool on (see MetadataSyncShellTablePoolEnabled()).
+ * The prerequisite objects the shell tables depend on (roles, schemas, types,
+ * functions, sequences, ...) were already created before this runs, so the
+ * barrier ordering is preserved.
+ */
+void
+SendShellTableCreationCommandsViaPool(MetadataSyncContext *context)
+{
+	int connectionCount = MaxAdaptiveExecutorPoolSize;
+	if (connectionCount < 1)
+	{
+		connectionCount = 1;
+	}
+
+	WorkerNode *workerNode = NULL;
+	foreach_ptr(workerNode, context->activatedWorkerNodeList)
+	{
+		MetadataSyncPool *pool =
+			OpenMetadataSyncPool(context, workerNode, connectionCount,
+								 &StreamingLeafSourceOps, "shell table creation");
+
+		OpenStreamingLeafSource(pool, DistPartitionRelationId(),
+								ShellTableStreamExtractOid, ShellTableStreamBuilder);
+
+		RunMetadataSyncPool(pool);
+
+		CloseMetadataSyncPool(pool);
+	}
+}
+
+
+/*
+ * SendSequenceCreationCommandsViaPool creates the distributed sequences on all
+ * activated nodes using the wave-less connection pool in STREAMING_LEAF mode: it
+ * scans pg_dist_object and deparses each distributed sequence's CREATE bundle on
+ * dispatch.
+ *
+ * It runs AFTER SendDependencyCreationCommands() (so the roles/schemas the
+ * sequences depend on already exist) and BEFORE
+ * SendShellTableCreationCommandsViaPool() (so each shell table can re-associate
+ * its column defaults with the already-created sequences). Distributed sequences
+ * form an embarrassingly parallel leaf class -- no intra-class edges, only upward
+ * dependencies on the small prerequisite set -- so, like shell tables, they are
+ * excluded from the serial dependency ordering phase and (re)created here in
+ * parallel instead.
+ */
+void
+SendSequenceCreationCommandsViaPool(MetadataSyncContext *context)
+{
+	int connectionCount = MaxAdaptiveExecutorPoolSize;
+	if (connectionCount < 1)
+	{
+		connectionCount = 1;
+	}
+
+	WorkerNode *workerNode = NULL;
+	foreach_ptr(workerNode, context->activatedWorkerNodeList)
+	{
+		MetadataSyncPool *pool =
+			OpenMetadataSyncPool(context, workerNode, connectionCount,
+								 &StreamingLeafSourceOps, "sequence creation");
+
+		OpenStreamingLeafSource(pool, DistObjectRelationId(),
+								SequenceStreamExtractOid, SequenceStreamBuilder);
+
+		RunMetadataSyncPool(pool);
+
+		CloseMetadataSyncPool(pool);
+	}
+}
+
+
+/*
+ * SendDistTableMetadataCommandsViaPool creates the Citus table metadata entries
+ * (pg_dist_shard, pg_dist_shard_placement, pg_dist_partition) for all distributed
+ * tables on the activated nodes using a pool of parallel connections.
+ *
+ * This is the parallel counterpart of SendDistTableMetadataCommands(). The rows
+ * for different tables are mutually independent (each references only its own
+ * table plus already-synced pg_dist_colocation entries), so the phase is
+ * embarrassingly parallel. It runs after the shell tables exist, exactly like
+ * the serial per-table metadata loop it replaces.
+ */
+void
+SendDistTableMetadataCommandsViaPool(MetadataSyncContext *context)
+{
+	WorkerNode *workerNode = NULL;
+	foreach_ptr(workerNode, context->activatedWorkerNodeList)
+	{
+		RunNodeTargetedPoolPhase(context, workerNode, DistPartitionRelationId(),
+								 DistTableMetadataPoolDeparse,
+								 "dist table metadata creation", false);
+	}
+}
+
+
+/*
+ * SendDistObjectCommandsViaPool creates the pg_dist_object marks for all
+ * distributed objects on the activated nodes using a pool of parallel
+ * connections.
+ *
+ * This is the parallel counterpart of SendDistObjectCommands(). Each mark is a
+ * self-contained metadata insert for one already-existing object, independent of
+ * every other mark, so the phase is embarrassingly parallel. It runs after all
+ * the objects it marks (prerequisites, sequences, shell tables) exist on the
+ * worker, exactly like the serial loop it replaces.
+ */
+void
+SendDistObjectCommandsViaPool(MetadataSyncContext *context)
+{
+	WorkerNode *workerNode = NULL;
+	foreach_ptr(workerNode, context->activatedWorkerNodeList)
+	{
+		RunNodeTargetedPoolPhase(context, workerNode, DistObjectRelationId(),
+								 DistObjectMarkPoolDeparse,
+								 "dist object metadata creation", false);
+	}
+}
+
+
+/*
+ * CreateNodeTargetedPoolTaskList builds one DDL_TASK per per-task command list
+ * in commandListPerTask, each targeting the single (shardless) placement on
+ * workerNode. This mirrors ConvertNonExistingPlacementDDLCommandsToTasks() but
+ * takes the WorkerNode directly, since the caller already has it, and attaches
+ * the commands as a query string list so the adaptive executor runs (and
+ * accounts for) them one statement at a time.
+ *
+ * It is shared by the metadata sync pool phases (shell tables and sequences):
+ * both dispatch batches of independent, node-targeted DDL over the connection
+ * pool in exactly this shape.
+ */
+static List *
+CreateNodeTargetedPoolTaskList(List *commandListPerTask, WorkerNode *workerNode)
+{
+	List *taskList = NIL;
+	int taskId = 1;
+	List *taskCommandList = NIL;
+	foreach_ptr(taskCommandList, commandListPerTask)
+	{
+		Task *task = CreateBasicTask(INVALID_JOB_ID, taskId, DDL_TASK, NULL);
+		SetTaskQueryStringList(task, taskCommandList);
+
+		/* node-targeted task with a synthetic placement and no real shard */
+		ShardPlacement *taskPlacement = CitusMakeNode(ShardPlacement);
+		SetPlacementNodeMetadata(taskPlacement, workerNode);
+		task->taskPlacementList = list_make1(taskPlacement);
+
+		taskList = lappend(taskList, task);
+		taskId++;
+	}
+
+	return taskList;
+}
+
+
+/*
+ * MetadataSyncShellTablePoolEnabled returns whether the shell table creation
+ * step should use the parallel connection pool path instead of the serial
+ * single-connection path.
+ *
+ * The pool path requires:
+ *   - citus.metadata_sync_use_pool is on;
+ *   - nontransactional mode, because the parallel connections each auto-commit
+ *     their own work and so cannot participate in the single distributed
+ *     transaction used by transactional mode;
+ *   - that we are actually sending commands, not collecting them (the command
+ *     collection path has no target connections to execute over).
+ */
+static bool
+MetadataSyncShellTablePoolEnabled(MetadataSyncContext *context)
+{
+	return MetadataSyncUsePool &&
+		   context->transactionMode == METADATA_SYNC_NON_TRANSACTIONAL &&
+		   !MetadataSyncCollectsCommands(context);
+}
+
+
+/*
+ * IsCitusShellTableDependency returns true if the given distributed object is a
+ * Citus table relation whose shell table is (re)created during metadata sync.
+ * This matches exactly the branch in GetDependencyCreateDDLCommands() that emits
+ * the shell table bundle (see ShellTableCreationCommandList()).
+ */
+static bool
+IsCitusShellTableDependency(const ObjectAddress *dependency)
+{
+	if (getObjectClass(dependency) != OCLASS_CLASS)
+	{
+		return false;
+	}
+
+	char relKind = get_rel_relkind(dependency->objectId);
+	if (relKind != RELKIND_RELATION && relKind != RELKIND_PARTITIONED_TABLE &&
+		relKind != RELKIND_FOREIGN_TABLE)
+	{
+		return false;
+	}
+
+	return IsCitusTable(dependency->objectId);
+}
+
+
+/*
+ * IsDependentOnShellTableObject returns true if the given distributed object's
+ * creation DDL references a Citus shell table, and therefore must be created
+ * AFTER the shell table phase when the shell table pool path is enabled.
+ *
+ * These are:
+ *  - views and materialized views (their definition selects from the table), and
+ *  - publications (CREATE PUBLICATION ... FOR TABLE names the specific table).
+ *
+ * In the normal (serial) path these are emitted in dependency order after their
+ * target tables, so no special handling is needed. In the pool path the shell
+ * tables are deferred out of the dependency order, so these objects would be
+ * emitted before their target tables exist; SendDependencyCreationCommands()
+ * stashes them and SendDeferredDependentCreationCommands() (re)creates them once
+ * the shell tables exist.
+ */
+static bool
+IsDependentOnShellTableObject(const ObjectAddress *dependency)
+{
+	if (dependency->classId == PublicationRelationId)
+	{
+		return true;
+	}
+
+	if (getObjectClass(dependency) == OCLASS_CLASS)
+	{
+		char relKind = get_rel_relkind(dependency->objectId);
+		if (relKind == RELKIND_VIEW || relKind == RELKIND_MATVIEW)
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+
+/*
+ * SendDeferredDependentCreationCommands (re)creates the objects that depend on
+ * Citus shell tables (views, materialized views, publications) which
+ * SendDependencyCreationCommands() deferred because their target shell tables
+ * were created later in the parallel pool phase.
+ *
+ * It must be called AFTER SendShellTableCreationCommandsViaPool() so the shell
+ * tables the deferred objects reference already exist, and BEFORE the per-table
+ * metadata commands, matching the position these objects would have in the
+ * stock dependency order. The deferred addresses were collected in dependency
+ * order, so recreating them in list order preserves any relative ordering among
+ * them (e.g. a view built on another view).
+ *
+ * In the serial path the deferred list is empty (nothing was stashed), so this
+ * is a no-op and safe to call unconditionally.
+ */
+static void
+SendDeferredDependentCreationCommands(MetadataSyncContext *context)
+{
+	List *deferredObjectAddresses = context->deferredDependentObjectAddresses;
+	if (deferredObjectAddresses == NIL)
+	{
+		return;
+	}
+
+	/* disable ddl propagation */
+	SendOrCollectCommandListToActivatedNodes(context,
+											 list_make1(DISABLE_DDL_PROPAGATION));
+
+	MemoryContext oldContext = MemoryContextSwitchTo(context->context);
+
+	/*
+	 * perObjectContext holds each object's deparse scratch and is reset every
+	 * iteration so it does not accumulate.
+	 */
+	MemoryContext perObjectContext = AllocSetContextCreate(oldContext,
+														   "deferred dependent per object context",
+														   ALLOCSET_DEFAULT_SIZES);
+
+	ObjectAddress *dependency = NULL;
+	foreach_ptr(dependency, deferredObjectAddresses)
+	{
+		MemoryContextReset(perObjectContext);
+		MemoryContextSwitchTo(perObjectContext);
+
+		/*
+		 * We expect extension-owned objects to be created as a result
+		 * of the extension being created.
+		 */
+		if (!IsAnyObjectAddressOwnedByExtension(list_make1(dependency), NULL))
+		{
+			List *ddlCommands = GetAllDependencyCreateDDLCommands(list_make1(dependency));
+			SendOrCollectCommandListToActivatedNodes(context, ddlCommands);
+		}
+	}
+
+	MemoryContextSwitchTo(oldContext);
+
+	MemoryContextDelete(perObjectContext);
+
+	ResetMetadataSyncMemoryContext(context);
+
+	/*
+	 * The deferred addresses live in TopTransactionContext; drop our reference
+	 * so a subsequent activation in the same transaction starts clean. The
+	 * memory itself is reclaimed when the local sync transaction ends.
+	 */
+	context->deferredDependentObjectAddresses = NIL;
 
 	/* enable ddl propagation */
 	SendOrCollectCommandListToActivatedNodes(context, list_make1(ENABLE_DDL_PROPAGATION));
@@ -5482,9 +7232,10 @@ SendDistTableMetadataCommands(MetadataSyncContext *context)
 
 	/*
 	 * Accumulate up to metadata_sync_set_batch_size relations and emit their
-	 * pg_dist_shard / pg_dist_placement entries as a couple of set-based statements
-	 * (one citus_internal_add_shard_metadata, one citus_internal_add_placement_metadata
-	 * over the whole batch), instead of two statements and two remote commits
+	 * pg_dist_partition / pg_dist_shard / pg_dist_placement entries as a few
+	 * set-based statements (one citus_internal_add_partition_metadata, one
+	 * citus_internal_add_shard_metadata, one citus_internal_add_placement_metadata
+	 * over the whole batch), instead of three statements and three remote commits
 	 * per relation. On a cluster with millions of distributed tables the per-relation
 	 * form emits millions of tiny statements; set-batching collapses that to a few
 	 * statements per batch.
@@ -5495,17 +7246,19 @@ SendDistTableMetadataCommands(MetadataSyncContext *context)
 	 * AppendRelationMetadataBatchRowsWithOptionalLockRelease), so we never hold more
 	 * than one relation lock and the accumulated rows live in a batch context that is
 	 * reset after every flush, bounding peak coordinator memory by the batch size.
-	 * shard rows are emitted before placement rows because the placement metadata UDF
-	 * requires the shard's pg_dist_shard entry to already exist.
+	 * partition rows are emitted before shard rows before placement rows because the
+	 * shard/placement metadata UDFs require the relation's pg_dist_partition entry and
+	 * the shard's pg_dist_shard entry to already exist.
 	 */
 	bool collecting = MetadataSyncCollectsCommands(context);
-	int batchSize = Max(MetadataSyncSetBatchSize, 1);
+	int batchSize = collecting ? 1 : Max(MetadataSyncSetBatchSize, 1);
 	MemoryContext batchContext = AllocSetContextCreate(oldContext,
 													   "dist table metadata batch context",
 													   ALLOCSET_DEFAULT_SIZES);
 
 	MemoryContextSwitchTo(batchContext);
 
+	StringInfo partitionValues = makeStringInfo();
 	StringInfo shardValues = makeStringInfo();
 	StringInfo placementValues = makeStringInfo();
 	int batchCount = 0;
@@ -5522,6 +7275,7 @@ SendDistTableMetadataCommands(MetadataSyncContext *context)
 
 		Oid relationId = FetchRelationIdFromPgPartitionHeapTuple(nextTuple, tupleDesc);
 		AppendRelationMetadataBatchRowsWithOptionalLockRelease(relationId,
+															   partitionValues,
 															   shardValues,
 															   placementValues);
 		batchCount++;
@@ -5532,12 +7286,15 @@ SendDistTableMetadataCommands(MetadataSyncContext *context)
 		 * the metadata cache.
 		 */
 		FlushMetadataSyncCachesIfNeeded(context, ++processedCount);
+		LogMetadataSyncProgress("distributed tables (shard/placement metadata)",
+								processedCount - 1, processedCount, -1);
 
 		if (batchCount >= batchSize)
 		{
 			MemoryContext buildContext = collecting ? context->context : batchContext;
 			MemoryContext prev = MemoryContextSwitchTo(buildContext);
-			List *commandList = DistTableMetadataBatchCommandList(shardValues,
+			List *commandList = DistTableMetadataBatchCommandList(partitionValues,
+																  shardValues,
 																  placementValues);
 			MemoryContextSwitchTo(prev);
 
@@ -5547,6 +7304,7 @@ SendDistTableMetadataCommands(MetadataSyncContext *context)
 			}
 
 			MemoryContextReset(batchContext);
+			partitionValues = makeStringInfo();
 			shardValues = makeStringInfo();
 			placementValues = makeStringInfo();
 			batchCount = 0;
@@ -5558,7 +7316,8 @@ SendDistTableMetadataCommands(MetadataSyncContext *context)
 	{
 		MemoryContext buildContext = collecting ? context->context : batchContext;
 		MemoryContext prev = MemoryContextSwitchTo(buildContext);
-		List *commandList = DistTableMetadataBatchCommandList(shardValues,
+		List *commandList = DistTableMetadataBatchCommandList(partitionValues,
+															  shardValues,
 															  placementValues);
 		MemoryContextSwitchTo(prev);
 
@@ -5579,7 +7338,7 @@ SendDistTableMetadataCommands(MetadataSyncContext *context)
 
 /*
  * AppendRelationMetadataBatchRowsWithOptionalLockRelease renders relationId's
- * pg_dist_shard / pg_dist_placement VALUES rows into the batch
+ * pg_dist_partition / pg_dist_shard / pg_dist_placement VALUES rows into the batch
  * StringInfos, releasing the AccessShareLock taken while reading the relation's
  * metadata cache as soon as the rows are rendered.
  *
@@ -5593,12 +7352,13 @@ SendDistTableMetadataCommands(MetadataSyncContext *context)
  */
 static void
 AppendRelationMetadataBatchRowsWithOptionalLockRelease(Oid relationId,
+													   StringInfo partitionValues,
 													   StringInfo shardValues,
 													   StringInfo placementValues)
 {
 	if (!MetadataSyncReleaseDeparseLocks)
 	{
-		AppendRelationMetadataBatchRows(relationId, shardValues,
+		AppendRelationMetadataBatchRows(relationId, partitionValues, shardValues,
 										placementValues);
 		return;
 	}
@@ -5613,7 +7373,7 @@ AppendRelationMetadataBatchRowsWithOptionalLockRelease(Oid relationId,
 
 	PG_TRY();
 	{
-		AppendRelationMetadataBatchRows(relationId, shardValues,
+		AppendRelationMetadataBatchRows(relationId, partitionValues, shardValues,
 										placementValues);
 
 		RollbackAndReleaseCurrentSubTransaction();
@@ -5633,13 +7393,13 @@ AppendRelationMetadataBatchRowsWithOptionalLockRelease(Oid relationId,
 
 
 /*
- * AppendRelationMetadataBatchRows appends relationId's pg_dist_shard and
- * pg_dist_placement VALUES rows to the batch StringInfos, or does
+ * AppendRelationMetadataBatchRows appends relationId's pg_dist_partition,
+ * pg_dist_shard and pg_dist_placement VALUES rows to the batch StringInfos, or does
  * nothing when the relation's metadata should not be synced. It must be called with
  * the relation reachable through the metadata cache (its caller holds the lock).
  */
 static void
-AppendRelationMetadataBatchRows(Oid relationId,
+AppendRelationMetadataBatchRows(Oid relationId, StringInfo partitionValues,
 								StringInfo shardValues, StringInfo placementValues)
 {
 	if (!ShouldSyncTableMetadata(relationId))
@@ -5647,8 +7407,66 @@ AppendRelationMetadataBatchRows(Oid relationId,
 		return;
 	}
 
+	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
+
+	/*
+	 * The pg_dist_partition row is bundled with the shell table CREATE for
+	 * tables that get a shell table bundle (see
+	 * ShouldBundlePartitionMetadataWithShellTable); only emit it here for the
+	 * excluded tables (e.g. extension-owned shell tables) so we neither
+	 * duplicate the row nor leave it out.
+	 */
+	if (!ShouldBundlePartitionMetadataWithShellTable(relationId))
+	{
+		AppendDistributionMetadataBatchRow(partitionValues, cacheEntry);
+	}
+
 	List *shardIntervalList = LoadShardIntervalList(relationId);
 	AppendShardMetadataBatchRows(shardValues, placementValues, shardIntervalList);
+}
+
+
+/*
+ * AppendDistributionMetadataBatchRow appends one VALUES row describing the
+ * pg_dist_partition entry of cacheEntry's relation to partitionValues. The row feeds
+ * the set-based citus_internal_add_partition_metadata statement built by
+ * DistTableMetadataBatchCommandList and mirrors DistributionCreateCommand.
+ */
+static void
+AppendDistributionMetadataBatchRow(StringInfo partitionValues,
+								   CitusTableCacheEntry *cacheEntry)
+{
+	Oid relationId = cacheEntry->relationId;
+	char distributionMethod = cacheEntry->partitionMethod;
+	char *qualifiedRelationName = generate_qualified_relation_name(relationId);
+	uint32 colocationId = cacheEntry->colocationId;
+	char replicationModel = cacheEntry->replicationModel;
+
+	StringInfo tablePartitionKeyNameString = makeStringInfo();
+	if (!HasDistributionKeyCacheEntry(cacheEntry))
+	{
+		appendStringInfoString(tablePartitionKeyNameString, "NULL");
+	}
+	else
+	{
+		char *partitionKeyColumnName =
+			ColumnToColumnName(relationId, (Node *) cacheEntry->partitionColumn);
+		appendStringInfo(tablePartitionKeyNameString, "%s",
+						 quote_literal_cstr(partitionKeyColumnName));
+	}
+
+	if (partitionValues->len > 0)
+	{
+		appendStringInfoString(partitionValues, ", ");
+	}
+
+	appendStringInfo(partitionValues,
+					 "(%s::regclass, '%c'::\"char\", %s::text, %d, '%c'::\"char\")",
+					 quote_literal_cstr(qualifiedRelationName),
+					 distributionMethod,
+					 tablePartitionKeyNameString->data,
+					 colocationId,
+					 replicationModel);
 }
 
 
@@ -5773,17 +7591,30 @@ AppendShardMetadataBatchRows(StringInfo shardValues, StringInfo placementValues,
 
 
 /*
- * DistTableMetadataBatchCommandList wraps the accumulated pg_dist_shard and
- * pg_dist_placement VALUES rows into up to two set-based statements, in the order
- * shard -> placement so the placement metadata UDF finds the pg_dist_shard entries
- * it requires. Returns NIL when the batch produced no rows (e.g. every relation was
- * skipped).
+ * DistTableMetadataBatchCommandList wraps the accumulated pg_dist_partition,
+ * pg_dist_shard and pg_dist_placement VALUES rows into up to three set-based
+ * statements, in the order partition -> shard -> placement so the shard/placement
+ * metadata UDFs find the pg_dist_partition and pg_dist_shard entries they require.
+ * Returns NIL when the batch produced no rows (e.g. every relation was skipped).
  */
 static List *
-DistTableMetadataBatchCommandList(StringInfo shardValues,
+DistTableMetadataBatchCommandList(StringInfo partitionValues, StringInfo shardValues,
 								  StringInfo placementValues)
 {
 	List *commandList = NIL;
+
+	if (partitionValues->len > 0)
+	{
+		StringInfo command = makeStringInfo();
+		appendStringInfo(command,
+						 "WITH partition_data(relationname, distributionmethod, "
+						 "distributioncolumn, colocationid, repmodel) AS (VALUES %s) "
+						 "SELECT citus_internal_add_partition_metadata(relationname, "
+						 "distributionmethod, distributioncolumn, colocationid, repmodel) "
+						 "FROM partition_data;",
+						 partitionValues->data);
+		commandList = lappend(commandList, command->data);
+	}
 
 	if (shardValues->len > 0)
 	{
@@ -5851,7 +7682,7 @@ SendDistObjectCommands(MetadataSyncContext *context)
 	 * long-lived context so it survives the batch reset.
 	 */
 	bool collecting = MetadataSyncCollectsCommands(context);
-	int batchSize = Max(MetadataSyncSetBatchSize, 1);
+	int batchSize = collecting ? 1 : Max(MetadataSyncSetBatchSize, 1);
 	MemoryContext batchContext = AllocSetContextCreate(oldContext,
 													   "dist object commands batch context",
 													   ALLOCSET_DEFAULT_SIZES);
@@ -5940,8 +7771,11 @@ SendDistObjectCommands(MetadataSyncContext *context)
 			MemoryContextSwitchTo(prev);
 
 			SendOrCollectCommandListToActivatedNodes(context, commandList);
+			int64 previousCount = processedCount;
 			processedCount += batchCount;
 			FlushMetadataSyncCachesIfNeeded(context, processedCount);
+			LogMetadataSyncProgress("dist object marks", previousCount,
+									processedCount, -1);
 
 			MemoryContextReset(batchContext);
 			addresses = NIL;
@@ -5966,8 +7800,11 @@ SendDistObjectCommands(MetadataSyncContext *context)
 		MemoryContextSwitchTo(prev);
 
 		SendOrCollectCommandListToActivatedNodes(context, commandList);
+		int64 previousCount = processedCount;
 		processedCount += batchCount;
 		FlushMetadataSyncCachesIfNeeded(context, processedCount);
+		LogMetadataSyncProgress("dist object marks", previousCount,
+								processedCount, -1);
 	}
 
 	MemoryContextSwitchTo(oldContext);
@@ -6002,11 +7839,21 @@ SendInterTableRelationshipCommands(MetadataSyncContext *context)
 											  scanKeyCount, scanKey);
 
 	MemoryContext oldContext = MemoryContextSwitchTo(context->context);
+
+	/*
+	 * Build each object's commands in a per-object context that we reset every
+	 * iteration, so the per-object deparse and catalog scratch does not pile up
+	 * in the batch context until the batch is flushed.
+	 */
+	MemoryContext perObjectContext = AllocSetContextCreate(oldContext,
+														   "inter-table commands per object context",
+														   ALLOCSET_DEFAULT_SIZES);
 	HeapTuple nextTuple = NULL;
 	int64 processedCount = 0;
 	while (true)
 	{
-		ResetMetadataSyncMemoryContext(context);
+		MemoryContextReset(perObjectContext);
+		MemoryContextSwitchTo(perObjectContext);
 
 		nextTuple = systable_getnext(scanDesc);
 		if (!HeapTupleIsValid(nextTuple))
@@ -6017,11 +7864,18 @@ SendInterTableRelationshipCommands(MetadataSyncContext *context)
 		/*
 		 * Skip foreign key and partition creation when the Citus table is
 		 * owned by an extension or when the table doesn't need to be synced.
+		 *
+		 * Like SendDistTableMetadataCommands, the builder opens the relation
+		 * through the Citus metadata cache; build inside a rolled-back
+		 * subtransaction so the AccessShareLock is released per object instead of
+		 * piling up until the sync transaction ends.
 		 */
 		Oid relationId = FetchRelationIdFromPgPartitionHeapTuple(nextTuple, tupleDesc);
-		if (ShouldSyncTableMetadata(relationId) && !IsTableOwnedByExtension(relationId))
+		List *commandList =
+			BuildRelationCommandsWithOptionalLockRelease(
+				relationId, InterTableRelationshipCommandsForRelation);
+		if (commandList != NIL)
 		{
-			List *commandList = InterTableRelationshipOfRelationCommandList(relationId);
 			SendOrCollectCommandListToActivatedNodes(context, commandList);
 		}
 
@@ -6031,14 +7885,100 @@ SendInterTableRelationshipCommands(MetadataSyncContext *context)
 		 * the cache-flush counter and flush if needed on this skip path too.
 		 */
 		FlushMetadataSyncCachesIfNeeded(context, ++processedCount);
+		LogMetadataSyncProgress("tables scanned for inter-table relationships",
+								processedCount - 1, processedCount, -1);
 	}
+
 	MemoryContextSwitchTo(oldContext);
+
+	MemoryContextDelete(perObjectContext);
 
 	systable_endscan(scanDesc);
 	table_close(relation, AccessShareLock);
 
 	/* enable ddl propagation */
 	SendOrCollectCommandListToActivatedNodes(context, list_make1(ENABLE_DDL_PROPAGATION));
+}
+
+
+/*
+ * BuildRelationCommandsWithOptionalLockRelease invokes builder(relationId) to
+ * produce that relation's metadata-sync command strings.
+ *
+ * When citus.metadata_sync_release_deparse_locks is on (the default), the builder
+ * runs inside an internal subtransaction that is immediately rolled back. The
+ * builder opens the relation through the Citus metadata cache (both to decide
+ * ShouldSyncTableMetadata and to read shard/partition/constraint info), taking an
+ * AccessShareLock that PostgreSQL would otherwise keep until the end of the sync
+ * transaction. On clusters with millions of distributed tables that accumulates
+ * one lock per table, which exhausts the shared lock table ("out of shared
+ * memory") and inflates coordinator backend memory. Rolling the subtransaction
+ * back releases the lock as soon as the relation's commands are built, bounding
+ * the held-lock set to O(1) instead of O(#tables).
+ *
+ * The builder must allocate its result in the current memory context, which is
+ * the caller's per-object context created before (and therefore outliving) the
+ * subtransaction, so the returned list stays valid after the rollback. Only the
+ * subtransaction's own resource owner (its locks) is discarded.
+ *
+ * When the GUC is off the builder is called directly, preserving the historical
+ * behavior of holding the locks until sync end.
+ */
+static List *
+BuildRelationCommandsWithOptionalLockRelease(Oid relationId, List *(*builder)(Oid))
+{
+	if (!MetadataSyncReleaseDeparseLocks)
+	{
+		return builder(relationId);
+	}
+
+	List *commandList = NIL;
+	MemoryContext savedContext = CurrentMemoryContext;
+	ResourceOwner savedOwner = CurrentResourceOwner;
+
+	BeginInternalSubTransaction(NULL);
+
+	/* build in the caller's (parent-owned) context so the result survives rollback */
+	MemoryContextSwitchTo(savedContext);
+
+	PG_TRY();
+	{
+		commandList = builder(relationId);
+
+		RollbackAndReleaseCurrentSubTransaction();
+		MemoryContextSwitchTo(savedContext);
+		CurrentResourceOwner = savedOwner;
+	}
+	PG_CATCH();
+	{
+		MemoryContextSwitchTo(savedContext);
+		RollbackAndReleaseCurrentSubTransaction();
+		MemoryContextSwitchTo(savedContext);
+		CurrentResourceOwner = savedOwner;
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
+
+	return commandList;
+}
+
+
+/*
+ * InterTableRelationshipCommandsForRelation returns the inter-table relationship
+ * commands (foreign keys, attach partition) for relationId, or NIL when the
+ * relation's metadata should not be synced or it is owned by an extension. It is
+ * the builder used by SendInterTableRelationshipCommands via
+ * BuildRelationCommandsWithOptionalLockRelease.
+ */
+static List *
+InterTableRelationshipCommandsForRelation(Oid relationId)
+{
+	if (!ShouldSyncTableMetadata(relationId) || IsTableOwnedByExtension(relationId))
+	{
+		return NIL;
+	}
+
+	return InterTableRelationshipOfRelationCommandList(relationId);
 }
 
 

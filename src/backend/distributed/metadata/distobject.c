@@ -20,6 +20,7 @@
 #include "catalog/dependency.h"
 #include "catalog/namespace.h"
 #include "catalog/objectaddress.h"
+#include "catalog/pg_class.h"
 #include "catalog/pg_extension_d.h"
 #include "catalog/pg_namespace.h"
 #include "catalog/pg_proc.h"
@@ -446,11 +447,83 @@ IsAnyObjectDistributed(const List *addresses)
 
 
 /*
- * GetDistributedObjectAddressList returns a list of ObjectAddresses that contains all
- * distributed objects as marked in pg_dist_object
+ * IsPgDistObjectRowCitusShellTable returns whether the pg_dist_object row
+ * identified by (classId, objId) refers to a Citus shell table relation (a
+ * distributed table whose empty shell is (re)created during metadata sync).
+ *
+ * This is the cache-free counterpart of IsCitusShellTableDependency() in
+ * metadata_sync.c: it deliberately uses IsCitusTableViaCatalog() (an index
+ * probe on pg_dist_partition that frees its tuple) rather than the caching
+ * IsCitusTable(), so it can be evaluated once per pg_dist_object row while
+ * scanning a cluster with millions of distributed tables WITHOUT building a
+ * CitusTableCacheEntry per relation (which would reintroduce the very
+ * coordinator memory blowup metadata sync guards against).
  */
-List *
-GetDistributedObjectAddressList(void)
+static bool
+IsPgDistObjectRowCitusShellTable(Oid classId, Oid objId)
+{
+	if (classId != RelationRelationId)
+	{
+		return false;
+	}
+
+	char relKind = get_rel_relkind(objId);
+	if (relKind != RELKIND_RELATION && relKind != RELKIND_PARTITIONED_TABLE &&
+		relKind != RELKIND_FOREIGN_TABLE)
+	{
+		return false;
+	}
+
+	return IsCitusTableViaCatalog(objId);
+}
+
+
+/*
+ * IsPgDistObjectRowDistributedSequence returns whether a pg_dist_object row
+ * (identified by its classid/objid) describes a distributed sequence.
+ *
+ * Like IsPgDistObjectRowCitusShellTable() it uses the catalog helper
+ * get_rel_relkind() rather than opening a relcache entry, so it can be
+ * evaluated once per pg_dist_object row while scanning a cluster with millions
+ * of distributed sequences WITHOUT building a relcache entry per sequence.
+ *
+ * A distributed sequence needs no IsCitusTableViaCatalog()-style membership
+ * check: its presence in pg_dist_object already means Citus distributed it.
+ */
+bool
+IsPgDistObjectRowDistributedSequence(Oid classId, Oid objId)
+{
+	if (classId != RelationRelationId)
+	{
+		return false;
+	}
+
+	return get_rel_relkind(objId) == RELKIND_SEQUENCE;
+}
+
+
+/*
+ * GetDistributedObjectAddressListInternal is the shared implementation behind
+ * GetDistributedObjectAddressList() and its shell-table / sequence excluding
+ * variants. It scans pg_dist_object and returns an ObjectAddress list of the
+ * distributed objects, optionally skipping Citus shell tables and/or
+ * distributed sequences during the scan.
+ *
+ * Skipping these numerous leaf classes at scan time (rather than materializing
+ * them and filtering later) is what keeps metadata sync scalable on clusters
+ * with millions of distributed tables and sequences: the excluded objects are
+ * never allocated into the returned list, never run through the
+ * SupportedDependencyByCitus predicate, and -- most importantly -- never fed
+ * into the per-object pg_depend dependency traversal in
+ * OrderObjectAddressListInDependencyOrder(), whose cost (and peak memory, from
+ * its visited-set hash and the ordered result list) is otherwise proportional
+ * to the number of distributed tables/sequences and dominates sync wall time
+ * on the single coordinator backend. Shell tables and sequences are recreated
+ * separately, in parallel, by the metadata sync pool phases.
+ */
+static List *
+GetDistributedObjectAddressListInternal(bool excludeCitusShellTables,
+										bool excludeDistributedSequences)
 {
 	HeapTuple pgDistObjectTup = NULL;
 	List *objectAddressList = NIL;
@@ -463,6 +536,21 @@ GetDistributedObjectAddressList(void)
 	{
 		Form_pg_dist_object pg_dist_object =
 			(Form_pg_dist_object) GETSTRUCT(pgDistObjectTup);
+
+		if (excludeCitusShellTables &&
+			IsPgDistObjectRowCitusShellTable(pg_dist_object->classid,
+											 pg_dist_object->objid))
+		{
+			continue;
+		}
+
+		if (excludeDistributedSequences &&
+			IsPgDistObjectRowDistributedSequence(pg_dist_object->classid,
+												 pg_dist_object->objid))
+		{
+			continue;
+		}
+
 		ObjectAddress *objectAddress = palloc0(sizeof(ObjectAddress));
 		ObjectAddressSubSet(*objectAddress,
 							pg_dist_object->classid,
@@ -475,6 +563,51 @@ GetDistributedObjectAddressList(void)
 	relation_close(pgDistObjectRel, AccessShareLock);
 
 	return objectAddressList;
+}
+
+
+/*
+ * GetDistributedObjectAddressList returns a list of ObjectAddresses that contains all
+ * distributed objects as marked in pg_dist_object
+ */
+List *
+GetDistributedObjectAddressList(void)
+{
+	return GetDistributedObjectAddressListInternal(false, false);
+}
+
+
+/*
+ * GetDistributedObjectAddressListWithoutShellTables returns the distributed
+ * objects marked in pg_dist_object EXCEPT the Citus shell tables, whose
+ * (mutually independent) creation is handled separately -- and in parallel over
+ * a pool of connections -- by the metadata sync shell table phase. Excluding
+ * them here keeps the serial dependency-ordering phase proportional to the
+ * number of prerequisite objects (roles, schemas, types, functions, sequences,
+ * ...) instead of the number of distributed tables.
+ */
+List *
+GetDistributedObjectAddressListWithoutShellTables(void)
+{
+	return GetDistributedObjectAddressListInternal(true, false);
+}
+
+
+/*
+ * GetDistributedObjectAddressListWithoutShellTablesAndSequences returns the
+ * distributed objects marked in pg_dist_object EXCEPT the Citus shell tables
+ * AND the distributed sequences. Both of those classes are numerous (up to one
+ * shell table and several sequences per distributed table on a large cluster),
+ * have no intra-class dependency edges, and are (re)created separately in
+ * parallel by the metadata sync pool phases. Excluding both here keeps the
+ * serial dependency-ordering phase -- and its peak memory -- proportional to
+ * the small set of prerequisite objects (roles, schemas, types, functions,
+ * ...) rather than to the number of distributed tables and sequences.
+ */
+List *
+GetDistributedObjectAddressListWithoutShellTablesAndSequences(void)
+{
+	return GetDistributedObjectAddressListInternal(true, true);
 }
 
 

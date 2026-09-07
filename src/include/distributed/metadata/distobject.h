@@ -35,6 +35,9 @@ extern bool IsObjectAddressOwnedByCitus(const ObjectAddress *objectAddress);
 extern ObjectAddress PgGetObjectAddress(char *ttype, ArrayType *namearr,
 										ArrayType *argsarr);
 extern List * GetDistributedObjectAddressList(void);
+extern List * GetDistributedObjectAddressListWithoutShellTables(void);
+extern List * GetDistributedObjectAddressListWithoutShellTablesAndSequences(void);
+extern bool IsPgDistObjectRowDistributedSequence(Oid classId, Oid objId);
 extern RoleSpec * GetRoleSpecObjectForUser(Oid roleOid);
 extern void UpdateDistributedObjectColocationId(uint32 oldColocationId, uint32
 												newColocationId);
