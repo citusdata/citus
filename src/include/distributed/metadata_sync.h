@@ -31,6 +31,7 @@ extern int MetadataSyncInterval;
 extern int MetadataSyncRetryInterval;
 extern int MetadataSyncTransMode;
 extern int MetadataSyncCacheFlushInterval;
+extern int MetadataSyncSetBatchSize;
 
 /*
  * MetadataSyncContext is used throughout metadata sync.
