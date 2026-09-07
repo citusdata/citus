@@ -1106,7 +1106,8 @@ RelationHasPublication(MultiConnection *connection, char *qualifiedRelationName)
 	if (response != RESPONSE_OKAY)
 	{
 		ereport(WARNING, (errmsg("failed to determine if relation %s is part of any "
-								 "publication because the check failed",
+								 "publication because the check failed, assuming "
+								 "the relation has publication",
 								 qualifiedRelationName)));
 		return true;
 	}
