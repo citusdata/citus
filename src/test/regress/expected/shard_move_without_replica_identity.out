@@ -1551,10 +1551,9 @@ SELECT DISTINCT result FROM run_command_on_placements('ix_multi','SELECT relrepl
 --            restored to 'd'.
 --
 --            The background rebalancer citus_rebalance_start() is a whole-cluster
---            operation, so it cannot be exercised reliably from this shared schedule
+--            operation and cannot be exercised reliably from this shared schedule
 --            (it would try to move every unrelated table left behind by earlier
---            tests). Its handling of force_logical_auto_identity is covered by the
---            background_rebalance test instead.
+--            tests), so it is not covered here.
 --
 SET citus.shard_count TO 4;
 SET citus.shard_replication_factor TO 1;

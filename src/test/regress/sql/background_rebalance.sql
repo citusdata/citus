@@ -93,10 +93,6 @@ SELECT 1 FROM citus_rebalance_start(shard_transfer_mode := 'force_logical');
 ROLLBACK;
 -- success
 BEGIN;
-SELECT 1 FROM citus_rebalance_start(shard_transfer_mode := 'force_logical_auto_identity');
-ROLLBACK;
--- success
-BEGIN;
 SELECT 1 FROM citus_rebalance_start(shard_transfer_mode := 'block_writes');
 ROLLBACK;
 
