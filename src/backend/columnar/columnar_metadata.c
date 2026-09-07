@@ -2010,7 +2010,8 @@ ColumnarStorageUpdateIfNeeded(Relation rel, bool isUpgrade)
 	BlockNumber nblocks = smgrnblocks(RelationGetSmgr(rel), MAIN_FORKNUM);
 	if (nblocks < 2)
 	{
-		ColumnarStorageInit(RelationGetSmgr(rel), ColumnarMetadataNewStorageId());
+		ColumnarStorageInit(RelationGetSmgr(rel), ColumnarMetadataNewStorageId(),
+							rel->rd_id);
 		return;
 	}
 

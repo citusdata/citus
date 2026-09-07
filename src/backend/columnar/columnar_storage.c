@@ -46,6 +46,12 @@
 
 #include "pg_version_compat.h"
 
+#if PG_VERSION_NUM >= PG_VERSION_16
+#include "utils/relfilenumbermap.h"
+#else
+#include "utils/relfilenodemap.h"
+#endif
+
 #include "columnar/columnar.h"
 #include "columnar/columnar_storage.h"
 
@@ -157,15 +163,64 @@ static void ColumnarMetapageCheckVersion(Relation rel, ColumnarMetapage *metapag
  * Caller must hold AccessExclusiveLock on the relation.
  */
 void
-ColumnarStorageInit(SMgrRelation srel, uint64 storageId)
+ColumnarStorageInit(SMgrRelation srel, uint64 storageId, Oid relationId)
 {
 	BlockNumber nblocks = smgrnblocks(srel, MAIN_FORKNUM);
 
 	if (nblocks > 0)
 	{
-		elog(ERROR,
-			 "attempted to initialize metapage, but %d pages already exist",
-			 nblocks);
+		/*
+		 * Resolve the relation that currently owns this relfilenode. The smgr
+		 * node value differs by PG version (RelFileLocator vs RelFileNode), so
+		 * grab it into a version-typed local before reading its fields.
+		 */
+#if PG_VERSION_NUM >= PG_VERSION_16
+		RelFileLocator rlocator = srel->smgr_rlocator.locator;
+#else
+		RelFileNode rlocator = srel->smgr_rnode.node;
+#endif
+		Oid spcOid = RelationTablespace_compat(rlocator);
+		Oid relNumber = RelationPhysicalIdentifierNumber_compat(rlocator);
+		Oid owner = RelidByRelfilenumber(spcOid, relNumber);
+
+		if (OidIsValid(owner) && owner != relationId)
+		{
+			/*
+			 * The storage we are about to initialize is still referenced by a
+			 * different, live relation. Overwriting it would corrupt that
+			 * relation's data, so keep this a hard error -- but now report the
+			 * owning relation so it can be identified from the coordinator logs
+			 * too (this error is otherwise opaque when it surfaces during a
+			 * remote metadata-sync command).
+			 */
+			elog(ERROR,
+				 "attempted to initialize metapage, but %u pages already exist "
+				 "(relfilenode %u belongs to relation %u)",
+				 nblocks, relNumber, owner);
+		}
+
+		/*
+		 * Otherwise the pages are leftover storage that no live catalog entry
+		 * references: an orphan file left behind by an aborted write, or a
+		 * stale smgr size cache for a relfilenode that has since been reused.
+		 * In both cases the pages are not this relation's data, so it is safe
+		 * to reset the storage to empty before writing a fresh metapage. This
+		 * lets metadata sync (and shell-table creation) make progress instead
+		 * of aborting the whole operation. Columnar writes bypass shared
+		 * buffers, so there are no dirty buffers to invalidate here.
+		 */
+		ereport(WARNING,
+				(errmsg("resetting %u leftover columnar page(s) for "
+						"relfilenode %u before initializing metapage",
+						nblocks, relNumber)));
+
+		ForkNumber fork = MAIN_FORKNUM;
+		BlockNumber newNblocks = 0;
+#if PG_VERSION_NUM >= 180000
+		smgrtruncate(srel, &fork, 1, &nblocks, &newNblocks);
+#else
+		smgrtruncate(srel, &fork, 1, &newNblocks);
+#endif
 	}
 
 	/* create two pages */

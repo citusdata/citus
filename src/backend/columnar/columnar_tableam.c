@@ -879,7 +879,7 @@ columnar_relation_set_new_filelocator(Relation rel,
 	*minmulti = GetOldestMultiXactId();
 	SMgrRelation srel = RelationCreateStorage_compat(*newrlocator, persistence, true);
 
-	ColumnarStorageInit(srel, ColumnarMetadataNewStorageId());
+	ColumnarStorageInit(srel, ColumnarMetadataNewStorageId(), rel->rd_id);
 	InitColumnarOptions(rel->rd_id);
 
 	smgrclose(srel);
@@ -909,7 +909,7 @@ columnar_relation_nontransactional_truncate(Relation rel)
 	RelationTruncate(rel, 0);
 
 	uint64 storageId = ColumnarMetadataNewStorageId();
-	ColumnarStorageInit(RelationGetSmgr(rel), storageId);
+	ColumnarStorageInit(RelationGetSmgr(rel), storageId, rel->rd_id);
 }
 
 
