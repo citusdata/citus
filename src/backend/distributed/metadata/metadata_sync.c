@@ -51,6 +51,7 @@
 #include "utils/inval.h"
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
+#include "utils/resowner.h"
 #include "utils/snapmgr.h"
 #include "utils/syscache.h"
 
@@ -154,7 +155,8 @@ static List * DistTableMetadataBatchCommandList(StringInfo shardValues,
 													  StringInfo placementValues);
 static char * ColocationMetadataBatchCommand(List *valueRows);
 static char * TenantSchemaMetadataBatchCommand(List *valueRows);
-static void DropMetadataSnapshotOnNode(WorkerNode *workerNode);
+static void DropMetadataSnapshotOnNode(WorkerNode *workerNode, bool dropShellTables);
+static void DropOrphanedShellTablesOnNode(WorkerNode *workerNode);
 static char * CreateSequenceDependencyCommand(Oid relationId, Oid sequenceId,
 											  char *columnName);
 static GrantStmt * GenerateGrantStmtForRights(ObjectType objectType,
@@ -473,6 +475,14 @@ stop_metadata_sync_to_node(PG_FUNCTION_ARGS)
 	text *nodeName = PG_GETARG_TEXT_P(0);
 	int32 nodePort = PG_GETARG_INT32(1);
 	bool clearMetadata = PG_GETARG_BOOL(2);
+
+	/*
+	 * drop_orphaned_shell_tables is an optional 4th argument (added in 12.1-2).
+	 * Guard with PG_NARGS() so this C function keeps working if the SQL
+	 * definition was downgraded to the 3-argument signature while this library
+	 * is still loaded.
+	 */
+	bool dropOrphanedShellTables = (PG_NARGS() > 3) ? PG_GETARG_BOOL(3) : false;
 	char *nodeNameString = text_to_cstring(nodeName);
 
 	LockRelationOid(DistNodeRelationId(), ExclusiveLock);
@@ -492,13 +502,37 @@ stop_metadata_sync_to_node(PG_FUNCTION_ARGS)
 		PG_RETURN_VOID();
 	}
 
+	/*
+	 * When an authoritative sweep is requested, drop the shell tables that the
+	 * coordinator's pg_dist_partition says should exist FIRST, over an
+	 * independent connection that commits each batch. This runs before we open
+	 * any coordinated-transaction connection to the worker, so it cannot
+	 * deadlock against the shell-table locks that the worker-driven teardown in
+	 * DropMetadataSnapshotOnNode would otherwise hold until this surrounding
+	 * transaction commits.
+	 */
+	if (dropOrphanedShellTables && NodeIsPrimary(workerNode))
+	{
+		ereport(NOTICE, (errmsg("dropping orphaned shell tables on the node (%s,%d)",
+								nodeNameString, nodePort)));
+		DropOrphanedShellTablesOnNode(workerNode);
+	}
+
 	if (clearMetadata)
 	{
 		if (NodeIsPrimary(workerNode))
 		{
 			ereport(NOTICE, (errmsg("dropping metadata on the node (%s,%d)",
 									nodeNameString, nodePort)));
-			DropMetadataSnapshotOnNode(workerNode);
+
+			/*
+			 * If we already swept the shell tables above, skip the worker-driven
+			 * shell-table teardown here: it is redundant (the sweep dropped the
+			 * tables with CASCADE, which also removed their partitions and owned
+			 * sequences) and dropping the same tables again from a second
+			 * connection within this transaction would deadlock.
+			 */
+			DropMetadataSnapshotOnNode(workerNode, !dropOrphanedShellTables);
 		}
 		else
 		{
@@ -758,22 +792,35 @@ SyncNodeMetadataSnapshotToNode(WorkerNode *workerNode, bool raiseOnError)
  * to the worker given as parameter.
  */
 static void
-DropMetadataSnapshotOnNode(WorkerNode *workerNode)
+DropMetadataSnapshotOnNode(WorkerNode *workerNode, bool dropShellTables)
 {
 	EnsureSequentialModeMetadataOperations();
 
 	char *userName = CurrentUserName();
 
+	List *dropMetadataCommandList = NIL;
+
 	/*
 	 * Detach partitions, break dependencies between sequences and table then
 	 * remove shell tables first.
+	 *
+	 * When dropShellTables is false the caller has already dropped the shell
+	 * tables authoritatively (enumerated from the coordinator's
+	 * pg_dist_partition) over a separate, already-committed connection, so we
+	 * skip this worker-driven teardown to avoid both redundant work and a
+	 * self-deadlock on those shell tables within this transaction.
 	 */
-	bool singleTransaction = true;
-	List *dropMetadataCommandList = DetachPartitionCommandList();
-	dropMetadataCommandList = lappend(dropMetadataCommandList,
-									  BREAK_ALL_CITUS_TABLE_SEQUENCE_DEPENDENCY_COMMAND);
-	dropMetadataCommandList = lappend(dropMetadataCommandList,
-									  WorkerDropAllShellTablesCommand(singleTransaction));
+	if (dropShellTables)
+	{
+		bool singleTransaction = true;
+		dropMetadataCommandList = DetachPartitionCommandList();
+		dropMetadataCommandList = lappend(dropMetadataCommandList,
+										  BREAK_ALL_CITUS_TABLE_SEQUENCE_DEPENDENCY_COMMAND);
+		dropMetadataCommandList = lappend(dropMetadataCommandList,
+										  WorkerDropAllShellTablesCommand(
+											  singleTransaction));
+	}
+
 	dropMetadataCommandList = list_concat(dropMetadataCommandList,
 										  NodeMetadataDropCommands());
 	dropMetadataCommandList = lappend(dropMetadataCommandList,
@@ -793,6 +840,117 @@ DropMetadataSnapshotOnNode(WorkerNode *workerNode)
 		workerNode->workerPort,
 		userName,
 		dropMetadataCommandList);
+}
+
+
+/* number of DROP TABLE statements sent to the node in a single remote transaction */
+#define DROP_ORPHANED_SHELL_TABLES_BATCH_SIZE 1000
+
+/*
+ * DropOrphanedShellTablesOnNode drops every distributed table's shell table from
+ * the given node, driven by the COORDINATOR's pg_dist_partition (the authoritative
+ * source) instead of the worker's own pg_dist_partition the way
+ * worker_drop_all_shell_tables() does.
+ *
+ * The normal teardown path (WorkerDropAllShellTablesCommand) loops over the
+ * *worker's* pg_dist_partition. After a partially failed metadata sync the worker
+ * can be left with a physical shell table whose pg_dist_partition row was never
+ * written (or was already deleted), so the worker-driven drop misses it and the
+ * leftover table blocks a subsequent re-sync (e.g. a re-created view referencing a
+ * column that the stale table lacks). Enumerating from the coordinator guarantees
+ * we attempt to drop every shell table that *should* exist, so a retry converges.
+ *
+ * To keep coordinator memory and worker lock usage bounded on clusters with
+ * millions of distributed tables, we scan pg_dist_partition incrementally and send
+ * the DROP statements in fixed-size batches, each committed as its own remote
+ * transaction over a single reused connection so locks are released between
+ * batches. This is opt-in (drop_orphaned_shell_tables => true) and is not run
+ * automatically by start_metadata_sync_to_node.
+ */
+static void
+DropOrphanedShellTablesOnNode(WorkerNode *workerNode)
+{
+	int connectionFlags = FORCE_NEW_CONNECTION;
+	MultiConnection *connection =
+		GetNodeUserDatabaseConnection(connectionFlags, workerNode->workerName,
+									  workerNode->workerPort, CurrentUserName(), NULL);
+
+	Relation relation = table_open(DistPartitionRelationId(), AccessShareLock);
+	TupleDesc tupleDesc = RelationGetDescr(relation);
+	SysScanDesc scanDesc = systable_beginscan(relation, InvalidOid, false, NULL, 0,
+											  NULL);
+
+	/*
+	 * Build each batch of DROP commands in a dedicated context that we reset after
+	 * every flush, so the command strings for one batch do not accumulate across
+	 * the whole (potentially multi-million relation) scan.
+	 */
+	MemoryContext batchContext =
+		AllocSetContextCreate(CurrentMemoryContext,
+							  "drop orphaned shell tables batch context",
+							  ALLOCSET_DEFAULT_SIZES);
+	MemoryContext oldContext = MemoryContextSwitchTo(batchContext);
+
+	List *dropCommandList = NIL;
+	int batchCount = 0;
+	HeapTuple heapTuple = NULL;
+	while (HeapTupleIsValid(heapTuple = systable_getnext(scanDesc)))
+	{
+		Oid relationId = FetchRelationIdFromPgPartitionHeapTuple(heapTuple, tupleDesc);
+
+		/*
+		 * The relation may have been dropped on the coordinator concurrently; if so
+		 * there is nothing to sweep on the worker either.
+		 */
+		if (get_rel_name(relationId) == NULL)
+		{
+			continue;
+		}
+
+		/*
+		 * generate_qualified_relation_name only does syscache lookups, so unlike
+		 * table_open it does not take and hold an AccessShareLock per relation; that
+		 * keeps coordinator lock usage flat across the whole scan.
+		 */
+		char *qualifiedName = generate_qualified_relation_name(relationId);
+
+		/*
+		 * Use worker_drop_shell_table() rather than a plain DROP TABLE. A plain
+		 * DROP would fire the Citus drop event trigger on the (still MX) worker,
+		 * which calls coordinator-only metadata functions and errors out. Instead
+		 * worker_drop_shell_table() removes the shell table via an internal
+		 * performDeletion(), matching the normal shell-table teardown path, and is
+		 * a no-op (with a NOTICE) if the relation no longer exists on the worker.
+		 */
+		char *dropCommand =
+			psprintf("SELECT pg_catalog.worker_drop_shell_table(%s)",
+					 quote_literal_cstr(qualifiedName));
+		dropCommandList = lappend(dropCommandList, dropCommand);
+
+		if (++batchCount >= DROP_ORPHANED_SHELL_TABLES_BATCH_SIZE)
+		{
+			SendCommandListToWorkerOutsideTransactionWithConnection(connection,
+																	dropCommandList);
+			MemoryContextReset(batchContext);
+			dropCommandList = NIL;
+			batchCount = 0;
+		}
+	}
+
+	/* flush the final partial batch */
+	if (dropCommandList != NIL)
+	{
+		SendCommandListToWorkerOutsideTransactionWithConnection(connection,
+																dropCommandList);
+	}
+
+	MemoryContextSwitchTo(oldContext);
+	MemoryContextDelete(batchContext);
+
+	systable_endscan(scanDesc);
+	table_close(relation, AccessShareLock);
+
+	CloseConnection(connection);
 }
 
 
