@@ -4991,6 +4991,23 @@ FlushDistTableCache(void)
 }
 
 
+/*
+ * FlushDistObjectCache flushes the entire distributed object cache, frees all
+ * entries, and recreates the cache.
+ */
+void
+FlushDistObjectCache(void)
+{
+	if (DistObjectCacheHash == NULL)
+	{
+		return;
+	}
+
+	hash_destroy(DistObjectCacheHash);
+	CreateDistObjectCache();
+}
+
+
 /* CreateDistTableCache initializes the per-table hash table */
 static void
 CreateDistTableCache(void)
