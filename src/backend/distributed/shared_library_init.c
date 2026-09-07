@@ -2060,6 +2060,24 @@ RegisterCitusConfigVariables(void)
 		GUC_SUPERUSER_ONLY | GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
+	DefineCustomBoolVariable(
+		"citus.metadata_sync_release_deparse_locks",
+		gettext_noop("Releases per-object catalog locks during metadata sync by "
+					 "deparsing inside a rolled-back subtransaction."),
+		gettext_noop("When enabled (the default), each distributed object's "
+					 "command bundle is deparsed inside an internal subtransaction "
+					 "that is rolled back once the command strings are copied out. "
+					 "This releases the AccessShareLocks and relcache pins taken "
+					 "during deparse per object, bounding the coordinator lock "
+					 "table and backend memory to a single object instead of "
+					 "growing linearly with the number of distributed objects. On "
+					 "by default."),
+		&MetadataSyncReleaseDeparseLocks,
+		true,
+		PGC_SUSET,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
+		NULL, NULL, NULL);
+
 	DefineCustomIntVariable(
 		"citus.metadata_sync_retry_interval",
 		gettext_noop("Sets the interval to retry failed metadata syncs."),
