@@ -16,6 +16,7 @@
 
 #include "lib/stringinfo.h"
 #include "storage/latch.h"
+#include "tcop/tcopprot.h"
 #include "utils/builtins.h"
 #include "utils/fmgrprotos.h"
 #include "utils/palloc.h"
@@ -26,6 +27,7 @@
 #include "distributed/listutils.h"
 #include "distributed/log_utils.h"
 #include "distributed/remote_commands.h"
+#include "distributed/transaction_management.h"
 
 
 /*
@@ -827,6 +829,22 @@ FinishConnectionIO(MultiConnection *connection, bool raiseInterrupts)
 		if (PQisBusy(pgConn))
 		{
 			waitFlags |= WL_SOCKET_READABLE;
+		}
+		else if (sendStatus == 1)
+		{
+			/*
+			 * PQisBusy() is false, so a result is already available, yet we
+			 * still have unsent output (PQflush() returned 1). Waiting
+			 * write-only here would stop us draining the peer while we block on
+			 * our own send; if the peer is likewise blocked writing to us (its
+			 * send buffer full because we haven't read), the two sides deadlock
+			 * -- the classic hazard of queueing a whole batch before reading
+			 * any result.
+			 *
+			 * Instead, hand the ready result back to the caller because consuming
+			 * the result lets the peer drain
+			 */
+			return true;
 		}
 
 		if ((waitFlags & (WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE)) == 0)
