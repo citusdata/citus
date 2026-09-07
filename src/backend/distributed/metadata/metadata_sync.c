@@ -102,6 +102,7 @@
 char *EnableManualMetadataChangesForUser = "";
 int MetadataSyncTransMode = METADATA_SYNC_TRANSACTIONAL;
 int MetadataSyncCacheFlushInterval = 1000;
+int MetadataSyncSetBatchSize = 1000;
 
 
 static void EnsureObjectMetadataIsSane(int distributionArgumentIndex,
@@ -5617,12 +5618,25 @@ SendDistObjectCommands(MetadataSyncContext *context)
 											  scanKeyCount, scanKey);
 
 	MemoryContext oldContext = MemoryContextSwitchTo(context->context);
-	HeapTuple nextTuple = NULL;
+
+	bool collecting = MetadataSyncCollectsCommands(context);
+	int batchSize = collecting ? 1 : Max(MetadataSyncSetBatchSize, 1);
+	MemoryContext batchContext = AllocSetContextCreate(context->context,
+													   "dist object commands batch context",
+													   ALLOCSET_DEFAULT_SIZES);
+
+	List *addresses = NIL;
+	List *distributionArgumentIndexes = NIL;
+	List *colocationIds = NIL;
+	List *forceDelegations = NIL;
+	int batchCount = 0;
 	int64 processedCount = 0;
+
+	MemoryContextSwitchTo(batchContext);
+
+	HeapTuple nextTuple = NULL;
 	while (true)
 	{
-		ResetMetadataSyncMemoryContext(context);
-
 		nextTuple = systable_getnext(scanDesc);
 		if (!HeapTupleIsValid(nextTuple))
 		{
@@ -5675,18 +5689,59 @@ SendDistObjectCommands(MetadataSyncContext *context)
 			forceDelegation = NO_FORCE_PUSHDOWN;
 		}
 
-		char *workerMetadataUpdateCommand =
-			MarkObjectsDistributedCreateCommand(list_make1(address),
-												NIL,
-												list_make1_int(distributionArgumentIndex),
-												list_make1_int(colocationId),
-												list_make1_int(forceDelegation));
-		SendOrCollectCommandListToActivatedNodes(context,
-												 list_make1(workerMetadataUpdateCommand));
+		addresses = lappend(addresses, address);
+		distributionArgumentIndexes = lappend_int(distributionArgumentIndexes,
+												  distributionArgumentIndex);
+		colocationIds = lappend_int(colocationIds, colocationId);
+		forceDelegations = lappend_int(forceDelegations, forceDelegation);
+		batchCount++;
+
+		if (batchCount >= batchSize)
+		{
+			MemoryContext buildContext = collecting ? context->context : batchContext;
+			MemoryContext prev = MemoryContextSwitchTo(buildContext);
+			char *command =
+				MarkObjectsDistributedCreateCommand(addresses,
+													NIL,
+													distributionArgumentIndexes,
+													colocationIds,
+													forceDelegations);
+			List *commandList = list_make1(command);
+
+			SendOrCollectCommandListToActivatedNodes(context, commandList);
+			MemoryContextSwitchTo(prev);
+
+			MemoryContextReset(batchContext);
+			addresses = NIL;
+			distributionArgumentIndexes = NIL;
+			colocationIds = NIL;
+			forceDelegations = NIL;
+			batchCount = 0;
+		}
 
 		FlushMetadataSyncCachesIfNeeded(context, ++processedCount);
 	}
+
+	/* flush the final partial batch */
+	if (batchCount > 0)
+	{
+		MemoryContext buildContext = collecting ? context->context : batchContext;
+		MemoryContext prev = MemoryContextSwitchTo(buildContext);
+		char *command =
+			MarkObjectsDistributedCreateCommand(addresses,
+												NIL,
+												distributionArgumentIndexes,
+												colocationIds,
+												forceDelegations);
+		List *commandList = list_make1(command);
+
+		SendOrCollectCommandListToActivatedNodes(context, commandList);
+		MemoryContextSwitchTo(prev);
+	}
+
 	MemoryContextSwitchTo(oldContext);
+
+	MemoryContextDelete(batchContext);
 
 	systable_endscan(scanDesc);
 	relation_close(relation, NoLock);
