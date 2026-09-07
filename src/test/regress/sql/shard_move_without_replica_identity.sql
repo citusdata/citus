@@ -937,20 +937,22 @@ SELECT count(*) FROM ix_multi;
 SELECT DISTINCT result FROM run_command_on_placements('ix_multi','SELECT relreplident FROM pg_class WHERE oid=''%s''::regclass');
 
 --
--- SECTION 8: the mode must reach the rebalancer, both the foreground
---            rebalance_table_shards() and the background citus_rebalance_start().
+-- SECTION 8: the mode must reach the foreground rebalancer rebalance_table_shards().
 --            A no-replica-identity table is imbalanced onto one worker and then
 --            rebalanced back with force_logical_auto_identity; the move must
 --            succeed, the data is preserved, and the source replica identity is
 --            restored to 'd'.
 --
+--            The background rebalancer citus_rebalance_start() is a whole-cluster
+--            operation, so it cannot be exercised reliably from this shared schedule
+--            (it would try to move every unrelated table left behind by earlier
+--            tests). Its handling of force_logical_auto_identity is covered by the
+--            background_rebalance test instead.
+--
 SET citus.shard_count TO 4;
 SET citus.shard_replication_factor TO 1;
 SET citus.next_shard_id TO 8987000;
 
---
--- 8a) foreground rebalance_table_shards()
---
 CREATE TABLE rebal_fg (a int, b text);
 SELECT create_distributed_table('rebal_fg', 'a', colocate_with:='none');
 INSERT INTO rebal_fg SELECT g, 'v'||g FROM generate_series(1,400) g;
@@ -975,33 +977,6 @@ WHERE s.logicalrelid='rebal_fg'::regclass
 GROUP BY p.nodeport ORDER BY 1;
 SELECT count(*) AS rows FROM rebal_fg;
 SELECT DISTINCT result FROM run_command_on_placements('rebal_fg','SELECT relreplident FROM pg_class WHERE oid=''%s''::regclass');
-
---
--- 8b) background citus_rebalance_start() + citus_rebalance_wait()
---
-SET citus.next_shard_id TO 8987100;
-CREATE TABLE rebal_bg (a int, b text);
-SELECT create_distributed_table('rebal_bg', 'a', colocate_with:='none');
-INSERT INTO rebal_bg SELECT g, 'v'||g FROM generate_series(1,400) g;
-
-SELECT citus_move_shard_placement(s.shardid, 'localhost', :worker_2_port, 'localhost', :worker_1_port, shard_transfer_mode:='block_writes')
-FROM pg_dist_shard s JOIN pg_dist_shard_placement p USING (shardid)
-WHERE s.logicalrelid='rebal_bg'::regclass AND p.nodeport = :worker_2_port
-ORDER BY s.shardid;
-SELECT public.wait_for_resource_cleanup();
-SELECT count(DISTINCT nodeport) AS distinct_nodes_before
-FROM pg_dist_shard s JOIN pg_dist_shard_placement p USING (shardid)
-WHERE s.logicalrelid='rebal_bg'::regclass;
-
-SELECT citus_rebalance_start(shard_transfer_mode:='force_logical_auto_identity') > 0 AS started;
-SELECT citus_rebalance_wait();
-SELECT public.wait_for_resource_cleanup();
-SELECT count(*) AS shards_per_node, (count(*) = 2) AS balanced
-FROM pg_dist_shard s JOIN pg_dist_shard_placement p USING (shardid)
-WHERE s.logicalrelid='rebal_bg'::regclass
-GROUP BY p.nodeport ORDER BY 1;
-SELECT count(*) AS rows FROM rebal_bg;
-SELECT DISTINCT result FROM run_command_on_placements('rebal_bg','SELECT relreplident FROM pg_class WHERE oid=''%s''::regclass');
 
 --
 -- SECTION 9: ownership and identifier edge cases.

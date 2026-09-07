@@ -253,6 +253,18 @@ HINT:  To monitor progress, run: SELECT * FROM citus_rebalance_status();
 ROLLBACK;
 -- success
 BEGIN;
+SELECT 1 FROM citus_rebalance_start(shard_transfer_mode := 'force_logical_auto_identity');
+NOTICE:  Scheduled 1 moves as job xxx
+DETAIL:  Rebalance scheduled as background job
+HINT:  To monitor progress, run: SELECT * FROM citus_rebalance_status();
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+ROLLBACK;
+-- success
+BEGIN;
 SELECT 1 FROM citus_rebalance_start(shard_transfer_mode := 'block_writes');
 NOTICE:  Scheduled 1 moves as job xxx
 DETAIL:  Rebalance scheduled as background job
