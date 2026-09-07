@@ -152,6 +152,8 @@ static void AppendShardMetadataBatchRows(StringInfo shardValues,
 												 List *shardIntervalList);
 static List * DistTableMetadataBatchCommandList(StringInfo shardValues,
 													  StringInfo placementValues);
+static char * ColocationMetadataBatchCommand(List *valueRows);
+static char * TenantSchemaMetadataBatchCommand(List *valueRows);
 static void DropMetadataSnapshotOnNode(WorkerNode *workerNode);
 static char * CreateSequenceDependencyCommand(Oid relationId, Oid sequenceId,
 											  char *columnName);
@@ -4896,28 +4898,58 @@ SendColocationMetadataCommands(MetadataSyncContext *context)
 											  scanKeyCount, scanKey);
 
 	MemoryContext oldContext = MemoryContextSwitchTo(context->context);
+
+	/*
+	 * Accumulate up to metadata_sync_set_batch_size colocation groups and emit
+	 * their rows as a single set-based citus_internal_add_colocation_metadata
+	 * statement (a WITH ... (VALUES ...) CTE that LEFT JOINs pg_collation and
+	 * calls the UDF once per row -- see ColocationMetadataBatchCommand()),
+	 * instead of one statement and one round-trip per group. On a cluster with
+	 * many colocation groups (single-shard / schema-based sharding approaches one
+	 * group per table, so this can reach O(#tables)) the per-group form emits
+	 * millions of tiny statements, each parsed/planned and committed separately
+	 * on the worker; set-batching collapses that to one statement per batch. The
+	 * per-row VALUES fragments live in a dedicated batch context that we reset
+	 * after every flush, so peak coordinator memory is bounded by the batch size
+	 * rather than by the number of colocation groups.
+	 *
+	 * In command-collecting mode (activate_node_snapshot()) we force a batch size
+	 * of one so the collected snapshot keeps its canonical one-command-per-group
+	 * shape (byte-identical to the pre-batching output); batching is a transport
+	 * optimization applied only on the real send path.
+	 */
+	bool collecting = MetadataSyncCollectsCommands(context);
+	int batchSize = collecting ? 1 : Max(MetadataSyncSetBatchSize, 1);
+	MemoryContext batchContext =
+		AllocSetContextCreate(oldContext, "colocation metadata batch context",
+							  ALLOCSET_DEFAULT_SIZES);
+
+	List *valueRows = NIL;
+	int batchCount = 0;
+	int64 processedCount = 0;
+
+	MemoryContextSwitchTo(batchContext);
+
 	HeapTuple nextTuple = NULL;
 	while (true)
 	{
-		ResetMetadataSyncMemoryContext(context);
-
 		nextTuple = systable_getnext(scanDesc);
 		if (!HeapTupleIsValid(nextTuple))
 		{
 			break;
 		}
 
-		StringInfo colocationGroupCreateCommand = makeStringInfo();
-		appendStringInfo(colocationGroupCreateCommand,
-						 "WITH colocation_group_data (colocationid, shardcount, "
-						 "replicationfactor, distributioncolumntype, "
-						 "distributioncolumncollationname, "
-						 "distributioncolumncollationschema)  AS (VALUES ");
-
 		Form_pg_dist_colocation colocationForm =
 			(Form_pg_dist_colocation) GETSTRUCT(nextTuple);
 
-		appendStringInfo(colocationGroupCreateCommand,
+		/*
+		 * Build one VALUES tuple "(colocationid, shardcount, replicationfactor,
+		 * distributioncolumntype, distributioncolumncollationname,
+		 * distributioncolumncollationschema)" for this colocation group, in the
+		 * batch context.
+		 */
+		StringInfo valueRow = makeStringInfo();
+		appendStringInfo(valueRow,
 						 "(%d, %d, %d, %s, ",
 						 colocationForm->colocationid,
 						 colocationForm->shardcount,
@@ -4940,7 +4972,7 @@ SendColocationMetadataCommands(MetadataSyncContext *context)
 				char *collationName = NameStr(collationform->collname);
 				char *collationSchemaName =
 					get_namespace_name(collationform->collnamespace);
-				appendStringInfo(colocationGroupCreateCommand,
+				appendStringInfo(valueRow,
 								 "%s, %s)",
 								 quote_literal_cstr(collationName),
 								 quote_literal_cstr(collationSchemaName));
@@ -4948,29 +4980,49 @@ SendColocationMetadataCommands(MetadataSyncContext *context)
 			}
 			else
 			{
-				appendStringInfo(colocationGroupCreateCommand,
-								 "NULL, NULL)");
+				appendStringInfo(valueRow, "NULL, NULL)");
 			}
 		}
 		else
 		{
-			appendStringInfo(colocationGroupCreateCommand,
-							 "NULL, NULL)");
+			appendStringInfo(valueRow, "NULL, NULL)");
 		}
 
-		appendStringInfo(colocationGroupCreateCommand,
-						 ") SELECT pg_catalog.citus_internal_add_colocation_metadata("
-						 "colocationid, shardcount, replicationfactor, "
-						 "distributioncolumntype, coalesce(c.oid, 0)) "
-						 "FROM colocation_group_data d LEFT JOIN pg_collation c "
-						 "ON (d.distributioncolumncollationname = c.collname "
-						 "AND d.distributioncolumncollationschema::regnamespace"
-						 " = c.collnamespace)");
+		valueRows = lappend(valueRows, valueRow->data);
+		batchCount++;
 
-		List *commandList = list_make1(colocationGroupCreateCommand->data);
-		SendOrCollectCommandListToActivatedNodes(context, commandList);
+		if (batchCount >= batchSize)
+		{
+			MemoryContext buildContext = collecting ? context->context : batchContext;
+			MemoryContext prev = MemoryContextSwitchTo(buildContext);
+			List *commandList = list_make1(ColocationMetadataBatchCommand(valueRows));
+			MemoryContextSwitchTo(prev);
+
+			SendOrCollectCommandListToActivatedNodes(context, commandList);
+			processedCount += batchCount;
+			FlushMetadataSyncCachesIfNeeded(context, processedCount);
+
+			MemoryContextReset(batchContext);
+			valueRows = NIL;
+			batchCount = 0;
+		}
 	}
+
+	/* flush the final partial batch */
+	if (batchCount > 0)
+	{
+		MemoryContext buildContext = collecting ? context->context : batchContext;
+		MemoryContext prev = MemoryContextSwitchTo(buildContext);
+		List *commandList = list_make1(ColocationMetadataBatchCommand(valueRows));
+		MemoryContextSwitchTo(prev);
+
+		SendOrCollectCommandListToActivatedNodes(context, commandList);
+		processedCount += batchCount;
+		FlushMetadataSyncCachesIfNeeded(context, processedCount);
+	}
+
 	MemoryContextSwitchTo(oldContext);
+	MemoryContextDelete(batchContext);
 
 	systable_endscan(scanDesc);
 	table_close(relation, AccessShareLock);
@@ -4994,11 +5046,41 @@ SendTenantSchemaMetadataCommands(MetadataSyncContext *context)
 											  scanKeyCount, scanKey);
 
 	MemoryContext oldContext = MemoryContextSwitchTo(context->context);
+
+	/*
+	 * Accumulate up to metadata_sync_set_batch_size tenant schemas and emit
+	 * their rows as a single set-based citus_internal_add_tenant_schema
+	 * statement (a SELECT over a VALUES list -- see
+	 * TenantSchemaMetadataBatchCommand()), instead of one statement and one
+	 * round-trip per tenant schema. Clusters with schema-based sharding can have
+	 * very many tenant schemas (100k+ is seen in the field), so the per-row form
+	 * emits that many tiny statements, each parsed/planned and committed
+	 * separately on the worker; set-batching collapses that to one statement per
+	 * batch. The per-row VALUES fragments live in a dedicated batch context that
+	 * we reset after every flush, so peak coordinator memory is bounded by the
+	 * batch size rather than by the number of tenant schemas.
+	 */
+	/*
+	 * In command-collecting mode (activate_node_snapshot()) we keep emitting one
+	 * legacy per-row citus_internal_add_tenant_schema(...) call per tenant schema
+	 * so the collected snapshot stays a canonical per-object list; batching is a
+	 * transport optimization applied only on the real send path.
+	 */
+	bool collecting = MetadataSyncCollectsCommands(context);
+	int batchSize = collecting ? 1 : Max(MetadataSyncSetBatchSize, 1);
+	MemoryContext batchContext =
+		AllocSetContextCreate(oldContext, "tenant schema metadata batch context",
+							  ALLOCSET_DEFAULT_SIZES);
+
+	List *valueRows = NIL;
+	int batchCount = 0;
+	int64 processedCount = 0;
+
+	MemoryContextSwitchTo(batchContext);
+
 	HeapTuple heapTuple = NULL;
 	while (true)
 	{
-		ResetMetadataSyncMemoryContext(context);
-
 		heapTuple = systable_getnext(scanDesc);
 		if (!HeapTupleIsValid(heapTuple))
 		{
@@ -5008,19 +5090,138 @@ SendTenantSchemaMetadataCommands(MetadataSyncContext *context)
 		Form_pg_dist_schema tenantSchemaForm =
 			(Form_pg_dist_schema) GETSTRUCT(heapTuple);
 
-		StringInfo insertTenantSchemaCommand = makeStringInfo();
-		appendStringInfo(insertTenantSchemaCommand,
-						 "SELECT pg_catalog.citus_internal_add_tenant_schema(%s, %u)",
+		/*
+		 * Build one VALUES tuple "(schemaid, colocationid)" for this tenant
+		 * schema, in the batch context. The schema id is rendered as a
+		 * '"name"'::regnamespace expression so it resolves to the schema's OID on
+		 * the target node.
+		 */
+		StringInfo valueRow = makeStringInfo();
+		appendStringInfo(valueRow,
+						 "(%s, %u)",
 						 RemoteSchemaIdExpressionById(tenantSchemaForm->schemaid),
 						 tenantSchemaForm->colocationid);
 
-		List *commandList = list_make1(insertTenantSchemaCommand->data);
-		SendOrCollectCommandListToActivatedNodes(context, commandList);
+		valueRows = lappend(valueRows, valueRow->data);
+		batchCount++;
+
+		if (batchCount >= batchSize)
+		{
+			MemoryContext buildContext = collecting ? context->context : batchContext;
+			MemoryContext prev = MemoryContextSwitchTo(buildContext);
+			char *command = collecting ?
+							psprintf(
+								"SELECT pg_catalog.citus_internal_add_tenant_schema%s",
+								(char *) linitial(valueRows)) :
+							TenantSchemaMetadataBatchCommand(valueRows);
+			List *commandList = list_make1(command);
+			MemoryContextSwitchTo(prev);
+
+			SendOrCollectCommandListToActivatedNodes(context, commandList);
+			processedCount += batchCount;
+			FlushMetadataSyncCachesIfNeeded(context, processedCount);
+
+			MemoryContextReset(batchContext);
+			valueRows = NIL;
+			batchCount = 0;
+		}
 	}
+
+	/* flush the final partial batch */
+	if (batchCount > 0)
+	{
+		MemoryContext buildContext = collecting ? context->context : batchContext;
+		MemoryContext prev = MemoryContextSwitchTo(buildContext);
+		char *command = collecting ?
+						psprintf(
+							"SELECT pg_catalog.citus_internal_add_tenant_schema%s",
+							(char *) linitial(valueRows)) :
+						TenantSchemaMetadataBatchCommand(valueRows);
+		List *commandList = list_make1(command);
+		MemoryContextSwitchTo(prev);
+
+		SendOrCollectCommandListToActivatedNodes(context, commandList);
+		processedCount += batchCount;
+		FlushMetadataSyncCachesIfNeeded(context, processedCount);
+	}
+
 	MemoryContextSwitchTo(oldContext);
+	MemoryContextDelete(batchContext);
 
 	systable_endscan(scanDesc);
 	table_close(pgDistTenantSchema, AccessShareLock);
+}
+
+
+/*
+ * ColocationMetadataBatchCommand builds a single set-based colocation metadata
+ * (re)creation command for a batch of colocation groups. valueRows is a list of
+ * pre-rendered "(colocationid, shardcount, replicationfactor,
+ * distributioncolumntype, distributioncolumncollationname,
+ * distributioncolumncollationschema)" VALUES tuples (see
+ * SendColocationMetadataCommands). The rows are wrapped in a WITH ... AS
+ * (VALUES ...) CTE that LEFT JOINs pg_collation to resolve each group's
+ * distribution-column collation OID on the target node, and calls
+ * citus_internal_add_colocation_metadata once per row.
+ */
+static char *
+ColocationMetadataBatchCommand(List *valueRows)
+{
+	StringInfo command = makeStringInfo();
+	appendStringInfoString(command,
+						   "WITH colocation_group_data (colocationid, shardcount, "
+						   "replicationfactor, distributioncolumntype, "
+						   "distributioncolumncollationname, "
+						   "distributioncolumncollationschema)  AS (VALUES ");
+
+	char *valueRow = NULL;
+	bool firstRow = true;
+	foreach_ptr(valueRow, valueRows)
+	{
+		appendStringInfo(command, "%s%s", firstRow ? "" : ", ", valueRow);
+		firstRow = false;
+	}
+
+	appendStringInfoString(command,
+						   ") SELECT pg_catalog.citus_internal_add_colocation_metadata("
+						   "colocationid, shardcount, replicationfactor, "
+						   "distributioncolumntype, coalesce(c.oid, 0)) "
+						   "FROM colocation_group_data d LEFT JOIN pg_collation c "
+						   "ON (d.distributioncolumncollationname = c.collname "
+						   "AND d.distributioncolumncollationschema::regnamespace"
+						   " = c.collnamespace)");
+
+	return command->data;
+}
+
+
+/*
+ * TenantSchemaMetadataBatchCommand builds a single set-based tenant schema
+ * metadata (re)creation command for a batch of tenant schemas. valueRows is a
+ * list of pre-rendered "(schemaid, colocationid)" VALUES tuples (see
+ * SendTenantSchemaMetadataCommands), where schemaid is a
+ * '"name"'::regnamespace expression. The rows are wrapped in a VALUES list that
+ * citus_internal_add_tenant_schema is called over once per row.
+ */
+static char *
+TenantSchemaMetadataBatchCommand(List *valueRows)
+{
+	StringInfo command = makeStringInfo();
+	appendStringInfoString(command,
+						   "SELECT pg_catalog.citus_internal_add_tenant_schema("
+						   "d.schemaid, d.colocationid) FROM (VALUES ");
+
+	char *valueRow = NULL;
+	bool firstRow = true;
+	foreach_ptr(valueRow, valueRows)
+	{
+		appendStringInfo(command, "%s%s", firstRow ? "" : ", ", valueRow);
+		firstRow = false;
+	}
+
+	appendStringInfoString(command, ") d(schemaid, colocationid)");
+
+	return command->data;
 }
 
 
