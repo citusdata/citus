@@ -1,0 +1,132 @@
+Parsed test spec with 3 sessions
+
+starting permutation: s3-acquire-advisory-lock s1-move-placement s2-update s3-release-advisory-lock s1-select s1-get-shard-distribution s1-check-replica-identity
+step s3-acquire-advisory-lock:
+ SELECT pg_advisory_lock(44000, 55152);
+
+pg_advisory_lock
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-move-placement:
+ SELECT master_move_shard_placement(
+  (SELECT * FROM selected_shard),
+  'localhost', 57637,
+  'localhost', 57638,
+  shard_transfer_mode => 'force_logical_auto_identity');
+ <waiting ...>
+step s2-update: 
+ UPDATE logical_replicate_no_identity SET y = y + 1 WHERE x = 15;
+
+step s3-release-advisory-lock:
+ SELECT pg_advisory_unlock(44000, 55152);
+
+pg_advisory_unlock
+---------------------------------------------------------------------
+t
+(1 row)
+
+step s1-move-placement: <... completed>
+master_move_shard_placement
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-select:
+ SELECT * FROM logical_replicate_no_identity ORDER BY x;
+
+ x| y
+---------------------------------------------------------------------
+15|16
+(1 row)
+
+step s1-get-shard-distribution:
+ SELECT nodeport
+ FROM pg_dist_placement
+ INNER JOIN pg_dist_node USING (groupid)
+ WHERE shardstate != 4
+   AND shardid IN (SELECT * FROM selected_shard)
+ ORDER BY nodeport;
+
+nodeport
+---------------------------------------------------------------------
+   57638
+(1 row)
+
+step s1-check-replica-identity:
+ SELECT DISTINCT result
+ FROM run_command_on_placements(
+  'logical_replicate_no_identity',
+  'SELECT relreplident FROM pg_class WHERE oid = ''%s''::regclass');
+
+result
+---------------------------------------------------------------------
+d
+(1 row)
+
+
+starting permutation: s3-acquire-advisory-lock s1-move-placement s2-delete s3-release-advisory-lock s1-select s1-get-shard-distribution s1-check-replica-identity
+step s3-acquire-advisory-lock:
+ SELECT pg_advisory_lock(44000, 55152);
+
+pg_advisory_lock
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-move-placement:
+ SELECT master_move_shard_placement(
+  (SELECT * FROM selected_shard),
+  'localhost', 57637,
+  'localhost', 57638,
+  shard_transfer_mode => 'force_logical_auto_identity');
+ <waiting ...>
+step s2-delete: 
+ DELETE FROM logical_replicate_no_identity WHERE x = 15;
+
+step s3-release-advisory-lock:
+ SELECT pg_advisory_unlock(44000, 55152);
+
+pg_advisory_unlock
+---------------------------------------------------------------------
+t
+(1 row)
+
+step s1-move-placement: <... completed>
+master_move_shard_placement
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-select:
+ SELECT * FROM logical_replicate_no_identity ORDER BY x;
+
+x|y
+---------------------------------------------------------------------
+(0 rows)
+
+step s1-get-shard-distribution:
+ SELECT nodeport
+ FROM pg_dist_placement
+ INNER JOIN pg_dist_node USING (groupid)
+ WHERE shardstate != 4
+   AND shardid IN (SELECT * FROM selected_shard)
+ ORDER BY nodeport;
+
+nodeport
+---------------------------------------------------------------------
+   57638
+(1 row)
+
+step s1-check-replica-identity:
+ SELECT DISTINCT result
+ FROM run_command_on_placements(
+  'logical_replicate_no_identity',
+  'SELECT relreplident FROM pg_class WHERE oid = ''%s''::regclass');
+
+result
+---------------------------------------------------------------------
+d
+(1 row)
+

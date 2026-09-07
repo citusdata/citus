@@ -468,3 +468,9 @@ s/local_table_5_col_1_fkey_([0-9]+)/local_table_5_col_1_fkey1_\1/g
 # these rules can be removed when PG19 is the minimum supported version
 /^([[:space:]]*)139264$/ s/139264$/131072/
 /^([[:space:]]*[0-9]+[[:space:]]+[|][[:space:]]+)139264$/ s/139264$/131072/
+
+# shard_move_without_replica_identity: the temporary replica identity helper index
+# on the un-indexable column fails to build and forwards the raw btree size WARNING
+# from the worker. The heap tuple location (ctid) it references is an incidental
+# layout detail that can differ across PostgreSQL versions, so mask it.
+s/references tuple \([0-9]+,[0-9]+\) in relation "t_unindexable_/references tuple (X,Y) in relation "t_unindexable_/
