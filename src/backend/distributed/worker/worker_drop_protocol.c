@@ -38,6 +38,7 @@
 
 PG_FUNCTION_INFO_V1(worker_drop_distributed_table);
 PG_FUNCTION_INFO_V1(worker_drop_shell_table);
+PG_FUNCTION_INFO_V1(worker_drop_shell_table_and_partition_row);
 PG_FUNCTION_INFO_V1(worker_drop_sequence_dependency);
 
 static void WorkerDropDistributedTable(Oid relationId);
@@ -253,6 +254,84 @@ worker_drop_shell_table(PG_FUNCTION_ARGS)
 	 * table and only delete the metadata.
 	 *
 	 * We drop the table with cascade since other tables may be referring to it.
+	 */
+	performDeletion(distributedTableObject, DROP_CASCADE,
+					PERFORM_DELETION_INTERNAL);
+
+	PG_RETURN_VOID();
+}
+
+/*
+ * worker_drop_shell_table_and_partition_row drops one shell table on the worker
+ * and, in the same command, deletes its pg_dist_partition row. It is the
+ * parallel-drop-phase counterpart of worker_drop_shell_table(): metadata sync
+ * drives it over the connection pool, one table per task.
+ *
+ * Deleting the pg_dist_partition row here (instead of relying only on the later
+ * bulk DELETE FROM pg_dist_partition) leaves the worker's pg_dist_partition
+ * near-empty by the time the safety-net CALL worker_drop_all_shell_tables(false)
+ * runs, so that per-row-committing loop sweeps only the few orphan tables the
+ * coordinator did not know about rather than all ~N tables.
+ *
+ * Unlike worker_drop_shell_table() it does not unmark owned sequences from
+ * pg_dist_object; that catalog (along with pg_dist_shard / pg_dist_placement) is
+ * cleared by the existing bulk metadata-deletion path. Sequence dependencies were
+ * already broken earlier in the sync, so the DROP_CASCADE below will not drop the
+ * distributed sequences.
+ */
+Datum
+worker_drop_shell_table_and_partition_row(PG_FUNCTION_ARGS)
+{
+	CheckCitusVersion(ERROR);
+
+	text *relationName = PG_GETARG_TEXT_P(0);
+	Oid relationId = ResolveRelationId(relationName, true);
+
+	if (!OidIsValid(relationId))
+	{
+		ereport(NOTICE, (errmsg("relation %s does not exist, skipping",
+								text_to_cstring(relationName))));
+		PG_RETURN_VOID();
+	}
+
+	EnsureTableOwner(relationId);
+
+	if (GetLocalGroupId() == COORDINATOR_GROUP_ID)
+	{
+		ereport(ERROR, (errmsg("worker_drop_shell_table_and_partition_row is only "
+							   "allowed to run on worker nodes")));
+	}
+
+	/* first check the relation type */
+	Relation distributedRelation = relation_open(relationId, AccessShareLock);
+	EnsureRelationKindSupported(relationId);
+
+	/* close the relation since we do not need anymore */
+	relation_close(distributedRelation, AccessShareLock);
+
+	/* prepare distributedTableObject for dropping the table */
+	ObjectAddress *distributedTableObject = palloc0(sizeof(ObjectAddress));
+	ObjectAddressSet(*distributedTableObject, RelationRelationId, relationId);
+	if (IsAnyObjectAddressOwnedByExtension(list_make1(distributedTableObject), NULL))
+	{
+		/*
+		 * If the table is owned by an extension, we cannot drop it until the
+		 * user runs DROP EXTENSION. Match worker_drop_shell_table() and leave
+		 * both the relation and its pg_dist_partition row in place.
+		 */
+		PG_RETURN_VOID();
+	}
+
+	/*
+	 * Delete this table's pg_dist_partition row atomically with the drop below.
+	 * We deliberately leave pg_dist_shard, pg_dist_placement and pg_dist_object
+	 * to the bulk metadata-deletion path.
+	 */
+	DeletePartitionRow(relationId);
+
+	/*
+	 * We drop the table with cascade since other tables may be referring to it.
+	 * PERFORM_DELETION_INTERNAL avoids firing the Citus drop event trigger.
 	 */
 	performDeletion(distributedTableObject, DROP_CASCADE,
 					PERFORM_DELETION_INTERNAL);
