@@ -121,6 +121,8 @@ static bool ShouldSyncTableMetadataInternal(bool hashDistributed,
 static bool SyncNodeMetadataSnapshotToNode(WorkerNode *workerNode, bool raiseOnError);
 static void FlushMetadataSyncCachesIfNeeded(MetadataSyncContext *context,
 											int64 processedCount);
+static char * ColocationMetadataBatchCommand(List *valueRows);
+static char * TenantSchemaMetadataBatchCommand(List *valueRows);
 static void DropMetadataSnapshotOnNode(WorkerNode *workerNode);
 static void FetchSequenceState(Oid sequenceId, int64 *lastValue, bool *isCalled);
 static void AppendSequenceRangeAdjustCommand(Oid sequenceId, List **commandList);
@@ -5292,24 +5294,27 @@ SendColocationMetadataCommands(MetadataSyncContext *context)
 											  scanKeyCount, scanKey);
 
 	MemoryContext oldContext = MemoryContextSwitchTo(context->context);
+
+	bool collecting = MetadataSyncCollectsCommands(context);
+	int batchSize = collecting ? 1 : Max(MetadataSyncSetBatchSize, 1);
+	MemoryContext batchContext =
+		AllocSetContextCreate(context->context, "colocation metadata batch context",
+							  ALLOCSET_DEFAULT_SIZES);
+
+	List *valueRows = NIL;
+	int batchCount = 0;
+	int64 processedCount = 0;
+
+	MemoryContextSwitchTo(batchContext);
+
 	HeapTuple nextTuple = NULL;
 	while (true)
 	{
-		ResetMetadataSyncMemoryContext(context);
-
 		nextTuple = systable_getnext(scanDesc);
 		if (!HeapTupleIsValid(nextTuple))
 		{
 			break;
 		}
-
-		StringInfo colocationGroupCreateCommand = makeStringInfo();
-		appendStringInfo(colocationGroupCreateCommand,
-						 "WITH colocation_group_data (colocationid, shardcount, "
-						 "replicationfactor, distributioncolumntypeschema, "
-						 "distributioncolumntypename, "
-						 "distributioncolumncollationname, "
-						 "distributioncolumncollationschema)  AS (VALUES ");
 
 		Form_pg_dist_colocation colocationForm =
 			(Form_pg_dist_colocation) GETSTRUCT(nextTuple);
@@ -5324,7 +5329,8 @@ SendColocationMetadataCommands(MetadataSyncContext *context)
 		char *typeSchemaName =
 			GetRemoteTypeNamespace(colocationForm->distributioncolumntype);
 
-		appendStringInfo(colocationGroupCreateCommand,
+		StringInfo valueRow = makeStringInfo();
+		appendStringInfo(valueRow,
 						 "(%d, %d, %d, ",
 						 colocationForm->colocationid,
 						 colocationForm->shardcount,
@@ -5334,7 +5340,7 @@ SendColocationMetadataCommands(MetadataSyncContext *context)
 		if (typeSchemaName != NULL && typeName != NULL)
 		{
 			/* Use quote_identifier so the schema name can be cast to regnamespace */
-			appendStringInfo(colocationGroupCreateCommand,
+			appendStringInfo(valueRow,
 							 "%s, %s, ",
 							 quote_literal_cstr(quote_identifier(typeSchemaName)),
 							 quote_literal_cstr(typeName));
@@ -5342,14 +5348,14 @@ SendColocationMetadataCommands(MetadataSyncContext *context)
 		else if (typeName != NULL)
 		{
 			/* Type is in pg_catalog or no schema qualifier needed */
-			appendStringInfo(colocationGroupCreateCommand,
+			appendStringInfo(valueRow,
 							 "NULL, %s, ",
 							 quote_literal_cstr(typeName));
 		}
 		else
 		{
 			/* InvalidOid or unknown type */
-			appendStringInfo(colocationGroupCreateCommand,
+			appendStringInfo(valueRow,
 							 "NULL, NULL, ");
 		}
 
@@ -5369,7 +5375,7 @@ SendColocationMetadataCommands(MetadataSyncContext *context)
 				char *collationName = NameStr(collationform->collname);
 				char *collationSchemaName =
 					get_namespace_name(collationform->collnamespace);
-				appendStringInfo(colocationGroupCreateCommand,
+				appendStringInfo(valueRow,
 								 "%s, %s)",
 								 quote_literal_cstr(collationName),
 								 quote_literal_cstr(collationSchemaName));
@@ -5377,40 +5383,45 @@ SendColocationMetadataCommands(MetadataSyncContext *context)
 			}
 			else
 			{
-				appendStringInfo(colocationGroupCreateCommand,
-								 "NULL, NULL)");
+				appendStringInfo(valueRow, "NULL, NULL)");
 			}
 		}
 		else
 		{
-			appendStringInfo(colocationGroupCreateCommand,
-							 "NULL, NULL)");
+			appendStringInfo(valueRow, "NULL, NULL)");
 		}
 
-		/*
-		 * Use LEFT JOIN with pg_type to resolve the type OID at runtime.
-		 * This defers type resolution until execution on the worker, allowing
-		 * the type and its schema to be created first by dependency commands.
-		 */
-		appendStringInfo(colocationGroupCreateCommand,
-						 ") SELECT citus_internal.add_colocation_metadata("
-						 "colocationid, shardcount, replicationfactor, "
-						 "coalesce(t.oid, 0), coalesce(c.oid, 0)) "
-						 "FROM colocation_group_data d "
-						 "LEFT JOIN pg_type t ON ("
-						 "d.distributioncolumntypename = t.typname "
-						 "AND (d.distributioncolumntypeschema IS NULL OR "
-						 "t.typnamespace = (SELECT oid FROM pg_namespace WHERE "
-						 "nspname = d.distributioncolumntypeschema))) "
-						 "LEFT JOIN pg_collation c "
-						 "ON (d.distributioncolumncollationname = c.collname "
-						 "AND c.collnamespace = (SELECT oid FROM pg_namespace WHERE "
-						 "nspname = d.distributioncolumncollationschema))");
+		valueRows = lappend(valueRows, valueRow->data);
+		batchCount++;
 
-		List *commandList = list_make1(colocationGroupCreateCommand->data);
-		SendOrCollectCommandListToActivatedNodes(context, commandList);
+		if (batchCount >= batchSize)
+		{
+			MemoryContext buildContext = collecting ? context->context : batchContext;
+			MemoryContext prev = MemoryContextSwitchTo(buildContext);
+			List *commandList = list_make1(ColocationMetadataBatchCommand(valueRows));
+			SendOrCollectCommandListToActivatedNodes(context, commandList);
+			MemoryContextSwitchTo(prev);
+
+			MemoryContextReset(batchContext);
+			valueRows = NIL;
+			batchCount = 0;
+		}
+
+		FlushMetadataSyncCachesIfNeeded(context, ++processedCount);
 	}
+
+	/* flush the final partial batch */
+	if (batchCount > 0)
+	{
+		MemoryContext buildContext = collecting ? context->context : batchContext;
+		MemoryContext prev = MemoryContextSwitchTo(buildContext);
+		List *commandList = list_make1(ColocationMetadataBatchCommand(valueRows));
+		SendOrCollectCommandListToActivatedNodes(context, commandList);
+		MemoryContextSwitchTo(prev);
+	}
+
 	MemoryContextSwitchTo(oldContext);
+	MemoryContextDelete(batchContext);
 
 	systable_endscan(scanDesc);
 	table_close(relation, AccessShareLock);
@@ -5434,11 +5445,22 @@ SendTenantSchemaMetadataCommands(MetadataSyncContext *context)
 											  scanKeyCount, scanKey);
 
 	MemoryContext oldContext = MemoryContextSwitchTo(context->context);
+
+	bool collecting = MetadataSyncCollectsCommands(context);
+	int batchSize = collecting ? 1 : Max(MetadataSyncSetBatchSize, 1);
+	MemoryContext batchContext =
+		AllocSetContextCreate(context->context, "tenant schema metadata batch context",
+							  ALLOCSET_DEFAULT_SIZES);
+
+	List *valueRows = NIL;
+	int batchCount = 0;
+	int64 processedCount = 0;
+
+	MemoryContextSwitchTo(batchContext);
+
 	HeapTuple heapTuple = NULL;
 	while (true)
 	{
-		ResetMetadataSyncMemoryContext(context);
-
 		heapTuple = systable_getnext(scanDesc);
 		if (!HeapTupleIsValid(heapTuple))
 		{
@@ -5448,19 +5470,135 @@ SendTenantSchemaMetadataCommands(MetadataSyncContext *context)
 		Form_pg_dist_schema tenantSchemaForm =
 			(Form_pg_dist_schema) GETSTRUCT(heapTuple);
 
-		StringInfo insertTenantSchemaCommand = makeStringInfo();
-		appendStringInfo(insertTenantSchemaCommand,
-						 "SELECT citus_internal.add_tenant_schema(%s, %u)",
+		StringInfo valueRow = makeStringInfo();
+		appendStringInfo(valueRow,
+						 "(%s, %u)",
 						 RemoteSchemaIdExpressionById(tenantSchemaForm->schemaid),
 						 tenantSchemaForm->colocationid);
 
-		List *commandList = list_make1(insertTenantSchemaCommand->data);
-		SendOrCollectCommandListToActivatedNodes(context, commandList);
+		valueRows = lappend(valueRows, valueRow->data);
+		batchCount++;
+
+		if (batchCount >= batchSize)
+		{
+			MemoryContext buildContext = collecting ? context->context : batchContext;
+			MemoryContext prev = MemoryContextSwitchTo(buildContext);
+			char *command = collecting ?
+							psprintf(
+				"SELECT citus_internal.add_tenant_schema%s",
+				(char *) linitial(valueRows)) :
+							TenantSchemaMetadataBatchCommand(valueRows);
+			List *commandList = list_make1(command);
+			SendOrCollectCommandListToActivatedNodes(context, commandList);
+			MemoryContextSwitchTo(prev);
+
+			MemoryContextReset(batchContext);
+			valueRows = NIL;
+			batchCount = 0;
+		}
+
+		FlushMetadataSyncCachesIfNeeded(context, ++processedCount);
 	}
+
+	/* flush the final partial batch */
+	if (batchCount > 0)
+	{
+		MemoryContext buildContext = collecting ? context->context : batchContext;
+		MemoryContext prev = MemoryContextSwitchTo(buildContext);
+		char *command = collecting ?
+						psprintf(
+			"SELECT citus_internal.add_tenant_schema%s",
+			(char *) linitial(valueRows)) :
+						TenantSchemaMetadataBatchCommand(valueRows);
+		List *commandList = list_make1(command);
+		SendOrCollectCommandListToActivatedNodes(context, commandList);
+		MemoryContextSwitchTo(prev);
+	}
+
 	MemoryContextSwitchTo(oldContext);
+	MemoryContextDelete(batchContext);
 
 	systable_endscan(scanDesc);
 	table_close(pgDistTenantSchema, AccessShareLock);
+}
+
+
+/*
+ * ColocationMetadataBatchCommand builds a single set-based colocation metadata
+ * (re)creation command for a batch of colocation groups. valueRows is a list of
+ * pre-rendered "(colocationid, shardcount, replicationfactor,
+ * distributioncolumntypeschema, distributioncolumntypename,
+ * distributioncolumncollationname, distributioncolumncollationschema)" VALUES
+ * tuples (see SendColocationMetadataCommands).
+ */
+static char *
+ColocationMetadataBatchCommand(List *valueRows)
+{
+	StringInfo command = makeStringInfo();
+	appendStringInfoString(command,
+						   "WITH colocation_group_data (colocationid, shardcount, "
+						   "replicationfactor, distributioncolumntypeschema, "
+						   "distributioncolumntypename, "
+						   "distributioncolumncollationname, "
+						   "distributioncolumncollationschema)  AS (VALUES ");
+
+	char *valueRow = NULL;
+	bool firstRow = true;
+	foreach_declared_ptr(valueRow, valueRows)
+	{
+		appendStringInfo(command, "%s%s", firstRow ? "" : ", ", valueRow);
+		firstRow = false;
+	}
+
+	/*
+	 * Use LEFT JOIN with pg_type to resolve the type OID at runtime.
+	 * This defers type resolution until execution on the worker, allowing
+	 * the type and its schema to be created first by dependency commands.
+	 */
+	appendStringInfoString(command,
+						   ") SELECT citus_internal.add_colocation_metadata("
+						   "colocationid, shardcount, replicationfactor, "
+						   "coalesce(t.oid, 0), coalesce(c.oid, 0)) "
+						   "FROM colocation_group_data d "
+						   "LEFT JOIN pg_type t ON ("
+						   "d.distributioncolumntypename = t.typname "
+						   "AND (d.distributioncolumntypeschema IS NULL OR "
+						   "t.typnamespace = (SELECT oid FROM pg_namespace WHERE "
+						   "nspname = d.distributioncolumntypeschema))) "
+						   "LEFT JOIN pg_collation c "
+						   "ON (d.distributioncolumncollationname = c.collname "
+						   "AND c.collnamespace = (SELECT oid FROM pg_namespace WHERE "
+						   "nspname = d.distributioncolumncollationschema))");
+
+	return command->data;
+}
+
+
+/*
+ * TenantSchemaMetadataBatchCommand builds a single set-based tenant schema
+ * metadata (re)creation command for a batch of tenant schemas. valueRows is a
+ * list of pre-rendered "(schemaid, colocationid)" VALUES tuples (see
+ * SendTenantSchemaMetadataCommands).
+ */
+static char *
+TenantSchemaMetadataBatchCommand(List *valueRows)
+{
+	StringInfo command = makeStringInfo();
+	appendStringInfoString(command,
+						   "SELECT citus_internal.add_tenant_schema("
+						   "d.schemaid, d.colocationid) FROM (VALUES ");
+
+	char *valueRow = NULL;
+	bool firstRow = true;
+	foreach_declared_ptr(valueRow, valueRows)
+	{
+		appendStringInfo(command, "%s%s", firstRow ? "" : ", ", valueRow);
+		firstRow = false;
+	}
+
+	appendStringInfoString(command, ") d(schemaid, colocationid)");
+
+	return command->data;
 }
 
 
