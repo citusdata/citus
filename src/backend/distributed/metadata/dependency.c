@@ -37,6 +37,7 @@
 #include "common/hashfn.h"
 #include "utils/fmgroids.h"
 #include "utils/hsearch.h"
+#include "utils/inval.h"
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
 
@@ -330,14 +331,18 @@ GetAllCitusDependedDependenciesForObject(const ObjectAddress *target)
  *
  * If the object is already in the list it is skipped for traversal. This happens when an
  * object was already added to the target list before it occurred in the input list.
+ *
+ * When flushCaches is true, the caller opts into periodically flushing the coordinator
+ * caches that grow while traversing pg_depend.
  */
 List *
-OrderObjectAddressListInDependencyOrder(List *objectAddressList)
+OrderObjectAddressListInDependencyOrder(List *objectAddressList, bool flushCaches)
 {
 	ObjectAddressCollector collector = { 0 };
 	InitObjectAddressCollector(&collector);
 
 	ObjectAddress *objectAddress = NULL;
+	int64 processedCount = 0;
 	foreach_declared_ptr(objectAddress, objectAddressList)
 	{
 		if (IsObjectAddressCollected(*objectAddress, &collector))
@@ -353,6 +358,20 @@ OrderObjectAddressListInDependencyOrder(List *objectAddressList)
 								  &collector);
 
 		CollectObjectAddress(&collector, objectAddress);
+
+		/*
+		 * This loop opens each Citus table (and its dependencies) to traverse pg_depend,
+		 * which accumulates postgres relcache/catcache and Citus metadata cache entries
+		 * on the coordinator. For a very large number of distributed objects this transient
+		 * cache growth can exhaust coordinator memory during metadata sync, even before the
+		 * ordered list is returned.
+		 *
+		 * The collector only keeps ObjectAddresses, so it's safe to flush the caches.
+		 */
+		if (flushCaches && MetadataSyncCacheFlushIntervalReached(++processedCount))
+		{
+			FlushCachesForMetadataSync();
+		}
 	}
 
 	return collector.dependencyList;
