@@ -2483,13 +2483,17 @@ ColumnarProcessUtility(PlannedStmt *pstmt,
 		CheckCitusColumnarAlterExtensionStmt(parsetree);
 	}
 
-	int saveNestLevel = -1;
+	/*
+	 * We cannot use a GUC nest level here: CREATE INDEX CONCURRENTLY and
+	 * REINDEX CONCURRENTLY commit and restart the transaction internally,
+	 * which resets GUCNestLevel.  That both discards the override and makes
+	 * the matching AtEOXact_GUC() call trip its nest-level assertion.  Save
+	 * and restore the variable directly instead.
+	 */
+	int saveMaintenanceWorkers = max_parallel_maintenance_workers;
 	if (indexBuildOnColumnar)
 	{
-		saveNestLevel = NewGUCNestLevel();
-		set_config_option("max_parallel_maintenance_workers", "0",
-						  PGC_USERSET, PGC_S_SESSION,
-						  GUC_ACTION_SAVE, true, 0, false);
+		max_parallel_maintenance_workers = 0;
 	}
 
 	PG_TRY();
@@ -2499,9 +2503,9 @@ ColumnarProcessUtility(PlannedStmt *pstmt,
 	}
 	PG_FINALLY();
 	{
-		if (saveNestLevel >= 0)
+		if (indexBuildOnColumnar)
 		{
-			AtEOXact_GUC(true, saveNestLevel);
+			max_parallel_maintenance_workers = saveMaintenanceWorkers;
 		}
 	}
 	PG_END_TRY();
