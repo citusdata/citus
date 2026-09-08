@@ -519,12 +519,16 @@ ORDER BY t.id
 LIMIT 10');
 
 -- H4 EXPLAIN
+BEGIN;
+SET LOCAL citus.propagate_set_commands TO 'local';
+SET LOCAL enable_nestloop TO off;
 SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF) SELECT id, val FROM sorted_merge_test
 WHERE id IN (
     SELECT id FROM sorted_merge_events ORDER BY id LIMIT 10
 )
 ORDER BY id
 LIMIT 5');
+COMMIT;
 
 -- H5 EXPLAIN
 SELECT public.explain_filter('EXPLAIN (ANALYZE ON, VERBOSE ON, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF) WITH small_cte AS (

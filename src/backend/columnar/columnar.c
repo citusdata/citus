@@ -65,7 +65,7 @@ columnar_init(void)
 
 
 void
-columnar_init_gucs()
+columnar_init_gucs(void)
 {
 	DefineCustomEnumVariable("columnar.compression",
 							 "Compression type for columnar.",

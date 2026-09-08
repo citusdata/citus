@@ -190,7 +190,7 @@ citus_check_defaults_for_sslmode(PG_FUNCTION_ARGS)
  * the current backend the changes will also be reflected in the current transaction.
  */
 static void
-GloballyReloadConfig()
+GloballyReloadConfig(void)
 {
 	if (kill(PostmasterPid, SIGHUP))
 	{
@@ -231,7 +231,7 @@ ShouldUseAutoSSL(void)
  * guaranteed they have the right permissions as we will not touch the keys if they exist.
  */
 static bool
-CreateCertificatesWhenNeeded()
+CreateCertificatesWhenNeeded(void)
 {
 	EVP_PKEY *privateKey = NULL;
 	X509 *certificate = NULL;
@@ -317,7 +317,7 @@ CreateCertificatesWhenNeeded()
  * when the function is called and therefore should not be freed by the caller.
  */
 static EVP_PKEY *
-GeneratePrivateKey()
+GeneratePrivateKey(void)
 {
 	/* Allocate memory for the EVP_PKEY structure. */
 	EVP_PKEY *privateKey = EVP_PKEY_new();

@@ -178,8 +178,8 @@ CitusExecutorRun(QueryDesc *queryDesc,
 	 * and stop the instrumentation of the total time and put it back on the queryDesc
 	 * before returning (or rethrowing) from this function.
 	 */
-	Instrumentation *volatile totalTime = queryDesc->totaltime;
-	queryDesc->totaltime = NULL;
+	Instrumentation *volatile totalTime = QueryDescTotalTime(queryDesc);
+	QueryDescTotalTime(queryDesc) = NULL;
 
 	PG_TRY();
 	{
@@ -187,7 +187,11 @@ CitusExecutorRun(QueryDesc *queryDesc,
 
 		if (totalTime)
 		{
+#if PG_VERSION_NUM >= PG_VERSION_19
+			InstrStart(totalTime);
+#else
 			InstrStartNode(totalTime);
+#endif
 		}
 
 		/*
@@ -257,8 +261,12 @@ CitusExecutorRun(QueryDesc *queryDesc,
 
 		if (totalTime)
 		{
+#if PG_VERSION_NUM >= PG_VERSION_19
+			InstrStop(totalTime);
+#else
 			InstrStopNode(totalTime, queryDesc->estate->es_processed);
-			queryDesc->totaltime = totalTime;
+#endif
+			QueryDescTotalTime(queryDesc) = totalTime;
 		}
 
 		executorBoundParams = savedBoundParams;
@@ -288,7 +296,7 @@ CitusExecutorRun(QueryDesc *queryDesc,
 	{
 		if (totalTime)
 		{
-			queryDesc->totaltime = totalTime;
+			QueryDescTotalTime(queryDesc) = totalTime;
 		}
 
 		executorBoundParams = savedBoundParams;
@@ -840,7 +848,7 @@ ExecutePlanIntoDestReceiver(PlannedStmt *queryPlan, ParamListInfo params,
  *      SET LOCAL citus.multi_shard_modify_mode = 'sequential';
  */
 void
-SetLocalMultiShardModifyModeToSequential()
+SetLocalMultiShardModifyModeToSequential(void)
 {
 	set_config_option("citus.multi_shard_modify_mode", "sequential",
 					  (superuser() ? PGC_SUSET : PGC_USERSET), PGC_S_SESSION,

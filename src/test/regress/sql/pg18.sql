@@ -612,12 +612,12 @@ INSERT INTO temporal_fk_rng2rng VALUES
 CREATE TABLE check_ign_err (n int, m int[], k int);
 SELECT create_distributed_table('check_ign_err', 'n');
 
-COPY check_ign_err FROM STDIN WITH (on_error stop, reject_limit 5);
-COPY check_ign_err FROM STDIN WITH (ON_ERROR ignore, REJECT_LIMIT 100);
-COPY check_ign_err FROM STDIN WITH (on_error ignore, log_verbosity verbose, reject_limit 50);
-COPY check_ign_err FROM STDIN WITH (reject_limt 77, log_verbosity verbose, on_error ignore);
+\copy check_ign_err FROM PROGRAM 'true' WITH (on_error stop, reject_limit 5)
+\copy check_ign_err FROM PROGRAM 'true' WITH (ON_ERROR ignore, REJECT_LIMIT 100)
+\copy check_ign_err FROM PROGRAM 'true' WITH (on_error ignore, log_verbosity verbose, reject_limit 50)
+\copy check_ign_err FROM PROGRAM 'true' WITH (reject_limt 77, log_verbosity verbose, on_error ignore)
 -- PG requires on_error when reject_limit is specified
-COPY check_ign_err FROM STDIN WITH (reject_limit 100);
+\copy check_ign_err FROM PROGRAM 'true' WITH (reject_limit 100)
 
 -- PG18 Feature: COPY TABLE TO on a materialized view
 -- PG18 commit: https://github.com/postgres/postgres/commit/534874fac

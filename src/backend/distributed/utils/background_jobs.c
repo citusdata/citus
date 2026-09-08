@@ -113,7 +113,7 @@ static void TaskEnded(TaskExecutionContext *taskExecutionContext);
 static void TerminateAllTaskExecutors(HTAB *currentExecutors);
 static HTAB * GetRunningUniqueJobIds(HTAB *currentExecutors);
 static void CancelAllTaskExecutors(HTAB *currentExecutors);
-static bool MonitorGotTerminationOrCancellationRequest();
+static bool MonitorGotTerminationOrCancellationRequest(void);
 static void QueueMonitorSigTermHandler(SIGNAL_ARGS);
 static void QueueMonitorSigIntHandler(SIGNAL_ARGS);
 static void QueueMonitorSigHupHandler(SIGNAL_ARGS);
@@ -964,7 +964,7 @@ QueueMonitorSigHupHandler(SIGNAL_ARGS)
  * MonitorGotTerminationOrCancellationRequest returns true if monitor had SIGTERM or SIGINT signals
  */
 static bool
-MonitorGotTerminationOrCancellationRequest()
+MonitorGotTerminationOrCancellationRequest(void)
 {
 	return GotSigterm || GotSigint;
 }
@@ -1500,7 +1500,7 @@ ConsumeTaskWorkerOutput(shm_mq_handle *responseq, StringInfo message, bool *hadE
 				}
 			}
 
-			/* FALLTHROUGH */
+				pg_fallthrough;
 
 			case 'N': /* NoticeResponse */
 			{

@@ -108,8 +108,13 @@ static void AddColumnarScanPathsRec(PlannerInfo *root, RelOptInfo *rel,
 /* hooks and callbacks */
 static void ColumnarSetRelPathlistHook(PlannerInfo *root, RelOptInfo *rel, Index rti,
 									   RangeTblEntry *rte);
+#if PG_VERSION_NUM < PG_VERSION_19
 static void ColumnarGetRelationInfoHook(PlannerInfo *root, Oid relationObjectId,
 										bool inhparent, RelOptInfo *rel);
+#else
+static void ColumnarBuildSimpleRelHook(PlannerInfo *root, RelOptInfo *rel,
+									   RangeTblEntry *rte);
+#endif
 static Plan * ColumnarScanPath_PlanCustomPath(PlannerInfo *root,
 											  RelOptInfo *rel,
 											  struct CustomPath *best_path,
@@ -143,7 +148,11 @@ static Bitmapset * fixup_inherited_columns(Oid parentId, Oid childId, Bitmapset 
 
 /* saved hook value in case of unload */
 static set_rel_pathlist_hook_type PreviousSetRelPathlistHook = NULL;
+#if PG_VERSION_NUM < PG_VERSION_19
 static get_relation_info_hook_type PreviousGetRelationInfoHook = NULL;
+#else
+static build_simple_rel_hook_type PreviousBuildSimpleRelHook = NULL;
+#endif
 
 static bool EnableColumnarCustomScan = true;
 static bool EnableColumnarQualPushdown = true;
@@ -194,13 +203,18 @@ static const struct config_enum_entry debug_level_options[] = {
  * provide extra paths for columnar tables
  */
 void
-columnar_customscan_init()
+columnar_customscan_init(void)
 {
 	PreviousSetRelPathlistHook = set_rel_pathlist_hook;
 	set_rel_pathlist_hook = ColumnarSetRelPathlistHook;
 
+#if PG_VERSION_NUM < PG_VERSION_19
 	PreviousGetRelationInfoHook = get_relation_info_hook;
 	get_relation_info_hook = ColumnarGetRelationInfoHook;
+#else
+	PreviousBuildSimpleRelHook = build_simple_rel_hook;
+	build_simple_rel_hook = ColumnarBuildSimpleRelHook;
+#endif
 
 	/* register customscan specific GUC's */
 	DefineCustomBoolVariable(
@@ -304,8 +318,8 @@ ColumnarSetRelPathlistHook(PlannerInfo *root, RelOptInfo *rel, Index rti,
 		if (list_length(rel->partial_pathlist) != 0)
 		{
 			/*
-			 * Parallel scans on columnar tables are already discardad by
-			 * ColumnarGetRelationInfoHook but be on the safe side.
+			 * Parallel scans on columnar tables are already disabled by the
+			 * relation setup hook, but be on the safe side.
 			 */
 			elog(ERROR, "parallel scans on columnar are not supported");
 		}
@@ -351,6 +365,34 @@ ColumnarSetRelPathlistHook(PlannerInfo *root, RelOptInfo *rel, Index rti,
 }
 
 
+#if PG_VERSION_NUM >= PG_VERSION_19
+static void
+ColumnarBuildSimpleRelHook(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
+{
+	if (PreviousBuildSimpleRelHook)
+	{
+		PreviousBuildSimpleRelHook(root, rel, rte);
+	}
+
+	if (!OidIsValid(rte->relid) || rte->rtekind != RTE_RELATION ||
+		!IsColumnarTableAmTable(rte->relid))
+	{
+		return;
+	}
+
+	/* disable parallel query */
+	rel->rel_parallel_workers = 0;
+
+	/* disable index-only scan */
+	IndexOptInfo *indexOptInfo = NULL;
+	foreach_declared_ptr(indexOptInfo, rel->indexlist)
+	{
+		memset(indexOptInfo->canreturn, false, indexOptInfo->ncolumns * sizeof(bool));
+	}
+}
+
+
+#else
 static void
 ColumnarGetRelationInfoHook(PlannerInfo *root, Oid relationObjectId,
 							bool inhparent, RelOptInfo *rel)
@@ -373,6 +415,9 @@ ColumnarGetRelationInfoHook(PlannerInfo *root, Oid relationObjectId,
 		}
 	}
 }
+
+
+#endif
 
 
 /*

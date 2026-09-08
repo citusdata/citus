@@ -255,7 +255,7 @@ stop_session_level_connection_to_node(PG_FUNCTION_ARGS)
  * by the connection.
  */
 static int64
-GetRemoteProcessId()
+GetRemoteProcessId(void)
 {
 	StringInfo queryStringInfo = makeStringInfo();
 	PGresult *result = NULL;

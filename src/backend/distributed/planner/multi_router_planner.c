@@ -161,7 +161,7 @@ static bool ContainsSearchClauseWalker(Node *node, void *context);
 static bool SelectsFromDistributedTable(List *rangeTableList, Query *query);
 static bool AllShardsColocated(List *relationShardList);
 static ShardPlacement * CreateDummyPlacement(bool hasLocalRelation);
-static ShardPlacement * CreateLocalDummyPlacement();
+static ShardPlacement * CreateLocalDummyPlacement(void);
 static int CompareInsertValuesByShardId(const void *leftElement,
 										const void *rightElement);
 static List * SingleShardTaskList(Query *query, uint64 jobId,
@@ -3129,7 +3129,7 @@ CreateTaskPlacementListForShardIntervals(List *shardIntervalListList, bool shard
  *       (b) queries that hit zero shards (... WHERE false;)
  */
 static ShardPlacement *
-CreateLocalDummyPlacement()
+CreateLocalDummyPlacement(void)
 {
 	ShardPlacement *dummyPlacement = CitusMakeNode(ShardPlacement);
 	dummyPlacement->nodeId = LOCAL_NODE_ID;

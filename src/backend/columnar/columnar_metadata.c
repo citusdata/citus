@@ -2024,7 +2024,7 @@ LookupStorageId(Oid relid, RelFileLocator relfilelocator)
  * it.
  */
 uint64
-ColumnarMetadataNewStorageId()
+ColumnarMetadataNewStorageId(void)
 {
 	return nextval_internal(ColumnarStorageIdSequenceRelationId(), false);
 }

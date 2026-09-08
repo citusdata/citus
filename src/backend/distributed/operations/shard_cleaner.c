@@ -196,7 +196,7 @@ DropOrphanedResourcesInSeparateTransaction(void)
  * returns the number of dropped resources.
  */
 int
-TryDropOrphanedResources()
+TryDropOrphanedResources(void)
 {
 	int droppedResourceCount = 0;
 	MemoryContext savedContext = CurrentMemoryContext;
@@ -244,7 +244,7 @@ TryDropOrphanedResources()
  * locks held anymore.
  */
 static int
-DropOrphanedResourcesForCleanup()
+DropOrphanedResourcesForCleanup(void)
 {
 	List *cleanupRecordList = ListCleanupRecords();
 
@@ -979,7 +979,7 @@ ErrorIfCleanupRecordForShardExists(char *shardName)
  * in write ahead logs; writing to logs avoids the risk of having operationId collisions.
  */
 static OperationId
-GetNextOperationId()
+GetNextOperationId(void)
 {
 	OperationId operationdId = INVALID_OPERATION_ID;
 

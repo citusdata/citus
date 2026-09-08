@@ -157,7 +157,12 @@ PlannedStmt *
 distributed_planner(Query *parse,
 					const char *query_string,
 					int cursorOptions,
+#if PG_VERSION_NUM >= PG_VERSION_19
+					ParamListInfo boundParams,
+					struct ExplainState *es)
+#else
 					ParamListInfo boundParams)
+#endif
 {
 	bool needsDistributedPlanning = false;
 	bool fastPathRouterQuery = false;
@@ -2302,6 +2307,27 @@ multi_get_relation_info_hook(PlannerInfo *root, Oid relationObjectId, bool inhpa
 }
 
 
+#if PG_VERSION_NUM >= PG_VERSION_19
+
+/*
+ * multi_build_simple_rel_hook is the PG19 replacement for the removed
+ * get_relation_info_hook. It runs at the end of build_simple_rel() with the
+ * RelOptInfo (indexlist included) already populated, and delegates to
+ * multi_get_relation_info_hook to keep the partitioned-index filtering
+ * behaviour identical across versions.
+ */
+void
+multi_build_simple_rel_hook(PlannerInfo *root, RelOptInfo *rel,
+							RangeTblEntry *rte)
+{
+	/* the delegate ignores these args; it re-derives the RTE from rel->relid */
+	multi_get_relation_info_hook(root, InvalidOid, false, rel);
+}
+
+
+#endif
+
+
 /*
  * TranslatedVars deep copies the translated vars for the given relation index
  * if there is any append rel list.
@@ -2994,13 +3020,11 @@ CheckPostPlanDistribution(DistributedPlanningContext *planContext, bool
 		Node *origQuals = origQuery->jointree->quals;
 		Node *plannedQuals = plannedQuery->jointree->quals;
 
-		#if PG_VERSION_NUM >= PG_VERSION_17
 		if (IsMergeQuery(origQuery))
 		{
 			origQuals = origQuery->mergeJoinCondition;
 			plannedQuals = plannedQuery->mergeJoinCondition;
 		}
-		#endif
 
 		/*
 		 * If the WHERE quals have been eliminated by the Postgres planner, possibly

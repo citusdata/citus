@@ -957,7 +957,7 @@ upgrade_to_reference_table(PG_FUNCTION_ARGS)
  * anything.
  */
 uint32
-CreateReferenceTableColocationId()
+CreateReferenceTableColocationId(void)
 {
 	int shardCount = 1;
 	Oid distributionColumnType = InvalidOid;
@@ -986,7 +986,7 @@ CreateReferenceTableColocationId()
 
 
 uint32
-GetReferenceTableColocationId()
+GetReferenceTableColocationId(void)
 {
 	int shardCount = 1;
 	Oid distributionColumnType = InvalidOid;

@@ -150,6 +150,18 @@ PreprocessGrantStmt(Node *node, const char *queryString,
 	}
 
 	/*
+	 * A grant may be attributed to a role other than the one we connect to the
+	 * workers as, in which case the workers would pick a grantor of their own
+	 * and end up with an ACL that differs from the one on the coordinator.
+	 */
+	const char *grantedBy = "";
+	if (grantStmt->grantor)
+	{
+		grantedBy = psprintf(" GRANTED BY %s",
+							 RoleSpecString(grantStmt->grantor, true));
+	}
+
+	/*
 	 * Deparse the target objects, and issue the deparsed statements to
 	 * workers, if applicable. That's so we easily can replicate statements
 	 * only to distributed relations.
@@ -170,9 +182,9 @@ PreprocessGrantStmt(Node *node, const char *queryString,
 				grantOption = " WITH GRANT OPTION";
 			}
 
-			appendStringInfo(&ddlString, "GRANT %s ON %s TO %s%s",
+			appendStringInfo(&ddlString, "GRANT %s ON %s TO %s%s%s",
 							 privsString.data, targetString.data, granteesString.data,
-							 grantOption);
+							 grantOption, grantedBy);
 		}
 		else
 		{
@@ -181,9 +193,9 @@ PreprocessGrantStmt(Node *node, const char *queryString,
 				grantOption = "GRANT OPTION FOR ";
 			}
 
-			appendStringInfo(&ddlString, "REVOKE %s%s ON %s FROM %s",
+			appendStringInfo(&ddlString, "REVOKE %s%s ON %s FROM %s%s",
 							 grantOption, privsString.data, targetString.data,
-							 granteesString.data);
+							 granteesString.data, grantedBy);
 
 			if (grantStmt->behavior == DROP_CASCADE)
 			{

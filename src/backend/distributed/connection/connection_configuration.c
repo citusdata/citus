@@ -69,7 +69,7 @@ static int uri_prefix_length(const char *connstr);
  * populated parameter settings being lost.
  */
 void
-InitConnParams()
+InitConnParams(void)
 {
 	Size maxSize = CalculateMaxSize();
 	ConnParamsInfo connParams = {
@@ -93,7 +93,7 @@ InitConnParams()
  * are no).
  */
 void
-ResetConnParams()
+ResetConnParams(void)
 {
 	for (Size paramIdx = 0; paramIdx < ConnParams.size; paramIdx++)
 	{
@@ -584,7 +584,7 @@ GetAuthinfo(char *hostname, int32 port, char *user)
  * be used if a connection utilizes every known libpq parameter.
  */
 static Size
-CalculateMaxSize()
+CalculateMaxSize(void)
 {
 	PQconninfoOption *defaults = PQconndefaults();
 	Size maxSize = 0;

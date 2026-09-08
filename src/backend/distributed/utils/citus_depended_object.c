@@ -244,16 +244,12 @@ HideCitusDependentObjectsOnQueriesOfPgMetaTables(Node *node, void *context)
 
 				if (OidIsValid(metaTableOid))
 				{
-					bool mergeJoinCondition = false;
-#if PG_VERSION_NUM >= PG_VERSION_17
-
 					/*
 					 * In Postgres 17, the query tree has a specific field for the merge condition.
 					 * So we shouldn't modify the jointree, but rather the mergeJoinCondition here
 					 * Relevant PG17 commit: 0294df2f1
 					 */
-					mergeJoinCondition = query->mergeJoinCondition;
-#endif
+					bool mergeJoinCondition = query->mergeJoinCondition;
 
 					/*
 					 * We found a valid pg meta class in query,
@@ -277,10 +273,8 @@ HideCitusDependentObjectsOnQueriesOfPgMetaTables(Node *node, void *context)
 					}
 					else
 					{
-#if PG_VERSION_NUM >= PG_VERSION_17
 						query->mergeJoinCondition = make_and_qual(
 							query->mergeJoinCondition, citusDependentObjExpr);
-#endif
 					}
 				}
 

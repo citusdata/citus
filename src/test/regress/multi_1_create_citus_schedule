@@ -90,8 +90,10 @@ test: stat_counters
 test: function_propagation
 test: citus_internal_distribute_object
 test: drop_database
+test: extract_deparse
 test: pg16
 test: pg18
+test: pg19
 test: multi_transaction_recovery_multiple_databases
 
 # Have this placeholder section at the end for the tests that need to be moved back

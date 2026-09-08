@@ -5,7 +5,7 @@ description: >-
   nightly cassert suites exercise PG-core asserts and Citus's own Assert().
 inputs:
   pg_full:
-    description: "Full PG version pgenv should build, e.g. 16.14 / 17.10 / 18.4 / 19beta1"
+    description: "Full PG version pgenv should build, e.g. 17.10 / 18.4 / 19beta1"
     required: true
 outputs:
   pgenv_bindir:

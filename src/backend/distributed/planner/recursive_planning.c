@@ -207,10 +207,6 @@ static char * GetRelationNameAndAliasName(RangeTblEntry *rangeTablentry);
 static bool CanPushdownRecurringOuterJoinOnOuterRTE(RangeTblEntry *rte);
 static bool CanPushdownRecurringOuterJoinOnInnerVar(Var *innervar, RangeTblEntry *rte);
 static bool CanPushdownRecurringOuterJoin(JoinExpr *joinExpr, Query *query);
-#if PG_VERSION_NUM < PG_VERSION_17
-static bool hasPseudoconstantQuals(RelationRestrictionContext *
-								   relationRestrictionContext);
-#endif
 
 /*
  * GenerateSubplansForSubqueriesAndCTEs is a wrapper around RecursivelyPlanSubqueriesAndCTEs.
@@ -509,33 +505,6 @@ ShouldRecursivelyPlanOuterJoins(Query *query, RecursivePlanningContext *context)
 
 	bool hasOuterJoin =
 		context->plannerRestrictionContext->joinRestrictionContext->hasOuterJoin;
-#if PG_VERSION_NUM < PG_VERSION_17
-	if (!EnableOuterJoinsWithPseudoconstantQualsPrePG17 && !hasOuterJoin)
-	{
-		/*
-		 * PG16 commit 695f5deb7902865901eb2d50a70523af655c3a00
-		 * disallows replacing joins with scans in queries with pseudoconstant quals.
-		 * This commit prevents the set_join_pathlist_hook from being called
-		 * if any of the join restrictions is a pseudo-constant.
-		 * So in these cases, citus has no info on the join, never sees that the query
-		 * has an outer join, and ends up producing an incorrect plan.
-		 * PG17 fixes this by commit 9e9931d2bf40e2fea447d779c2e133c2c1256ef3
-		 * Therefore, we take this extra measure here for PG versions less than 17.
-		 * hasOuterJoin can never be true when set_join_pathlist_hook is absent.
-		 */
-		if (hasPseudoconstantQuals(
-				context->plannerRestrictionContext->relationRestrictionContext) &&
-			FindNodeMatchingCheckFunction((Node *) query->jointree, IsOuterJoinExpr))
-		{
-			ereport(ERROR, (errmsg("Distributed queries with outer joins and "
-								   "pseudoconstant quals are not supported in PG16."),
-							errdetail(
-								"PG16 disallows replacing joins with scans when the"
-								" query has pseudoconstant quals"),
-							errhint("Consider upgrading your PG version to PG17+")));
-		}
-	}
-#endif
 	return hasOuterJoin;
 }
 
@@ -2663,32 +2632,6 @@ GeneratingSubplans(void)
 {
 	return recursivePlanningDepth > 0;
 }
-
-
-#if PG_VERSION_NUM < PG_VERSION_17
-
-/*
- * hasPseudoconstantQuals returns true if any of the planner infos in the
- * relation restriction list of the input relation restriction context
- * has a pseudoconstant qual
- */
-static bool
-hasPseudoconstantQuals(RelationRestrictionContext *relationRestrictionContext)
-{
-	ListCell *objectCell = NULL;
-	foreach(objectCell, relationRestrictionContext->relationRestrictionList)
-	{
-		if (((RelationRestriction *) lfirst(
-				 objectCell))->plannerInfo->hasPseudoConstantQuals)
-		{
-			return true;
-		}
-	}
-	return false;
-}
-
-
-#endif
 
 
 /*

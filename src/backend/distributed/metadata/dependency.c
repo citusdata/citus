@@ -2076,8 +2076,28 @@ GetRelationTriggerFunctionDependencyList(Oid relationId)
 static List *
 GetPublicationRelationsDependencyList(Oid publicationId)
 {
-	List *allRelationIds = GetPublicationRelations(publicationId, PUBLICATION_PART_ROOT);
+	List *allRelationIds = NIL;
 	List *citusRelationIds = NIL;
+
+#if PG_VERSION_NUM >= PG_VERSION_19
+	if (GetPublication(publicationId)->alltables)
+	{
+		/*
+		 * A FOR ALL TABLES publication records only its EXCEPT tables in
+		 * pg_publication_rel, and GetIncludedPublicationRelations() asserts that
+		 * the publication is not FOR ALL TABLES. The DDL we reconstruct for such
+		 * a publication names the excluded tables, so those are the relations it
+		 * depends on.
+		 */
+		allRelationIds = GetExcludedPublicationTables(publicationId,
+													  PUBLICATION_PART_ROOT);
+	}
+	else
+#endif
+	{
+		allRelationIds = GetPublicationRelations(publicationId,
+												 PUBLICATION_PART_ROOT);
+	}
 
 	Oid relationId = InvalidOid;
 

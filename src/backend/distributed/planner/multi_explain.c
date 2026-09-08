@@ -108,24 +108,16 @@ typedef struct
 	bool wal;
 	bool timing;
 	bool summary;
-#if PG_VERSION_NUM >= PG_VERSION_17
 	bool memory;
 	ExplainSerializeOption serialize;
-#endif
 	ExplainFormat format;
 } ExplainOptions;
 
 
 /* EXPLAIN flags of current distributed explain */
-#if PG_VERSION_NUM >= PG_VERSION_17
 static ExplainOptions CurrentDistributedQueryExplainOptions = {
 	0, 0, 0, 0, 0, 0, 0, EXPLAIN_SERIALIZE_NONE, EXPLAIN_FORMAT_TEXT
 };
-#else
-static ExplainOptions CurrentDistributedQueryExplainOptions = {
-	0, 0, 0, 0, 0, 0, EXPLAIN_FORMAT_TEXT
-};
-#endif
 
 /* Result for a single remote EXPLAIN command */
 typedef struct RemoteExplainPlan
@@ -187,8 +179,6 @@ typedef struct SerializeDestReceiver
 } SerializeDestReceiver;
 #endif
 
-#if PG_VERSION_NUM >= PG_VERSION_17
-
 /*
  * Various places within need to convert bytes to kilobytes.  Round these up
  * to the next whole kilobyte.
@@ -203,7 +193,6 @@ static void show_memory_counters(ExplainState *es,
 								 const MemoryContextCounters *mem_counters);
 static void ExplainPrintSerialize(ExplainState *es,
 								  SerializeMetrics *metrics);
-#endif
 
 /* Explain functions for distributed queries */
 static void ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es);
@@ -224,30 +213,24 @@ static void ExplainTaskPlacement(ShardPlacement *taskPlacement, List *explainOut
 								 ExplainState *es);
 static StringInfo BuildRemoteExplainQuery(char *queryString, ExplainState *es);
 static const char * ExplainFormatStr(ExplainFormat format);
-#if PG_VERSION_NUM >= PG_VERSION_17
 static const char * ExplainSerializeStr(ExplainSerializeOption serializeOption);
-#endif
 static void ExplainWorkerPlan(PlannedStmt *plannedStmt, DistributedSubPlan *subPlan,
 							  DestReceiver *dest,
 							  ExplainState *es,
 							  const char *queryString, ParamListInfo params,
 							  QueryEnvironment *queryEnv,
 							  const instr_time *planduration,
-#if PG_VERSION_NUM >= PG_VERSION_17
 							  const BufferUsage *bufusage,
 							  const MemoryContextCounters *mem_counters,
-#endif
 							  double *executionDurationMillisec,
 							  double *executionTuples,
 							  double *executionLoops);
 static ExplainFormat ExtractFieldExplainFormat(Datum jsonbDoc, const char *fieldName,
 											   ExplainFormat defaultValue);
-#if PG_VERSION_NUM >= PG_VERSION_17
 static ExplainSerializeOption ExtractFieldExplainSerialize(Datum jsonbDoc,
 														   const char *fieldName,
 														   ExplainSerializeOption
 														   defaultValue);
-#endif
 static TupleDestination * CreateExplainAnlyzeDestination(Task *task,
 														 TupleDestination *taskDest);
 static void ExplainAnalyzeDestPutTuple(TupleDestination *self, Task *task,
@@ -458,11 +441,21 @@ ExtractAnalyzeStats(DistributedSubPlan *subPlan, PlanState *planState)
 		return;
 	}
 
+#if PG_VERSION_NUM >= PG_VERSION_19
+	NodeInstrumentation *instr = planState->instrument;
+#else
 	Instrumentation *instr = planState->instrument;
+#endif
 	if (!IsA(planState, CustomScanState))
 	{
+#if PG_VERSION_NUM >= PG_VERSION_19
+		NodeInstrumentation *nodeInstr = planState->instrument;
+		nodeInstr->ntuples = subPlan->ntuples;
+		nodeInstr->nloops = 1; /* subplan nodes are executed only once */
+#else
 		instr->ntuples = subPlan->ntuples;
 		instr->nloops = 1; /* subplan nodes are executed only once */
+#endif
 		return;
 	}
 
@@ -477,7 +470,7 @@ ExtractAnalyzeStats(DistributedSubPlan *subPlan, PlanState *planState)
 	int tasksOutput = 0;
 	double tasksNtuples = 0;
 	double tasksNloops = 0;
-	memset(instr, 0, sizeof(Instrumentation));
+	memset(instr, 0, sizeof(*instr));
 	DistributedPlan *newdistributedPlan =
 		((CitusScanState *) planState)->distributedPlan;
 
@@ -519,8 +512,16 @@ ExtractAnalyzeStats(DistributedSubPlan *subPlan, PlanState *planState)
 		tasksOutput++;
 	}
 
+#if PG_VERSION_NUM >= PG_VERSION_19
+	{
+		NodeInstrumentation *nodeInstr = planState->instrument;
+		nodeInstr->ntuples = tasksNtuples;
+		nodeInstr->nloops = tasksNloops;
+	}
+#else
 	instr->ntuples = tasksNtuples;
 	instr->nloops = tasksNloops;
+#endif
 }
 
 
@@ -553,7 +554,6 @@ ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es)
 		BufferUsage bufusage_start,
 					bufusage;
 
-#if PG_VERSION_NUM >= PG_VERSION_17
 		MemoryContextCounters mem_counters;
 		MemoryContext planner_ctx = NULL;
 		MemoryContext saved_ctx = NULL;
@@ -566,7 +566,6 @@ ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es)
 												ALLOCSET_DEFAULT_SIZES);
 			saved_ctx = MemoryContextSwitchTo(planner_ctx);
 		}
-#endif
 
 		if (es->buffers)
 		{
@@ -630,8 +629,7 @@ ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es)
 		double executionTuples = 0;
 		double executionLoops = 0;
 
-/* Capture memory stats on PG17+ */
-#if PG_VERSION_NUM >= PG_VERSION_17
+		/* Capture memory stats */
 		if (es->memory)
 		{
 			MemoryContextSwitchTo(saved_ctx);
@@ -646,13 +644,6 @@ ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es)
 						  &executionDurationMillisec,
 						  &executionTuples,
 						  &executionLoops);
-#else
-
-		/* Execute EXPLAIN without ANALYZE */
-		ExplainWorkerPlan(plan, subPlan, dest, es, queryString, params, NULL,
-						  &planduration, &executionDurationMillisec,
-						  &executionTuples, &executionLoops);
-#endif
 
 		ExplainCloseGroup("PlannedStmt", "PlannedStmt", false, es);
 		ExplainCloseGroup("Subplan", NULL, true, es);
@@ -1210,18 +1201,14 @@ BuildRemoteExplainQuery(char *queryString, ExplainState *es)
 {
 	StringInfo explainQuery = makeStringInfo();
 	const char *formatStr = ExplainFormatStr(es->format);
-#if PG_VERSION_NUM >= PG_VERSION_17
 	const char *serializeStr = ExplainSerializeStr(es->serialize);
-#endif
 
 
 	appendStringInfo(explainQuery,
 					 "EXPLAIN (ANALYZE %s, VERBOSE %s, "
 					 "COSTS %s, BUFFERS %s, WAL %s, "
 					 "TIMING %s, SUMMARY %s, "
-#if PG_VERSION_NUM >= PG_VERSION_17
 					 "MEMORY %s, SERIALIZE %s, "
-#endif
 					 "FORMAT %s) %s",
 					 es->analyze ? "TRUE" : "FALSE",
 					 es->verbose ? "TRUE" : "FALSE",
@@ -1230,10 +1217,8 @@ BuildRemoteExplainQuery(char *queryString, ExplainState *es)
 					 es->wal ? "TRUE" : "FALSE",
 					 es->timing ? "TRUE" : "FALSE",
 					 es->summary ? "TRUE" : "FALSE",
-#if PG_VERSION_NUM >= PG_VERSION_17
 					 es->memory ? "TRUE" : "FALSE",
 					 serializeStr,
-#endif
 					 formatStr,
 					 queryString);
 
@@ -1272,8 +1257,6 @@ ExplainFormatStr(ExplainFormat format)
 }
 
 
-#if PG_VERSION_NUM >= PG_VERSION_17
-
 /*
  * ExplainSerializeStr converts the given explain serialize option to string.
  */
@@ -1303,9 +1286,6 @@ ExplainSerializeStr(ExplainSerializeOption serializeOption)
 		}
 	}
 }
-
-
-#endif
 
 
 /*
@@ -1371,11 +1351,9 @@ worker_save_query_explain_analyze(PG_FUNCTION_ARGS)
 	es->verbose = ExtractFieldBoolean(explainOptions, "verbose", es->verbose);
 	es->timing = ExtractFieldBoolean(explainOptions, "timing", es->timing);
 	es->format = ExtractFieldExplainFormat(explainOptions, "format", es->format);
-#if PG_VERSION_NUM >= PG_VERSION_17
 	es->memory = ExtractFieldBoolean(explainOptions, "memory", es->memory);
 	es->serialize = ExtractFieldExplainSerialize(explainOptions, "serialize",
 												 es->serialize);
-#endif
 
 	TupleDesc tupleDescriptor = NULL;
 	Tuplestorestate *tupleStore = SetupTuplestore(fcinfo, &tupleDescriptor);
@@ -1421,7 +1399,6 @@ worker_save_query_explain_analyze(PG_FUNCTION_ARGS)
 	/* plan query and record planning stats */
 	instr_time planStart;
 	instr_time planDuration;
-#if PG_VERSION_NUM >= PG_VERSION_17
 	BufferUsage bufusage_start,
 				bufusage;
 	MemoryContextCounters mem_counters;
@@ -1450,7 +1427,6 @@ worker_save_query_explain_analyze(PG_FUNCTION_ARGS)
 	{
 		bufusage_start = pgBufferUsage;
 	}
-#endif
 
 	INSTR_TIME_SET_CURRENT(planStart);
 
@@ -1459,7 +1435,6 @@ worker_save_query_explain_analyze(PG_FUNCTION_ARGS)
 	INSTR_TIME_SET_CURRENT(planDuration);
 	INSTR_TIME_SUBTRACT(planDuration, planStart);
 
-#if PG_VERSION_NUM >= PG_VERSION_17
 	if (es->memory)
 	{
 		MemoryContextSwitchTo(saved_ctx);
@@ -1481,13 +1456,6 @@ worker_save_query_explain_analyze(PG_FUNCTION_ARGS)
 					  &executionDurationMillisec,
 					  &executionTuples,
 					  &executionLoops);
-#else
-
-	/* do the actual EXPLAIN ANALYZE */
-	ExplainWorkerPlan(plan, NULL, tupleStoreDest, es, queryString, boundParams, NULL,
-					  &planDuration, &executionDurationMillisec,
-					  &executionTuples, &executionLoops);
-#endif
 
 	ExplainEndOutput(es);
 
@@ -1558,8 +1526,6 @@ ExtractFieldExplainFormat(Datum jsonbDoc, const char *fieldName, ExplainFormat
 }
 
 
-#if PG_VERSION_NUM >= PG_VERSION_17
-
 /*
  * ExtractFieldExplainSerialize gets value of fieldName from jsonbDoc, or returns
  * defaultValue if it doesn't exist.
@@ -1599,9 +1565,6 @@ ExtractFieldExplainSerialize(Datum jsonbDoc, const char *fieldName, ExplainSeria
 }
 
 
-#endif
-
-
 /*
  * CitusExplainOneQuery is the executor hook that is called when
  * postgres wants to explain a query.
@@ -1619,10 +1582,8 @@ CitusExplainOneQuery(Query *query, int cursorOptions, IntoClause *into,
 	CurrentDistributedQueryExplainOptions.summary = es->summary;
 	CurrentDistributedQueryExplainOptions.timing = es->timing;
 	CurrentDistributedQueryExplainOptions.format = es->format;
-#if PG_VERSION_NUM >= PG_VERSION_17
 	CurrentDistributedQueryExplainOptions.memory = es->memory;
 	CurrentDistributedQueryExplainOptions.serialize = es->serialize;
-#endif
 
 	/* rest is copied from ExplainOneQuery() */
 	instr_time planstart,
@@ -1630,7 +1591,6 @@ CitusExplainOneQuery(Query *query, int cursorOptions, IntoClause *into,
 	BufferUsage bufusage_start,
 				bufusage;
 
-#if PG_VERSION_NUM >= PG_VERSION_17
 	MemoryContextCounters mem_counters;
 	MemoryContext planner_ctx = NULL;
 	MemoryContext saved_ctx = NULL;
@@ -1643,7 +1603,6 @@ CitusExplainOneQuery(Query *query, int cursorOptions, IntoClause *into,
 											ALLOCSET_DEFAULT_SIZES);
 		saved_ctx = MemoryContextSwitchTo(planner_ctx);
 	}
-#endif
 
 	if (es->buffers)
 	{
@@ -1678,16 +1637,12 @@ CitusExplainOneQuery(Query *query, int cursorOptions, IntoClause *into,
 		BufferUsageAccumDiff(&bufusage, &pgBufferUsage, &bufusage_start);
 	}
 
-/* capture memory stats on PG17+ */
-#if PG_VERSION_NUM >= PG_VERSION_17
+	/* capture memory stats */
 	if (es->memory)
 	{
 		MemoryContextSwitchTo(saved_ctx);
 		MemoryContextMemConsumed(planner_ctx, &mem_counters);
 	}
-#endif
-
-#if PG_VERSION_NUM >= PG_VERSION_17
 
 	/* PostgreSQL 17 signature (9 args: includes mem_counters) */
 	ExplainOnePlan(
@@ -1701,18 +1656,6 @@ CitusExplainOneQuery(Query *query, int cursorOptions, IntoClause *into,
 		(es->buffers ? &bufusage : NULL),
 		(es->memory ? &mem_counters : NULL)
 		);
-#else
-	ExplainOnePlan(
-		plan,
-		into,
-		es,
-		queryString,
-		params,
-		queryEnv,
-		&planduration,
-		(es->buffers ? &bufusage : NULL)
-		);
-#endif
 }
 
 
@@ -1735,6 +1678,7 @@ CreateExplainAnlyzeDestination(Task *task, TupleDestination *taskDest)
 	TupleDescInitEntry(lastSavedExplainAnalyzeTupDesc, 2, "duration", FLOAT8OID, 0, 0);
 	TupleDescInitEntry(lastSavedExplainAnalyzeTupDesc, 3, "ntuples", FLOAT8OID, 0, 0);
 	TupleDescInitEntry(lastSavedExplainAnalyzeTupDesc, 4, "nloops", FLOAT8OID, 0, 0);
+	TupleDescFinalize(lastSavedExplainAnalyzeTupDesc);
 
 	tupleDestination->lastSavedExplainAnalyzeTupDesc = lastSavedExplainAnalyzeTupDesc;
 
@@ -2044,18 +1988,14 @@ WrapQueryForExplainAnalyze(const char *queryString, TupleDesc tupleDesc,
 	StringInfo explainOptions = makeStringInfo();
 	appendStringInfo(explainOptions,
 					 "{\"verbose\": %s, \"costs\": %s, \"buffers\": %s, \"wal\": %s, "
-#if PG_VERSION_NUM >= PG_VERSION_17
 					 "\"memory\": %s, \"serialize\": \"%s\", "
-#endif
 					 "\"timing\": %s, \"summary\": %s, \"format\": \"%s\"}",
 					 CurrentDistributedQueryExplainOptions.verbose ? "true" : "false",
 					 CurrentDistributedQueryExplainOptions.costs ? "true" : "false",
 					 CurrentDistributedQueryExplainOptions.buffers ? "true" : "false",
 					 CurrentDistributedQueryExplainOptions.wal ? "true" : "false",
-#if PG_VERSION_NUM >= PG_VERSION_17
 					 CurrentDistributedQueryExplainOptions.memory ? "true" : "false",
 					 ExplainSerializeStr(CurrentDistributedQueryExplainOptions.serialize),
-#endif
 					 CurrentDistributedQueryExplainOptions.timing ? "true" : "false",
 					 CurrentDistributedQueryExplainOptions.summary ? "true" : "false",
 					 ExplainFormatStr(CurrentDistributedQueryExplainOptions.format));
@@ -2214,7 +2154,6 @@ ExplainOneQuery(Query *query, int cursorOptions,
 		BufferUsage bufusage_start,
 			    bufusage;
 
-#if PG_VERSION_NUM >= PG_VERSION_17
 		MemoryContextCounters mem_counters;
 		MemoryContext planner_ctx = NULL;
 		MemoryContext saved_ctx = NULL;
@@ -2227,7 +2166,6 @@ ExplainOneQuery(Query *query, int cursorOptions,
 												ALLOCSET_DEFAULT_SIZES);
 			saved_ctx = MemoryContextSwitchTo(planner_ctx);
 		}
-#endif
 
 		if (es->buffers)
 			bufusage_start = pgBufferUsage;
@@ -2246,16 +2184,13 @@ ExplainOneQuery(Query *query, int cursorOptions,
 			BufferUsageAccumDiff(&bufusage, &pgBufferUsage, &bufusage_start);
 		}
 
-/* 1) Capture memory counters on PG17+ only once: */
-#if PG_VERSION_NUM >= PG_VERSION_17
+		/* 1) Capture memory counters only once: */
 		if (es->memory)
 		{
 			MemoryContextSwitchTo(saved_ctx);
 			MemoryContextMemConsumed(planner_ctx, &mem_counters);
 		}
-#endif
 
-#if PG_VERSION_NUM >= PG_VERSION_17
 		ExplainOnePlan(
 			plan,
 			into,
@@ -2267,18 +2202,6 @@ ExplainOneQuery(Query *query, int cursorOptions,
 			(es->buffers  ? &bufusage    : NULL),
 			(es->memory   ? &mem_counters: NULL)
 		);
-#else
-		ExplainOnePlan(
-			plan,
-			into,
-			es,
-			queryString,
-			params,
-			queryEnv,
-			&planduration,
-			(es->buffers ? &bufusage : NULL)
-		);
-#endif
 	}
 }
 
@@ -2314,10 +2237,8 @@ static void
 ExplainWorkerPlan(PlannedStmt *plannedstmt, DistributedSubPlan *subPlan, DestReceiver *dest, ExplainState *es,
 				  const char *queryString, ParamListInfo params, QueryEnvironment *queryEnv,
 				  const instr_time *planduration,
-#if PG_VERSION_NUM >= PG_VERSION_17
 				  const BufferUsage *bufusage,
 			      const MemoryContextCounters *mem_counters,
-#endif
 				  double *executionDurationMillisec,
 				  double *executionTuples,
 				  double *executionLoops)
@@ -2412,7 +2333,6 @@ ExplainWorkerPlan(PlannedStmt *plannedstmt, DistributedSubPlan *subPlan, DestRec
 	/* Create textual dump of plan tree */
 	ExplainPrintPlan(es, queryDesc);
 
-#if PG_VERSION_NUM >= PG_VERSION_17
 	/* Show buffer and/or memory usage in planning */
 	if (peek_buffer_usage(es, bufusage) || mem_counters)
 	{
@@ -2436,7 +2356,6 @@ ExplainWorkerPlan(PlannedStmt *plannedstmt, DistributedSubPlan *subPlan, DestRec
 
 		ExplainCloseGroup("Planning", "Planning", true, es);
 	}
-#endif
 
 	if (es->summary && planduration)
 	{
@@ -2458,7 +2377,6 @@ ExplainWorkerPlan(PlannedStmt *plannedstmt, DistributedSubPlan *subPlan, DestRec
 	if (es->costs)
 		ExplainPrintJITSummary(es, queryDesc);
 
-#if PG_VERSION_NUM >= PG_VERSION_17
 	if (es->serialize != EXPLAIN_SERIALIZE_NONE)
 	{
 		/* the SERIALIZE option requires its own tuple receiver */
@@ -2473,7 +2391,6 @@ ExplainWorkerPlan(PlannedStmt *plannedstmt, DistributedSubPlan *subPlan, DestRec
 		/* Print info about serialization of output */
 		ExplainPrintSerialize(es, &serializeMetrics);
 	}
-#endif
 
 	/*
 	 * Close down the query and free resources.  Include time for this in the
@@ -2483,7 +2400,11 @@ ExplainWorkerPlan(PlannedStmt *plannedstmt, DistributedSubPlan *subPlan, DestRec
 
 	if (executeQuery)
 	{
+#if PG_VERSION_NUM >= PG_VERSION_19
+		NodeInstrumentation *instr = queryDesc->planstate->instrument;
+#else
 		Instrumentation *instr = queryDesc->planstate->instrument;
+#endif
 		*executionTuples = instr->ntuples;
 		*executionLoops = instr->nloops;
 	}
@@ -2576,7 +2497,6 @@ GetSerializationMetrics(DestReceiver *dest)
 #endif
 
 
-#if PG_VERSION_NUM >= PG_VERSION_17
 /*
  * Return whether show_buffer_usage would have anything to print, if given
  * the same 'usage' data.  Note that when the format is anything other than
@@ -2879,4 +2799,3 @@ ExplainPrintSerialize(ExplainState *es, SerializeMetrics *metrics)
 
 	ExplainCloseGroup("Serialization", "Serialization", true, es);
 }
-#endif

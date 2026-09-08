@@ -94,8 +94,7 @@ INSERT INTO collections_1 SELECT * FROM collections_1;
 INSERT INTO collections_1 SELECT * FROM collections_1 OFFSET 0;
 
 -- COPY is not allowed
-COPY collections_1 FROM STDIN;
-\.
+\copy collections_1 FROM PROGRAM 'true'
 
 -- DDLs are not allowed
 CREATE INDEX index_on_partition ON collections_1(key);

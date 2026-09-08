@@ -170,7 +170,7 @@ IsNodeWideObjectClass(ObjectClass objectClass)
 	 * If new object classes are added and none of them are node-wide, then update
 	 * this assertion check based on latest supported major Postgres version.
 	 */
-	StaticAssertStmt(PG_MAJORVERSION_NUM <= 18,
+	StaticAssertStmt(PG_MAJORVERSION_NUM <= 19,
 					 "better to check if any of newly added ObjectClass'es are node-wide")
 	;
 

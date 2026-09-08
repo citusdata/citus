@@ -289,7 +289,7 @@ AppendAllWorkerNodes(IntermediateResultsHashEntry *entry)
  * stores information on the intermediate result.
  */
 HTAB *
-MakeIntermediateResultHTAB()
+MakeIntermediateResultHTAB(void)
 {
 	HASHCTL info = { 0 };
 	int initialNumberOfElements = 16;

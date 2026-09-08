@@ -137,5 +137,39 @@ WHERE
 ) ORDER BY result;
 
 
+--tests for reassign owned by to a keyword role specification (e.g. CURRENT_USER),
+--where RoleSpec->rolename is NULL
+CREATE ROLE keyword_source_role;
+GRANT CREATE ON SCHEMA public TO keyword_source_role;
+
+SET ROLE keyword_source_role;
+CREATE TABLE public.test_table5 (col1 int);
+RESET ROLE;
+SELECT create_distributed_table('test_table5', 'col1');
+
+set citus.log_remote_commands to on;
+set citus.grep_remote_commands = '%REASSIGN OWNED BY%';
+REASSIGN OWNED BY keyword_source_role TO CURRENT_USER;
+reset citus.grep_remote_commands;
+reset citus.log_remote_commands;
+
+SELECT result from run_command_on_all_nodes(
+  $$
+  SELECT jsonb_agg(to_jsonb(q2.*)) FROM (
+   SELECT
+    schemaname,
+    tablename,
+    tableowner
+   FROM
+    pg_tables
+   WHERE
+    tablename = 'test_table5'
+  ) q2
+  $$
+) ORDER BY result;
+
+DROP TABLE public.test_table5;
+DROP OWNED BY keyword_source_role;
+
 set client_min_messages to warning;
-drop role distributed_source_role1, "distributed_source_role-\!","distributed_target_role1-\!",local_target_role1,local_source_role1;
+drop role distributed_source_role1, "distributed_source_role-\!","distributed_target_role1-\!",local_target_role1,local_source_role1,keyword_source_role;

@@ -1564,6 +1564,7 @@ ALTER TABLE referencing_table_0 ADD CONSTRAINT pkey PRIMARY KEY (id);
 ALTER TABLE referencing_table_4 ADD CONSTRAINT fkey FOREIGN KEY (id) REFERENCES referencing_table_0;
 -- add foreign constraint from a partition to reference table
 ALTER TABLE referencing_table_4 ADD CONSTRAINT fkey_to_ref FOREIGN KEY (value_1) REFERENCES referenced_table;
+INSERT INTO referenced_table VALUES(5,5);
 -- should fail since the data will flow to partitioning_test_4 and it has a foreign constraint to partitioning_test_0 on id column
 INSERT INTO referencing_table VALUES (0, 5);
 ERROR:  insert or update on table "referencing_table_4_xxxxxxx" violates foreign key constraint "fkey_xxxxxxx"
@@ -1578,11 +1579,10 @@ SELECT * FROM referencing_table;
 (1 row)
 
 -- should fail since partitioning_test_4 has foreign constraint to referenced_table on value_1 column
-INSERT INTO referencing_table VALUES (0, 5);
+INSERT INTO referencing_table VALUES (0, 4);
 ERROR:  insert or update on table "referencing_table_4_xxxxxxx" violates foreign key constraint "fkey_to_ref_xxxxxxx"
-DETAIL:  Key (value_1)=(5) is not present in table "referenced_table_xxxxxxx".
+DETAIL:  Key (value_1)=(4) is not present in table "referenced_table_xxxxxxx".
 CONTEXT:  while executing command on localhost:xxxxx
-INSERT INTO referenced_table VALUES(5,5);
 -- should succeed since both of the foreign constraints are positive
 INSERT INTO referencing_table VALUES (0, 5);
 -- TRUNCATE should work in any way

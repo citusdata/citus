@@ -517,7 +517,7 @@ FullShardPlacementList(Oid relationId, ArrayType *excludedShardArray)
  * ActiveReadableNodeList, but sorted.
  */
 static List *
-SortedActiveWorkers()
+SortedActiveWorkers(void)
 {
 	List *activeWorkerList = ActiveReadableNodeList();
 	return SortList(activeWorkerList, CompareWorkerNodes);
@@ -980,7 +980,7 @@ AcquirePlacementColocationLockLocally(int64 lockId, int lockMode)
  * connection requests.
  */
 static List *
-GetResponsiveWorkerList()
+GetResponsiveWorkerList(void)
 {
 	List *activeWorkerList = ActiveReadableNodeList();
 	ListCell *activeWorkerCell = NULL;

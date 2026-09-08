@@ -1210,7 +1210,7 @@ WorkerNodeGetDatum(WorkerNode *workerNode, TupleDesc tupleDescriptor)
  * are replicated according to ShardReplicationFactor.
  */
 bool
-DistributedTableReplicationIsEnabled()
+DistributedTableReplicationIsEnabled(void)
 {
 	return (ShardReplicationFactor > 1);
 }

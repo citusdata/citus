@@ -1453,7 +1453,7 @@ DecrementUtilityHookCountersIfNecessary(Node *parsetree)
  * invalidated due to a DDL.
  */
 void
-MarkInvalidateForeignKeyGraph()
+MarkInvalidateForeignKeyGraph(void)
 {
 	shouldInvalidateForeignKeyGraph = true;
 }
