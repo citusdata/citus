@@ -123,10 +123,22 @@ static void FlushMetadataSyncCachesIfNeeded(MetadataSyncContext *context,
 											int64 processedCount);
 static char * ColocationMetadataBatchCommand(List *valueRows);
 static char * TenantSchemaMetadataBatchCommand(List *valueRows);
+static void AppendRelationMetadataBatchRows(Oid relationId,
+											StringInfo partitionValues,
+											StringInfo shardValues,
+											StringInfo placementValues);
+static void AppendDistributionMetadataBatchRow(StringInfo partitionValues,
+											   CitusTableCacheEntry *cacheEntry);
+static void AppendShardMetadataBatchRows(StringInfo shardValues,
+										 StringInfo placementValues,
+										 List *shardIntervalList);
 static void AppendShardMetadataRow(StringInfo shardValues,
 								   ShardInterval *shardInterval);
 static void AppendPlacementMetadataRow(StringInfo placementValues,
 									   uint64 shardId, ShardPlacement *placement);
+static List * DistTableMetadataBatchCommandList(StringInfo partitionValues,
+												StringInfo shardValues,
+												StringInfo placementValues);
 static void DropMetadataSnapshotOnNode(WorkerNode *workerNode);
 static void FetchSequenceState(Oid sequenceId, int64 *lastValue, bool *isCalled);
 static void AppendSequenceRangeAdjustCommand(Oid sequenceId, List **commandList);
@@ -5651,42 +5663,198 @@ SendDistTableMetadataCommands(MetadataSyncContext *context)
 											  scanKeyCount, scanKey);
 
 	MemoryContext oldContext = MemoryContextSwitchTo(context->context);
-	HeapTuple nextTuple = NULL;
+
+	bool collecting = MetadataSyncCollectsCommands(context);
+	int batchSize = collecting ? 1 : Max(MetadataSyncSetBatchSize, 1);
+	MemoryContext batchContext = AllocSetContextCreate(context->context,
+													   "dist table metadata batch context",
+													   ALLOCSET_DEFAULT_SIZES);
+
+	MemoryContextSwitchTo(batchContext);
+
+	StringInfo partitionValues = makeStringInfo();
+	StringInfo shardValues = makeStringInfo();
+	StringInfo placementValues = makeStringInfo();
+	int batchCount = 0;
 	int64 processedCount = 0;
+
+	HeapTuple nextTuple = NULL;
 	while (true)
 	{
-		ResetMetadataSyncMemoryContext(context);
-
 		nextTuple = systable_getnext(scanDesc);
 		if (!HeapTupleIsValid(nextTuple))
 		{
 			break;
 		}
 
-		/*
-		 * Create Citus table metadata commands (pg_dist_shard, pg_dist_shard_placement,
-		 * pg_dist_partition). Only Citus tables have shard metadata.
-		 */
 		Oid relationId = FetchRelationIdFromPgPartitionHeapTuple(nextTuple, tupleDesc);
 		if (ShouldSyncTableMetadata(relationId))
 		{
-			List *commandList = CitusTableMetadataCreateCommandList(relationId);
-			SendOrCollectCommandListToActivatedNodes(context, commandList);
+			AppendRelationMetadataBatchRows(relationId, partitionValues,
+											shardValues, placementValues);
+			batchCount++;
 		}
 
 		/*
-		 * We flush the caches even when we skip the dependency creation commands
-		 * because ShouldSyncTableMetadata still opened relation to reach this
-		 * decision, so advance the cache-flush counter and flush if needed on this
-		 * skip path too.
+		 * We advance the cache-flush counter even for relations whose metadata is
+		 * skipped, because reaching that decision still opened the relation through
+		 * the metadata cache.
 		 */
 		FlushMetadataSyncCachesIfNeeded(context, ++processedCount);
+
+		if (batchCount >= batchSize)
+		{
+			MemoryContext buildContext = collecting ? context->context : batchContext;
+			MemoryContext prev = MemoryContextSwitchTo(buildContext);
+			List *commandList = DistTableMetadataBatchCommandList(partitionValues,
+																  shardValues,
+																  placementValues);
+
+			SendOrCollectCommandListToActivatedNodes(context, commandList);
+			MemoryContextSwitchTo(prev);
+
+			MemoryContextReset(batchContext);
+			partitionValues = makeStringInfo();
+			shardValues = makeStringInfo();
+			placementValues = makeStringInfo();
+			batchCount = 0;
+		}
+	}
+
+	/* flush the final partial batch */
+	if (batchCount > 0)
+	{
+		MemoryContext buildContext = collecting ? context->context : batchContext;
+		MemoryContext prev = MemoryContextSwitchTo(buildContext);
+		List *commandList = DistTableMetadataBatchCommandList(partitionValues,
+															  shardValues,
+															  placementValues);
+
+		SendOrCollectCommandListToActivatedNodes(context, commandList);
+		MemoryContextSwitchTo(prev);
 	}
 
 	MemoryContextSwitchTo(oldContext);
 
+	MemoryContextDelete(batchContext);
+
 	systable_endscan(scanDesc);
 	table_close(relation, AccessShareLock);
+}
+
+
+/*
+ * AppendRelationMetadataBatchRows appends relationId's pg_dist_partition,
+ * pg_dist_shard and pg_dist_placement VALUES rows to the batch StringInfos.
+ */
+static void
+AppendRelationMetadataBatchRows(Oid relationId, StringInfo partitionValues,
+								StringInfo shardValues, StringInfo placementValues)
+{
+	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
+
+	AppendDistributionMetadataBatchRow(partitionValues, cacheEntry);
+
+	List *shardIntervalList = LoadShardIntervalList(relationId);
+	AppendShardMetadataBatchRows(shardValues, placementValues, shardIntervalList);
+}
+
+
+/*
+ * AppendDistributionMetadataBatchRow appends one VALUES row describing the
+ * pg_dist_partition entry of cacheEntry's relation to partitionValues.
+ */
+static void
+AppendDistributionMetadataBatchRow(StringInfo partitionValues,
+								   CitusTableCacheEntry *cacheEntry)
+{
+	Oid relationId = cacheEntry->relationId;
+	char distributionMethod = cacheEntry->partitionMethod;
+	char *qualifiedRelationName = generate_qualified_relation_name(relationId);
+	uint32 colocationId = cacheEntry->colocationId;
+	char replicationModel = cacheEntry->replicationModel;
+
+	StringInfo tablePartitionKeyNameString = makeStringInfo();
+	if (!HasDistributionKeyCacheEntry(cacheEntry))
+	{
+		appendStringInfoString(tablePartitionKeyNameString, "NULL");
+	}
+	else
+	{
+		char *partitionKeyColumnName =
+			ColumnToColumnName(relationId, (Node *) cacheEntry->partitionColumn);
+		appendStringInfo(tablePartitionKeyNameString, "%s",
+						 quote_literal_cstr(partitionKeyColumnName));
+	}
+
+	if (partitionValues->len > 0)
+	{
+		appendStringInfoString(partitionValues, ", ");
+	}
+
+	appendStringInfo(partitionValues,
+					 "(%s::regclass, '%c'::\"char\", %s::text, %d, '%c'::\"char\")",
+					 quote_literal_cstr(qualifiedRelationName),
+					 distributionMethod,
+					 tablePartitionKeyNameString->data,
+					 colocationId,
+					 replicationModel);
+}
+
+
+/*
+ * AppendShardMetadataBatchRows appends the pg_dist_shard and pg_dist_placement
+ * VALUES rows for the given shard intervals to shardValues and placementValues.
+ * Each shard row carries its own relationname::regclass, so intervals from different
+ * relations can share one batched statement.
+ */
+static void
+AppendShardMetadataBatchRows(StringInfo shardValues, StringInfo placementValues,
+							 List *shardIntervalList)
+{
+	/*
+	 * Render this relation's rows into local buffers first so we can honor the
+	 * all-zero-placement suppression per relation: a shard with no active placement
+	 * still contributes its pg_dist_shard row (so the worker keeps the full shard
+	 * interval map), but if the whole relation has no active placement we emit
+	 * neither its shard rows nor an empty placement statement.
+	 */
+	StringInfo relationShardRows = makeStringInfo();
+	StringInfo relationPlacementRows = makeStringInfo();
+
+	ShardInterval *shardInterval = NULL;
+	foreach_declared_ptr(shardInterval, shardIntervalList)
+	{
+		AppendShardMetadataRow(relationShardRows, shardInterval);
+
+		uint64 shardId = shardInterval->shardId;
+		List *shardPlacementList = ActiveShardPlacementList(shardId);
+		ShardPlacement *placement = NULL;
+		foreach_declared_ptr(placement, shardPlacementList)
+		{
+			AppendPlacementMetadataRow(relationPlacementRows, shardId, placement);
+		}
+	}
+
+	if (relationPlacementRows->len == 0)
+	{
+		/* no active placement on any shard of this relation, emit nothing */
+		return;
+	}
+
+	if (shardValues->len > 0)
+	{
+		appendStringInfoString(shardValues, ", ");
+	}
+
+	appendStringInfoString(shardValues, relationShardRows->data);
+
+	if (placementValues->len > 0)
+	{
+		appendStringInfoString(placementValues, ", ");
+	}
+
+	appendStringInfoString(placementValues, relationPlacementRows->data);
 }
 
 
@@ -5762,6 +5930,60 @@ AppendPlacementMetadataRow(StringInfo placementValues, uint64 shardId,
 					 placement->shardLength,
 					 placement->groupId,
 					 placement->placementId);
+}
+
+
+/*
+ * DistTableMetadataBatchCommandList wraps the accumulated pg_dist_partition,
+ * pg_dist_shard and pg_dist_placement VALUES rows into up to three set-based
+ * statements, in the order partition -> shard -> placement so the shard/placement
+ * metadata UDFs find the pg_dist_partition and pg_dist_shard entries they require.
+ * Returns NIL when the batch produced no rows (e.g. every relation was skipped).
+ */
+static List *
+DistTableMetadataBatchCommandList(StringInfo partitionValues, StringInfo shardValues,
+								  StringInfo placementValues)
+{
+	List *commandList = NIL;
+
+	if (partitionValues->len > 0)
+	{
+		StringInfo command = makeStringInfo();
+		appendStringInfo(command,
+						 "WITH partition_data(relationname, distributionmethod, "
+						 "distributioncolumn, colocationid, repmodel) AS (VALUES %s) "
+						 "SELECT citus_internal_add_partition_metadata(relationname, "
+						 "distributionmethod, distributioncolumn, colocationid, repmodel) "
+						 "FROM partition_data;",
+						 partitionValues->data);
+		commandList = lappend(commandList, command->data);
+	}
+
+	if (shardValues->len > 0)
+	{
+		StringInfo command = makeStringInfo();
+		appendStringInfo(command,
+						 "WITH shard_data(relationname, shardid, storagetype, "
+						 "shardminvalue, shardmaxvalue) AS (VALUES %s) "
+						 "SELECT citus_internal_add_shard_metadata(relationname, shardid, "
+						 "storagetype, shardminvalue, shardmaxvalue) FROM shard_data;",
+						 shardValues->data);
+		commandList = lappend(commandList, command->data);
+	}
+
+	if (placementValues->len > 0)
+	{
+		StringInfo command = makeStringInfo();
+		appendStringInfo(command,
+						 "WITH placement_data(shardid, shardlength, groupid, placementid) "
+						 "AS (VALUES %s) "
+						 "SELECT citus_internal_add_placement_metadata(shardid, shardlength, "
+						 "groupid, placementid) FROM placement_data;",
+						 placementValues->data);
+		commandList = lappend(commandList, command->data);
+	}
+
+	return commandList;
 }
 
 
