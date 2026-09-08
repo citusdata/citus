@@ -125,7 +125,6 @@ jobs:
         # PG_CONFIG variable in each of those runs.
         packaging_docker_image:
           - debian-bookworm-all
-          - debian-bullseye-all
           - ubuntu-focal-all
           - ubuntu-jammy-all
 
