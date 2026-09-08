@@ -1,14 +1,13 @@
 name: Nightly cassert
 run-name: Nightly cassert (${{ github.ref_name }})
 
-# Full-suite Citus run against an --enable-cassert PostgreSQL build (PG 17/18).
+# Full-suite Citus run against an --enable-cassert PostgreSQL build (PG 17/18/19).
 # Purpose: surface PG-core asserts and Citus's own Assert() that the normal PGDG-image PR
 # pipeline cannot catch. First runs are EXPECTED to be RED across all majors as pre-existing
 # asserts surface -- that is the intended signal, not a regression gate.
 #
 # The version matrix lives in the `params` job below (single source of truth, mirroring
-# build_and_test.yml). The `pg19-support` branch adapts this by adding the 19beta1 row + the
-# 18->19 upgrade pair, the same way 19 support is layered onto the other test suites.
+# build_and_test.yml's params job, which pins 17.11 / 18.6 / 19beta3 and no longer builds PG16).
 
 on:
   schedule:
@@ -35,9 +34,9 @@ jobs:
     name: Initialize parameters
     runs-on: ubuntu-latest
     outputs:
-      pg_versions: '[{ "major": "17", "full": "17.11" }, { "major": "18", "full": "18.6" }]'
-      pg_upgrade_pairs: '[{ "old": "17", "old_full": "17.11", "new": "18", "new_full": "18.6" }]'
-      citus_upgrade_pg: '[{ "major": "17", "full": "17.11" }]'
+      pg_versions: '[{ "major": "17", "full": "17.11" }, { "major": "18", "full": "18.6" }, { "major": "19", "full": "19beta3" }]'
+      pg_upgrade_pairs: '[{ "old": "17", "old_full": "17.11", "new": "18", "new_full": "18.6" }, { "old": "18", "old_full": "18.6", "new": "19", "new_full": "19beta3" }, { "old": "17", "old_full": "17.11", "new": "19", "new_full": "19beta3" }]'
+      citus_upgrade_pg: '[{ "major": "17", "full": "17.11" }, { "major": "18", "full": "18.6" }]'
       citus_old_version: "v14.0.1"  # 14.0-1 chains to MASTER (15.0); 14.1 has no path to 15.0 yet
     steps:
       - name: Set up parameters
