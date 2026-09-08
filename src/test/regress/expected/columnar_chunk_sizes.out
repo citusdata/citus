@@ -1,0 +1,163 @@
+CREATE SCHEMA columnar_chunk_test;
+SET search_path TO columnar_chunk_test;
+SET columnar.compression TO 'none';
+-- set to debug1 to see how many new chunks has been created during
+-- chunk_group_size_limit overflow
+SET client_min_messages TO debug1;
+--
+-- ISSUE_6420
+--
+-- Issue: Automatically allocate a new chunk group instead of throwing error due to buffer size limits
+-- Link: https://github.com/citusdata/citus/issues/6420
+--
+-- Insert rows that exceeds the chunk group size limit.
+-- Adding 600 rows each with the size of 2MB will eventually exceeds the
+-- limit of 1GB for enlargeStringInfo() but this should not fail.
+-- Also setting chunk_group_size_limit to will exceed the max chunk groups limit 5000/1000 = 5, new
+-- chunkgroup should be allocated automatically
+CREATE TABLE test_oversized_row (
+    id INTEGER,
+    huge_text TEXT
+) USING columnar WITH (
+    columnar.chunk_group_row_limit = 1000,
+    columnar.stripe_row_limit = 1500,
+    columnar.chunk_group_size_limit = 128
+);
+-- test with chunk & stripe row limit reached
+INSERT INTO test_oversized_row
+SELECT gs, repeat('Y', 1*1024*1024)  -- 1 MB text
+FROM generate_series(1, 1600) AS gs;
+DEBUG:  Row size (1048584 bytes) exceeds chunk group size limit (134217728 bytes), storing in a separate chunk group
+DEBUG:  Row size (1048584 bytes) exceeds chunk group size limit (134217728 bytes), storing in a separate chunk group
+DEBUG:  Row size (1048584 bytes) exceeds chunk group size limit (134217728 bytes), storing in a separate chunk group
+DEBUG:  Row size (1048584 bytes) exceeds chunk group size limit (134217728 bytes), storing in a separate chunk group
+DEBUG:  Row size (1048584 bytes) exceeds chunk group size limit (134217728 bytes), storing in a separate chunk group
+DEBUG:  Row size (1048584 bytes) exceeds chunk group size limit (134217728 bytes), storing in a separate chunk group
+DEBUG:  Row size (1048584 bytes) exceeds chunk group size limit (134217728 bytes), storing in a separate chunk group
+DEBUG:  Row size (1048584 bytes) exceeds chunk group size limit (134217728 bytes), storing in a separate chunk group
+DEBUG:  Row size (1048584 bytes) exceeds chunk group size limit (134217728 bytes), storing in a separate chunk group
+DEBUG:  Row size (1048584 bytes) exceeds chunk group size limit (134217728 bytes), storing in a separate chunk group
+DEBUG:  Row size (1048584 bytes) exceeds chunk group size limit (134217728 bytes), storing in a separate chunk group
+DEBUG:  Flushing Stripe of size 1500
+DEBUG:  Flushing Stripe of size 100
+SET client_min_messages TO warning;
+-- try verifying the data integrity
+SELECT * FROM columnar.chunk_group WHERE relation = 'test_oversized_row'::regclass;
+      relation      | storage_id  | stripe_num | chunk_group_num | row_count
+---------------------------------------------------------------------
+ test_oversized_row | 10000000261 |          1 |               0 |       127
+ test_oversized_row | 10000000261 |          1 |               1 |       127
+ test_oversized_row | 10000000261 |          1 |               2 |       127
+ test_oversized_row | 10000000261 |          1 |               3 |       127
+ test_oversized_row | 10000000261 |          1 |               4 |       127
+ test_oversized_row | 10000000261 |          1 |               5 |       127
+ test_oversized_row | 10000000261 |          1 |               6 |       127
+ test_oversized_row | 10000000261 |          1 |               7 |       127
+ test_oversized_row | 10000000261 |          1 |               8 |       127
+ test_oversized_row | 10000000261 |          1 |               9 |       127
+ test_oversized_row | 10000000261 |          1 |              10 |       127
+ test_oversized_row | 10000000261 |          1 |              11 |       103
+ test_oversized_row | 10000000261 |          2 |               0 |       100
+(13 rows)
+
+SELECT * FROM columnar.stripe WHERE relation = 'test_oversized_row'::regclass;
+      relation      | storage_id  | stripe_num | file_offset | data_length | column_count | chunk_row_count | row_count | chunk_group_count | first_row_number
+---------------------------------------------------------------------
+ test_oversized_row | 10000000261 |          1 |       16336 |  1572876378 |            2 |            1000 |      1500 |                12 |                1
+ test_oversized_row | 10000000261 |          2 |  1572895424 |   104858426 |            2 |            1000 |       100 |                 1 |             1501
+(2 rows)
+
+SELECT COUNT(*) FROM test_oversized_row;
+ count
+---------------------------------------------------------------------
+  1600
+(1 row)
+
+SELECT ID, LENGTH(huge_text) FROM test_oversized_row ORDER BY id LIMIT 10;
+ id | length
+---------------------------------------------------------------------
+  1 | 1048576
+  2 | 1048576
+  3 | 1048576
+  4 | 1048576
+  5 | 1048576
+  6 | 1048576
+  7 | 1048576
+  8 | 1048576
+  9 | 1048576
+ 10 | 1048576
+(10 rows)
+
+\dt+ test_oversized_row
+                                         List of relations
+       Schema        |        Name        | Type  |  Owner   | Persistence |  Size   | Description
+---------------------------------------------------------------------
+ columnar_chunk_test | test_oversized_row | table | postgres | permanent   | 1605 MB |
+(1 row)
+
+-- test edge case setting chunk_group_size_limit = 1024
+DROP TABLE test_oversized_row;
+SET client_min_messages TO debug1;
+SET columnar.compression TO default;
+CREATE TABLE test_oversized_row (
+    id INTEGER,
+    huge_text TEXT
+) USING columnar WITH (
+    columnar.chunk_group_row_limit = 1000,
+    columnar.stripe_row_limit = 5000,
+    columnar.chunk_group_size_limit = 1024
+);
+INSERT INTO test_oversized_row
+SELECT gs, repeat('Y', 2*1024*1024)  -- 2 MB text
+FROM generate_series(1, 600) AS gs;
+DEBUG:  Row size (2097160 bytes) exceeds chunk group size limit (1073741824 bytes), storing in a separate chunk group
+DEBUG:  Flushing Stripe of size 600
+-- test VACUUM FULL
+VACUUM FULL test_oversized_row;
+DEBUG:  Row size (2097160 bytes) exceeds chunk group size limit (1073741824 bytes), storing in a separate chunk group
+DEBUG:  Flushing Stripe of size 600
+SET client_min_messages TO warning;
+-- try verifying the data integrity
+SELECT * FROM columnar.chunk_group WHERE relation = 'test_oversized_row'::regclass;
+      relation      | storage_id  | stripe_num | chunk_group_num | row_count
+---------------------------------------------------------------------
+ test_oversized_row | 10000000263 |          1 |               0 |       510
+ test_oversized_row | 10000000263 |          1 |               1 |        90
+(2 rows)
+
+SELECT * FROM columnar.stripe WHERE relation = 'test_oversized_row'::regclass;
+      relation      | storage_id  | stripe_num | file_offset | data_length | column_count | chunk_row_count | row_count | chunk_group_count | first_row_number
+---------------------------------------------------------------------
+ test_oversized_row | 10000000263 |          1 |       16336 |       49278 |            2 |            1000 |       600 |                 2 |                1
+(1 row)
+
+SELECT COUNT(*) FROM test_oversized_row;
+ count
+---------------------------------------------------------------------
+   600
+(1 row)
+
+SELECT ID, LENGTH(huge_text) FROM test_oversized_row ORDER BY id LIMIT 10;
+ id | length
+---------------------------------------------------------------------
+  1 | 2097152
+  2 | 2097152
+  3 | 2097152
+  4 | 2097152
+  5 | 2097152
+  6 | 2097152
+  7 | 2097152
+  8 | 2097152
+  9 | 2097152
+ 10 | 2097152
+(10 rows)
+
+\dt+ test_oversized_row
+                                        List of relations
+       Schema        |        Name        | Type  |  Owner   | Persistence | Size  | Description
+---------------------------------------------------------------------
+ columnar_chunk_test | test_oversized_row | table | postgres | permanent   | 72 kB |
+(1 row)
+
+DROP TABLE test_oversized_row;
+DROP SCHEMA columnar_chunk_test CASCADE;
