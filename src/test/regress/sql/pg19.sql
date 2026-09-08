@@ -46,9 +46,16 @@ EXCEPTION
 END
 $$;
 
-SELECT bool_and(result::boolean) AS extract_field_injection_blocked
+-- Positive control: the same expression with a valid field must still be
+-- pushed down, so the check below cannot pass merely because the expression
+-- stopped reaching the workers.
+SELECT EXTRACT('year' FROM ts) = 2026 AS extract_field_pushdown_works
+FROM extract_deparse_source
+WHERE id = 1;
+
+SELECT bool_and(result::int = 0) AS extract_field_injection_blocked
 FROM run_command_on_workers($$
-	SELECT to_regclass('pg19_repack.injected') IS NULL
+	SELECT count(*) FROM pg_class WHERE relname = 'injected'
 $$);
 SET citus.shard_count TO 4;
 
