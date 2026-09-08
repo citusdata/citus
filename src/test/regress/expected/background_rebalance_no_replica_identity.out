@@ -8,7 +8,6 @@ CREATE SCHEMA background_rebalance_no_ri;
 SET search_path TO background_rebalance_no_ri;
 SET citus.shard_replication_factor TO 1;
 SET citus.next_shard_id TO 12345000;
-
 -- make the background task queue monitor pick up scheduled jobs quickly
 ALTER SYSTEM SET citus.background_task_queue_interval TO '1s';
 SELECT pg_reload_conf();
@@ -16,7 +15,6 @@ SELECT pg_reload_conf();
 ---------------------------------------------------------------------
  t
 (1 row)
-
 
 --
 -- 1) A table force_logical_auto_identity cannot rescue: it has no replica identity
@@ -56,7 +54,6 @@ ERROR:  cannot use shard transfer mode "force_logical_auto_identity" for relatio
 DETAIL:  Column "payload" has type json, which has no equality operator required to replicate UPDATE and DELETE commands using REPLICA IDENTITY FULL.
 HINT:  Add a replica identity or primary key to the relation, or use shard transfer mode "force_logical" or "block_writes".
 DROP TABLE reject_json;
-
 --
 -- 2) A table force_logical_auto_identity can move: no replica identity, but every
 --    column is comparable. The background rebalance succeeds, the data is preserved,
@@ -95,7 +92,6 @@ WHERE s.logicalrelid='move_ok'::regclass;
 ---------------------------------------------------------------------
                      1
 (1 row)
-
 
 SELECT citus_rebalance_start(shard_transfer_mode => 'force_logical_auto_identity') > 0 AS started;
 NOTICE:  Scheduled 2 moves as job xxx
@@ -143,6 +139,5 @@ SELECT DISTINCT result FROM run_command_on_placements('move_ok','SELECT relrepli
 (1 row)
 
 DROP TABLE move_ok;
-
 SET client_min_messages TO WARNING;
 DROP SCHEMA background_rebalance_no_ri CASCADE;
