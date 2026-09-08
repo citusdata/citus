@@ -1,7 +1,12 @@
 #include "postgres.h"
 
+#include "miscadmin.h"
+
+#include "portability/instr_time.h"
+#include "storage/latch.h"
 #include "utils/fmgrprotos.h"
 #include "utils/pg_lsn.h"
+#include "utils/wait_event.h"
 
 #include "distributed/argutils.h"
 #include "distributed/clonenode_utils.h"
@@ -15,6 +20,7 @@
 
 
 static void BlockAllWritesToWorkerNode(WorkerNode *workerNode);
+static XLogRecPtr GetNodeWalPosition(WorkerNode *workerNode, bool replay);
 static bool GetNodeIsInRecoveryStatus(WorkerNode *workerNode);
 static void PromoteCloneNode(WorkerNode *cloneWorkerNode);
 static void EnsureSingleNodePromotion(WorkerNode *primaryNode);
@@ -152,19 +158,42 @@ citus_promote_clone_and_rebalance(PG_FUNCTION_ARGS)
 						 catchUpTimeoutSeconds)));
 
 	bool caughtUp = false;
-	const int sleepIntervalSeconds = 5;
-	int elapsedTimeSeconds = 0;
+	instr_time startTime;
+	INSTR_TIME_SET_CURRENT(startTime);
+	XLogRecPtr targetLsn = GetNodeWalPosition(primaryNode, false);
+	XLogRecPtr replayLsn = InvalidXLogRecPtr;
 
-	while (elapsedTimeSeconds < catchUpTimeoutSeconds)
+	while (catchUpTimeoutSeconds > 0)
 	{
-		uint64 repLag = GetReplicationLag(primaryNode, cloneNode);
-		if (repLag <= 0)
+		CHECK_FOR_INTERRUPTS();
+		instr_time elapsedTime;
+		INSTR_TIME_SET_CURRENT(elapsedTime);
+		INSTR_TIME_SUBTRACT(elapsedTime, startTime);
+		if (INSTR_TIME_GET_DOUBLE(elapsedTime) >= catchUpTimeoutSeconds)
+		{
+			break;
+		}
+
+		replayLsn = GetNodeWalPosition(cloneNode, true);
+		INSTR_TIME_SET_CURRENT(elapsedTime);
+		INSTR_TIME_SUBTRACT(elapsedTime, startTime);
+		double remainingSeconds = catchUpTimeoutSeconds -
+								  INSTR_TIME_GET_DOUBLE(elapsedTime);
+		if (remainingSeconds <= 0)
+		{
+			break;
+		}
+
+		if (!XLogRecPtrIsInvalid(replayLsn) && replayLsn >= targetLsn)
 		{
 			caughtUp = true;
 			break;
 		}
-		pg_usleep(sleepIntervalSeconds * 1000000L);
-		elapsedTimeSeconds += sleepIntervalSeconds;
+		ResetLatch(MyLatch);
+		CHECK_FOR_INTERRUPTS();
+		WaitLatch(MyLatch, WL_LATCH_SET | WL_TIMEOUT | WL_EXIT_ON_PM_DEATH,
+				  Max(1L, (long) (Min(remainingSeconds, 0.1) * 1000)),
+				  PG_WAIT_EXTENSION);
 	}
 
 	if (!caughtUp)
@@ -174,7 +203,11 @@ citus_promote_clone_and_rebalance(PG_FUNCTION_ARGS)
 							"Clone %s:%d failed to catch up with primary %s:%d within %d seconds.",
 							cloneNode->workerName, cloneNode->workerPort,
 							primaryNode->workerName, primaryNode->workerPort,
-							catchUpTimeoutSeconds)));
+							catchUpTimeoutSeconds),
+						errdetail("Target WAL position is %X/%X; last observed replay "
+								  "position is %X/%X (0/0 means unavailable).",
+								  LSN_FORMAT_ARGS(targetLsn), LSN_FORMAT_ARGS(replayLsn)))
+				);
 	}
 
 	ereport(NOTICE, (errmsg("Clone %s:%d is now caught up with primary %s:%d.",
@@ -295,6 +328,62 @@ PromoteCloneNode(WorkerNode *cloneWorkerNode)
 							 cloneWorkerNode->workerName, cloneWorkerNode->workerPort,
 							 cloneWorkerNode->nodeId)));
 	}
+}
+
+
+static XLogRecPtr
+GetNodeWalPosition(WorkerNode *workerNode, bool replay)
+{
+	MultiConnection *connection = GetNodeConnection(0, workerNode->workerName,
+													workerNode->workerPort);
+	if (PQstatus(connection->pgConn) != CONNECTION_OK)
+	{
+		ReportConnectionError(connection, ERROR);
+	}
+
+	const char *query = replay ?
+						"SELECT pg_last_wal_replay_lsn() WHERE pg_is_in_recovery()" :
+						"SELECT pg_current_wal_insert_lsn()";
+	if (SendRemoteCommand(connection, query) == 0)
+	{
+		ReportConnectionError(connection, ERROR);
+	}
+
+	PGresult *result = GetRemoteCommandResult(connection, true);
+	if (result == NULL)
+	{
+		ReportConnectionError(connection, ERROR);
+	}
+	if (!IsResponseOK(result))
+	{
+		ReportResultError(connection, result, ERROR);
+	}
+	if (PQntuples(result) != 1 || PQnfields(result) != 1)
+	{
+		ereport(ERROR, (errmsg("cannot read WAL position from node %s:%d",
+							   workerNode->workerName, workerNode->workerPort),
+						errhint("Verify that the source is a primary and the clone "
+								"is still in recovery.")));
+	}
+
+	XLogRecPtr position = InvalidXLogRecPtr;
+	if (!PQgetisnull(result, 0, 0))
+	{
+		position = DatumGetLSN(DirectFunctionCall1(pg_lsn_in,
+												   CStringGetDatum(PQgetvalue(result, 0, 0
+																			  ))));
+	}
+	PQclear(result);
+	ForgetResults(connection);
+	CloseConnection(connection);
+
+	if (!replay && XLogRecPtrIsInvalid(position))
+	{
+		ereport(ERROR, (errmsg("invalid source WAL position from node %s:%d",
+							   workerNode->workerName, workerNode->workerPort)));
+	}
+
+	return position;
 }
 
 
