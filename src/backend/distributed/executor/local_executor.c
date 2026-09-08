@@ -302,6 +302,7 @@ ExecuteLocalTaskListExtended(List *taskList,
 													  ALLOCSET_DEFAULT_SIZES);
 
 	Task *task = NULL;
+
 	foreach_declared_ptr(task, taskList)
 	{
 		MemoryContext oldContext = MemoryContextSwitchTo(loopContext);

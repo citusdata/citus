@@ -31,6 +31,8 @@ static char * DeparseLocalShardQuery(Query *jobQuery, List *relationShardList,
 									 Oid anchorDistributedTableId, int64 anchorShardId);
 static int ExtractParameterTypesForParamListInfo(ParamListInfo originalParamListInfo,
 												 Oid **parameterTypes);
+static PlannedStmt * lookupLocalPlan(uint64 shardId, int32 localGroupId, List *
+									 cachedPlanList);
 
 /*
  * CacheLocalPlanForShardQuery replaces the relation OIDs in the job query
@@ -41,16 +43,21 @@ void
 CacheLocalPlanForShardQuery(Task *task, DistributedPlan *originalDistributedPlan,
 							ParamListInfo paramListInfo)
 {
-	PlannedStmt *localPlan = GetCachedLocalPlan(task, originalDistributedPlan);
-	if (localPlan != NULL)
-	{
-		/* we already have a local plan */
-		return;
-	}
-
 	if (list_length(task->relationShardList) == 0)
 	{
 		/* zero shard plan, no need to cache */
+		return;
+	}
+
+	uint64 shardId = task->anchorShardId;
+	uint32 localGroupId = GetLocalGroupId();
+	PlannedStmt *localPlan = lookupLocalPlan(shardId, localGroupId,
+											 originalDistributedPlan->workerJob->
+											 localPlannedStatements);
+
+	if (localPlan != NULL)
+	{
+		/* Already have a plan, nothing to do here */
 		return;
 	}
 
@@ -88,15 +95,20 @@ CacheLocalPlanForShardQuery(Task *task, DistributedPlan *originalDistributedPlan
 
 	LockRelationOid(rangeTableEntry->relid, lockMode);
 
-	LocalPlannedStatement *localPlannedStatement = CitusMakeNode(LocalPlannedStatement);
 	localPlan = planner(localShardQuery, NULL, 0, NULL);
+	LocalPlannedStatement *localPlannedStatement = CitusMakeNode(LocalPlannedStatement);
 	localPlannedStatement->localPlan = localPlan;
-	localPlannedStatement->shardId = task->anchorShardId;
-	localPlannedStatement->localGroupId = GetLocalGroupId();
+	localPlannedStatement->shardId = shardId;
+	localPlannedStatement->localGroupId = localGroupId;
 
 	originalDistributedPlan->workerJob->localPlannedStatements =
 		lappend(originalDistributedPlan->workerJob->localPlannedStatements,
 				localPlannedStatement);
+
+	ereport(DEBUG2, (errmsg("Created and cached local plan for shard " UINT64_FORMAT
+							" and local group %d",
+							shardId,
+							(int) localGroupId)));
 
 	MemoryContextSwitchTo(oldContext);
 }
@@ -231,6 +243,11 @@ ExtractParameterTypesForParamListInfo(ParamListInfo originalParamListInfo,
  * plan in the distributedPlan for the given task if exists.
  *
  * Otherwise, the function returns NULL.
+ *
+ * Callers must ensure that distributedPlan and its workerJob are non-NULL, and
+ * that the job has only one task. IsLocalPlanCachingSupported() establishes
+ * both for the Citus Begin functions, and ExecuteLocalTaskListExtended() in
+ * local_executor.c does so via its isSingleTask check.
  */
 PlannedStmt *
 GetCachedLocalPlan(Task *task, DistributedPlan *distributedPlan)
@@ -240,22 +257,31 @@ GetCachedLocalPlan(Task *task, DistributedPlan *distributedPlan)
 		return NULL;
 	}
 
-	if (list_length(distributedPlan->workerJob->taskList) != 1)
+	if (list_length(distributedPlan->workerJob->taskList) > 1)
 	{
 		/* we only support plan caching for single shard queries */
 		return NULL;
 	}
 
-	List *cachedPlanList = distributedPlan->workerJob->localPlannedStatements;
-	LocalPlannedStatement *localPlannedStatement = NULL;
+	return lookupLocalPlan(task->anchorShardId, GetLocalGroupId(), distributedPlan->
+						   workerJob->localPlannedStatements);
+}
 
-	int32 localGroupId = GetLocalGroupId();
+
+static PlannedStmt *
+lookupLocalPlan(uint64 shardId, int32 localGroupId, List *cachedPlanList)
+{
+	LocalPlannedStatement *localPlannedStatement = NULL;
 
 	foreach_declared_ptr(localPlannedStatement, cachedPlanList)
 	{
-		if (localPlannedStatement->shardId == task->anchorShardId &&
+		if (localPlannedStatement->shardId == shardId &&
 			localPlannedStatement->localGroupId == localGroupId)
 		{
+			ereport(DEBUG2, (errmsg("Found cached local plan for shard " UINT64_FORMAT
+									" and local group %d",
+									shardId, (int) localGroupId)));
+
 			/* already have a cached plan, no need to continue */
 			return localPlannedStatement->localPlan;
 		}
