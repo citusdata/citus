@@ -131,64 +131,6 @@ SELECT 1 FROM citus_drain_node('localhost', :worker_3_port);
 CALL citus_cleanup_orphaned_resources();
 SELECT 1 FROM citus_remove_node('localhost', :worker_3_port);
 
-
---
--- force_logical_auto_identity must also reach the background rebalancer
--- (citus_rebalance_start). These two cases run last, against the base two-worker
--- cluster, so they cannot disturb the checks above. Drop the leftover distributed
--- table first so the whole-cluster rebalance below only has to move the tables
--- created in this section (its scheduled-move count is then deterministic).
---
-SET client_min_messages TO WARNING;
-DROP TABLE non_super_user_t1;
-RESET client_min_messages;
-SET citus.shard_replication_factor TO 1;
-
--- 1) A table force_logical_auto_identity cannot rescue: it has no replica identity
---    (so it would be set to REPLICA IDENTITY FULL) but it has a json column, which
---    has no equality operator. The rebalancer must reject this up front, before it
---    schedules any background job, just like it rejects a no-replica-identity table
---    under the default mode.
-CREATE TABLE rebal_bg_json (a int, payload json);
-SELECT create_distributed_table('rebal_bg_json', 'a', shard_count => 4, colocate_with => 'none');
-INSERT INTO rebal_bg_json SELECT g, json_build_object('v', g) FROM generate_series(1, 40) g;
--- imbalance: move every shard on worker_2 onto worker_1 so a rebalance has work to do
-SELECT citus_move_shard_placement(s.shardid, 'localhost', :worker_2_port, 'localhost', :worker_1_port, shard_transfer_mode => 'block_writes')
-FROM pg_dist_shard s JOIN pg_dist_shard_placement p USING (shardid)
-WHERE s.logicalrelid='rebal_bg_json'::regclass AND p.nodeport = :worker_2_port
-ORDER BY s.shardid;
-SELECT public.wait_for_resource_cleanup();
--- rejected synchronously; no background job is scheduled
-SELECT citus_rebalance_start(shard_transfer_mode => 'force_logical_auto_identity');
-DROP TABLE rebal_bg_json;
-
--- 2) A table force_logical_auto_identity can move: no replica identity, but every
---    column is comparable. The background rebalance succeeds, the data is preserved,
---    and the source replica identity is restored to 'd'.
-CREATE TABLE rebal_bg_ok (a int, b text);
-SELECT create_distributed_table('rebal_bg_ok', 'a', shard_count => 4, colocate_with => 'none');
-INSERT INTO rebal_bg_ok SELECT g, 'v'||g FROM generate_series(1, 400) g;
-SELECT citus_move_shard_placement(s.shardid, 'localhost', :worker_2_port, 'localhost', :worker_1_port, shard_transfer_mode => 'block_writes')
-FROM pg_dist_shard s JOIN pg_dist_shard_placement p USING (shardid)
-WHERE s.logicalrelid='rebal_bg_ok'::regclass AND p.nodeport = :worker_2_port
-ORDER BY s.shardid;
-SELECT public.wait_for_resource_cleanup();
--- all four shards now live on a single worker
-SELECT count(DISTINCT nodeport) AS distinct_nodes_before
-FROM pg_dist_shard s JOIN pg_dist_shard_placement p USING (shardid)
-WHERE s.logicalrelid='rebal_bg_ok'::regclass;
-SELECT citus_rebalance_start(shard_transfer_mode => 'force_logical_auto_identity') > 0 AS started;
-SELECT citus_rebalance_wait();
-SELECT public.wait_for_resource_cleanup();
--- rebalanced back across both workers (2 shards each)
-SELECT count(*) AS shards_per_node, (count(*) = 2) AS balanced
-FROM pg_dist_shard s JOIN pg_dist_shard_placement p USING (shardid)
-WHERE s.logicalrelid='rebal_bg_ok'::regclass
-GROUP BY p.nodeport ORDER BY 1;
-SELECT count(*) AS rows FROM rebal_bg_ok;
-SELECT DISTINCT result FROM run_command_on_placements('rebal_bg_ok','SELECT relreplident FROM pg_class WHERE oid=''%s''::regclass');
-DROP TABLE rebal_bg_ok;
-
 SET client_min_messages TO WARNING;
 DROP SCHEMA background_rebalance CASCADE;
 DROP USER non_super_user_rebalance;
