@@ -123,6 +123,10 @@ static void FlushMetadataSyncCachesIfNeeded(MetadataSyncContext *context,
 											int64 processedCount);
 static char * ColocationMetadataBatchCommand(List *valueRows);
 static char * TenantSchemaMetadataBatchCommand(List *valueRows);
+static void AppendShardMetadataRow(StringInfo shardValues,
+								   ShardInterval *shardInterval);
+static void AppendPlacementMetadataRow(StringInfo placementValues,
+									   uint64 shardId, ShardPlacement *placement);
 static void DropMetadataSnapshotOnNode(WorkerNode *workerNode);
 static void FetchSequenceState(Oid sequenceId, int64 *lastValue, bool *isCalled);
 static void AppendSequenceRangeAdjustCommand(Oid sequenceId, List **commandList);
@@ -1325,35 +1329,25 @@ ShardListInsertCommand(List *shardIntervalList)
 					 "WITH placement_data(shardid, "
 					 "shardlength, groupid, placementid)  AS (VALUES ");
 
+	StringInfo shardRows = makeStringInfo();
+	StringInfo placementRows = makeStringInfo();
+
 	ShardInterval *shardInterval = NULL;
-	bool firstPlacementProcessed = false;
 	foreach_declared_ptr(shardInterval, shardIntervalList)
 	{
+		AppendShardMetadataRow(shardRows, shardInterval);
+
 		uint64 shardId = shardInterval->shardId;
 		List *shardPlacementList = ActiveShardPlacementList(shardId);
 
 		ShardPlacement *placement = NULL;
 		foreach_declared_ptr(placement, shardPlacementList)
 		{
-			if (firstPlacementProcessed)
-			{
-				/*
-				 * As long as this is not the first placement of the first shard,
-				 * append the comma.
-				 */
-				appendStringInfo(insertPlacementCommand, ", ");
-			}
-			firstPlacementProcessed = true;
-
-			appendStringInfo(insertPlacementCommand,
-							 "(%ld, %ld, %d, %ld)",
-							 shardId,
-							 placement->shardLength,
-							 placement->groupId,
-							 placement->placementId);
+			AppendPlacementMetadataRow(placementRows, shardId, placement);
 		}
 	}
 
+	appendStringInfoString(insertPlacementCommand, placementRows->data);
 	appendStringInfo(insertPlacementCommand, ") ");
 
 	appendStringInfo(insertPlacementCommand,
@@ -1367,49 +1361,7 @@ ShardListInsertCommand(List *shardIntervalList)
 					 "WITH shard_data(relationname, shardid, storagetype, "
 					 "shardminvalue, shardmaxvalue)  AS (VALUES ");
 
-	foreach_declared_ptr(shardInterval, shardIntervalList)
-	{
-		uint64 shardId = shardInterval->shardId;
-		Oid distributedRelationId = shardInterval->relationId;
-		char *qualifiedRelationName = generate_qualified_relation_name(
-			distributedRelationId);
-		StringInfo minHashToken = makeStringInfo();
-		StringInfo maxHashToken = makeStringInfo();
-
-		if (shardInterval->minValueExists)
-		{
-			appendStringInfo(minHashToken, "'%d'", DatumGetInt32(
-								 shardInterval->minValue));
-		}
-		else
-		{
-			appendStringInfo(minHashToken, "NULL");
-		}
-
-		if (shardInterval->maxValueExists)
-		{
-			appendStringInfo(maxHashToken, "'%d'", DatumGetInt32(
-								 shardInterval->maxValue));
-		}
-		else
-		{
-			appendStringInfo(maxHashToken, "NULL");
-		}
-
-		appendStringInfo(insertShardCommand,
-						 "(%s::regclass, %ld, '%c'::\"char\", %s, %s)",
-						 quote_literal_cstr(qualifiedRelationName),
-						 shardId,
-						 shardInterval->storageType,
-						 minHashToken->data,
-						 maxHashToken->data);
-
-		if (llast(shardIntervalList) != shardInterval)
-		{
-			appendStringInfo(insertShardCommand, ", ");
-		}
-	}
-
+	appendStringInfoString(insertShardCommand, shardRows->data);
 	appendStringInfo(insertShardCommand, ") ");
 
 	appendStringInfo(insertShardCommand,
@@ -1430,7 +1382,7 @@ ShardListInsertCommand(List *shardIntervalList)
 	 * TODO: remove this check once citus_disable_node errors out for
 	 * the above scenario.
 	 */
-	if (firstPlacementProcessed)
+	if (placementRows->len > 0)
 	{
 		/* first insert shards, than the placements */
 		commandList = lappend(commandList, insertShardCommand->data);
@@ -5735,6 +5687,81 @@ SendDistTableMetadataCommands(MetadataSyncContext *context)
 
 	systable_endscan(scanDesc);
 	table_close(relation, AccessShareLock);
+}
+
+
+/*
+ * AppendShardMetadataRow appends a single pg_dist_shard VALUES tuple for the given
+ * shard interval to shardValues, prefixing a comma separator when shardValues
+ * already holds a row. The tuple layout matches the shard_data CTE consumed by
+ * citus_internal_add_shard_metadata.
+ */
+static void
+AppendShardMetadataRow(StringInfo shardValues, ShardInterval *shardInterval)
+{
+	uint64 shardId = shardInterval->shardId;
+	Oid distributedRelationId = shardInterval->relationId;
+	char *qualifiedRelationName =
+		generate_qualified_relation_name(distributedRelationId);
+
+	StringInfo minHashToken = makeStringInfo();
+	if (shardInterval->minValueExists)
+	{
+		appendStringInfo(minHashToken, "'%d'",
+						 DatumGetInt32(shardInterval->minValue));
+	}
+	else
+	{
+		appendStringInfoString(minHashToken, "NULL");
+	}
+
+	StringInfo maxHashToken = makeStringInfo();
+	if (shardInterval->maxValueExists)
+	{
+		appendStringInfo(maxHashToken, "'%d'",
+						 DatumGetInt32(shardInterval->maxValue));
+	}
+	else
+	{
+		appendStringInfoString(maxHashToken, "NULL");
+	}
+
+	if (shardValues->len > 0)
+	{
+		appendStringInfoString(shardValues, ", ");
+	}
+
+	appendStringInfo(shardValues,
+					 "(%s::regclass, %ld, '%c'::\"char\", %s, %s)",
+					 quote_literal_cstr(qualifiedRelationName),
+					 shardId,
+					 shardInterval->storageType,
+					 minHashToken->data,
+					 maxHashToken->data);
+}
+
+
+/*
+ * AppendPlacementMetadataRow appends a single pg_dist_placement VALUES tuple for
+ * the given placement of shardId to placementValues, prefixing a comma separator
+ * when placementValues already holds a row. The tuple layout matches the
+ * placement_data CTE consumed by citus_internal_add_placement_metadata.
+ */
+static void
+AppendPlacementMetadataRow(StringInfo placementValues, uint64 shardId,
+						   ShardPlacement *placement)
+{
+	if (placementValues->len > 0)
+	{
+		appendStringInfoString(placementValues, ", ");
+	}
+
+	appendStringInfo(placementValues,
+					 "(%ld, %ld, %d, %ld)",
+					 shardId,
+					 placement->shardLength,
+					 placement->groupId,
+					 placement->placementId);
 }
 
 
