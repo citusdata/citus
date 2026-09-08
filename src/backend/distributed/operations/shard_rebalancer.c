@@ -2427,6 +2427,18 @@ RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationMo
 		{
 			VerifyTablesHaveReplicaIdentity(referenceTableIdList);
 		}
+		else if (shardTransferMode == TRANSFER_MODE_FORCE_LOGICAL_AUTO_IDENTITY)
+		{
+			/*
+			 * The reference tables are copied to the missing nodes with the same
+			 * transfer mode, so reject up front any reference table that
+			 * force_logical_auto_identity would set to REPLICA IDENTITY FULL but
+			 * that cannot then have UPDATE and DELETE replicated (e.g. a column with
+			 * no equality operator). Otherwise the reference table copy task would be
+			 * scheduled only to fail when it later executes.
+			 */
+			ErrorIfTablesCannotUseReplicaIdentityFull(referenceTableIdList);
+		}
 
 		/*
 		 * Reference tables need to be copied to (newly-added) nodes, this needs to be the
