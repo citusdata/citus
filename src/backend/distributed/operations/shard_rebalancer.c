@@ -2100,6 +2100,22 @@ RebalanceTableShards(RebalanceOptions *options, Oid shardReplicationModeOid)
 			VerifyTablesHaveReplicaIdentity(colocatedTableList);
 		}
 	}
+	else if (transferMode == TRANSFER_MODE_FORCE_LOGICAL_AUTO_IDENTITY)
+	{
+		/*
+		 * force_logical_auto_identity temporarily sets REPLICA IDENTITY FULL on the
+		 * tables that have no usable replica identity. Reject up front any such table
+		 * that cannot then have UPDATE and DELETE replicated (e.g. a column with no
+		 * equality operator), so we fail here instead of failing mid-transfer.
+		 */
+		PlacementUpdateEvent *placementUpdate = NULL;
+		foreach_declared_ptr(placementUpdate, placementUpdateList)
+		{
+			Oid relationId = RelationIdForShard(placementUpdate->shardId);
+			List *colocatedTableList = ColocatedTableList(relationId);
+			ErrorIfTablesCannotUseReplicaIdentityFull(colocatedTableList);
+		}
+	}
 
 	EnsureReferenceTablesExistOnAllNodesExtended(transferMode);
 
@@ -2367,6 +2383,23 @@ RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationMo
 			relationId = RelationIdForShard(placementUpdate->shardId);
 			List *colocatedTables = ColocatedTableList(relationId);
 			VerifyTablesHaveReplicaIdentity(colocatedTables);
+		}
+	}
+	else if (shardTransferMode == TRANSFER_MODE_FORCE_LOGICAL_AUTO_IDENTITY)
+	{
+		/*
+		 * force_logical_auto_identity temporarily sets REPLICA IDENTITY FULL on the
+		 * tables that have no usable replica identity. Reject up front any such table
+		 * that cannot then have UPDATE and DELETE replicated (e.g. a column with no
+		 * equality operator). Otherwise the background job would be scheduled only to
+		 * fail (and retry) when it later executes the move.
+		 */
+		PlacementUpdateEvent *placementUpdate = NULL;
+		foreach_declared_ptr(placementUpdate, placementUpdateList)
+		{
+			relationId = RelationIdForShard(placementUpdate->shardId);
+			List *colocatedTables = ColocatedTableList(relationId);
+			ErrorIfTablesCannotUseReplicaIdentityFull(colocatedTables);
 		}
 	}
 

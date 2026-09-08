@@ -130,7 +130,6 @@ static void EnsureShardCanBeCopied(int64 shardId, const char *sourceNodeName,
 static List * RecreateTableDDLCommandList(Oid relationId);
 static void EnsureTableListOwner(List *tableIdList);
 static void ErrorIfReplicatingDistributedTableWithFKeys(List *tableIdList);
-static void ErrorIfTablesCannotUseReplicaIdentityFull(List *tableIdList);
 
 static void DropShardPlacementsFromMetadata(List *shardList,
 											char *nodeName,
@@ -1543,7 +1542,7 @@ VerifyTablesHaveReplicaIdentity(List *colocatedTableList)
  * a replica identity or primary key are published through that index instead and are
  * not affected, so we only check the tables that would be set to FULL.
  */
-static void
+void
 ErrorIfTablesCannotUseReplicaIdentityFull(List *tableIdList)
 {
 	Oid relationId = InvalidOid;
