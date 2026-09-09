@@ -577,9 +577,9 @@ SendRemoteCommand(MultiConnection *connection, const char *command)
 
 
 /*
- * SendRemotePrepare wraps PQprepare() to prepare a statement on a worker
- * connection. This is a synchronous call that blocks until the prepare
- * completes. Returns 1 on success, 0 on failure.
+ * SendRemotePrepare prepares a statement on a worker connection and waits for
+ * the worker to confirm it. The wait is interruptible, so a cancel is honoured
+ * even when the worker is slow to answer. Returns 1 on success, 0 on failure.
  */
 int
 SendRemotePrepare(MultiConnection *connection, const char *stmtName,
@@ -594,15 +594,34 @@ SendRemotePrepare(MultiConnection *connection, const char *stmtName,
 		return 0;
 	}
 
-	PGresult *result = PQprepare(pgConn, stmtName, query, nParams, paramTypes);
-	if (PQresultStatus(result) != PGRES_COMMAND_OK)
+	Assert(PQisnonblocking(pgConn));
+
+	if (PQsendPrepare(pgConn, stmtName, query, nParams, paramTypes) == 0)
 	{
-		ReportResultError(connection, result, WARNING);
-		PQclear(result);
 		return 0;
 	}
 
+	bool raiseInterrupts = true;
+	PGresult *result = GetRemoteCommandResult(connection, raiseInterrupts);
+	if (result == NULL)
+	{
+		return 0;
+	}
+
+	if (PQresultStatus(result) != PGRES_COMMAND_OK)
+	{
+		/*
+		 * Raise for a lost connection as well, which GetRemoteCommandResult()
+		 * reports as a synthetic PGRES_FATAL_ERROR. Returning failure instead
+		 * marks the connection lost while placements are still attached, and
+		 * RestartConnection() asserts that they are not.
+		 */
+		ReportResultError(connection, result, ERROR);
+	}
+
 	PQclear(result);
+	ForgetResults(connection);
+
 	return 1;
 }
 

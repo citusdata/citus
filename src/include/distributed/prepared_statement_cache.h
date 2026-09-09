@@ -43,17 +43,14 @@ typedef struct PreparedStatementCacheKey
 
 
 /*
- * PreparedStatementCacheEntry stores the prepared statement handle on a
- * connection, plus metadata needed to re-execute it.
+ * PreparedStatementCacheEntry names the statement prepared on a connection
+ * for a given (planId, shardId).
  */
 typedef struct PreparedStatementCacheEntry
 {
 	PreparedStatementCacheKey key;
 
 	char stmtName[MAX_STMT_NAME_LENGTH];
-	Oid *paramTypes;
-	int paramCount;
-	char *parameterizedQueryString;
 } PreparedStatementCacheEntry;
 
 
@@ -81,7 +78,8 @@ extern void PreparedStatementCacheDestroy(HTAB **cache_ptr);
 extern PreparedStatementCacheEntry * PreparedStatementCacheLookup(HTAB *cache, uint64
 																  planId, uint64 shardId);
 extern PreparedStatementCacheEntry * PreparedStatementCacheInsert(HTAB *cache, uint64
-																  planId, uint64 shardId);
+																  planId, uint64 shardId,
+																  const char *stmtName);
 
 /* planner-side integration (see citus_custom_scan.c) */
 extern bool PreparedStatementCacheTryFastPath(struct CitusScanState *scanState,
