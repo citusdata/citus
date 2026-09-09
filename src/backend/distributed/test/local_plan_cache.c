@@ -11,8 +11,9 @@
 
 #include "postgres.h"
 
-#include "commands/prepare.h"
 #include "fmgr.h"
+
+#include "commands/prepare.h"
 #include "utils/builtins.h"
 
 #include "distributed/citus_custom_scan.h"

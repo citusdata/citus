@@ -396,6 +396,13 @@ CitusBeginReadOnlyScan(CustomScanState *node, EState *estate, int eflags)
 	bool planAddedToCache = false;
 	CacheLocalPlanForShardQuery(workerJob, originalDistributedPlan,
 								estate->es_param_list_info, &planAddedToCache);
+
+	/* Use a newly cached plan for the current execution as well. */
+	if (planAddedToCache)
+	{
+		currentPlan->workerJob->localPlannedStatements =
+			originalDistributedPlan->workerJob->localPlannedStatements;
+	}
 }
 
 
@@ -511,6 +518,13 @@ CitusBeginModifyScan(CustomScanState *node, EState *estate, int eflags)
 	bool planAddedToCache = false;
 	CacheLocalPlanForShardQuery(workerJob, originalDistributedPlan,
 								estate->es_param_list_info, &planAddedToCache);
+
+	/* Use a newly cached plan for the current execution as well. */
+	if (planAddedToCache)
+	{
+		currentPlan->workerJob->localPlannedStatements =
+			originalDistributedPlan->workerJob->localPlannedStatements;
+	}
 
 	MemoryContextSwitchTo(oldContext);
 }
