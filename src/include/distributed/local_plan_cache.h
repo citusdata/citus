@@ -7,6 +7,6 @@ extern LocalPlannedStatement * CacheLocalPlanForShardQuery(Job *currentJob,
 														   DistributedPlan *
 														   originalDistributedPlan,
 														   ParamListInfo paramListInfo,
-														   bool *planAddedToCached);
+														   bool *planAddedToCache);
 
 #endif /* LOCAL_PLAN_CACHE */

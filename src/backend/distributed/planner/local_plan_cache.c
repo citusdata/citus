@@ -61,9 +61,10 @@ JobHasMultipleTasks(const Job *job)
 
 
 /*
- * CacheLocalPlanForShardQuery replaces the relation OIDs in the job query
- * with shard relation OIDs and then plans the query and caches the result
- * in the originalDistributedPlan (which may be preserved across executions).
+ * CacheLocalPlanForShardQuery returns an existing local plan for the current
+ * shard, or, when local plan caching is supported, creates and caches one in
+ * originalDistributedPlan (which may be preserved across executions).
+ * Returns NULL when local plan caching is unsupported or no plan can be created.
  */
 LocalPlannedStatement *
 CacheLocalPlanForShardQuery(Job *currentJob, DistributedPlan *originalDistributedPlan,
@@ -147,10 +148,9 @@ CreatePlanForLocalCache(Job *currentJob, DistributedPlan *originalDistributedPla
 
 	LockRelationOid(rangeTableEntry->relid, lockMode);
 
-	PlannedStmt *localPlan = NULL;
 	LocalPlannedStatement *localPlannedStatement = CitusMakeNode(LocalPlannedStatement);
 
-	localPlan = planner(localShardQuery, NULL, 0, NULL);
+	PlannedStmt *localPlan = planner(localShardQuery, NULL, 0, NULL);
 	localPlannedStatement->localPlan = localPlan;
 	localPlannedStatement->shardId = task->anchorShardId;
 	localPlannedStatement->localGroupId = GetLocalGroupId();
