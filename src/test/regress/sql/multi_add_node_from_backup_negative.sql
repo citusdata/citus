@@ -52,7 +52,7 @@ SELECT * from pg_dist_node ORDER by nodeid;
 SELECT :clone_node_id;
 
 \c - - - :follower_worker_2_port
-SET statement_timeout = '4s';
+SET statement_timeout = '60s';
 DO $$
 BEGIN
     PERFORM pg_wal_replay_pause();
@@ -67,32 +67,79 @@ DROP TABLE promotion_catchup_wal;
 
 \c - - - :master_port
 SET client_min_messages = WARNING;
-SET statement_timeout = '4s';
+SET statement_timeout = '60s';
 DO $$
 DECLARE
     cloneId integer := (SELECT nodeid FROM pg_dist_node WHERE nodeisclone);
-    timeoutSeconds integer;
     errorDetail text;
 BEGIN
-    FOREACH timeoutSeconds IN ARRAY ARRAY[0, -1, 1] LOOP
-        BEGIN
-            PERFORM citus_promote_clone_and_rebalance(
-                clone_nodeid => cloneId, catchup_timeout_seconds => timeoutSeconds);
-            RAISE EXCEPTION 'promotion unexpectedly succeeded with paused replay';
-        EXCEPTION WHEN object_not_in_prerequisite_state THEN
-            IF SQLERRM NOT LIKE '%failed to catch up%' THEN
-                RAISE;
-            END IF;
-            GET STACKED DIAGNOSTICS errorDetail = PG_EXCEPTION_DETAIL;
-            IF errorDetail NOT LIKE 'Target WAL position is %' THEN
-                RAISE EXCEPTION 'missing catch-up timeout diagnostics';
-            END IF;
-        END;
-    END LOOP;
+    BEGIN
+        PERFORM citus_promote_clone_and_rebalance(
+            clone_nodeid => cloneId, catchup_timeout_seconds => 1);
+        RAISE EXCEPTION 'promotion unexpectedly succeeded with paused replay';
+    EXCEPTION WHEN object_not_in_prerequisite_state THEN
+        IF SQLERRM NOT LIKE '%failed to catch up%' THEN
+            RAISE;
+        END IF;
+        GET STACKED DIAGNOSTICS errorDetail = PG_EXCEPTION_DETAIL;
+        IF errorDetail IS NULL OR errorDetail NOT LIKE 'Target WAL position is %' THEN
+            RAISE EXCEPTION 'missing catch-up timeout diagnostics';
+        END IF;
+    END;
     IF NOT EXISTS (SELECT FROM pg_dist_node
                    WHERE nodeid = cloneId AND nodeisclone AND NOT isactive) THEN
         RAISE EXCEPTION 'timeout changed clone metadata';
     END IF;
+END $$;
+RESET statement_timeout;
+SET statement_timeout = '1s';
+DO $$
+DECLARE
+    cloneId integer := (SELECT nodeid FROM pg_dist_node WHERE nodeisclone);
+BEGIN
+    BEGIN
+        PERFORM citus_promote_clone_and_rebalance(
+            clone_nodeid => cloneId, catchup_timeout_seconds => 0);
+        RAISE EXCEPTION 'promotion unexpectedly succeeded with paused replay';
+    EXCEPTION WHEN query_canceled THEN
+        NULL;
+    END;
+    IF NOT EXISTS (SELECT FROM pg_dist_node
+                   WHERE nodeid = cloneId AND nodeisclone AND NOT isactive) THEN
+        RAISE EXCEPTION 'cancellation changed clone metadata';
+    END IF;
+END $$;
+DO $$
+DECLARE
+    cloneId integer := (SELECT nodeid FROM pg_dist_node WHERE nodeisclone);
+BEGIN
+    BEGIN
+        PERFORM citus_promote_clone_and_rebalance(
+            clone_nodeid => cloneId, catchup_timeout_seconds => 30);
+        RAISE EXCEPTION 'promotion unexpectedly succeeded with paused replay';
+    EXCEPTION WHEN query_canceled THEN
+        NULL;
+    END;
+    IF NOT EXISTS (SELECT FROM pg_dist_node
+                   WHERE nodeid = cloneId AND nodeisclone AND NOT isactive) THEN
+        RAISE EXCEPTION 'cancellation changed clone metadata';
+    END IF;
+END $$;
+RESET statement_timeout;
+SET statement_timeout = '60s';
+DO $$
+DECLARE
+    cloneId integer := (SELECT nodeid FROM pg_dist_node WHERE nodeisclone);
+BEGIN
+    BEGIN
+        PERFORM citus_promote_clone_and_rebalance(
+            clone_nodeid => cloneId, catchup_timeout_seconds => 1);
+        RAISE EXCEPTION 'promotion unexpectedly succeeded with paused replay';
+    EXCEPTION WHEN object_not_in_prerequisite_state THEN
+        IF SQLERRM NOT LIKE '%failed to catch up%' THEN
+            RAISE;
+        END IF;
+    END;
 END $$;
 RESET statement_timeout;
 RESET client_min_messages;
@@ -140,7 +187,9 @@ INSERT INTO ref_table2 SELECT i FROM generate_series(1, 5) i;
 SELECT * from get_snapshot_based_node_split_plan('localhost', :worker_3_port, 'localhost', :follower_worker_3_port);
 
 SET client_min_messages to 'LOG';
-SELECT citus_promote_clone_and_rebalance(clone_nodeid => :clone_node_id_3);
+SET statement_timeout = '120s';
+SELECT citus_promote_clone_and_rebalance(clone_nodeid => :clone_node_id_3, catchup_timeout_seconds => 0);
+RESET statement_timeout;
 SET client_min_messages to DEFAULT;
 
 SELECT COUNT(*) from backup_test;

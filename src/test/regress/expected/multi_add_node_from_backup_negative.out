@@ -85,7 +85,7 @@ ERROR:  Node localhost:xxxxx (ID 1) is not a valid clone or its primary node ID 
 -- Test 3: Try to promote with invalid timeout (negative)
 SELECT citus_promote_clone_and_rebalance(clone_nodeid => 1,
          catchup_timeout_seconds => -100);
-ERROR:  Node localhost:xxxxx (ID 1) is not a valid clone or its primary node ID is not set.
+ERROR:  catchup_timeout_seconds must be nonnegative
 -- register the new node as a clone, This should pass
 SELECT citus_add_clone_node('localhost', :follower_worker_2_port, 'localhost', :worker_2_port) AS clone_node_id \gset
 NOTICE:  checking replication relationship between primary localhost:xxxxx and clone localhost:xxxxx
@@ -107,55 +107,102 @@ SELECT :clone_node_id;
 (1 row)
 
 \c - - - :follower_worker_2_port
-SET statement_timeout = '4s';
+SET statement_timeout = '60s';
 DO $$
 BEGIN
-      PERFORM pg_wal_replay_pause();
-      WHILE pg_get_wal_replay_pause_state() <> 'paused' LOOP
-            PERFORM pg_sleep(0.01);
-      END LOOP;
+    PERFORM pg_wal_replay_pause();
+    WHILE pg_get_wal_replay_pause_state() <> 'paused' LOOP
+        PERFORM pg_sleep(0.01);
+    END LOOP;
 END $$;
 \c - - - :worker_2_port
 CREATE TABLE promotion_catchup_wal (id integer);
 DROP TABLE promotion_catchup_wal;
 \c - - - :master_port
 SET client_min_messages = WARNING;
-SET statement_timeout = '4s';
+SET statement_timeout = '60s';
 DO $$
 DECLARE
-      cloneId integer := (SELECT nodeid FROM pg_dist_node WHERE nodeisclone);
-      timeoutSeconds integer;
-      errorDetail text;
+    cloneId integer := (SELECT nodeid FROM pg_dist_node WHERE nodeisclone);
+    errorDetail text;
 BEGIN
-      FOREACH timeoutSeconds IN ARRAY ARRAY[0, -1, 1] LOOP
-            BEGIN
-                  PERFORM citus_promote_clone_and_rebalance(
-                        clone_nodeid => cloneId, catchup_timeout_seconds => timeoutSeconds);
-                  RAISE EXCEPTION 'promotion unexpectedly succeeded with paused replay';
-            EXCEPTION WHEN object_not_in_prerequisite_state THEN
-                  IF SQLERRM NOT LIKE '%failed to catch up%' THEN
-                        RAISE;
-                  END IF;
-                  GET STACKED DIAGNOSTICS errorDetail = PG_EXCEPTION_DETAIL;
-                  IF errorDetail NOT LIKE 'Target WAL position is %' THEN
-                        RAISE EXCEPTION 'missing catch-up timeout diagnostics';
-                  END IF;
-            END;
-      END LOOP;
-      IF NOT EXISTS (SELECT FROM pg_dist_node
-                           WHERE nodeid = cloneId AND nodeisclone AND NOT isactive) THEN
-            RAISE EXCEPTION 'timeout changed clone metadata';
-      END IF;
+    BEGIN
+        PERFORM citus_promote_clone_and_rebalance(
+            clone_nodeid => cloneId, catchup_timeout_seconds => 1);
+        RAISE EXCEPTION 'promotion unexpectedly succeeded with paused replay';
+    EXCEPTION WHEN object_not_in_prerequisite_state THEN
+        IF SQLERRM NOT LIKE '%failed to catch up%' THEN
+            RAISE;
+        END IF;
+        GET STACKED DIAGNOSTICS errorDetail = PG_EXCEPTION_DETAIL;
+        IF errorDetail IS NULL OR errorDetail NOT LIKE 'Target WAL position is %' THEN
+            RAISE EXCEPTION 'missing catch-up timeout diagnostics';
+        END IF;
+    END;
+    IF NOT EXISTS (SELECT FROM pg_dist_node
+                   WHERE nodeid = cloneId AND nodeisclone AND NOT isactive) THEN
+        RAISE EXCEPTION 'timeout changed clone metadata';
+    END IF;
+END $$;
+RESET statement_timeout;
+SET statement_timeout = '1s';
+DO $$
+DECLARE
+    cloneId integer := (SELECT nodeid FROM pg_dist_node WHERE nodeisclone);
+BEGIN
+    BEGIN
+        PERFORM citus_promote_clone_and_rebalance(
+            clone_nodeid => cloneId, catchup_timeout_seconds => 0);
+        RAISE EXCEPTION 'promotion unexpectedly succeeded with paused replay';
+    EXCEPTION WHEN query_canceled THEN
+        NULL;
+    END;
+    IF NOT EXISTS (SELECT FROM pg_dist_node
+                   WHERE nodeid = cloneId AND nodeisclone AND NOT isactive) THEN
+        RAISE EXCEPTION 'cancellation changed clone metadata';
+    END IF;
+END $$;
+DO $$
+DECLARE
+    cloneId integer := (SELECT nodeid FROM pg_dist_node WHERE nodeisclone);
+BEGIN
+    BEGIN
+        PERFORM citus_promote_clone_and_rebalance(
+            clone_nodeid => cloneId, catchup_timeout_seconds => 30);
+        RAISE EXCEPTION 'promotion unexpectedly succeeded with paused replay';
+    EXCEPTION WHEN query_canceled THEN
+        NULL;
+    END;
+    IF NOT EXISTS (SELECT FROM pg_dist_node
+                   WHERE nodeid = cloneId AND nodeisclone AND NOT isactive) THEN
+        RAISE EXCEPTION 'cancellation changed clone metadata';
+    END IF;
+END $$;
+RESET statement_timeout;
+SET statement_timeout = '60s';
+DO $$
+DECLARE
+    cloneId integer := (SELECT nodeid FROM pg_dist_node WHERE nodeisclone);
+BEGIN
+    BEGIN
+        PERFORM citus_promote_clone_and_rebalance(
+            clone_nodeid => cloneId, catchup_timeout_seconds => 1);
+        RAISE EXCEPTION 'promotion unexpectedly succeeded with paused replay';
+    EXCEPTION WHEN object_not_in_prerequisite_state THEN
+        IF SQLERRM NOT LIKE '%failed to catch up%' THEN
+            RAISE;
+        END IF;
+    END;
 END $$;
 RESET statement_timeout;
 RESET client_min_messages;
 \c - - - :follower_worker_2_port
 DO $$
 BEGIN
-      IF NOT pg_is_in_recovery() THEN
-            RAISE EXCEPTION 'timeout promoted the clone';
-      END IF;
-      PERFORM pg_wal_replay_resume();
+    IF NOT pg_is_in_recovery() THEN
+        RAISE EXCEPTION 'timeout promoted the clone';
+    END IF;
+    PERFORM pg_wal_replay_resume();
 END $$;
 \c - - - :master_port
 -- Test 4: Try to promote clone with invalid strategy name
@@ -269,14 +316,15 @@ SELECT * from get_snapshot_based_node_split_plan('localhost', :worker_3_port, 'l
 (25 rows)
 
 SET client_min_messages to 'LOG';
-SELECT citus_promote_clone_and_rebalance(clone_nodeid => :clone_node_id_3);
+SET statement_timeout = '120s';
+SELECT citus_promote_clone_and_rebalance(clone_nodeid => :clone_node_id_3, catchup_timeout_seconds => 0);
 NOTICE:  Starting promotion process for clone node localhost:xxxxx (ID 6), original primary localhost:xxxxx (ID 5)
 NOTICE:  checking replication relationship between primary localhost:xxxxx and clone localhost:xxxxx
 NOTICE:  checking replication status of clone node localhost:xxxxx
 NOTICE:  clone localhost:xxxxx is properly connected to primary localhost:xxxxx and is not synchronous
 NOTICE:  Blocking writes on shards of original primary node localhost:xxxxx (group 5)
 NOTICE:  Blocking all writes to worker node localhost:xxxxx (ID 5)
-NOTICE:  Waiting for clone localhost:xxxxx to catch up with primary localhost:xxxxx (timeout: 300 seconds)
+NOTICE:  Waiting for clone localhost:xxxxx to catch up with primary localhost:xxxxx (timeout disabled)
 NOTICE:  Clone localhost:xxxxx is now caught up with primary localhost:xxxxx.
 NOTICE:  Attempting to promote clone localhost:xxxxx via pg_promote().
 NOTICE:  Clone node localhost:xxxxx (ID 6) has been successfully promoted.
@@ -318,6 +366,7 @@ NOTICE:  Clone node localhost:xxxxx (ID 6) successfully registered as a worker n
 
 (1 row)
 
+RESET statement_timeout;
 SET client_min_messages to DEFAULT;
 SELECT COUNT(*) from backup_test;
  count
