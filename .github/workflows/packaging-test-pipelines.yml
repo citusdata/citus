@@ -120,14 +120,11 @@ jobs:
         # PG_CONFIG variable in each of those runs.
         packaging_docker_image:
           - debian-bookworm-all
-          - ubuntu-focal-all
+          - debian-trixie-all
           - ubuntu-jammy-all
+          - ubuntu-noble-all
 
         POSTGRES_VERSION: ${{ fromJson(needs.get_postgres_versions_from_file.outputs.pg_versions) }}
-        exclude:
-          # PG18 is not supported on Ubuntu focal
-          - packaging_docker_image: ubuntu-focal-all
-            POSTGRES_VERSION: 18
 
     container:
       image: citus/packaging:${{ matrix.packaging_docker_image }}
