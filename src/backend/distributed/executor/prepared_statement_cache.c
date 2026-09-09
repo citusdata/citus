@@ -37,16 +37,38 @@
 #include "distributed/listutils.h"
 #include "distributed/local_plan_cache.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/metadata_utility.h"
 #include "distributed/multi_executor.h"
+#include "distributed/multi_explain.h"
+#include "distributed/multi_physical_planner.h"
 #include "distributed/multi_router_planner.h"
 #include "distributed/prepared_statement_cache.h"
 #include "distributed/remote_commands.h"
 #include "distributed/shard_cleaner.h"
+#include "distributed/shard_pruning.h"
 #include "distributed/shardinterval_utils.h"
+#include "distributed/stats/stat_tenants.h"
 
 
 /* GUC: citus.enable_prepared_statement_caching */
 bool EnablePreparedStatementCaching = false;
+
+
+/*
+ * PreparedStatementCachingUsable returns whether the cache may be used at all
+ * for this execution.
+ *
+ * Tenant statistics reach the worker as a comment on the query text. A reused
+ * prepared statement cannot carry that per execution -- it would freeze the
+ * tenant of whichever execution prepared it -- so decline while tracking is on
+ * rather than mis-attribute.
+ */
+static bool
+PreparedStatementCachingUsable(void)
+{
+	return EnablePreparedStatementCaching &&
+		   StatTenantsTrack == STAT_TENANTS_TRACK_NONE;
+}
 
 
 /*
@@ -96,21 +118,17 @@ PreparedStatementCacheLookup(HTAB *cache, uint64 planId, uint64 shardId)
 
 
 /*
- * PreparedStatementCacheInsert inserts a new entry for (planId, shardId).
- * Returns the new entry on success, or NULL if the cache has reached
- * MAX_CACHED_STMTS_PER_CONNECTION (caller should fall back to plain SQL).
+ * PreparedStatementCacheInsert records that stmtName has been prepared on this
+ * connection for (planId, shardId).
  *
- * The caller is responsible for filling in the returned entry's fields
- * (stmtName, paramTypes, paramCount, parameterizedQueryString).
+ * Only call this once the worker has accepted the statement: an entry for a
+ * statement that does not exist makes every later execution on this connection
+ * fail with "prepared statement does not exist".
  */
 PreparedStatementCacheEntry *
-PreparedStatementCacheInsert(HTAB *cache, uint64 planId, uint64 shardId)
+PreparedStatementCacheInsert(HTAB *cache, uint64 planId, uint64 shardId,
+							 const char *stmtName)
 {
-	if (hash_get_num_entries(cache) >= MAX_CACHED_STMTS_PER_CONNECTION)
-	{
-		return NULL;
-	}
-
 	PreparedStatementCacheKey key;
 
 	memset(&key, 0, sizeof(key));
@@ -122,18 +140,10 @@ PreparedStatementCacheInsert(HTAB *cache, uint64 planId, uint64 shardId)
 		(PreparedStatementCacheEntry *) hash_search(cache, &key,
 													HASH_ENTER, &found);
 
-	if (found)
+	if (!found)
 	{
-		/* already exists — return existing entry */
-		return entry;
+		strlcpy(entry->stmtName, stmtName, MAX_STMT_NAME_LENGTH);
 	}
-
-	/* initialize the new entry with auto-generated statement name */
-	SafeSnprintf(entry->stmtName, MAX_STMT_NAME_LENGTH,
-				 "__citus_stmt_%ld", (long) hash_get_num_entries(cache));
-	entry->paramTypes = NULL;
-	entry->paramCount = 0;
-	entry->parameterizedQueryString = NULL;
 
 	return entry;
 }
@@ -154,26 +164,6 @@ PreparedStatementCacheDestroy(HTAB **cache_ptr)
 	if (cache == NULL)
 	{
 		return;
-	}
-
-	/*
-	 * Free dynamically allocated fields in each entry before destroying
-	 * the hash table itself.
-	 */
-	HASH_SEQ_STATUS status;
-	PreparedStatementCacheEntry *entry;
-
-	hash_seq_init(&status, cache);
-	while ((entry = hash_seq_search(&status)) != NULL)
-	{
-		if (entry->paramTypes != NULL)
-		{
-			pfree(entry->paramTypes);
-		}
-		if (entry->parameterizedQueryString != NULL)
-		{
-			pfree(entry->parameterizedQueryString);
-		}
 	}
 
 	hash_destroy(cache);
@@ -226,7 +216,7 @@ PreparedStatementCacheSendQuery(MultiConnection *connection, Task *task,
 								ParamListInfo paramListInfo, bool binaryResults,
 								char **fallbackQueryString)
 {
-	if (!EnablePreparedStatementCaching || task->jobQueryForPrepare == NULL ||
+	if (!PreparedStatementCachingUsable() || task->jobQueryForPrepare == NULL ||
 		paramListInfo == NULL)
 	{
 		return PREPARED_STMT_NOT_APPLICABLE;
@@ -257,10 +247,9 @@ PreparedStatementCacheSendQuery(MultiConnection *connection, Task *task,
 			 " shard " UINT64_FORMAT,
 			 task->preparedStatementPlanId, task->anchorShardId);
 
-		cacheEntry = PreparedStatementCacheInsert(connection->preparedStatementCache,
-												  task->preparedStatementPlanId,
-												  task->anchorShardId);
-		if (cacheEntry == NULL)
+		HTAB *cache = connection->preparedStatementCache;
+
+		if (hash_get_num_entries(cache) >= MAX_CACHED_STMTS_PER_CONNECTION)
 		{
 			/*
 			 * Cache full. The fast-path task has no query string of its own, so
@@ -272,24 +261,30 @@ PreparedStatementCacheSendQuery(MultiConnection *connection, Task *task,
 			return PREPARED_STMT_FALLBACK;
 		}
 
+		char stmtName[MAX_STMT_NAME_LENGTH];
+		SafeSnprintf(stmtName, MAX_STMT_NAME_LENGTH, "__citus_stmt_%ld",
+					 (long) hash_get_num_entries(cache) + 1);
+
 		char *queryString = DeparseTaskTemplate(task);
 
-		if (SendRemotePrepare(connection, cacheEntry->stmtName, queryString,
+		if (SendRemotePrepare(connection, stmtName, queryString,
 							  parameterCount, parameterTypes) == 0)
 		{
+			pfree(queryString);
 			connection->connectionState = MULTI_CONNECTION_LOST;
 			return PREPARED_STMT_FAILED;
 		}
 
-		Size paramTypesSize = parameterCount * sizeof(Oid);
-		cacheEntry->paramTypes = MemoryContextAlloc(TopMemoryContext, paramTypesSize);
-		memcpy_s(cacheEntry->paramTypes, paramTypesSize, parameterTypes,
-				 paramTypesSize);
-		cacheEntry->paramCount = parameterCount;
-		cacheEntry->parameterizedQueryString =
-			MemoryContextStrdup(TopMemoryContext, queryString);
-
 		pfree(queryString);
+
+		/*
+		 * Publish only now: SendRemotePrepare raises on a rejected statement, so
+		 * an earlier insert would leave an entry naming a statement the worker
+		 * never created.
+		 */
+		cacheEntry = PreparedStatementCacheInsert(cache,
+												  task->preparedStatementPlanId,
+												  task->anchorShardId, stmtName);
 	}
 	else
 	{
@@ -301,12 +296,6 @@ PreparedStatementCacheSendQuery(MultiConnection *connection, Task *task,
 
 	if (SendRemotePreparedQuery(connection, cacheEntry->stmtName, parameterCount,
 								parameterValues, binaryResults) == 0)
-	{
-		connection->connectionState = MULTI_CONNECTION_LOST;
-		return PREPARED_STMT_FAILED;
-	}
-
-	if (PQsetSingleRowMode(connection->pgConn) == 0)
 	{
 		connection->connectionState = MULTI_CONNECTION_LOST;
 		return PREPARED_STMT_FAILED;
@@ -332,13 +321,23 @@ PreparedStatementCacheSaveTemplate(DistributedPlan *originalPlan)
 	Job *originalJob = originalPlan->workerJob;
 	Query *jobQuery = originalJob->jobQuery;
 
-	if (!EnablePreparedStatementCaching)
+	if (!PreparedStatementCachingUsable())
 	{
 		return NULL;
 	}
 
 	if (jobQuery->commandType != CMD_SELECT)
 	{
+		/*
+		 * nextval(), now() and other coordinator-evaluated expressions are
+		 * resolved into the per-execution copy of the query, never into this
+		 * template, so a cached statement would evaluate them on the worker.
+		 */
+		if (originalJob->requiresCoordinatorEvaluation)
+		{
+			return NULL;
+		}
+
 		/*
 		 * Multi-row INSERT can't be cached: each shard's task carries only its
 		 * own subset of VALUES rows, but the statement is deparsed once from
@@ -357,6 +356,9 @@ PreparedStatementCacheSaveTemplate(DistributedPlan *originalPlan)
 			MemoryContextSwitchTo(GetMemoryChunkContext(originalPlan));
 		originalJob->savedJobQueryForCaching = copyObject(jobQuery);
 		MemoryContextSwitchTo(oldContext);
+
+		/* the fast path has not run yet, so this is still the planner's value */
+		originalJob->plannerPartitionKeyValue = originalJob->partitionKeyValue;
 	}
 
 	return originalJob->savedJobQueryForCaching;
@@ -372,7 +374,17 @@ void
 PreparedStatementCacheAttachToTasks(DistributedPlan *currentPlan, Job *workerJob,
 									Query *savedJobQuery)
 {
-	if (!EnablePreparedStatementCaching || savedJobQuery == NULL)
+	if (!PreparedStatementCachingUsable() || savedJobQuery == NULL)
+	{
+		return;
+	}
+
+	/*
+	 * Only attach to a plan that is being reused. A custom plan is rebuilt with a
+	 * fresh planId per execution, so its entries could never be hit and would fill
+	 * the connection's cache. Same reuse test as IsLocalPlanCachingSupported().
+	 */
+	if (currentPlan->numberOfTimesExecuted < 1)
 	{
 		return;
 	}
@@ -397,9 +409,14 @@ PreparedStatementCacheAttachToTasks(DistributedPlan *currentPlan, Job *workerJob
 /*
  * FastPathShardInterval returns the shard the distribution key parameter routes
  * to, or NULL if the fast path cannot be used for this execution.
+ *
+ * The value is returned via partitionKeyValue, coerced to the distribution
+ * column's type. Single-row INSERT records the Param with implicit coercions
+ * stripped, so the parameter type can differ from the column type.
  */
 static ShardInterval *
-FastPathShardInterval(DistributedPlan *plan, Job *workerJob, EState *estate)
+FastPathShardInterval(DistributedPlan *plan, Job *workerJob, EState *estate,
+					  Const **partitionKeyValue)
 {
 	int paramId = workerJob->distributionKeyParamId;
 	ParamListInfo paramListInfo = estate->es_param_list_info;
@@ -417,18 +434,47 @@ FastPathShardInterval(DistributedPlan *plan, Job *workerJob, EState *estate)
 
 	Oid relationId = linitial_oid(plan->relationIdList);
 	CitusTableCacheEntry *tableEntry = GetCitusTableCacheEntry(relationId);
+	Var *partitionColumn = tableEntry->partitionColumn;
 
-	return FindShardInterval(param->value, tableEntry);
+	if (partitionColumn == NULL)
+	{
+		return NULL;
+	}
+
+	int16 typeLength;
+	bool typeByValue;
+	get_typlenbyval(param->ptype, &typeLength, &typeByValue);
+	Const *valueConst = makeConst(param->ptype, -1, InvalidOid, (int) typeLength,
+								  param->value, false, typeByValue);
+
+	if (param->ptype != partitionColumn->vartype)
+	{
+		bool missingOk = true;
+		valueConst = TransformPartitionRestrictionValue(partitionColumn, valueConst,
+														missingOk);
+		if (valueConst == NULL || valueConst->constisnull)
+		{
+			return NULL;
+		}
+	}
+
+	*partitionKeyValue = valueConst;
+
+	return FindShardInterval(valueConst->constvalue, tableEntry);
 }
 
 
 /*
  * BuildFastPathTask builds the minimal Task for a single-shard execution,
  * bypassing plan copying, coordinator evaluation and task regeneration.
+ *
+ * Returns NULL when the shard has no placement to run on, so the caller can
+ * fall back to normal planning and raise its "found no worker with all shard
+ * placements" error.
  */
 static Task *
-BuildFastPathTask(DistributedPlan *plan, Job *workerJob, EState *estate,
-				  ShardInterval *shardInterval, bool isModify)
+BuildFastPathTask(DistributedPlan *plan, Job *workerJob, ShardInterval *shardInterval,
+				  Const *partitionKeyValue, bool isModify)
 {
 	List *shardIntervalListList = list_make1(list_make1(shardInterval));
 	bool shardsPresent = false;
@@ -438,26 +484,34 @@ BuildFastPathTask(DistributedPlan *plan, Job *workerJob, EState *estate,
 		CreateTaskPlacementListForShardIntervals(shardIntervalListList, shardsPresent,
 												 true, false);
 
+	if (placementList == NIL)
+	{
+		return NULL;
+	}
+
+	/*
+	 * Modifications run on every placement and are assigned first-replica by the
+	 * caller, so only reads honour citus.task_assignment_policy.
+	 */
+	if (!isModify && TaskAssignmentPolicy == TASK_ASSIGNMENT_ROUND_ROBIN)
+	{
+		placementList = RemoveCoordinatorPlacementIfNotSingleNode(placementList);
+		placementList = RoundRobinReorder(placementList);
+	}
+
 	Task *task = CitusMakeNode(Task);
 	task->taskType = isModify ? MODIFY_TASK : READ_TASK;
 	task->anchorShardId = shardInterval->shardId;
 	task->anchorDistributedTableId = linitial_oid(plan->relationIdList);
 	task->taskPlacementList = placementList;
 	task->queryCount = 1;
-	task->parametersInQueryStringResolved = true;
 	task->preparedStatementPlanId = plan->planId;
 	task->jobQueryForPrepare = workerJob->savedJobQueryForCaching;
 	task->relationShardList = relationShardList;
+	task->relationRowLockList =
+		RelationRowLockListForQuery(workerJob->savedJobQueryForCaching);
 	task->colocationId = workerJob->colocationId;
-
-	ParamExternData *param =
-		&estate->es_param_list_info->params[workerJob->distributionKeyParamId - 1];
-	int16 typeLength;
-	bool typeByValue;
-	get_typlenbyval(param->ptype, &typeLength, &typeByValue);
-	task->partitionKeyValue = makeConst(param->ptype, -1, InvalidOid,
-										(int) typeLength, param->value, false,
-										typeByValue);
+	task->partitionKeyValue = partitionKeyValue;
 
 	return task;
 }
@@ -480,9 +534,18 @@ PreparedStatementCacheTryFastPath(struct CitusScanState *scanStateArg, EState *e
 	Job *workerJob = originalPlan->workerJob;
 
 	/* the first execution populates the template the fast path depends on */
-	if (!EnablePreparedStatementCaching ||
+	if (!PreparedStatementCachingUsable() ||
 		originalPlan->numberOfTimesExecuted == 0 ||
 		workerJob->savedJobQueryForCaching == NULL)
+	{
+		return false;
+	}
+
+	/*
+	 * EXPLAIN ANALYZE wraps the task's query string, which would then carry the
+	 * template's Params into the reported worker plan.
+	 */
+	if (RequestedForExplainAnalyze(scanState))
 	{
 		return false;
 	}
@@ -494,18 +557,47 @@ PreparedStatementCacheTryFastPath(struct CitusScanState *scanStateArg, EState *e
 		return false;
 	}
 
+	Const *partitionKeyValue = NULL;
 	ShardInterval *shardInterval = FastPathShardInterval(originalPlan, workerJob,
-														 estate);
-	if (shardInterval == NULL || (isModify && !ShardExists(shardInterval->shardId)))
+														 estate, &partitionKeyValue);
+	if (shardInterval == NULL)
 	{
 		return false;
 	}
 
-	Task *task = BuildFastPathTask(originalPlan, workerJob, estate, shardInterval,
-								   isModify);
+	Task *task = BuildFastPathTask(originalPlan, workerJob, shardInterval,
+								   partitionKeyValue, isModify);
+	if (task == NULL)
+	{
+		return false;
+	}
 
 	workerJob->taskList = list_make1(task);
 	workerJob->parametersInJobQueryResolved = true;
+
+	/* local execution and query stats read the key from the job, not the task */
+	workerJob->partitionKeyValue = partitionKeyValue;
+
+	if (isModify)
+	{
+		AcquireMetadataLocks(workerJob->taskList);
+
+		/*
+		 * A concurrent split may have dropped the shard between pruning and
+		 * locking. Normal planning reroutes here, but it does so by rewriting
+		 * jobQuery in place, which would pin the cached plan to this execution's
+		 * shards. Decline instead, so normal planning reroutes on its own copy.
+		 */
+		if (!ShardExists(shardInterval->shardId))
+		{
+			workerJob->taskList = NIL;
+			workerJob->parametersInJobQueryResolved = false;
+			workerJob->partitionKeyValue = workerJob->plannerPartitionKeyValue;
+			return false;
+		}
+
+		workerJob->taskList = FirstReplicaAssignTaskList(workerJob->taskList);
+	}
 
 	elog(DEBUG2, "prepared statement cache-hit fast path%s: plan " UINT64_FORMAT
 		 " shard " UINT64_FORMAT,
@@ -513,13 +605,6 @@ PreparedStatementCacheTryFastPath(struct CitusScanState *scanStateArg, EState *e
 
 	/* the executor reads the plan back from the scan state */
 	scanState->distributedPlan = originalPlan;
-
-	if (isModify)
-	{
-		AcquireMetadataLocks(workerJob->taskList);
-		EnsureAnchorShardsInJobExist(workerJob);
-		workerJob->taskList = FirstReplicaAssignTaskList(workerJob->taskList);
-	}
 
 	/*
 	 * A fast-path task has no query string, so local execution needs a cached

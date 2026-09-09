@@ -1449,16 +1449,18 @@ GetDistributedPlan(CustomScan *customScan)
 	Assert(CitusIsA(node, DistributedPlan));
 
 	/*
-	 * Clear stale task pointers before CheckNodeCopyAndSerialization.
-	 * When prepared statement caching fast-path is active, the previous
-	 * execution may have set workerJob->taskList on the original plan.
-	 * That task's memory has been freed (portal context destroyed), so
-	 * serializing the plan now would dereference dangling pointers.
+	 * Undo what the previous execution's fast path left on the original plan.
+	 * Its Task and partition key Const were allocated in a portal context that
+	 * is now gone, so serializing the plan would follow dangling pointers.
+	 * CitusEndScanCommon() does this too, but an execution that errors out
+	 * never reaches it.
 	 */
 	DistributedPlan *plan = (DistributedPlan *) node;
-	if (plan->workerJob != NULL && plan->workerJob->deferredPruning)
+	if (plan->workerJob != NULL && plan->workerJob->savedJobQueryForCaching != NULL)
 	{
 		plan->workerJob->taskList = NIL;
+		plan->workerJob->parametersInJobQueryResolved = false;
+		plan->workerJob->partitionKeyValue = plan->workerJob->plannerPartitionKeyValue;
 	}
 
 	CheckNodeCopyAndSerialization(node);

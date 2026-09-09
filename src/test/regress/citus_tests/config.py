@@ -296,6 +296,14 @@ class CitusCacheManyConnectionsConfig(CitusDefaultClusterConfig):
         }
 
 
+class CitusPreparedStatementCachingConfig(CitusDefaultClusterConfig):
+    def __init__(self, arguments):
+        super().__init__(arguments)
+        self.new_settings = {
+            "citus.enable_prepared_statement_caching": True,
+        }
+
+
 class CitusUnusualExecutorConfig(CitusDefaultClusterConfig):
     def __init__(self, arguments):
         super().__init__(arguments)

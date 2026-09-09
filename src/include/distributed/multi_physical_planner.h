@@ -163,6 +163,14 @@ typedef struct Job
 	 * only; the per-execution copy (currentPlan) gets a NULL here.
 	 */
 	Query *savedJobQueryForCaching;
+
+	/*
+	 * partitionKeyValue as the planner left it, captured alongside
+	 * savedJobQueryForCaching. The cache fast path overwrites
+	 * partitionKeyValue with a per-execution Const, and this is what it gets
+	 * put back to once that Const is about to become dangling.
+	 */
+	Const *plannerPartitionKeyValue;
 } Job;
 
 

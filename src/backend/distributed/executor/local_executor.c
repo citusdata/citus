@@ -406,6 +406,9 @@ ExecuteLocalTaskListExtended(List *taskList,
 
 				if (queryForDeparse->commandType == CMD_INSERT)
 				{
+					/* upserts reference the target by name, which becomes the shard name */
+					AddInsertAliasIfNeeded(queryForDeparse);
+
 					deparse_shard_query(queryForDeparse,
 										task->anchorDistributedTableId,
 										task->anchorShardId, &buf);
