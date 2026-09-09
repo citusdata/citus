@@ -798,11 +798,23 @@ TaskQueryString(Task *task)
 			 * so subsequent calls don't re-deparse.
 			 */
 			Query *queryForDeparse = copyObject(task->jobQueryForPrepare);
+
+			/*
+			 * The task retains the string, so allocate it in the task's own
+			 * context rather than CurrentMemoryContext, which may be a
+			 * short-lived per-tuple context.
+			 */
+			MemoryContext previousContext =
+				MemoryContextSwitchTo(GetMemoryChunkContext(task));
 			StringInfoData buf;
 			initStringInfo(&buf);
+			MemoryContextSwitchTo(previousContext);
 
 			if (queryForDeparse->commandType == CMD_INSERT)
 			{
+				/* upserts reference the target by name, which becomes the shard name */
+				AddInsertAliasIfNeeded(queryForDeparse);
+
 				deparse_shard_query(queryForDeparse,
 									task->anchorDistributedTableId,
 									task->anchorShardId, &buf);
@@ -815,7 +827,6 @@ TaskQueryString(Task *task)
 			}
 
 			SetTaskQueryString(task, buf.data);
-			pfree(buf.data);
 			return task->taskQuery.data.queryStringLazy;
 		}
 

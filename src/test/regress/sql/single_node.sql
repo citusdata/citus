@@ -1333,6 +1333,61 @@ BEGIN;
 	SELECT coordinated_transaction_should_use_2PC();
 ROLLBACK;
 
+-- A cached fast-path upsert executed locally is deparsed for local planning,
+-- and needs the insert alias so the DO UPDATE reference to the target table
+-- resolves against the shard alias.
+SET citus.shard_replication_factor TO 1;
+SET citus.shard_count TO 4;
+SET citus.enable_prepared_statement_caching TO on;
+
+-- the suite runs with citus.stat_tenants_track = 'ALL', which the cache declines
+SET citus.stat_tenants_track TO 'none';
+
+CREATE TABLE single_node.upsert_cache_test (key int PRIMARY KEY, value int);
+SELECT create_distributed_table('single_node.upsert_cache_test', 'key');
+
+PREPARE local_cached_upsert(int, int) AS
+	INSERT INTO single_node.upsert_cache_test (key, value) VALUES ($1, $2)
+	ON CONFLICT (key) DO UPDATE
+		SET value = upsert_cache_test.value + EXCLUDED.value;
+
+-- with local command logging on, LogLocalCommand() deparses the task first, so
+-- the notice below shows the shard SQL that the alias has to appear in
+EXECUTE local_cached_upsert(1, 10);
+EXECUTE local_cached_upsert(1, 10);
+EXECUTE local_cached_upsert(1, 10);
+EXECUTE local_cached_upsert(1, 10);
+EXECUTE local_cached_upsert(1, 10);
+EXECUTE local_cached_upsert(1, 10);
+EXECUTE local_cached_upsert(1, 10);
+EXECUTE local_cached_upsert(2, 5);
+
+-- key 1 accumulated seven increments, key 2 was inserted once
+SELECT key, value FROM single_node.upsert_cache_test ORDER BY key;
+
+-- with logging off nothing deparses the task up front, so the local executor
+-- reaches its own fast-path deparse instead
+SET citus.log_local_commands TO off;
+
+EXECUTE local_cached_upsert(3, 100);
+EXECUTE local_cached_upsert(3, 100);
+EXECUTE local_cached_upsert(3, 100);
+EXECUTE local_cached_upsert(3, 100);
+EXECUTE local_cached_upsert(3, 100);
+EXECUTE local_cached_upsert(3, 100);
+EXECUTE local_cached_upsert(3, 100);
+EXECUTE local_cached_upsert(4, 7);
+
+SELECT key, value FROM single_node.upsert_cache_test WHERE key >= 3 ORDER BY key;
+
+RESET citus.log_local_commands;
+DEALLOCATE local_cached_upsert;
+DROP TABLE single_node.upsert_cache_test;
+RESET citus.enable_prepared_statement_caching;
+RESET citus.stat_tenants_track;
+RESET citus.shard_count;
+RESET citus.shard_replication_factor;
+
 -- if the local execution is disabled, we cannot failover to
 -- local execution and the queries would fail
 SET citus.enable_local_execution TO  false;

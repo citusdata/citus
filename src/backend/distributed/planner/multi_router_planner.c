@@ -1983,6 +1983,7 @@ RouterJob(Query *originalQuery, PlannerRestrictionContext *plannerRestrictionCon
 		Job *job = CreateJob(originalQuery);
 		job->deferredPruning = true;
 		job->distributionKeyParamId = fastPathRestrictionContext->distributionKeyParamId;
+		job->requiresCoordinatorEvaluation = requiresCoordinatorEvaluation;
 
 		ereport(DEBUG2, (errmsg("Deferred pruning for a fast-path router "
 								"query")));
@@ -2746,6 +2747,21 @@ RowLocksOnRelations(Node *node, List **relationRowLockList)
 	{
 		return expression_tree_walker(node, RowLocksOnRelations, relationRowLockList);
 	}
+}
+
+
+/*
+ * RelationRowLockListForQuery returns the FOR UPDATE/SHARE row locks the query
+ * takes on Citus tables.
+ */
+List *
+RelationRowLockListForQuery(Query *query)
+{
+	List *relationRowLockList = NIL;
+
+	RowLocksOnRelations((Node *) query, &relationRowLockList);
+
+	return relationRowLockList;
 }
 
 

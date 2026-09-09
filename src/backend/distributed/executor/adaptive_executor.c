@@ -741,6 +741,7 @@ static bool StartPlacementExecutionOnSession(TaskPlacementExecution *placementEx
 											 WorkerSession *session);
 static bool SendNextQuery(TaskPlacementExecution *placementExecution,
 						  WorkerSession *session);
+static bool SetRemoteRowMode(MultiConnection *connection);
 static void ConnectionStateMachine(WorkerSession *session);
 static bool HasUnfinishedTaskForSession(WorkerSession *session);
 static void HandleMultiConnectionSuccess(WorkerSession *session, bool newConnection);
@@ -926,16 +927,26 @@ AdaptiveExecutorStart(CitusScanState *scanState)
 	 * and never used in the query, mark such parameters' type as Invalid(0),
 	 * which will be used later in ExtractParametersFromParamList() to map them
 	 * to a generic datatype. Skip for dynamic parameters.
-	 *
-	 * When prepared statement caching is enabled, skip this step entirely:
-	 * the params appear "unreferenced" in job->jobQuery because they were
-	 * resolved to constants there, but they are still needed with their
-	 * original types for the parameterized query sent via PQprepare.
 	 */
-	if (paramListInfo && !paramListInfo->paramFetch && !EnablePreparedStatementCaching)
+	if (paramListInfo && !paramListInfo->paramFetch)
 	{
+		/*
+		 * A cached statement is deparsed from the saved template, which still
+		 * carries the Params. job->jobQuery has them resolved to constants, so
+		 * marking against it would strip types the worker still needs.
+		 */
+		Node *queryForParams = (Node *) job->jobQuery;
+		if (taskList != NIL)
+		{
+			Task *firstTask = (Task *) linitial(taskList);
+			if (firstTask->jobQueryForPrepare != NULL)
+			{
+				queryForParams = (Node *) firstTask->jobQueryForPrepare;
+			}
+		}
+
 		paramListInfo = copyParamList(paramListInfo);
-		MarkUnreferencedExternParams((Node *) job->jobQuery, paramListInfo);
+		MarkUnreferencedExternParams(queryForParams, paramListInfo);
 	}
 
 	DistributedExecution *execution = CreateDistributedExecution(
@@ -4274,7 +4285,7 @@ SendNextQuery(TaskPlacementExecution *placementExecution,
 										binaryResults, &queryString);
 	if (cacheStatus == PREPARED_STMT_SENT)
 	{
-		return true;
+		return SetRemoteRowMode(connection);
 	}
 	else if (cacheStatus == PREPARED_STMT_FAILED)
 	{
@@ -4333,6 +4344,17 @@ SendNextQuery(TaskPlacementExecution *placementExecution,
 		return false;
 	}
 
+	return SetRemoteRowMode(connection);
+}
+
+
+/*
+ * SetRemoteRowMode puts the connection into the incremental result mode the
+ * executor expects, chunked where libpq supports it.
+ */
+static bool
+SetRemoteRowMode(MultiConnection *connection)
+{
 #ifdef LIBPQ_HAS_CHUNK_MODE
 	int rowMode = PQsetChunkedRowsMode(connection->pgConn, ExecutorChunkSize);
 #else
