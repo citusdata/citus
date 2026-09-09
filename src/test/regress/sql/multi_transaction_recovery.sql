@@ -9,11 +9,16 @@ SET citus.force_max_query_parallelization TO ON;
 ALTER SYSTEM SET citus.recover_2pc_interval TO -1;
 SELECT pg_reload_conf();
 
--- Ensure pg_dist_transaction is empty
+-- Ensure pg_dist_transaction is empty for a clean start
 SELECT recover_prepared_transactions();
+DELETE FROM pg_dist_transaction;
 
 -- Create some "fake" prepared transactions to recover
+-- Clean up any leftover tables from previous runs
 \c - - - :worker_1_port
+SET client_min_messages TO WARNING;
+DROP TABLE IF EXISTS should_abort, should_commit, should_be_sorted_into_middle;
+RESET client_min_messages;
 
 BEGIN;
 CREATE TABLE should_abort (value int);
@@ -28,6 +33,9 @@ CREATE TABLE should_be_sorted_into_middle (value int);
 PREPARE TRANSACTION 'citus_0_should_be_sorted_into_middle';
 
 \c - - - :master_port
+SET client_min_messages TO WARNING;
+DROP TABLE IF EXISTS should_abort, should_commit, should_be_sorted_into_middle;
+RESET client_min_messages;
 
 BEGIN;
 CREATE TABLE should_abort (value int);
@@ -43,10 +51,13 @@ PREPARE TRANSACTION 'citus_0_should_be_sorted_into_middle';
 
 SET citus.force_max_query_parallelization TO ON;
 -- Add "fake" pg_dist_transaction records and run recovery
-INSERT INTO pg_dist_transaction VALUES (1, 'citus_0_should_commit'),
-                                       (0, 'citus_0_should_commit');
-INSERT INTO pg_dist_transaction VALUES (1, 'citus_0_should_be_forgotten'),
-                                       (0, 'citus_0_should_be_forgotten');
+-- Use dynamic group IDs so this works regardless of which cluster setup ran
+INSERT INTO pg_dist_transaction
+    VALUES ((SELECT groupid FROM pg_dist_node WHERE nodeport = :worker_1_port AND nodecluster = 'default' LIMIT 1), 'citus_0_should_commit'),
+           (0, 'citus_0_should_commit');
+INSERT INTO pg_dist_transaction
+    VALUES ((SELECT groupid FROM pg_dist_node WHERE nodeport = :worker_1_port AND nodecluster = 'default' LIMIT 1), 'citus_0_should_be_forgotten'),
+           (0, 'citus_0_should_be_forgotten');
 
 SELECT recover_prepared_transactions();
 SELECT count(*) FROM pg_dist_transaction;
@@ -126,6 +137,7 @@ SELECT recover_prepared_transactions();
 
 -- Create a single-replica table to enable 2PC in multi-statement transactions
 SET citus.shard_replication_factor TO 1;
+SET citus.enable_single_task_execution TO false; -- use adaptive executor for predictable 2PC behavior
 CREATE TABLE test_recovery_single (LIKE test_recovery);
 
 -- creating distributed table should write 2 transaction recovery records
@@ -186,6 +198,9 @@ SELECT create_distributed_table('test_2pcskip', 'a');
 INSERT INTO test_2pcskip SELECT i FROM generate_series(0, 5)i;
 SELECT recover_prepared_transactions();
 
+SET client_min_messages TO WARNING;
+DROP TABLE IF EXISTS selected_shard;
+RESET client_min_messages;
 SELECT shardid INTO selected_shard
 FROM citus_shards
 WHERE table_name='test_2pcskip'::regclass AND nodeport = :worker_1_port
@@ -257,3 +272,7 @@ DROP TABLE test_recovery;
 DROP TABLE test_recovery_single;
 DROP TABLE test_2pcskip;
 DROP TABLE test_reference;
+SET client_min_messages TO WARNING;
+DROP TABLE IF EXISTS selected_shard;
+DROP TABLE IF EXISTS should_abort, should_commit, should_be_sorted_into_middle;
+RESET client_min_messages;

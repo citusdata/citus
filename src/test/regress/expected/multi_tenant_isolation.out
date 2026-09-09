@@ -202,7 +202,7 @@ SELECT isolate_tenant_to_new_shard('lineitem_streaming', 101, 'CASCADE', shard_t
 EXPLAIN (COSTS false) SELECT count(*) FROM lineitem_streaming WHERE l_orderkey = 101;
                                  QUERY PLAN
 ---------------------------------------------------------------------
- Custom Scan (Citus Adaptive)
+ Custom Scan (Citus Single Task)
    Task Count: 1
    Tasks Shown: All
    ->  Task

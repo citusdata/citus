@@ -172,9 +172,9 @@ SELECT * FROM composite_type_partitioned_table WHERE id = 123;
 
 EXPLAIN (ANALYZE TRUE, COSTS FALSE, VERBOSE FALSE, TIMING FALSE, SUMMARY FALSE, BUFFERS OFF)
 INSERT INTO composite_type_partitioned_table VALUES (123, '(123, 456)'::other_composite_type);
-                                      QUERY PLAN
+                                        QUERY PLAN
 ---------------------------------------------------------------------
- Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
+ Custom Scan (Citus Single Task) (actual rows=0 loops=1)
    Task Count: 1
    Tasks Shown: All
    ->  Task
@@ -214,9 +214,9 @@ $cf$);
 INSERT INTO composite_type_partitioned_table VALUES (456, '(456, 678)'::other_composite_type);
 EXPLAIN (ANALYZE TRUE, COSTS FALSE, VERBOSE FALSE, TIMING FALSE, SUMMARY FALSE, BUFFERS OFF)
 INSERT INTO composite_type_partitioned_table VALUES (123, '(456, 678)'::other_composite_type);
-                                      QUERY PLAN
+                                        QUERY PLAN
 ---------------------------------------------------------------------
- Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
+ Custom Scan (Citus Single Task) (actual rows=0 loops=1)
    Task Count: 1
    Tasks Shown: All
    ->  Task

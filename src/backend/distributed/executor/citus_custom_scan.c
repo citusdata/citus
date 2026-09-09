@@ -44,6 +44,7 @@
 #include "distributed/merge_executor.h"
 #include "distributed/merge_planner.h"
 #include "distributed/multi_executor.h"
+#include "distributed/multi_explain.h"
 #include "distributed/multi_router_planner.h"
 #include "distributed/multi_server_executor.h"
 #include "distributed/shard_utils.h"
@@ -60,6 +61,7 @@ extern AllowedDistributionColumn AllowedDistributionColumnValue;
 /* functions for creating custom scan nodes */
 static Node * AdaptiveExecutorCreateScan(CustomScan *scan);
 static Node * SortedMergeCreateScan(CustomScan *scan);
+static Node * SingleTaskExecutorCreateScan(CustomScan *scan);
 static Node * NonPushableInsertSelectCreateScan(CustomScan *scan);
 static Node * DelayedErrorCreateScan(CustomScan *scan);
 static Node * NonPushableMergeCommandCreateScan(CustomScan *scan);
@@ -69,6 +71,7 @@ static void CitusBeginScan(CustomScanState *node, EState *estate, int eflags);
 static void CitusBeginReadOnlyScan(CustomScanState *node, EState *estate, int eflags);
 static void CitusBeginModifyScan(CustomScanState *node, EState *estate, int eflags);
 static void CitusPreExecScan(CitusScanState *scanState);
+static TupleTableSlot * CitusExecOneTaskScan(CustomScanState *node);
 static bool ModifyJobNeedsEvaluation(Job *workerJob);
 static void RegenerateTaskForFasthPathQuery(Job *workerJob);
 static void RegenerateTaskListForInsert(Job *workerJob);
@@ -99,6 +102,11 @@ CustomScanMethods SortedMergeCustomScanMethods = {
 	SortedMergeCreateScan
 };
 
+CustomScanMethods SingleTaskExecutorCustomScanMethods = {
+	"Citus Single Task",
+	SingleTaskExecutorCreateScan
+};
+
 CustomScanMethods NonPushableInsertSelectCustomScanMethods = {
 	"Citus INSERT ... SELECT",
 	NonPushableInsertSelectCreateScan
@@ -122,6 +130,15 @@ static CustomExecMethods AdaptiveExecutorCustomExecMethods = {
 	.CustomName = "AdaptiveExecutorScan",
 	.BeginCustomScan = CitusBeginScan,
 	.ExecCustomScan = CitusExecScan,
+	.EndCustomScan = CitusEndScan,
+	.ReScanCustomScan = CitusReScan,
+	.ExplainCustomScan = CitusExplainScan
+};
+
+static CustomExecMethods SingleTaskExecutorCustomExecMethods = {
+	.CustomName = "SingleTaskExecutorScan",
+	.BeginCustomScan = CitusBeginScan,
+	.ExecCustomScan = CitusExecOneTaskScan,
 	.EndCustomScan = CitusEndScan,
 	.ReScanCustomScan = CitusReScan,
 	.ExplainCustomScan = CitusExplainScan
@@ -179,6 +196,7 @@ IsCitusCustomState(PlanState *planState)
 	CustomScanState *css = castNode(CustomScanState, planState);
 	if (css->methods == &AdaptiveExecutorCustomExecMethods ||
 		css->methods == &SortedMergeCustomExecMethods ||
+		css->methods == &SingleTaskExecutorCustomExecMethods ||
 		css->methods == &NonPushableInsertSelectCustomExecMethods ||
 		css->methods == &NonPushableMergeCommandCustomExecMethods)
 	{
@@ -197,6 +215,7 @@ RegisterCitusCustomScanMethods(void)
 {
 	RegisterCustomScanMethods(&AdaptiveExecutorCustomScanMethods);
 	RegisterCustomScanMethods(&SortedMergeCustomScanMethods);
+	RegisterCustomScanMethods(&SingleTaskExecutorCustomScanMethods);
 	RegisterCustomScanMethods(&NonPushableInsertSelectCustomScanMethods);
 	RegisterCustomScanMethods(&DelayedErrorCustomScanMethods);
 	RegisterCustomScanMethods(&NonPushableMergeCommandCustomScanMethods);
@@ -327,6 +346,70 @@ CitusExecScan(CustomScanState *node)
 		tuplestore_clear(scanState->tuplestorestate);
 
 		scanState->finishedRemoteScan = AdaptiveExecutorRun(scanState);
+
+		resultSlot = ReturnTupleFromTuplestore(scanState);
+	}
+
+	return resultSlot;
+}
+
+
+/*
+ * CitusExecOneTaskScan is the ExecCustomScan callback for the single-task
+ * executor. On the first call it sets up execution via SingleTaskExecutorStart.
+ * Each call fetches a batch of rows into the tuplestore and returns one tuple.
+ * When the tuplestore is drained, it fetches the next batch. This keeps memory
+ * bounded by work_mem for large result sets.
+ *
+ * Falls back to the full AdaptiveExecutor for EXPLAIN ANALYZE.
+ */
+static TupleTableSlot *
+CitusExecOneTaskScan(CustomScanState *node)
+{
+	CitusScanState *scanState = (CitusScanState *) node;
+
+	if (!scanState->executionStarted)
+	{
+		/*
+		 * Count the query up front, before execution, mirroring the adaptive
+		 * executor's placement in CitusExecScan (which increments right after
+		 * AdaptiveExecutorStart, before the query actually runs). Both
+		 * SingleTaskExecutorStart (connection establishment + sending the
+		 * query) and SingleTaskExecutorRun (row fetch) can fail, so counting
+		 * here ensures a fast-path query that errors during connection
+		 * establishment or remote execution is still counted exactly once,
+		 * just like the adaptive executor. The EXPLAIN ANALYZE fallback
+		 * (EagerAdaptiveExecutor) does not increment the counter itself, so it
+		 * is also counted exactly once here.
+		 */
+		if (!scanState->distributedPlan->disableTrackingQueryCounters)
+		{
+			IncrementStatCounterForMyDb(STAT_QUERY_EXECUTION_SINGLE_SHARD);
+		}
+
+		if (RequestedForExplainAnalyze(scanState))
+		{
+			EagerAdaptiveExecutor(scanState);
+			scanState->finishedRemoteScan = true;
+		}
+		else
+		{
+			SingleTaskExecutorStart(scanState);
+
+			/* fetch first batch */
+			scanState->finishedRemoteScan = SingleTaskExecutorRun(scanState);
+		}
+
+		scanState->executionStarted = true;
+	}
+
+	TupleTableSlot *resultSlot = ReturnTupleFromTuplestore(scanState);
+
+	if (TupIsNull(resultSlot) && !scanState->finishedRemoteScan)
+	{
+		tuplestore_clear(scanState->tuplestorestate);
+
+		scanState->finishedRemoteScan = SingleTaskExecutorRun(scanState);
 
 		resultSlot = ReturnTupleFromTuplestore(scanState);
 	}
@@ -806,6 +889,30 @@ SortedMergeCreateScan(CustomScan *scan)
 
 
 /*
+ * SingleTaskExecutorCreateScan creates the scan state for the
+ * single-task executor, used for single-shard fast-path queries.
+ */
+static Node *
+SingleTaskExecutorCreateScan(CustomScan *scan)
+{
+	CitusScanState *scanState = palloc0(sizeof(CitusScanState));
+
+	/* reuse MULTI_EXECUTOR_ADAPTIVE for stats bucketing (see Research §6.1) */
+	scanState->executorType = MULTI_EXECUTOR_ADAPTIVE;
+	scanState->customScanState.ss.ps.type = T_CustomScanState;
+	scanState->distributedPlan = GetDistributedPlan(scan);
+
+	scanState->customScanState.methods = &SingleTaskExecutorCustomExecMethods;
+	scanState->PreExecScan = &CitusPreExecScan;
+
+	scanState->finishedPreScan = false;
+	scanState->finishedRemoteScan = false;
+
+	return (Node *) scanState;
+}
+
+
+/*
  * NonPushableInsertSelectCrateScan creates the scan state for executing
  * INSERT..SELECT into a distributed table via the coordinator.
  */
@@ -943,6 +1050,12 @@ CitusEndScan(CustomScanState *node)
 	 * ensuring sessions and connections are properly released.
 	 */
 	AdaptiveExecutorEnd(scanState);
+
+	/*
+	 * Clean up single-task execution state. Handles LIMIT / early
+	 * termination by cancelling in-flight queries and draining results.
+	 */
+	SingleTaskExecutorEnd(scanState);
 }
 
 
