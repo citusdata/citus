@@ -272,38 +272,46 @@ TranslateAndPublishRelationForCDC(LogicalDecodingContext *ctx, ReorderBufferTXN 
 	HeapTuple originalNewTuple = change->data.tp.newtuple;
 	HeapTuple originalOldTuple = change->data.tp.oldtuple;
 
-	/*
-	 * Check if there has been a schema change (such as a dropped column), by comparing
-	 * the number of attributes in the shard table and the shell table.
-	 */
-	TranslateChangesIfSchemaChanged(relation, targetRelation, change);
-
-	/*
-	 * Publish the change to the shard table as the change in the distributed table,
-	 * so that the CDC client can see the change in the distributed table,
-	 * instead of the shard table, by calling the pgoutput's callback function.
-	 */
-	ouputPluginChangeCB(ctx, txn, targetRelation, change);
-
-	/*
-	 * Free the translated tuples and put the original ones back. A field that
-	 * was not translated still holds its original pointer, so it is left alone.
-	 */
-	if (change->data.tp.newtuple != originalNewTuple &&
-		change->data.tp.newtuple != NULL)
+	PG_TRY();
 	{
-		heap_freetuple(change->data.tp.newtuple);
-		change->data.tp.newtuple = originalNewTuple;
-	}
+		/*
+		 * Check if there has been a schema change (such as a dropped column), by comparing
+		 * the number of attributes in the shard table and the shell table.
+		 */
+		TranslateChangesIfSchemaChanged(relation, targetRelation, change);
 
-	if (change->data.tp.oldtuple != originalOldTuple &&
-		change->data.tp.oldtuple != NULL)
+		/*
+		 * Publish the change to the shard table as the change in the distributed table,
+		 * so that the CDC client can see the change in the distributed table,
+		 * instead of the shard table, by calling the pgoutput's callback function.
+		 */
+		ouputPluginChangeCB(ctx, txn, targetRelation, change);
+	}
+	PG_FINALLY();
 	{
-		heap_freetuple(change->data.tp.oldtuple);
-		change->data.tp.oldtuple = originalOldTuple;
-	}
+		/*
+		 * Free the translated tuples and put the original ones back. A field that
+		 * was not translated still holds its original pointer, so it is left alone.
+		 * This also has to happen when the callback throws, because the reorder
+		 * buffer cleans the transaction up before the error propagates further.
+		 */
+		if (change->data.tp.newtuple != originalNewTuple &&
+			change->data.tp.newtuple != NULL)
+		{
+			heap_freetuple(change->data.tp.newtuple);
+			change->data.tp.newtuple = originalNewTuple;
+		}
 
-	RelationClose(targetRelation);
+		if (change->data.tp.oldtuple != originalOldTuple &&
+			change->data.tp.oldtuple != NULL)
+		{
+			heap_freetuple(change->data.tp.oldtuple);
+			change->data.tp.oldtuple = originalOldTuple;
+		}
+
+		RelationClose(targetRelation);
+	}
+	PG_END_TRY();
 }
 
 
