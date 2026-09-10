@@ -37,11 +37,52 @@ step "s2-insert"
     INSERT INTO columnar_temp VALUES (1, '1', 1);
 }
 
+step "s2-check-columnar-views"
+{
+    SELECT columnar.get_storage_id(c.oid) IS NULL AS other_temp_storage_id_is_null
+    FROM pg_class c
+    JOIN pg_am am ON c.relam = am.oid
+    WHERE am.amname = 'columnar'
+      AND c.relpersistence = 't'
+      AND c.relnamespace <> pg_my_temp_schema();
+
+    SELECT
+        NOT EXISTS (
+            SELECT 1
+            FROM columnar.storage s
+            JOIN pg_class c ON c.oid = s.relation
+            WHERE c.relpersistence = 't'
+              AND c.relnamespace <> pg_my_temp_schema()
+        ) AS storage_hides_other_temp,
+        NOT EXISTS (
+            SELECT 1
+            FROM columnar.stripe s
+            JOIN pg_class c ON c.oid = s.relation
+            WHERE c.relpersistence = 't'
+              AND c.relnamespace <> pg_my_temp_schema()
+        ) AS stripe_hides_other_temp,
+        NOT EXISTS (
+            SELECT 1
+            FROM columnar.chunk_group cg
+            JOIN pg_class c ON c.oid = cg.relation
+            WHERE c.relpersistence = 't'
+              AND c.relnamespace <> pg_my_temp_schema()
+        ) AS chunk_group_hides_other_temp,
+        NOT EXISTS (
+            SELECT 1
+            FROM columnar.chunk ch
+            JOIN pg_class c ON c.oid = ch.relation
+            WHERE c.relpersistence = 't'
+              AND c.relnamespace <> pg_my_temp_schema()
+        ) AS chunk_hides_other_temp;
+}
+
 step "s2-commit"
 {
     COMMIT;
 }
 
 // make sure that we allow creating same-named temporary columnar tables in different sessions
-// also make sure that they don't block each other
-permutation "s1-begin" "s2-begin" "s1-create-temp" "s1-insert" "s2-create-temp" "s2-insert" "s1-commit" "s2-commit"
+// without blocking each other, and that public views and get_storage_id skip
+// the other live session's temporary table once it becomes visible
+permutation "s1-begin" "s2-begin" "s1-create-temp" "s1-insert" "s2-create-temp" "s2-insert" "s1-commit" "s2-check-columnar-views" "s2-commit"

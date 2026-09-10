@@ -2038,6 +2038,12 @@ Datum
 columnar_relation_storageid(PG_FUNCTION_ARGS)
 {
 	Oid relationId = PG_GETARG_OID(0);
+
+	if (isOtherTempNamespace(get_rel_namespace(relationId)))
+	{
+		PG_RETURN_NULL();
+	}
+
 	Relation relation = relation_open(relationId, AccessShareLock);
 
 	if (!object_ownercheck(RelationRelationId, relationId, GetUserId()))
