@@ -117,9 +117,9 @@ jobs:
         # PG_CONFIG variable in each of those runs.
         packaging_docker_image:
           - debian-bookworm-all
-          - debian-bullseye-all
-          - ubuntu-focal-all
+          - debian-trixie-all
           - ubuntu-jammy-all
+          - ubuntu-noble-all
 
         POSTGRES_VERSION: ${{ fromJson(needs.get_postgres_versions_from_file.outputs.pg_versions) }}
 
