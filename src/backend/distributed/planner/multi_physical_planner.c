@@ -178,7 +178,6 @@ static uint32 HashPartitionCount(void);
 static Job * BuildJobTreeTaskList(Job *jobTree,
 								  PlannerRestrictionContext *plannerRestrictionContext);
 static bool IsInnerTableOfOuterJoin(RelationRestriction *relationRestriction,
-									Bitmapset *distributedTables,
 									bool *outerPartHasDistributedTable);
 static void ErrorIfUnsupportedShardDistribution(Query *query);
 static Task * QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
@@ -2277,7 +2276,7 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 	int minShardOffset = INT_MAX;
 	int prevShardCount = 0;
 	Bitmapset *taskRequiredForShardIndex = NULL;
-	Bitmapset *distributedTableIndex = NULL;
+	bool hasDistributedTable = false;
 
 	/* error if shards are not co-partitioned */
 	ErrorIfUnsupportedShardDistribution(query);
@@ -2294,10 +2293,7 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 	RelationRestriction *relationRestriction = NULL;
 	List *prunedShardList = NULL;
 
-	/* First loop, gather the indexes of distributed tables
-	 *  this is required to decide whether we can skip shards
-	 *  from inner tables of outer joins
-	 */
+	/* first check that distributed tables have the same shard count */
 	foreach_declared_ptr(relationRestriction,
 						 relationRestrictionContext->relationRestrictionList)
 	{
@@ -2320,14 +2316,13 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 		}
 		prevShardCount = cacheEntry->shardIntervalArrayLength;
 
-		distributedTableIndex = bms_add_member(distributedTableIndex,
-											   relationRestriction->index);
+		hasDistributedTable = true;
 	}
 
 	/* In the second loop, populate taskRequiredForShardIndex */
 	bool updateQualsForOuterJoin = false;
 	bool outerPartHasDistributedTable = false;
-	bool noDistTables = bms_is_empty(distributedTableIndex);
+	bool noDistTables = !hasDistributedTable;
 	bool hasRefOrSchemaShardedTable = false;
 	forboth_ptr(prunedShardList, prunedRelationShardList,
 				relationRestriction, relationRestrictionContext->relationRestrictionList)
@@ -2382,7 +2377,7 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 		 * the table is part of the non-outer side of the join and the outer side has a
 		 * distributed table.
 		 */
-		if (IsInnerTableOfOuterJoin(relationRestriction, distributedTableIndex,
+		if (IsInnerTableOfOuterJoin(relationRestriction,
 									&outerPartHasDistributedTable))
 		{
 			if (outerPartHasDistributedTable)
@@ -2490,7 +2485,6 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
  */
 static bool
 IsInnerTableOfOuterJoin(RelationRestriction *relationRestriction,
-						Bitmapset *distributedTables,
 						bool *outerPartHasDistributedTable)
 {
 	RestrictInfo *joinInfo = NULL;
@@ -2511,10 +2505,25 @@ IsInnerTableOfOuterJoin(RelationRestriction *relationRestriction,
 									   joinInfo->outer_relids);
 		if (!isInOuter)
 		{
-			/* this table is joined in the inner part of an outer join */
-			/* set if the outer part has a distributed relation */
-			*outerPartHasDistributedTable = bms_overlap(joinInfo->outer_relids,
-														distributedTables);
+			/*
+			 * Range table indexes are local to each query level. Resolve the
+			 * outer relations in this restriction's PlannerInfo, not against
+			 * distributed table indexes collected from other subqueries.
+			 */
+			PlannerInfo *plannerInfo = relationRestriction->plannerInfo;
+			*outerPartHasDistributedTable = false;
+			int outerRelationIndex = -1;
+			while ((outerRelationIndex = bms_next_member(joinInfo->outer_relids,
+														 outerRelationIndex)) >= 0)
+			{
+				RangeTblEntry *outerRte =
+					plannerInfo->simple_rte_array[outerRelationIndex];
+				if (IsTableWithDistKeyRTE((Node *) outerRte))
+				{
+					*outerPartHasDistributedTable = true;
+					break;
+				}
+			}
 
 			/* this is an inner table of an outer join  */
 			return true;
