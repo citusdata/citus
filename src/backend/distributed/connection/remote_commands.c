@@ -1180,6 +1180,12 @@ SendCancelationRequest(MultiConnection *connection)
 {
 	char errorBuffer[ERROR_BUFFER_SIZE] = { 0 };
 
+	if (!PQisBusy(connection->pgConn))
+	{
+		/* no statement in progress, nothing to cancel */
+		return false;
+	}
+
 	PGcancel *cancelObject = PQgetCancel(connection->pgConn);
 	if (cancelObject == NULL)
 	{
