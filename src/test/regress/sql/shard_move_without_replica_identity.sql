@@ -1,0 +1,1070 @@
+--
+-- SHARD_MOVE_WITHOUT_REPLICA_IDENTITY
+--
+-- Tests non-blocking (logical replication) shard moves for tables that do NOT
+-- have a replica identity (no primary key; REPLICA IDENTITY DEFAULT with no PK,
+-- or REPLICA IDENTITY NOTHING).
+--
+-- The extra capabilities are all enabled together by a single opt-in shard
+-- transfer mode, 'force_logical_auto_identity'. When 'force_logical_auto_identity'
+-- is used, Citus does all three of the following for a no-replica-identity table:
+--
+--  * It temporarily sets REPLICA IDENTITY FULL on the SOURCE shards of the table
+--    for the duration of the logical replication (so the publisher does not reject
+--    the user's UPDATE/DELETE statements) and restores the original replica
+--    identity afterwards. This is what makes a no-replica-identity table
+--    publishable, so 'force_logical_auto_identity' can transfer such a table with a
+--    non-blocking move.
+--
+--  * If the table has an existing usable btree index, that index is built early on
+--    the destination shard (before catch-up) so the subscriber can use an index
+--    scan, and that index is excluded from the late CREATE INDEX phase so it is
+--    created exactly once. Speed only.
+--
+--  * If the table has no usable index at all, a throwaway helper btree index is
+--    built on the destination shard and dropped when the move finishes. Speed only.
+--
+
+CREATE SCHEMA move_no_ri;
+SET search_path TO move_no_ri;
+SET citus.shard_count TO 4;
+SET citus.shard_replication_factor TO 1;
+SET citus.next_shard_id TO 8980000;
+
+--
+-- SECTION 0: reference table replication with force_logical_auto_identity.
+--
+--     replicate_reference_tables() copies a reference table to a node that is
+--     missing it through the citus_copy_shard_placement COPY path (see
+--     CopyShardPlacement / CopyShardTables), which is the same logical
+--     replication path that force_logical_auto_identity affects. A reference
+--     table with no primary key has REPLICA IDENTITY DEFAULT ('d') and no usable
+--     replica identity, so without the new mode it could not be replicated with
+--     logical replication while the user is writing to it. force_logical_auto_identity
+--     temporarily sets REPLICA IDENTITY FULL on the SOURCE placement for the
+--     duration of the copy and restores it afterwards.
+--
+--     Unlike a shard MOVE (which drops the source), a COPY leaves the source
+--     placement in place, so this is the one path where we can directly observe
+--     that the source's replica identity was restored to its original value and
+--     never left as REPLICA IDENTITY FULL ('f').
+--
+
+-- keep this reference table's shard id out of the range used by the move
+-- sections below so their output is unaffected
+SET citus.next_shard_id TO 8979000;
+
+-- start from a state where worker_2 is missing the reference table placement:
+-- remove it, create + populate the reference table (so it lives only on
+-- worker_1), then add worker_2 back without auto-replicating reference tables
+SET client_min_messages TO WARNING;
+SET citus.replicate_reference_tables_on_activate TO off;
+SELECT citus_remove_node('localhost', :worker_2_port);
+
+CREATE TABLE ref_no_ri (a int, b text);
+SELECT create_reference_table('ref_no_ri');
+INSERT INTO ref_no_ri SELECT g, 'v' || g FROM generate_series(1, 50) g;
+
+-- reference table is on worker_1 only, with the default replica identity 'd'
+SELECT DISTINCT result
+FROM run_command_on_placements('ref_no_ri',
+    $$ SELECT relreplident FROM pg_class WHERE oid = '%s'::regclass $$)
+ORDER BY 1;
+
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
+
+-- replicate using the new mode: this goes through the COPY logical replication
+-- path and temporarily sets REPLICA IDENTITY FULL on the source placement
+SELECT replicate_reference_tables(shard_transfer_mode := 'force_logical_auto_identity');
+
+RESET citus.replicate_reference_tables_on_activate;
+
+-- data is present on every placement (all placements report 50 rows)
+SELECT DISTINCT result
+FROM run_command_on_placements('ref_no_ri', $$ SELECT count(*) FROM %s $$)
+ORDER BY 1;
+
+-- replica identity was restored to the original 'd' on every placement; in
+-- particular the source placement was never left as REPLICA IDENTITY FULL ('f')
+SELECT DISTINCT result
+FROM run_command_on_placements('ref_no_ri',
+    $$ SELECT relreplident FROM pg_class WHERE oid = '%s'::regclass $$)
+ORDER BY 1;
+
+-- no replica-identity cleanup records are left behind
+SELECT count(*) FROM pg_dist_cleanup WHERE object_type = 7;
+
+DROP TABLE ref_no_ri;
+RESET client_min_messages;
+
+-- restore the shard id counter for the move sections below
+SET citus.next_shard_id TO 8980000;
+
+--
+-- SECTION 1: any mode other than force_logical_auto_identity => upstream behavior is
+--            preserved.
+--
+
+--
+-- 1a) no replica identity + a usable secondary btree index, "auto":
+--     "auto" still errors, exactly like upstream.
+--
+CREATE TABLE t_usable_idx (a int, b text);
+CREATE INDEX t_usable_idx_a ON t_usable_idx (a);
+SELECT create_distributed_table('t_usable_idx', 'a', colocate_with:='none');
+INSERT INTO t_usable_idx SELECT g, 'v' || g FROM generate_series(1, 100) g;
+
+SELECT min(shardid) AS shardid_usable FROM pg_dist_shard WHERE logicalrelid='t_usable_idx'::regclass \gset
+SELECT nodeport AS src_usable,
+       CASE WHEN nodeport = :worker_1_port THEN :worker_2_port ELSE :worker_1_port END AS tgt_usable
+FROM pg_dist_shard_placement WHERE shardid = :shardid_usable \gset
+
+-- errors ("auto" rejects a no-replica-identity table)
+SELECT citus_move_shard_placement(:shardid_usable, 'localhost', :src_usable, 'localhost', :tgt_usable, shard_transfer_mode:='auto');
+
+--
+-- 1b) no replica identity + NO index at all, "auto": errors, exactly like upstream.
+--
+CREATE TABLE t_no_idx (a int, b text);
+SELECT create_distributed_table('t_no_idx', 'a', colocate_with:='none');
+INSERT INTO t_no_idx SELECT g, 'v' || g FROM generate_series(1, 100) g;
+
+SELECT min(shardid) AS shardid_no_idx FROM pg_dist_shard WHERE logicalrelid='t_no_idx'::regclass \gset
+SELECT nodeport AS src_no_idx,
+       CASE WHEN nodeport = :worker_1_port THEN :worker_2_port ELSE :worker_1_port END AS tgt_no_idx
+FROM pg_dist_shard_placement WHERE shardid = :shardid_no_idx \gset
+
+-- errors ("auto" rejects a no-replica-identity table)
+SELECT citus_move_shard_placement(:shardid_no_idx, 'localhost', :src_no_idx, 'localhost', :tgt_no_idx, shard_transfer_mode:='auto');
+
+--
+-- 1c) force_logical always skips the admission check. Plain force_logical does NOT
+--     touch the replica identity (that is only done by force_logical_auto_identity), so
+--     this behaves exactly like upstream: the move itself succeeds (there are no
+--     concurrent writes here) and the source replica identity is left as the
+--     original default 'd'.
+--
+SELECT citus_move_shard_placement(:shardid_no_idx, 'localhost', :src_no_idx, 'localhost', :tgt_no_idx, shard_transfer_mode:='force_logical');
+SELECT public.wait_for_resource_cleanup();
+SELECT count(*) FROM t_no_idx;
+SELECT DISTINCT result FROM run_command_on_placements('t_no_idx', 'SELECT relreplident FROM pg_class WHERE oid = ''%s''::regclass');
+
+--
+-- SECTION 2: force_logical_auto_identity transfers a no-replica-identity table with a
+--            non-blocking move and faithfully restores its original replica
+--            identity afterwards.
+--
+
+--
+-- 2a) no replica identity + NO index, force_logical_auto_identity: the source is set to
+--     REPLICA IDENTITY FULL for the move. Move succeeds, data is preserved, and the
+--     original default replica identity 'd' is restored on the surviving placement.
+--
+SELECT min(shardid) AS shardid_no_idx2 FROM pg_dist_shard WHERE logicalrelid='t_no_idx'::regclass \gset
+SELECT nodeport AS src_no_idx2,
+       CASE WHEN nodeport = :worker_1_port THEN :worker_2_port ELSE :worker_1_port END AS tgt_no_idx2
+FROM pg_dist_shard_placement WHERE shardid = :shardid_no_idx2 \gset
+
+SELECT citus_move_shard_placement(:shardid_no_idx2, 'localhost', :src_no_idx2, 'localhost', :tgt_no_idx2, shard_transfer_mode:='force_logical_auto_identity');
+SELECT public.wait_for_resource_cleanup();
+SELECT count(*) FROM t_no_idx;
+SELECT DISTINCT result FROM run_command_on_placements('t_no_idx', 'SELECT relreplident FROM pg_class WHERE oid = ''%s''::regclass');
+
+--
+-- 2b) no replica identity + a usable btree index, force_logical_auto_identity: also
+--     succeeds; the original default replica identity 'd' is restored.
+--
+SELECT min(shardid) AS shardid_usable2 FROM pg_dist_shard WHERE logicalrelid='t_usable_idx'::regclass \gset
+SELECT nodeport AS src_usable2,
+       CASE WHEN nodeport = :worker_1_port THEN :worker_2_port ELSE :worker_1_port END AS tgt_usable2
+FROM pg_dist_shard_placement WHERE shardid = :shardid_usable2 \gset
+
+SELECT citus_move_shard_placement(:shardid_usable2, 'localhost', :src_usable2, 'localhost', :tgt_usable2, shard_transfer_mode:='force_logical_auto_identity');
+SELECT public.wait_for_resource_cleanup();
+SELECT count(*) FROM t_usable_idx;
+SELECT DISTINCT result FROM run_command_on_placements('t_usable_idx', 'SELECT relreplident FROM pg_class WHERE oid = ''%s''::regclass');
+
+--
+-- 2c) REPLICA IDENTITY FULL requires an equality operator for every replicated
+--     column when the subscriber applies UPDATE and DELETE commands. Reject such
+--     a table before the move starts instead of timing out during catch-up.
+--
+CREATE TABLE t_no_equality (a int, payload json);
+SELECT create_distributed_table('t_no_equality', 'a', colocate_with:='none');
+INSERT INTO t_no_equality VALUES (1, '{"value": 1}');
+
+SELECT min(shardid) AS shardid_no_equality
+FROM pg_dist_shard WHERE logicalrelid='t_no_equality'::regclass \gset
+SELECT nodeport AS src_no_equality,
+       CASE WHEN nodeport = :worker_1_port THEN :worker_2_port ELSE :worker_1_port END AS tgt_no_equality
+FROM pg_dist_shard_placement WHERE shardid = :shardid_no_equality \gset
+
+SELECT citus_move_shard_placement(:shardid_no_equality, 'localhost',
+                                  :src_no_equality, 'localhost',
+                                  :tgt_no_equality,
+                                  shard_transfer_mode:='force_logical_auto_identity');
+SELECT count(*) AS no_equality_placement_count
+FROM pg_dist_shard_placement WHERE shardid = :shardid_no_equality;
+
+--
+-- 2c-bis) A table that has a primary key is published through that key and is
+--         never set to REPLICA IDENTITY FULL, so a non-comparable column (json)
+--         must NOT block the move. This proves the equality preflight only rejects
+--         tables that would actually be set to FULL.
+--
+CREATE TABLE t_pk_with_json (id int PRIMARY KEY, payload json);
+SELECT create_distributed_table('t_pk_with_json', 'id', colocate_with:='none');
+INSERT INTO t_pk_with_json SELECT g, json_build_object('v', g) FROM generate_series(1, 100) g;
+
+SELECT min(shardid) AS shardid_pk_json
+FROM pg_dist_shard WHERE logicalrelid='t_pk_with_json'::regclass \gset
+SELECT nodeport AS src_pk_json,
+       CASE WHEN nodeport = :worker_1_port THEN :worker_2_port ELSE :worker_1_port END AS tgt_pk_json
+FROM pg_dist_shard_placement WHERE shardid = :shardid_pk_json \gset
+
+SELECT citus_move_shard_placement(:shardid_pk_json, 'localhost',
+                                  :src_pk_json, 'localhost',
+                                  :tgt_pk_json,
+                                  shard_transfer_mode:='force_logical_auto_identity');
+SELECT public.wait_for_resource_cleanup();
+SELECT count(*) FROM t_pk_with_json;
+-- the primary key is preserved, so the replica identity stays 'd'
+SELECT DISTINCT result FROM run_command_on_placements('t_pk_with_json', 'SELECT relreplident FROM pg_class WHERE oid = ''%s''::regclass');
+
+
+--     and the original NOTHING identity is faithfully restored ('n', not left as
+--     FULL 'f').
+--
+CREATE TABLE t_nothing_idx (a int, b text);
+CREATE INDEX t_nothing_idx_a ON t_nothing_idx (a);
+ALTER TABLE t_nothing_idx REPLICA IDENTITY NOTHING;
+SELECT create_distributed_table('t_nothing_idx', 'a', colocate_with:='none');
+INSERT INTO t_nothing_idx SELECT g, 'v' || g FROM generate_series(1, 100) g;
+
+SELECT min(shardid) AS shardid_nothing FROM pg_dist_shard WHERE logicalrelid='t_nothing_idx'::regclass \gset
+SELECT nodeport AS src_nothing,
+       CASE WHEN nodeport = :worker_1_port THEN :worker_2_port ELSE :worker_1_port END AS tgt_nothing
+FROM pg_dist_shard_placement WHERE shardid = :shardid_nothing \gset
+
+SELECT citus_move_shard_placement(:shardid_nothing, 'localhost', :src_nothing, 'localhost', :tgt_nothing, shard_transfer_mode:='force_logical_auto_identity');
+SELECT public.wait_for_resource_cleanup();
+SELECT count(*) FROM t_nothing_idx;
+SELECT DISTINCT result FROM run_command_on_placements('t_nothing_idx', 'SELECT relreplident FROM pg_class WHERE oid = ''%s''::regclass');
+
+--
+-- SECTION 3: under force_logical_auto_identity one existing usable index is built early
+--            on the destination shard and excluded from the late CREATE INDEX
+--            phase, so it is created exactly once. If the exclusion were wrong the
+--            move would fail with a duplicate-index error, so a successful move with
+--            preserved data is the proof it works.
+--
+
+--
+-- 3a) no replica identity + a usable btree index, force_logical_auto_identity: the
+--     existing index is built early on the destination shard (not a second time),
+--     the move succeeds, data is preserved, and the original replica identity 'd' is
+--     restored.
+--
+CREATE TABLE t_early_idx (a int, b text);
+CREATE INDEX t_early_idx_a ON t_early_idx (a);
+SELECT create_distributed_table('t_early_idx', 'a', colocate_with:='none');
+INSERT INTO t_early_idx SELECT g, 'v' || g FROM generate_series(1, 100) g;
+
+SELECT min(shardid) AS shardid_early FROM pg_dist_shard WHERE logicalrelid='t_early_idx'::regclass \gset
+SELECT nodeport AS src_early,
+       CASE WHEN nodeport = :worker_1_port THEN :worker_2_port ELSE :worker_1_port END AS tgt_early
+FROM pg_dist_shard_placement WHERE shardid = :shardid_early \gset
+
+SELECT citus_move_shard_placement(:shardid_early, 'localhost', :src_early, 'localhost', :tgt_early, shard_transfer_mode:='force_logical_auto_identity');
+SELECT public.wait_for_resource_cleanup();
+SELECT count(*) FROM t_early_idx;
+-- every placement still has exactly one copy of the index (built once)
+SELECT DISTINCT result FROM run_command_on_placements('t_early_idx', 'SELECT count(*) FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid WHERE i.indrelid = ''%s''::regclass');
+SELECT DISTINCT result FROM run_command_on_placements('t_early_idx', 'SELECT relreplident FROM pg_class WHERE oid = ''%s''::regclass');
+
+--
+-- 3b) no replica identity + only a PARTIAL btree index: it is not eligible to be
+--     built early, so nothing is built early and the late phase creates it normally.
+--     The move still succeeds and data is preserved.
+--
+CREATE TABLE t_early_partial (a int, b text);
+CREATE INDEX t_early_partial_a ON t_early_partial (a) WHERE a > 0;
+SELECT create_distributed_table('t_early_partial', 'a', colocate_with:='none');
+INSERT INTO t_early_partial SELECT g, 'v' || g FROM generate_series(1, 100) g;
+
+SELECT min(shardid) AS shardid_epartial FROM pg_dist_shard WHERE logicalrelid='t_early_partial'::regclass \gset
+SELECT nodeport AS src_epartial,
+       CASE WHEN nodeport = :worker_1_port THEN :worker_2_port ELSE :worker_1_port END AS tgt_epartial
+FROM pg_dist_shard_placement WHERE shardid = :shardid_epartial \gset
+
+SELECT citus_move_shard_placement(:shardid_epartial, 'localhost', :src_epartial, 'localhost', :tgt_epartial, shard_transfer_mode:='force_logical_auto_identity');
+SELECT public.wait_for_resource_cleanup();
+SELECT count(*) FROM t_early_partial;
+SELECT DISTINCT result FROM run_command_on_placements('t_early_partial', 'SELECT count(*) FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid WHERE i.indrelid = ''%s''::regclass');
+
+--
+-- SECTION 4: under force_logical_auto_identity a throwaway helper btree index is built
+--            on the destination shard of a table that has no usable index, and
+--            dropped when the move finishes.
+--
+
+--
+-- 4a) no replica identity + no index, force_logical_auto_identity: the helper index is
+--     built and dropped, the move succeeds, data is preserved, and no helper index
+--     (citus_ri_helper_%) is left behind. Because the table has no replica identity,
+--     force_logical_auto_identity also sets REPLICA IDENTITY FULL on the source for the
+--     duration of the move and restores the original default 'd' afterwards, so the
+--     surviving placement ends up back at 'd'.
+--
+CREATE TABLE t_temp (a int, b text, c int);
+SELECT create_distributed_table('t_temp', 'a', colocate_with:='none');
+INSERT INTO t_temp SELECT g % 10, 'v' || g, g FROM generate_series(1, 200) g;
+
+SELECT min(shardid) AS shardid_temp FROM pg_dist_shard WHERE logicalrelid='t_temp'::regclass \gset
+SELECT nodeport AS src_temp,
+       CASE WHEN nodeport = :worker_1_port THEN :worker_2_port ELSE :worker_1_port END AS tgt_temp
+FROM pg_dist_shard_placement WHERE shardid = :shardid_temp \gset
+
+SELECT citus_move_shard_placement(:shardid_temp, 'localhost', :src_temp, 'localhost', :tgt_temp, shard_transfer_mode:='force_logical_auto_identity');
+SELECT public.wait_for_resource_cleanup();
+-- data preserved
+SELECT count(*) FROM t_temp;
+-- no leftover temporary helper index on any placement
+SELECT bool_or(result::int > 0) AS any_leftover_helper_index
+FROM run_command_on_placements('t_temp', 'SELECT count(*) FROM pg_class WHERE relkind = ''i'' AND relname LIKE ''citus_ri_helper_%%''');
+-- source replica identity restored to the default 'd'
+SELECT DISTINCT result FROM run_command_on_placements('t_temp', 'SELECT relreplident FROM pg_class WHERE oid = ''%s''::regclass');
+
+--
+-- 4b) The temp helper also covers a table the user explicitly set to REPLICA
+--     IDENTITY FULL that has no index. Such a table can already publish all its
+--     modifications, so Citus never touches its replica identity, but the subscriber
+--     would still sequential-scan the destination shard during catch-up. Under
+--     force_logical_auto_identity a helper index is built (and dropped afterwards) for it
+--     too, and the user's REPLICA IDENTITY FULL is left untouched ('f').
+--
+CREATE TABLE t_temp_full (a int, b text, c int);
+SELECT create_distributed_table('t_temp_full', 'a', colocate_with:='none');
+ALTER TABLE t_temp_full REPLICA IDENTITY FULL;
+INSERT INTO t_temp_full SELECT g % 10, 'v' || g, g FROM generate_series(1, 200) g;
+
+SELECT min(shardid) AS shardid_tempfull FROM pg_dist_shard WHERE logicalrelid='t_temp_full'::regclass \gset
+SELECT nodeport AS src_tempfull,
+       CASE WHEN nodeport = :worker_1_port THEN :worker_2_port ELSE :worker_1_port END AS tgt_tempfull
+FROM pg_dist_shard_placement WHERE shardid = :shardid_tempfull \gset
+
+SELECT citus_move_shard_placement(:shardid_tempfull, 'localhost', :src_tempfull, 'localhost', :tgt_tempfull, shard_transfer_mode:='force_logical_auto_identity');
+SELECT public.wait_for_resource_cleanup();
+-- data preserved
+SELECT count(*) FROM t_temp_full;
+-- no leftover temporary helper index on any placement
+SELECT bool_or(result::int > 0) AS any_leftover_helper_index
+FROM run_command_on_placements('t_temp_full', 'SELECT count(*) FROM pg_class WHERE relkind = ''i'' AND relname LIKE ''citus_ri_helper_%%''');
+-- the user's REPLICA IDENTITY FULL is preserved (Citus never touched it): 'f'
+SELECT DISTINCT result FROM run_command_on_placements('t_temp_full', 'SELECT relreplident FROM pg_class WHERE oid = ''%s''::regclass');
+-- drop this intentionally-FULL table so it does not trip the strong "no leftover
+-- FULL shards" check below
+DROP TABLE t_temp_full;
+
+--
+-- 4c) A temporary helper index must not use a name that can collide with an
+--     unrelated index in the destination schema. Apart from making the move fail,
+--     registering cleanup for a pre-existing name would drop the unrelated index.
+--     Keep an index with the old shard-only helper name on the destination and
+--     verify that the move succeeds and leaves that index untouched.
+--
+SET citus.next_shard_id TO 8981000;
+CREATE TABLE t_temp_name_collision (a int, b text);
+SELECT create_distributed_table('t_temp_name_collision', 'a', colocate_with:='none');
+INSERT INTO t_temp_name_collision SELECT g, 'v' || g FROM generate_series(1, 100) g;
+
+SELECT min(shardid) AS shardid_temp_collision
+FROM pg_dist_shard WHERE logicalrelid='t_temp_name_collision'::regclass \gset
+SELECT nodeport AS src_temp_collision,
+       CASE WHEN nodeport = :worker_1_port THEN :worker_2_port ELSE :worker_1_port END AS tgt_temp_collision
+FROM pg_dist_shard_placement WHERE shardid = :shardid_temp_collision \gset
+
+\c - - - :tgt_temp_collision
+SET citus.override_table_visibility TO off;
+CREATE TABLE move_no_ri.helper_name_collision_guard (a int);
+CREATE INDEX citus_ri_helper_8981000
+ON move_no_ri.helper_name_collision_guard (a);
+\c - - - :master_port
+SET search_path TO move_no_ri;
+
+SELECT citus_move_shard_placement(:shardid_temp_collision, 'localhost',
+                                  :src_temp_collision, 'localhost',
+                                  :tgt_temp_collision,
+                                  shard_transfer_mode:='force_logical_auto_identity');
+SELECT public.wait_for_resource_cleanup();
+SELECT count(*) FROM t_temp_name_collision;
+SELECT bool_or(result::int > 0) AS any_leftover_helper_index
+FROM run_command_on_placements(
+    't_temp_name_collision',
+    'SELECT count(*) FROM pg_class c JOIN pg_index i ON i.indexrelid = c.oid WHERE i.indrelid = ''%s''::regclass AND c.relname LIKE ''citus_ri_helper_%%''');
+
+\c - - - :tgt_temp_collision
+SET citus.override_table_visibility TO off;
+SELECT count(*) AS unrelated_index_count
+FROM pg_class c JOIN pg_index i ON i.indexrelid = c.oid
+WHERE c.relnamespace = 'move_no_ri'::regnamespace
+  AND c.relname = 'citus_ri_helper_8981000'
+  AND i.indrelid = 'move_no_ri.helper_name_collision_guard'::regclass;
+\c - - - :master_port
+SET search_path TO move_no_ri;
+
+--
+-- 4d) Cleanup must not restore the source shard's original replica identity
+--     while a publication still contains that shard. Cleanup records are sorted
+--     by resource type, but one failed resource must prevent dependent cleanup
+--     from making UPDATE and DELETE fail on the live source.
+--
+SET citus.next_shard_id TO 8982000;
+SET citus.shard_count TO 1;
+SET citus.shard_replication_factor TO 1;
+CREATE TABLE t_cleanup_dependency (a int, b text);
+SELECT create_distributed_table('t_cleanup_dependency', 'a', colocate_with:='none');
+INSERT INTO t_cleanup_dependency VALUES (1, 'before');
+
+SELECT min(shardid) AS shardid_cleanup_dependency
+FROM pg_dist_shard WHERE logicalrelid='t_cleanup_dependency'::regclass \gset
+SELECT p.nodeport AS src_cleanup_dependency,
+       n.groupid AS src_cleanup_dependency_group,
+       shard_name(s.logicalrelid, s.shardid) AS cleanup_dependency_shard
+FROM pg_dist_shard s
+JOIN pg_dist_shard_placement p USING (shardid)
+JOIN pg_dist_node n
+  ON n.nodename = p.nodename AND n.nodeport = p.nodeport
+WHERE s.shardid = :shardid_cleanup_dependency \gset
+
+\c - - - :src_cleanup_dependency
+SET citus.override_table_visibility TO off;
+SET citus.enable_ddl_propagation TO off;
+ALTER TABLE :cleanup_dependency_shard REPLICA IDENTITY FULL;
+CREATE PUBLICATION cleanup_dependency_publication
+FOR TABLE :cleanup_dependency_shard;
+\c - - - :master_port
+SET search_path TO move_no_ri;
+
+INSERT INTO pg_dist_cleanup
+VALUES (nextval('pg_dist_cleanup_recordid_seq'), 8982000, 7,
+        'd:' || :'cleanup_dependency_shard',
+        :src_cleanup_dependency_group, 0);
+CALL citus_cleanup_orphaned_resources();
+SELECT count(*) AS retained_replica_identity_cleanup
+FROM pg_dist_cleanup WHERE operation_id = 8982000;
+
+\c - - - :src_cleanup_dependency
+SET citus.override_table_visibility TO off;
+SELECT relreplident
+FROM pg_class WHERE oid = :'cleanup_dependency_shard'::regclass;
+UPDATE :cleanup_dependency_shard SET b = 'publication-active' WHERE a = 1;
+DROP PUBLICATION cleanup_dependency_publication;
+\c - - - :master_port
+SET search_path TO move_no_ri;
+
+CALL citus_cleanup_orphaned_resources();
+SELECT count(*) AS retained_replica_identity_cleanup
+FROM pg_dist_cleanup WHERE operation_id = 8982000;
+\c - - - :src_cleanup_dependency
+SET citus.override_table_visibility TO off;
+SELECT relreplident
+FROM pg_class WHERE oid = :'cleanup_dependency_shard'::regclass;
+\c - - - :master_port
+SET search_path TO move_no_ri;
+
+--
+-- 4e) Match candidate columns by name, not attnum. Recreated shard placements
+--     compact dropped-column gaps while the coordinator relation keeps them, so
+--     coordinator and shard attnums can refer to different columns.
+--
+SET citus.shard_count TO 1;
+SET citus.shard_replication_factor TO 1;
+SET citus.next_shard_id TO 8983000;
+CREATE TABLE t_dropped_column (
+    dist int,
+    dropped_column int,
+    candidate text,
+    low_cardinality int);
+SELECT create_distributed_table('t_dropped_column', 'dist', colocate_with:='none');
+INSERT INTO t_dropped_column
+SELECT 1, g, 'candidate-' || g, 1 FROM generate_series(1, 100) g;
+ALTER TABLE t_dropped_column DROP COLUMN dropped_column;
+
+SELECT min(shardid) AS shardid_dropped_column
+FROM pg_dist_shard WHERE logicalrelid='t_dropped_column'::regclass \gset
+SELECT nodeport AS src_dropped_column,
+       CASE WHEN nodeport = :worker_1_port THEN :worker_2_port ELSE :worker_1_port END AS tgt_dropped_column
+FROM pg_dist_shard_placement WHERE shardid = :shardid_dropped_column \gset
+
+-- Recreate the shard once so its physical attnums no longer contain the dropped
+-- coordinator-column slot.
+SELECT citus_move_shard_placement(:shardid_dropped_column, 'localhost',
+                                  :src_dropped_column, 'localhost',
+                                  :tgt_dropped_column,
+                                  shard_transfer_mode:='block_writes');
+ANALYZE t_dropped_column;
+
+SELECT nodeport AS src_dropped_column,
+       CASE WHEN nodeport = :worker_1_port THEN :worker_2_port ELSE :worker_1_port END AS tgt_dropped_column
+FROM pg_dist_shard_placement WHERE shardid = :shardid_dropped_column \gset
+
+SET citus.next_operation_id TO 8983000;
+SET client_min_messages TO NOTICE;
+SET citus.log_remote_commands TO on;
+SET citus.grep_remote_commands TO '%CREATE INDEX%citus_ri_helper%';
+SELECT citus_move_shard_placement(:shardid_dropped_column, 'localhost',
+                                  :src_dropped_column, 'localhost',
+                                  :tgt_dropped_column,
+                                  shard_transfer_mode:='force_logical_auto_identity');
+SELECT public.wait_for_resource_cleanup();
+RESET citus.grep_remote_commands;
+RESET citus.log_remote_commands;
+SET client_min_messages TO WARNING;
+
+--
+-- 4f) The temporary helper index is only a catch-up optimization, so a failure
+--     to build it must not abort the move. A column whose values exceed the btree
+--     entry size limit cannot be indexed; the move must still succeed by falling
+--     back to a sequential scan on the subscriber. The build failure surfaces as
+--     the raw btree size WARNING forwarded from the worker together with our own
+--     fallback WARNING; without the fix the move would ERROR out instead.
+--
+SET citus.shard_count TO 1;
+SET citus.shard_replication_factor TO 1;
+SET citus.next_shard_id TO 8984000;
+CREATE TABLE t_unindexable (a int, wide text);
+SELECT create_distributed_table('t_unindexable', 'a', colocate_with:='none');
+-- low-cardinality int, but a wide incompressible column (deterministic md5 chunks,
+-- 2880 bytes) that the stats probe prefers and that exceeds the btree entry limit
+INSERT INTO t_unindexable
+SELECT (g % 3),
+       (SELECT string_agg(md5((g * 1000 + s)::text), '') FROM generate_series(1, 90) s)
+FROM generate_series(1, 100) g;
+ANALYZE t_unindexable;
+
+SELECT min(shardid) AS shardid_unindexable
+FROM pg_dist_shard WHERE logicalrelid='t_unindexable'::regclass \gset
+SELECT nodeport AS src_unindexable,
+       CASE WHEN nodeport = :worker_1_port THEN :worker_2_port ELSE :worker_1_port END AS tgt_unindexable
+FROM pg_dist_shard_placement WHERE shardid = :shardid_unindexable \gset
+
+SET client_min_messages TO WARNING;
+SELECT citus_move_shard_placement(:shardid_unindexable, 'localhost',
+                                  :src_unindexable, 'localhost',
+                                  :tgt_unindexable,
+                                  shard_transfer_mode:='force_logical_auto_identity');
+SELECT public.wait_for_resource_cleanup();
+-- the move succeeded and preserved the data despite the un-indexable column
+SELECT count(*) FROM t_unindexable;
+SELECT nodeport, shardstate FROM pg_dist_shard_placement WHERE shardid = :shardid_unindexable ORDER BY nodeport;
+-- no leftover helper index and the original replica identity is restored
+SELECT bool_or(result::int > 0) AS any_leftover_helper_index
+FROM run_command_on_placements('t_unindexable', 'SELECT count(*) FROM pg_class c JOIN pg_index i ON i.indexrelid = c.oid WHERE i.indrelid = ''%s''::regclass AND c.relname LIKE ''citus_ri_helper_%%''');
+SELECT DISTINCT result FROM run_command_on_placements('t_unindexable', 'SELECT relreplident FROM pg_class WHERE oid = ''%s''::regclass');
+
+--
+-- 4g) A source shard left at REPLICA IDENTITY 'i' (USING INDEX) whose replica
+--     identity index is *missing* is restored to NOTHING, not back to 'i': the
+--     named index is gone, so 'i' can no longer be re-issued and behaves like
+--     NOTHING anyway (see pg_class.relreplident). This drives the cleanup restore
+--     branch directly (as 4d does for the 'd' identity), so the restore is
+--     observable on the surviving shard instead of a dropped move source.
+--
+SET citus.next_shard_id TO 8989000;
+SET citus.shard_count TO 1;
+SET citus.shard_replication_factor TO 1;
+CREATE TABLE t_i_dropped (a int NOT NULL, b text);
+SELECT create_distributed_table('t_i_dropped', 'a', colocate_with:='none');
+INSERT INTO t_i_dropped VALUES (1, 'before');
+
+SELECT min(shardid) AS shardid_i_dropped
+FROM pg_dist_shard WHERE logicalrelid='t_i_dropped'::regclass \gset
+SELECT p.nodeport AS src_i_dropped,
+       n.groupid AS src_i_dropped_group,
+       shard_name(s.logicalrelid, s.shardid) AS i_dropped_shard
+FROM pg_dist_shard s
+JOIN pg_dist_shard_placement p USING (shardid)
+JOIN pg_dist_node n
+  ON n.nodename = p.nodename AND n.nodeport = p.nodeport
+WHERE s.shardid = :shardid_i_dropped \gset
+
+\c - - - :src_i_dropped
+SET citus.override_table_visibility TO off;
+SET citus.enable_ddl_propagation TO off;
+SET search_path TO move_no_ri;
+-- put the shard into the 'i' (USING INDEX) state, then drop the index behind it
+CREATE UNIQUE INDEX t_i_dropped_ri ON :i_dropped_shard (a);
+ALTER TABLE :i_dropped_shard REPLICA IDENTITY USING INDEX t_i_dropped_ri;
+DROP INDEX t_i_dropped_ri;
+-- relreplident is still 'i' even though the backing index no longer exists
+SELECT relreplident FROM pg_class WHERE oid = :'i_dropped_shard'::regclass;
+\c - - - :master_port
+SET search_path TO move_no_ri;
+
+-- record the shard for restore just as PrepareReplicaIdentitiesForPublication would
+INSERT INTO pg_dist_cleanup
+VALUES (nextval('pg_dist_cleanup_recordid_seq'), 8989000, 7,
+        'i:' || :'i_dropped_shard',
+        :src_i_dropped_group, 0);
+CALL citus_cleanup_orphaned_resources();
+SELECT count(*) AS retained_i_dropped_cleanup
+FROM pg_dist_cleanup WHERE operation_id = 8989000;
+
+\c - - - :src_i_dropped
+SET citus.override_table_visibility TO off;
+-- restored to NOTHING ('n'), not 'i'
+SELECT relreplident FROM pg_class WHERE oid = :'i_dropped_shard'::regclass;
+\c - - - :master_port
+SET search_path TO move_no_ri;
+
+--
+-- 4h) Same as 4g, but the replica identity index still *exists* and is only
+--     marked invalid. An invalid index is excluded from the usable replica
+--     identity just like a missing one, so the shard is likewise restored to
+--     NOTHING.
+--
+SET citus.next_shard_id TO 8989100;
+SET citus.shard_count TO 1;
+SET citus.shard_replication_factor TO 1;
+CREATE TABLE t_i_invalid (a int NOT NULL, b text);
+SELECT create_distributed_table('t_i_invalid', 'a', colocate_with:='none');
+INSERT INTO t_i_invalid VALUES (1, 'before');
+
+SELECT min(shardid) AS shardid_i_invalid
+FROM pg_dist_shard WHERE logicalrelid='t_i_invalid'::regclass \gset
+SELECT p.nodeport AS src_i_invalid,
+       n.groupid AS src_i_invalid_group,
+       shard_name(s.logicalrelid, s.shardid) AS i_invalid_shard
+FROM pg_dist_shard s
+JOIN pg_dist_shard_placement p USING (shardid)
+JOIN pg_dist_node n
+  ON n.nodename = p.nodename AND n.nodeport = p.nodeport
+WHERE s.shardid = :shardid_i_invalid \gset
+
+\c - - - :src_i_invalid
+SET citus.override_table_visibility TO off;
+SET citus.enable_ddl_propagation TO off;
+SET search_path TO move_no_ri;
+-- put the shard into the 'i' (USING INDEX) state, then invalidate the index
+CREATE UNIQUE INDEX t_i_invalid_ri ON :i_invalid_shard (a);
+ALTER TABLE :i_invalid_shard REPLICA IDENTITY USING INDEX t_i_invalid_ri;
+UPDATE pg_index SET indisvalid = false WHERE indexrelid = 't_i_invalid_ri'::regclass;
+-- relreplident is 'i' but the backing index is invalid, i.e. not usable
+SELECT relreplident FROM pg_class WHERE oid = :'i_invalid_shard'::regclass;
+\c - - - :master_port
+SET search_path TO move_no_ri;
+
+INSERT INTO pg_dist_cleanup
+VALUES (nextval('pg_dist_cleanup_recordid_seq'), 8989100, 7,
+        'i:' || :'i_invalid_shard',
+        :src_i_invalid_group, 0);
+CALL citus_cleanup_orphaned_resources();
+SELECT count(*) AS retained_i_invalid_cleanup
+FROM pg_dist_cleanup WHERE operation_id = 8989100;
+
+\c - - - :src_i_invalid
+SET citus.override_table_visibility TO off;
+-- restored to NOTHING ('n'), not 'i'
+SELECT relreplident FROM pg_class WHERE oid = :'i_invalid_shard'::regclass;
+\c - - - :master_port
+SET search_path TO move_no_ri;
+
+-- no leftover cleanup records after all of the moves above
+SELECT count(*) AS leftover_cleanup_records FROM pg_dist_cleanup;
+
+--
+-- SECTION 6: table-type / shape coverage. force_logical_auto_identity must handle
+--            the same table types a normal non-blocking move does. Every table here
+--            lives in the move_no_ri schema, so the final "no shard left FULL" check
+--            also covers them.
+--
+
+--
+-- 6a) A colocated group with MIXED replica identity: one table with a primary key,
+--     one with no replica identity, one with REPLICA IDENTITY NOTHING. The move
+--     iterates the whole colocated set; only the tables that cannot publish are set
+--     to FULL, and each table's original identity is restored (pk/d unchanged, the
+--     no-RI table back to 'd', the NOTHING table back to 'n').
+--
+SET citus.shard_count TO 4;
+SET citus.shard_replication_factor TO 1;
+SET citus.next_shard_id TO 8985000;
+CREATE TABLE grp_pk (a int PRIMARY KEY, b text);
+SELECT create_distributed_table('grp_pk', 'a', colocate_with:='none');
+CREATE TABLE grp_nori (a int, b text);
+SELECT create_distributed_table('grp_nori', 'a', colocate_with:='grp_pk');
+CREATE TABLE grp_nothing (a int, b text);
+ALTER TABLE grp_nothing REPLICA IDENTITY NOTHING;
+SELECT create_distributed_table('grp_nothing', 'a', colocate_with:='grp_pk');
+INSERT INTO grp_pk SELECT g, 'p'||g FROM generate_series(1,200) g;
+INSERT INTO grp_nori SELECT g, 'n'||g FROM generate_series(1,200) g;
+INSERT INTO grp_nothing SELECT g, 'x'||g FROM generate_series(1,200) g;
+
+SELECT get_shard_id_for_distribution_column('grp_pk', 5) AS shardid_grp \gset
+SELECT nodeport AS src_grp,
+       CASE WHEN nodeport = :worker_1_port THEN :worker_2_port ELSE :worker_1_port END AS tgt_grp
+FROM pg_dist_shard_placement WHERE shardid = :shardid_grp \gset
+
+SELECT citus_move_shard_placement(:shardid_grp, 'localhost', :src_grp, 'localhost', :tgt_grp, shard_transfer_mode:='force_logical_auto_identity');
+SELECT public.wait_for_resource_cleanup();
+SELECT (SELECT count(*) FROM grp_pk) AS pk, (SELECT count(*) FROM grp_nori) AS nori, (SELECT count(*) FROM grp_nothing) AS nothing;
+-- each table's replica identity is restored: pk table unchanged 'd', no-RI table 'd', NOTHING table 'n'
+SELECT DISTINCT result AS grp_pk_ri FROM run_command_on_placements('grp_pk','SELECT relreplident FROM pg_class WHERE oid=''%s''::regclass');
+SELECT DISTINCT result AS grp_nori_ri FROM run_command_on_placements('grp_nori','SELECT relreplident FROM pg_class WHERE oid=''%s''::regclass');
+SELECT DISTINCT result AS grp_nothing_ri FROM run_command_on_placements('grp_nothing','SELECT relreplident FROM pg_class WHERE oid=''%s''::regclass');
+
+--
+-- 6b) A partitioned distributed table with no replica identity. The parent holds no
+--     data of its own (and is skipped by the catch-up index builder); the leaf
+--     partitions are transferred and their replica identity restored.
+--
+SET citus.shard_count TO 4;
+SET citus.next_shard_id TO 8985100;
+CREATE TABLE part_nori (a int, b text, ts date) PARTITION BY RANGE (ts);
+CREATE TABLE part_nori_p1 PARTITION OF part_nori FOR VALUES FROM ('2020-01-01') TO ('2020-06-01');
+CREATE TABLE part_nori_p2 PARTITION OF part_nori FOR VALUES FROM ('2020-06-01') TO ('2021-01-01');
+SELECT create_distributed_table('part_nori', 'a', colocate_with:='none');
+INSERT INTO part_nori SELECT g, 'p'||g, '2020-03-01'::date FROM generate_series(1,60) g;
+INSERT INTO part_nori SELECT g, 'q'||g, '2020-08-01'::date FROM generate_series(61,120) g;
+
+SELECT get_shard_id_for_distribution_column('part_nori', 5) AS shardid_part \gset
+SELECT nodeport AS src_part,
+       CASE WHEN nodeport = :worker_1_port THEN :worker_2_port ELSE :worker_1_port END AS tgt_part
+FROM pg_dist_shard_placement WHERE shardid = :shardid_part \gset
+
+SELECT citus_move_shard_placement(:shardid_part, 'localhost', :src_part, 'localhost', :tgt_part, shard_transfer_mode:='force_logical_auto_identity');
+SELECT public.wait_for_resource_cleanup();
+SELECT count(*) FROM part_nori;
+SELECT DISTINCT result AS part_p1_ri FROM run_command_on_placements('part_nori_p1','SELECT relreplident FROM pg_class WHERE oid=''%s''::regclass');
+SELECT DISTINCT result AS part_p2_ri FROM run_command_on_placements('part_nori_p2','SELECT relreplident FROM pg_class WHERE oid=''%s''::regclass');
+
+--
+-- 6c) A columnar distributed table with no replica identity. Data is preserved and
+--     the original replica identity is restored.
+--
+SET citus.shard_count TO 4;
+SET citus.next_shard_id TO 8985200;
+SET client_min_messages TO WARNING;
+CREATE EXTENSION IF NOT EXISTS citus_columnar;
+SET search_path TO move_no_ri, public;
+CREATE TABLE col_nori (a int, b text) USING columnar;
+SELECT create_distributed_table('col_nori', 'a', colocate_with:='none');
+INSERT INTO col_nori SELECT g, 'c'||g FROM generate_series(1,100) g;
+
+SELECT get_shard_id_for_distribution_column('col_nori', 5) AS shardid_col \gset
+SELECT nodeport AS src_col,
+       CASE WHEN nodeport = :worker_1_port THEN :worker_2_port ELSE :worker_1_port END AS tgt_col
+FROM pg_dist_shard_placement WHERE shardid = :shardid_col \gset
+
+SELECT citus_move_shard_placement(:shardid_col, 'localhost', :src_col, 'localhost', :tgt_col, shard_transfer_mode:='force_logical_auto_identity');
+SELECT public.wait_for_resource_cleanup();
+SELECT count(*) FROM col_nori;
+SELECT DISTINCT result FROM run_command_on_placements('col_nori','SELECT relreplident FROM pg_class WHERE oid=''%s''::regclass');
+
+--
+-- 6d) A single-shard (null-distributed) table with no replica identity. It has one
+--     shard, which the move transfers like any other.
+--
+SET citus.next_shard_id TO 8985300;
+CREATE TABLE ss_nori (a int, b text);
+SELECT create_distributed_table('ss_nori', NULL, colocate_with:='none');
+INSERT INTO ss_nori SELECT g, 's'||g FROM generate_series(1,100) g;
+
+SELECT min(shardid) AS shardid_ss FROM pg_dist_shard WHERE logicalrelid='ss_nori'::regclass \gset
+SELECT nodeport AS src_ss,
+       CASE WHEN nodeport = :worker_1_port THEN :worker_2_port ELSE :worker_1_port END AS tgt_ss
+FROM pg_dist_shard_placement WHERE shardid = :shardid_ss \gset
+
+SELECT citus_move_shard_placement(:shardid_ss, 'localhost', :src_ss, 'localhost', :tgt_ss, shard_transfer_mode:='force_logical_auto_identity');
+SELECT public.wait_for_resource_cleanup();
+SELECT count(*) FROM ss_nori;
+SELECT DISTINCT result FROM run_command_on_placements('ss_nori','SELECT relreplident FROM pg_class WHERE oid=''%s''::regclass');
+
+--
+-- 6e) A table with a STORED generated column and no replica identity. The
+--     generated column is a normal stored column, so it can back the temporary
+--     helper index and it is preserved across the move. (VIRTUAL generated
+--     columns are PG18+, so only STORED is exercised here.)
+--
+SET citus.shard_count TO 2;
+SET citus.next_shard_id TO 8985400;
+CREATE TABLE gen_nori (a int, b int, c int GENERATED ALWAYS AS (a * 10) STORED);
+SELECT create_distributed_table('gen_nori', 'a', colocate_with:='none');
+INSERT INTO gen_nori (a, b) SELECT g, g FROM generate_series(1,100) g;
+
+SELECT min(shardid) AS shardid_gen FROM pg_dist_shard WHERE logicalrelid='gen_nori'::regclass \gset
+SELECT nodeport AS src_gen,
+       CASE WHEN nodeport = :worker_1_port THEN :worker_2_port ELSE :worker_1_port END AS tgt_gen
+FROM pg_dist_shard_placement WHERE shardid = :shardid_gen \gset
+
+SELECT citus_move_shard_placement(:shardid_gen, 'localhost', :src_gen, 'localhost', :tgt_gen, shard_transfer_mode:='force_logical_auto_identity');
+SELECT public.wait_for_resource_cleanup();
+-- the generated column is recomputed/preserved: sum(c) = 10 * sum(a) = 10 * 5050
+SELECT count(*) AS rows, sum(c) AS sum_c FROM gen_nori;
+SELECT DISTINCT result FROM run_command_on_placements('gen_nori','SELECT relreplident FROM pg_class WHERE oid=''%s''::regclass');
+
+--
+-- SECTION 7: existing-index eligibility for the early build. Section 3 already
+--            proves a plain btree index is built early and a partial index is
+--            refused. This section covers the remaining reasons
+--            ChooseReplicationHelperIndexToBuildEarly refuses an existing index
+--            and falls back to the throwaway helper: a non-btree index, an
+--            expression index, and a constraint-backed (UNIQUE) index. In each
+--            case the temporary "citus_ri_helper" index is built on the first
+--            eligible column instead. The last case (7d) proves that with more
+--            than one usable plain btree index the early path is still taken, so
+--            no helper is built at all.
+--
+-- The helper's remote CREATE INDEX is the oracle: a fixed next_operation_id and
+-- next_shard_id make its name deterministic, and citus.grep_remote_commands
+-- filters the log down to just that command.
+--
+
+--
+-- 7a) A hash index is not a btree index, so it cannot back the catch-up. The
+--     move falls back to the helper on the first eligible column (a).
+--
+SET citus.shard_count TO 1;
+SET citus.shard_replication_factor TO 1;
+SET citus.next_shard_id TO 8986000;
+CREATE TABLE ix_hash (a int, b text);
+CREATE INDEX ix_hash_a ON ix_hash USING hash (a);
+SELECT create_distributed_table('ix_hash', 'a', colocate_with:='none');
+INSERT INTO ix_hash SELECT g, 'v'||g FROM generate_series(1,100) g;
+
+SELECT min(shardid) AS shardid_hash FROM pg_dist_shard WHERE logicalrelid='ix_hash'::regclass \gset
+SELECT nodeport AS src_hash,
+       CASE WHEN nodeport = :worker_1_port THEN :worker_2_port ELSE :worker_1_port END AS tgt_hash
+FROM pg_dist_shard_placement WHERE shardid = :shardid_hash \gset
+
+SET citus.next_operation_id TO 8986000;
+SET client_min_messages TO NOTICE;
+SET citus.log_remote_commands TO on;
+SET citus.grep_remote_commands TO '%CREATE INDEX%citus_ri_helper%';
+SELECT citus_move_shard_placement(:shardid_hash, 'localhost', :src_hash, 'localhost', :tgt_hash, shard_transfer_mode:='force_logical_auto_identity');
+RESET citus.grep_remote_commands;
+RESET citus.log_remote_commands;
+SET client_min_messages TO WARNING;
+SELECT public.wait_for_resource_cleanup();
+SELECT count(*) FROM ix_hash;
+SELECT DISTINCT result FROM run_command_on_placements('ix_hash','SELECT relreplident FROM pg_class WHERE oid=''%s''::regclass');
+
+--
+-- 7b) An expression index has no plain leftmost column, so it is refused and the
+--     move falls back to the helper on the first eligible column (a).
+--
+SET citus.next_shard_id TO 8986100;
+CREATE TABLE ix_expr (a int, b text);
+CREATE INDEX ix_expr_e ON ix_expr ((a + 1));
+SELECT create_distributed_table('ix_expr', 'a', colocate_with:='none');
+INSERT INTO ix_expr SELECT g, 'v'||g FROM generate_series(1,100) g;
+
+SELECT min(shardid) AS shardid_expr FROM pg_dist_shard WHERE logicalrelid='ix_expr'::regclass \gset
+SELECT nodeport AS src_expr,
+       CASE WHEN nodeport = :worker_1_port THEN :worker_2_port ELSE :worker_1_port END AS tgt_expr
+FROM pg_dist_shard_placement WHERE shardid = :shardid_expr \gset
+
+SET citus.next_operation_id TO 8986100;
+SET client_min_messages TO NOTICE;
+SET citus.log_remote_commands TO on;
+SET citus.grep_remote_commands TO '%CREATE INDEX%citus_ri_helper%';
+SELECT citus_move_shard_placement(:shardid_expr, 'localhost', :src_expr, 'localhost', :tgt_expr, shard_transfer_mode:='force_logical_auto_identity');
+RESET citus.grep_remote_commands;
+RESET citus.log_remote_commands;
+SET client_min_messages TO WARNING;
+SELECT public.wait_for_resource_cleanup();
+SELECT count(*) FROM ix_expr;
+SELECT DISTINCT result FROM run_command_on_placements('ix_expr','SELECT relreplident FROM pg_class WHERE oid=''%s''::regclass');
+
+--
+-- 7c) A UNIQUE-constraint-backed btree index is refused (Citus does not reorder a
+--     constraint into the early phase), so the move falls back to the helper on
+--     the first eligible column (a). The UNIQUE constraint is not the table's
+--     replica identity, so the table is still set to REPLICA IDENTITY FULL and
+--     restored to 'd' afterwards. The UNIQUE is on the distribution column so
+--     Citus accepts it.
+--
+SET citus.next_shard_id TO 8986200;
+CREATE TABLE ix_uniq (a int, b text, UNIQUE (a));
+SELECT create_distributed_table('ix_uniq', 'a', colocate_with:='none');
+INSERT INTO ix_uniq SELECT g, 'v'||g FROM generate_series(1,100) g;
+
+SELECT min(shardid) AS shardid_uniq FROM pg_dist_shard WHERE logicalrelid='ix_uniq'::regclass \gset
+SELECT nodeport AS src_uniq,
+       CASE WHEN nodeport = :worker_1_port THEN :worker_2_port ELSE :worker_1_port END AS tgt_uniq
+FROM pg_dist_shard_placement WHERE shardid = :shardid_uniq \gset
+
+SET citus.next_operation_id TO 8986200;
+SET client_min_messages TO NOTICE;
+SET citus.log_remote_commands TO on;
+SET citus.grep_remote_commands TO '%CREATE INDEX%citus_ri_helper%';
+SELECT citus_move_shard_placement(:shardid_uniq, 'localhost', :src_uniq, 'localhost', :tgt_uniq, shard_transfer_mode:='force_logical_auto_identity');
+RESET citus.grep_remote_commands;
+RESET citus.log_remote_commands;
+SET client_min_messages TO WARNING;
+SELECT public.wait_for_resource_cleanup();
+SELECT count(*) FROM ix_uniq;
+SELECT DISTINCT result FROM run_command_on_placements('ix_uniq','SELECT relreplident FROM pg_class WHERE oid=''%s''::regclass');
+
+--
+-- 7d) With more than one usable plain btree index the early path is taken (the
+--     lowest-OID index is built early) and no helper index is built at all, so the
+--     grep below produces no CREATE INDEX line for citus_ri_helper.
+--
+SET citus.next_shard_id TO 8986300;
+CREATE TABLE ix_multi (a int, b text);
+CREATE INDEX ix_multi_a ON ix_multi (a);
+CREATE INDEX ix_multi_b ON ix_multi (b);
+SELECT create_distributed_table('ix_multi', 'a', colocate_with:='none');
+INSERT INTO ix_multi SELECT g, 'v'||g FROM generate_series(1,100) g;
+
+SELECT min(shardid) AS shardid_multi FROM pg_dist_shard WHERE logicalrelid='ix_multi'::regclass \gset
+SELECT nodeport AS src_multi,
+       CASE WHEN nodeport = :worker_1_port THEN :worker_2_port ELSE :worker_1_port END AS tgt_multi
+FROM pg_dist_shard_placement WHERE shardid = :shardid_multi \gset
+
+SET citus.next_operation_id TO 8986300;
+SET client_min_messages TO NOTICE;
+SET citus.log_remote_commands TO on;
+SET citus.grep_remote_commands TO '%CREATE INDEX%citus_ri_helper%';
+SELECT citus_move_shard_placement(:shardid_multi, 'localhost', :src_multi, 'localhost', :tgt_multi, shard_transfer_mode:='force_logical_auto_identity');
+RESET citus.grep_remote_commands;
+RESET citus.log_remote_commands;
+SET client_min_messages TO WARNING;
+SELECT public.wait_for_resource_cleanup();
+SELECT count(*) FROM ix_multi;
+SELECT DISTINCT result FROM run_command_on_placements('ix_multi','SELECT relreplident FROM pg_class WHERE oid=''%s''::regclass');
+
+--
+-- SECTION 8: the mode must reach the foreground rebalancer rebalance_table_shards().
+--            A no-replica-identity table is imbalanced onto one worker and then
+--            rebalanced back with force_logical_auto_identity; the move must
+--            succeed, the data is preserved, and the source replica identity is
+--            restored to 'd'.
+--
+--            The background rebalancer citus_rebalance_start() is a whole-cluster
+--            operation and cannot be exercised reliably from this shared schedule
+--            (it would try to move every unrelated table left behind by earlier
+--            tests), so it is not covered here.
+--
+SET citus.shard_count TO 4;
+SET citus.shard_replication_factor TO 1;
+SET citus.next_shard_id TO 8987000;
+
+CREATE TABLE rebal_fg (a int, b text);
+SELECT create_distributed_table('rebal_fg', 'a', colocate_with:='none');
+INSERT INTO rebal_fg SELECT g, 'v'||g FROM generate_series(1,400) g;
+
+-- imbalance: move every shard currently on worker_2 onto worker_1
+SELECT citus_move_shard_placement(s.shardid, 'localhost', :worker_2_port, 'localhost', :worker_1_port, shard_transfer_mode:='block_writes')
+FROM pg_dist_shard s JOIN pg_dist_shard_placement p USING (shardid)
+WHERE s.logicalrelid='rebal_fg'::regclass AND p.nodeport = :worker_2_port
+ORDER BY s.shardid;
+SELECT public.wait_for_resource_cleanup();
+-- all four shards now live on a single worker
+SELECT count(DISTINCT nodeport) AS distinct_nodes_before
+FROM pg_dist_shard s JOIN pg_dist_shard_placement p USING (shardid)
+WHERE s.logicalrelid='rebal_fg'::regclass;
+
+SELECT 1 FROM rebalance_table_shards('rebal_fg', shard_transfer_mode:='force_logical_auto_identity');
+SELECT public.wait_for_resource_cleanup();
+-- rebalanced back across both workers (2 shards each)
+SELECT count(*) AS shards_per_node, (count(*) = 2) AS balanced
+FROM pg_dist_shard s JOIN pg_dist_shard_placement p USING (shardid)
+WHERE s.logicalrelid='rebal_fg'::regclass
+GROUP BY p.nodeport ORDER BY 1;
+SELECT count(*) AS rows FROM rebal_fg;
+SELECT DISTINCT result FROM run_command_on_placements('rebal_fg','SELECT relreplident FROM pg_class WHERE oid=''%s''::regclass');
+
+--
+-- SECTION 9: ownership and identifier edge cases.
+--
+-- 9a) A no-replica-identity table owned by a non-superuser role. The move runs
+--     the source REPLICA IDENTITY FULL alter and the helper index creation as
+--     the table owner (TableOwner), so a login-capable non-superuser owner must
+--     be able to complete the move; data is preserved and the source replica
+--     identity is restored to 'd'. (A NOLOGIN owner cannot be connected to and
+--     fails for every transfer mode, including force_logical and block_writes;
+--     that is pre-existing behavior, not specific to this mode.)
+--
+SET citus.shard_count TO 2;
+SET citus.shard_replication_factor TO 1;
+SET citus.next_shard_id TO 8988000;
+SET client_min_messages TO WARNING;
+CREATE ROLE move_no_ri_owner LOGIN;
+GRANT ALL ON SCHEMA move_no_ri TO move_no_ri_owner;
+CREATE TABLE owned_nori (a int, b text);
+ALTER TABLE owned_nori OWNER TO move_no_ri_owner;
+SELECT create_distributed_table('owned_nori', 'a', colocate_with:='none');
+INSERT INTO owned_nori SELECT g, 'v'||g FROM generate_series(1,100) g;
+
+SELECT min(shardid) AS shardid_owned FROM pg_dist_shard WHERE logicalrelid='owned_nori'::regclass \gset
+SELECT nodeport AS src_owned,
+       CASE WHEN nodeport = :worker_1_port THEN :worker_2_port ELSE :worker_1_port END AS tgt_owned
+FROM pg_dist_shard_placement WHERE shardid = :shardid_owned \gset
+
+SELECT citus_move_shard_placement(:shardid_owned, 'localhost', :src_owned, 'localhost', :tgt_owned, shard_transfer_mode:='force_logical_auto_identity');
+SELECT public.wait_for_resource_cleanup();
+SELECT count(*) FROM owned_nori;
+SELECT DISTINCT result FROM run_command_on_placements('owned_nori','SELECT relreplident FROM pg_class WHERE oid=''%s''::regclass');
+DROP TABLE owned_nori;
+REVOKE ALL ON SCHEMA move_no_ri FROM move_no_ri_owner;
+DROP ROLE move_no_ri_owner;
+
+--
+-- 9b) A no-replica-identity table with a mixed-case, specially quoted name. The
+--     move must quote the relation and helper-index identifiers correctly.
+--
+SET citus.next_shard_id TO 8988100;
+CREATE TABLE "Weird Mixed.Case No-RI" (a int, b text);
+SELECT create_distributed_table('"Weird Mixed.Case No-RI"', 'a', colocate_with:='none');
+INSERT INTO "Weird Mixed.Case No-RI" SELECT g, 'v'||g FROM generate_series(1,100) g;
+
+SELECT min(shardid) AS shardid_weird FROM pg_dist_shard WHERE logicalrelid='"Weird Mixed.Case No-RI"'::regclass \gset
+SELECT nodeport AS src_weird,
+       CASE WHEN nodeport = :worker_1_port THEN :worker_2_port ELSE :worker_1_port END AS tgt_weird
+FROM pg_dist_shard_placement WHERE shardid = :shardid_weird \gset
+
+SELECT citus_move_shard_placement(:shardid_weird, 'localhost', :src_weird, 'localhost', :tgt_weird, shard_transfer_mode:='force_logical_auto_identity');
+SELECT public.wait_for_resource_cleanup();
+SELECT count(*) FROM "Weird Mixed.Case No-RI";
+SELECT DISTINCT result FROM run_command_on_placements('"Weird Mixed.Case No-RI"','SELECT relreplident FROM pg_class WHERE oid=''%s''::regclass');
+
+--
+-- SECTION 5: force_logical_auto_identity is a shard-MOVE-only capability. It only
+--            changes how LogicallyReplicateShards performs logical replication.
+--            Shard splits and tenant isolation (a split under the hood) do not go
+--            through that path, so they must reject the mode explicitly in
+--            LookupSplitMode instead of silently downgrading to a plain
+--            non-blocking split.
+--
+CREATE TABLE reject_split (a int, b int);
+SELECT create_distributed_table('reject_split', 'a', colocate_with:='none');
+SELECT min(shardid) AS shardid_reject FROM pg_dist_shard WHERE logicalrelid='reject_split'::regclass \gset
+
+-- citus_split_shard_by_split_points rejects force_logical_auto_identity
+SELECT citus_split_shard_by_split_points(:shardid_reject, ARRAY['-1500000000'], ARRAY[1, 2], 'force_logical_auto_identity');
+
+-- isolate_tenant_to_new_shard (tenant isolation) rejects force_logical_auto_identity
+SELECT isolate_tenant_to_new_shard('reject_split', 5, shard_transfer_mode:='force_logical_auto_identity');
+
+DROP TABLE reject_split;
+
+-- strong check: no shard of this schema on any worker is left with REPLICA
+-- IDENTITY FULL ('f'). All table creation is already done, so it is safe to
+-- switch connections (which resets session GUCs) from here on.
+\c - - - :worker_1_port
+SET citus.override_table_visibility TO off;
+SELECT count(*) AS full_ri_shards_on_worker_1
+FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+WHERE n.nspname = 'move_no_ri' AND c.relkind = 'r' AND c.relreplident = 'f';
+\c - - - :worker_2_port
+SET citus.override_table_visibility TO off;
+SELECT count(*) AS full_ri_shards_on_worker_2
+FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+WHERE n.nspname = 'move_no_ri' AND c.relkind = 'r' AND c.relreplident = 'f';
+\c - - - :master_port
+
+SET client_min_messages TO WARNING;
+DROP SCHEMA move_no_ri CASCADE;

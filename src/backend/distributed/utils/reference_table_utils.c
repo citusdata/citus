@@ -557,6 +557,8 @@ ScheduleTasksToParallelCopyReferenceTablesOnAllMissingNodes(int64 jobId, char tr
 	List *depTasksList = NIL;
 	const char *transferModeString =
 		transferMode == TRANSFER_MODE_BLOCK_WRITES ? "block_writes" :
+		transferMode == TRANSFER_MODE_FORCE_LOGICAL_AUTO_IDENTITY ?
+		"force_logical_auto_identity" :
 		transferMode == TRANSFER_MODE_FORCE_LOGICAL ? "force_logical" :
 		"auto";
 
@@ -921,6 +923,8 @@ CopyShardPlacementToWorkerNodeQuery(ShardPlacement *sourceShardPlacement,
 
 	const char *transferModeString =
 		transferMode == TRANSFER_MODE_BLOCK_WRITES ? "block_writes" :
+		transferMode == TRANSFER_MODE_FORCE_LOGICAL_AUTO_IDENTITY ?
+		"force_logical_auto_identity" :
 		transferMode == TRANSFER_MODE_FORCE_LOGICAL ? "force_logical" :
 		"auto";
 

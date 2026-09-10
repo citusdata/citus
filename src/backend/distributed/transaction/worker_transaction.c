@@ -779,6 +779,9 @@ SendOptionalCommandListToWorkerOutsideTransactionWithConnection(MultiConnection 
  * list to the given worker in a single transaction that is outside of the
  * coordinated tranaction. If any of the commands fail, it rollbacks the
  * transaction, and otherwise commits.
+ *
+ * A successful commit is indicated by returning true, and a failed commit by
+ * returning false.
  */
 bool
 SendOptionalCommandListToWorkerOutsideTransaction(const char *nodeName, int32 nodePort,
@@ -789,12 +792,12 @@ SendOptionalCommandListToWorkerOutsideTransaction(const char *nodeName, int32 no
 	MultiConnection *workerConnection = GetNodeUserDatabaseConnection(connectionFlags,
 																	  nodeName, nodePort,
 																	  nodeUser, NULL);
-	bool failed = SendOptionalCommandListToWorkerOutsideTransactionWithConnection(
+	bool success = SendOptionalCommandListToWorkerOutsideTransactionWithConnection(
 		workerConnection,
 		commandList);
 	CloseConnection(workerConnection);
 
-	return !failed;
+	return success;
 }
 
 

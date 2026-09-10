@@ -18,8 +18,10 @@
 #include "miscadmin.h"
 
 #include "access/htup_details.h"
+#include "catalog/pg_am.h"
 #include "catalog/pg_class.h"
 #include "catalog/pg_enum.h"
+#include "catalog/pg_index.h"
 #include "lib/stringinfo.h"
 #include "nodes/pg_list.h"
 #include "storage/lmgr.h"
@@ -31,6 +33,7 @@
 #include "utils/palloc.h"
 #include "utils/rel.h"
 #include "utils/syscache.h"
+#include "utils/typcache.h"
 
 #include "distributed/adaptive_executor.h"
 #include "distributed/backend_data.h"
@@ -107,12 +110,14 @@ static void ErrorIfSameNode(char *sourceNodeName, int sourceNodePort,
 static void CopyShardTables(List *shardIntervalList, char *sourceNodeName,
 							int32 sourceNodePort, char *targetNodeName,
 							int32 targetNodePort, bool useLogicalReplication,
+							bool useAutoIdentityLogicalReplication,
 							const char *operationName, uint32 optionFlags);
 static void CopyShardTablesViaLogicalReplication(List *shardIntervalList,
 												 char *sourceNodeName,
 												 int32 sourceNodePort,
 												 char *targetNodeName,
 												 int32 targetNodePort,
+												 bool useAutoIdentityLogicalReplication,
 												 uint32 optionFlags);
 
 static void CopyShardTablesViaBlockWrites(List *shardIntervalList, char *sourceNodeName,
@@ -593,10 +598,16 @@ TransferShards(int64 shardId, char *sourceNodeName,
 			return;
 		}
 
+		/*
+		 * Whether shard transfer mode is set to TRANSFER_MODE_FORCE_LOGICAL_AUTO_IDENTITY
+		 * doesn't matter while creating the relationships, so we just pass false here.
+		 */
+		bool useAutoIdentityLogicalReplication = false;
 		CopyShardTables(colocatedShardList, sourceNodeName, sourceNodePort, targetNodeName
 						,
 						targetNodePort, (shardReplicationMode ==
 										 TRANSFER_MODE_FORCE_LOGICAL),
+						useAutoIdentityLogicalReplication,
 						operationFunctionName, optionFlags);
 
 		/* We don't need to do anything else, just return */
@@ -619,6 +630,10 @@ TransferShards(int64 shardId, char *sourceNodeName,
 	if (shardReplicationMode == TRANSFER_MODE_AUTOMATIC)
 	{
 		VerifyTablesHaveReplicaIdentity(colocatedTableList);
+	}
+	else if (shardReplicationMode == TRANSFER_MODE_FORCE_LOGICAL_AUTO_IDENTITY)
+	{
+		ErrorIfTablesCannotUseReplicaIdentityFull(colocatedTableList);
 	}
 
 	EnsureEnoughDiskSpaceForShardMove(colocatedShardList,
@@ -698,9 +713,12 @@ TransferShards(int64 shardId, char *sourceNodeName,
 		ErrorIfCleanupRecordForShardExists(qualifiedShardName);
 	}
 
+	bool useAutoIdentityLogicalReplication =
+		(shardReplicationMode == TRANSFER_MODE_FORCE_LOGICAL_AUTO_IDENTITY);
 	CopyShardTables(colocatedShardList, sourceNodeName, sourceNodePort, targetNodeName,
-					targetNodePort, useLogicalReplication, operationFunctionName,
-					optionFlags);
+					targetNodePort, useLogicalReplication,
+					useAutoIdentityLogicalReplication,
+					operationFunctionName, optionFlags);
 
 	if (transferType == SHARD_TRANSFER_MOVE)
 	{
@@ -1470,8 +1488,15 @@ ErrorIfMoveUnsupportedTableType(Oid relationId)
 
 /*
  * VerifyTablesHaveReplicaIdentity throws an error if any of the tables
- * do not have a replica identity, which is required for logical replication
- * to replicate UPDATE and DELETE commands.
+ * cannot be safely transferred using logical replication in the automatic
+ * shard transfer mode.
+ *
+ * Logical replication needs to be able to publish UPDATE and DELETE commands. A
+ * table that has a REPLICA IDENTITY or PRIMARY KEY satisfies this directly. A
+ * table that has neither cannot publish its UPDATE/DELETE, so the publisher would
+ * reject the user's concurrent writes during the transfer. Therefore, in the
+ * automatic mode, we refuse such a table and direct the user to
+ * force_logical_auto_identity, force_logical, or block_writes.
  */
 void
 VerifyTablesHaveReplicaIdentity(List *colocatedTableList)
@@ -1482,21 +1507,95 @@ VerifyTablesHaveReplicaIdentity(List *colocatedTableList)
 	{
 		Oid colocatedTableId = lfirst_oid(colocatedTableCell);
 
-		if (!RelationCanPublishAllModifications(colocatedTableId))
+		if (RelationCanPublishAllModifications(colocatedTableId))
 		{
-			char *colocatedRelationName = get_rel_name(colocatedTableId);
-
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("cannot use logical replication to transfer shards of "
-								   "the relation %s since it doesn't have a REPLICA "
-								   "IDENTITY or PRIMARY KEY", colocatedRelationName),
-							errdetail("UPDATE and DELETE commands on the shard will "
-									  "error out during logical replication unless "
-									  "there is a REPLICA IDENTITY or PRIMARY KEY."),
-							errhint("If you wish to continue without a replica "
-									"identity set the shard_transfer_mode to "
-									"'force_logical' or 'block_writes'.")));
+			continue;
 		}
+
+		char *colocatedRelationName = get_rel_name(colocatedTableId);
+
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("cannot use logical replication to transfer shards of "
+							   "the relation %s since it doesn't have a REPLICA "
+							   "IDENTITY or PRIMARY KEY", colocatedRelationName),
+						errdetail("UPDATE and DELETE commands on the shard will "
+								  "error out during logical replication unless "
+								  "there is a REPLICA IDENTITY or PRIMARY KEY."),
+						errhint("If you wish to continue without a replica "
+								"identity set the shard_transfer_mode to "
+								"'force_logical_auto_identity', 'force_logical' or "
+								"'block_writes'.")));
+	}
+}
+
+
+/*
+ * ErrorIfTablesCannotUseReplicaIdentityFull errors out if force_logical_auto_identity
+ * would set REPLICA IDENTITY FULL on a table that PostgreSQL cannot then apply
+ * UPDATE and DELETE commands to.
+ *
+ * force_logical_auto_identity temporarily sets REPLICA IDENTITY FULL on the source
+ * shards of tables that have no usable replica identity (see
+ * PrepareReplicaIdentitiesForPublication). For such a table the subscriber applies
+ * UPDATE and DELETE by comparing the whole old row (tuples_equal), which requires a
+ * btree/hash equality operator for every replicated column. Tables that already have
+ * a replica identity or primary key are published through that index instead and are
+ * not affected, so we only check the tables that would be set to FULL.
+ */
+void
+ErrorIfTablesCannotUseReplicaIdentityFull(List *tableIdList)
+{
+	Oid relationId = InvalidOid;
+	foreach_declared_oid(relationId, tableIdList)
+	{
+		/*
+		 * Only tables that cannot already publish all modifications are set to
+		 * REPLICA IDENTITY FULL, so only those need every column to be comparable.
+		 */
+		if (RelationCanPublishAllModifications(relationId))
+		{
+			continue;
+		}
+
+		Relation relation = table_open(relationId, AccessShareLock);
+		TupleDesc tupleDescriptor = RelationGetDescr(relation);
+
+		for (int attributeIndex = 0; attributeIndex < tupleDescriptor->natts;
+			 attributeIndex++)
+		{
+			Form_pg_attribute attributeForm = TupleDescAttr(tupleDescriptor,
+															attributeIndex);
+
+			/* the subscriber ignores dropped and generated columns */
+			if (attributeForm->attisdropped || attributeForm->attgenerated)
+			{
+				continue;
+			}
+
+			TypeCacheEntry *typeEntry = lookup_type_cache(attributeForm->atttypid,
+														  TYPECACHE_EQ_OPR_FINFO);
+			if (OidIsValid(typeEntry->eq_opr_finfo.fn_oid))
+			{
+				continue;
+			}
+
+			char *columnName = NameStr(attributeForm->attname);
+			char *typeName = format_type_be(attributeForm->atttypid);
+
+			ereport(ERROR, (errcode(ERRCODE_UNDEFINED_FUNCTION),
+							errmsg("cannot use shard transfer mode "
+								   "\"force_logical_auto_identity\" for relation %s",
+								   generate_qualified_relation_name(relationId)),
+							errdetail("Column \"%s\" has type %s, which has no equality "
+									  "operator required to replicate UPDATE and DELETE "
+									  "commands using REPLICA IDENTITY FULL.",
+									  columnName, typeName),
+							errhint("Add a replica identity or primary key to the "
+									"relation, or use shard transfer mode "
+									"\"force_logical\" or \"block_writes\".")));
+		}
+
+		table_close(relation, NoLock);
 	}
 }
 
@@ -1694,6 +1793,10 @@ LookupShardTransferMode(Oid shardReplicationModeOid)
 	{
 		shardReplicationMode = TRANSFER_MODE_FORCE_LOGICAL;
 	}
+	else if (strncmp(enumLabel, "force_logical_auto_identity", NAMEDATALEN) == 0)
+	{
+		shardReplicationMode = TRANSFER_MODE_FORCE_LOGICAL_AUTO_IDENTITY;
+	}
 	else if (strncmp(enumLabel, "block_writes", NAMEDATALEN) == 0)
 	{
 		shardReplicationMode = TRANSFER_MODE_BLOCK_WRITES;
@@ -1753,6 +1856,7 @@ ErrorIfReplicatingDistributedTableWithFKeys(List *tableIdList)
 static void
 CopyShardTables(List *shardIntervalList, char *sourceNodeName, int32 sourceNodePort,
 				char *targetNodeName, int32 targetNodePort, bool useLogicalReplication,
+				bool useAutoIdentityLogicalReplication,
 				const char *operationName, uint32 optionFlags)
 {
 	if (list_length(shardIntervalList) < 1)
@@ -1773,7 +1877,9 @@ CopyShardTables(List *shardIntervalList, char *sourceNodeName, int32 sourceNodeP
 	{
 		CopyShardTablesViaLogicalReplication(shardIntervalList, sourceNodeName,
 											 sourceNodePort, targetNodeName,
-											 targetNodePort, optionFlags);
+											 targetNodePort,
+											 useAutoIdentityLogicalReplication,
+											 optionFlags);
 	}
 	else
 	{
@@ -1795,7 +1901,9 @@ CopyShardTables(List *shardIntervalList, char *sourceNodeName, int32 sourceNodeP
 static void
 CopyShardTablesViaLogicalReplication(List *shardIntervalList, char *sourceNodeName,
 									 int32 sourceNodePort, char *targetNodeName,
-									 int32 targetNodePort, uint32 optionFlags)
+									 int32 targetNodePort,
+									 bool useAutoIdentityLogicalReplication,
+									 uint32 optionFlags)
 {
 	MemoryContext localContext = AllocSetContextCreate(CurrentMemoryContext,
 													   "CopyShardTablesViaLogicalReplication",
@@ -1839,7 +1947,7 @@ CopyShardTablesViaLogicalReplication(List *shardIntervalList, char *sourceNodeNa
 	/* data copy is done seperately when logical replication is used */
 	LogicallyReplicateShards(shardIntervalList, sourceNodeName,
 							 sourceNodePort, targetNodeName, targetNodePort,
-							 skipRelationshipCreation);
+							 skipRelationshipCreation, useAutoIdentityLogicalReplication);
 }
 
 
