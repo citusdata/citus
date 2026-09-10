@@ -263,18 +263,55 @@ TranslateAndPublishRelationForCDC(LogicalDecodingContext *ctx, ReorderBufferTXN 
 	Relation targetRelation = RelationIdGetRelation(targetRelationid);
 
 	/*
-	 * Check if there has been a schema change (such as a dropped column), by comparing
-	 * the number of attributes in the shard table and the shell table.
+	 * Remember the tuples that the reorder buffer handed us. Any tuple that we
+	 * substitute below is allocated by us, but the reorder buffer frees both
+	 * tuple fields of the change when the transaction is cleaned up, assuming
+	 * they were allocated from its own tuple context. Restoring the original
+	 * pointers after publishing keeps each allocator freeing only what it owns.
 	 */
-	TranslateChangesIfSchemaChanged(relation, targetRelation, change);
+	HeapTuple originalNewTuple = change->data.tp.newtuple;
+	HeapTuple originalOldTuple = change->data.tp.oldtuple;
 
-	/*
-	 * Publish the change to the shard table as the change in the distributed table,
-	 * so that the CDC client can see the change in the distributed table,
-	 * instead of the shard table, by calling the pgoutput's callback function.
-	 */
-	ouputPluginChangeCB(ctx, txn, targetRelation, change);
-	RelationClose(targetRelation);
+	PG_TRY();
+	{
+		/*
+		 * Check if there has been a schema change (such as a dropped column), by comparing
+		 * the number of attributes in the shard table and the shell table.
+		 */
+		TranslateChangesIfSchemaChanged(relation, targetRelation, change);
+
+		/*
+		 * Publish the change to the shard table as the change in the distributed table,
+		 * so that the CDC client can see the change in the distributed table,
+		 * instead of the shard table, by calling the pgoutput's callback function.
+		 */
+		ouputPluginChangeCB(ctx, txn, targetRelation, change);
+	}
+	PG_FINALLY();
+	{
+		/*
+		 * Free the translated tuples and put the original ones back. A field that
+		 * was not translated still holds its original pointer, so it is left alone.
+		 * This also has to happen when the callback throws, because the reorder
+		 * buffer cleans the transaction up before the error propagates further.
+		 */
+		if (change->data.tp.newtuple != originalNewTuple &&
+			change->data.tp.newtuple != NULL)
+		{
+			heap_freetuple(change->data.tp.newtuple);
+			change->data.tp.newtuple = originalNewTuple;
+		}
+
+		if (change->data.tp.oldtuple != originalOldTuple &&
+			change->data.tp.oldtuple != NULL)
+		{
+			heap_freetuple(change->data.tp.oldtuple);
+			change->data.tp.oldtuple = originalOldTuple;
+		}
+
+		RelationClose(targetRelation);
+	}
+	PG_END_TRY();
 }
 
 
