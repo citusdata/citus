@@ -31,3 +31,5 @@ DROP FUNCTION IF EXISTS pg_catalog.worker_apply_sequence_command(text, regtype);
 
 -- fix citus_finish_citus_upgrade to always update last_upgrade_version
 #include "udfs/citus_finish_citus_upgrade/15.0-1.sql"
+
+#include "udfs/time_partitions/15.0-1.sql"
