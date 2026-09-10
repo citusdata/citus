@@ -341,7 +341,10 @@ ExecuteLocalTaskListExtended(List *taskList,
 			continue;
 		}
 
-		PlannedStmt *localPlan = GetCachedLocalPlan(task, distributedPlan);
+		LocalPlannedStatement *localPlannedStatement =
+			GetCachedLocalPlan(task, distributedPlan);
+		PlannedStmt *localPlan = localPlannedStatement ?
+								 localPlannedStatement->localPlan : NULL;
 
 		/*
 		 * If the plan is already cached, don't need to re-plan, just
