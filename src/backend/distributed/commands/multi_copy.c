@@ -2048,8 +2048,12 @@ CitusCopyDestReceiverStartup(DestReceiver *dest, int operation,
 
 	UseCoordinatedTransaction();
 
-	/* all modifications use 2PC */
-	Use2PCForCoordinatedTransaction();
+	/* all modifications use 2PC unless we only touch a single shard */
+	if (!IsCitusTableTypeCacheEntry(cacheEntry, SINGLE_SHARD_DISTRIBUTED) &&
+		!IsCitusTableTypeCacheEntry(cacheEntry, CITUS_LOCAL_TABLE))
+	{
+		Use2PCForCoordinatedTransaction();
+	}
 
 	/* define how tuples will be serialised */
 	CopyOutState copyOutState = (CopyOutState) palloc0(sizeof(CopyOutStateData));
