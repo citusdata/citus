@@ -88,6 +88,9 @@ s/(NOTICE:  [a-z]+ cascades to table ".*)_[0-9]{5,}"/\1_xxxxx"/g
 # connection id
 s/connectionId: [0-9]+/connectionId: xxxxxxx/g
 
+# cached prepared statement names are numbered per connection
+s/issuing __citus_stmt_[0-9]+/issuing __citus_stmt_xxx/g
+
 # Remove trailing whitespace
 s/ *$//g
 
