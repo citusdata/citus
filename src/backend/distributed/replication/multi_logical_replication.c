@@ -1663,7 +1663,7 @@ static void
 PrepareReplicaIdentitiesForPublication(MultiConnection *connection,
 									   HTAB *publicationInfoHash)
 {
-	WorkerNode *worker = FindWorkerNode(connection->hostname, connection->port);
+	WorkerNode *worker = FindWorkerNodeOrError(connection->hostname, connection->port);
 
 	HASH_SEQ_STATUS status;
 	hash_seq_init(&status, publicationInfoHash);
