@@ -1540,7 +1540,10 @@ VerifyTablesHaveReplicaIdentity(List *colocatedTableList)
  * UPDATE and DELETE by comparing the whole old row (tuples_equal), which requires a
  * btree/hash equality operator for every replicated column. Tables that already have
  * a replica identity or primary key are published through that index instead and are
- * not affected, so we only check the tables that would be set to FULL.
+ * not affected, so we only check the tables that would be published via
+ * REPLICA IDENTITY FULL. Note that a table the user has already set to REPLICA
+ * IDENTITY FULL is one of those (the subscriber still compares the whole old row for
+ * it), so it is checked here too.
  */
 void
 ErrorIfTablesCannotUseReplicaIdentityFull(List *tableIdList)
@@ -1548,16 +1551,27 @@ ErrorIfTablesCannotUseReplicaIdentityFull(List *tableIdList)
 	Oid relationId = InvalidOid;
 	foreach_declared_oid(relationId, tableIdList)
 	{
+		Relation relation = table_open(relationId, AccessShareLock);
+
 		/*
-		 * Only tables that cannot already publish all modifications are set to
-		 * REPLICA IDENTITY FULL, so only those need every column to be comparable.
+		 * A partitioned parent holds no data of its own, and a table with a usable
+		 * replica identity or primary key is published through that index; neither
+		 * is ever set to REPLICA IDENTITY FULL by force_logical_auto_identity, so
+		 * neither needs every column to be comparable.
+		 *
+		 * We deliberately do NOT use RelationCanPublishAllModifications() here: it
+		 * also returns true for a table the user has already set to REPLICA IDENTITY
+		 * FULL, but such a table does need every replicated column to be comparable
+		 * (the subscriber matches rows by comparing the whole old tuple), so we must
+		 * still check it here.
 		 */
-		if (RelationCanPublishAllModifications(relationId))
+		if (PartitionedTable(relationId) ||
+			OidIsValid(GetRelationIdentityOrPK(relation)))
 		{
+			table_close(relation, NoLock);
 			continue;
 		}
 
-		Relation relation = table_open(relationId, AccessShareLock);
 		TupleDesc tupleDescriptor = RelationGetDescr(relation);
 
 		for (int attributeIndex = 0; attributeIndex < tupleDescriptor->natts;

@@ -1070,6 +1070,32 @@ SELECT DISTINCT result FROM run_command_on_placements('t_gen_idx','SELECT relrep
 DROP TABLE t_gen_idx;
 
 --
+-- SECTION 11: a table the user has already set to REPLICA IDENTITY FULL that has a
+--             column with no equality operator (json) must still be rejected up
+--             front. Even though it is already FULL, the subscriber matches rows by
+--             comparing the whole old tuple, so the json column would break the
+--             UPDATE/DELETE replication during catch-up. (The preflight used to skip
+--             already-FULL tables, so this move was allowed and only failed later, on
+--             a concurrent UPDATE/DELETE.)
+--
+SET citus.next_shard_id TO 8990100;
+CREATE TABLE t_full_json (a int, payload json);
+ALTER TABLE t_full_json REPLICA IDENTITY FULL;
+SELECT create_distributed_table('t_full_json', 'a', colocate_with:='none');
+INSERT INTO t_full_json SELECT g, json_build_object('v', g) FROM generate_series(1, 40) g;
+
+SELECT min(shardid) AS shardid_fulljson FROM pg_dist_shard WHERE logicalrelid='t_full_json'::regclass \gset
+SELECT nodeport AS src_fulljson,
+       CASE WHEN nodeport = :worker_1_port THEN :worker_2_port ELSE :worker_1_port END AS tgt_fulljson
+FROM pg_dist_shard_placement WHERE shardid = :shardid_fulljson \gset
+
+-- rejected up front, before any replica-identity change or replication setup
+SELECT citus_move_shard_placement(:shardid_fulljson, 'localhost', :src_fulljson, 'localhost', :tgt_fulljson, shard_transfer_mode:='force_logical_auto_identity');
+-- drop the intentionally-FULL table so it does not trip the strong "no leftover
+-- FULL shards" check below
+DROP TABLE t_full_json;
+
+--
 -- SECTION 5: force_logical_auto_identity is a shard-MOVE-only capability. It only
 --            changes how LogicallyReplicateShards performs logical replication.
 --            Shard splits and tenant isolation (a split under the hood) do not go
