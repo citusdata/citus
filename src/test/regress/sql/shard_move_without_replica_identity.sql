@@ -1032,6 +1032,44 @@ SELECT count(*) FROM "Weird Mixed.Case No-RI";
 SELECT DISTINCT result FROM run_command_on_placements('"Weird Mixed.Case No-RI"','SELECT relreplident FROM pg_class WHERE oid=''%s''::regclass');
 
 --
+-- SECTION 10: an existing index whose leftmost column is a GENERATED column must
+--             not be built early on the destination shard. The publisher does not
+--             send generated columns, so PostgreSQL cannot use such an index for the
+--             REPLICA IDENTITY FULL tuple lookup on the subscriber; building it early
+--             would not accelerate catch-up. The move must therefore fall back to a
+--             throwaway helper index (on a plain column) instead, exactly like the
+--             expression-index case in section 7b.
+--
+SET citus.next_shard_id TO 8990000;
+CREATE TABLE t_gen_idx (a int, g int GENERATED ALWAYS AS (a * 2) STORED, b text);
+CREATE INDEX t_gen_idx_g ON t_gen_idx (g);
+SELECT create_distributed_table('t_gen_idx', 'a', colocate_with:='none');
+INSERT INTO t_gen_idx (a, b) SELECT gs, 'v' || gs FROM generate_series(1, 100) gs;
+
+SELECT min(shardid) AS shardid_genidx FROM pg_dist_shard WHERE logicalrelid='t_gen_idx'::regclass \gset
+SELECT nodeport AS src_genidx,
+       CASE WHEN nodeport = :worker_1_port THEN :worker_2_port ELSE :worker_1_port END AS tgt_genidx
+FROM pg_dist_shard_placement WHERE shardid = :shardid_genidx \gset
+
+SET citus.next_operation_id TO 8990000;
+SET client_min_messages TO NOTICE;
+SET citus.log_remote_commands TO on;
+SET citus.grep_remote_commands TO '%CREATE INDEX%citus_ri_helper%';
+-- the generated-leftmost-column index is refused, so a helper index on plain
+-- column "a" is built early (this CREATE INDEX line proves the fallback)
+SELECT citus_move_shard_placement(:shardid_genidx, 'localhost', :src_genidx, 'localhost', :tgt_genidx, shard_transfer_mode:='force_logical_auto_identity');
+RESET citus.grep_remote_commands;
+RESET citus.log_remote_commands;
+SET client_min_messages TO WARNING;
+SELECT public.wait_for_resource_cleanup();
+SELECT count(*) FROM t_gen_idx;
+-- the existing generated-column index is created once (in the late phase), so each
+-- placement still has exactly one index
+SELECT DISTINCT result FROM run_command_on_placements('t_gen_idx', 'SELECT count(*) FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid WHERE i.indrelid = ''%s''::regclass');
+SELECT DISTINCT result FROM run_command_on_placements('t_gen_idx','SELECT relreplident FROM pg_class WHERE oid=''%s''::regclass');
+DROP TABLE t_gen_idx;
+
+--
 -- SECTION 5: force_logical_auto_identity is a shard-MOVE-only capability. It only
 --            changes how LogicallyReplicateShards performs logical replication.
 --            Shard splits and tenant isolation (a split under the hood) do not go

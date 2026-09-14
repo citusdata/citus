@@ -1024,8 +1024,21 @@ ChooseReplicationHelperIndexToBuildEarly(Oid relationId)
 		bool isPartial = !heap_attisnull(indexTuple, Anum_pg_index_indpred, NULL);
 
 		/* the leftmost index field must be a plain column, not an expression */
-		bool leftmostFieldIsColumn =
-			AttributeNumberIsValid(indexForm->indkey.values[0]);
+		AttrNumber leftmostAttNum = indexForm->indkey.values[0];
+		bool leftmostFieldIsColumn = AttributeNumberIsValid(leftmostAttNum);
+
+		/*
+		 * The leftmost column must also be a non-generated column. The publisher
+		 * does not send generated columns over logical replication, so they are
+		 * absent from the subscriber's attribute map and PostgreSQL refuses an index
+		 * whose leftmost key is generated for the REPLICA IDENTITY FULL tuple lookup
+		 * (see IsIndexUsableForReplicaIdentityFull in the PostgreSQL source).
+		 * Building such an index early would therefore not accelerate catch-up.
+		 */
+		bool leftmostFieldIsNonGenerated =
+			leftmostFieldIsColumn &&
+			TupleDescAttr(RelationGetDescr(relation),
+						  leftmostAttNum - 1)->attgenerated == '\0';
 
 		/*
 		 * Skip indexes that back a constraint (primary key, unique, exclusion); those
@@ -1049,6 +1062,7 @@ ChooseReplicationHelperIndexToBuildEarly(Oid relationId)
 		}
 
 		if (!isValidIndex || isPartial || !leftmostFieldIsColumn ||
+			!leftmostFieldIsNonGenerated ||
 			impliedByConstraint || indexAmOid != BTREE_AM_OID)
 		{
 			continue;
