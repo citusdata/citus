@@ -1824,6 +1824,62 @@ HINT:  Add a replica identity or primary key to the relation, or use shard trans
 -- FULL shards" check below
 DROP TABLE t_full_json;
 --
+-- SECTION 12: when a table has no usable index and force_logical_auto_identity
+--             builds a throwaway helper index, the column it is built on must not be
+--             a GENERATED column. The publisher does not send generated columns, so
+--             a helper index on one is useless (the subscriber falls back to a
+--             sequential scan). Here the generated column has the lowest attribute
+--             number, so before the fix it was chosen; now a plain column is used.
+--
+SET citus.next_shard_id TO 8990200;
+CREATE TABLE t_gen_helper (g int GENERATED ALWAYS AS (a * 2) STORED, a int, b text);
+SELECT create_distributed_table('t_gen_helper', 'a', colocate_with:='none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO t_gen_helper (a, b) SELECT gs, 'v' || gs FROM generate_series(1, 100) gs;
+SELECT min(shardid) AS shardid_genhelper FROM pg_dist_shard WHERE logicalrelid='t_gen_helper'::regclass \gset
+SELECT nodeport AS src_genhelper,
+       CASE WHEN nodeport = :worker_1_port THEN :worker_2_port ELSE :worker_1_port END AS tgt_genhelper
+FROM pg_dist_shard_placement WHERE shardid = :shardid_genhelper \gset
+SET citus.next_operation_id TO 8990200;
+SET client_min_messages TO NOTICE;
+SET citus.log_remote_commands TO on;
+SET citus.grep_remote_commands TO '%CREATE INDEX%citus_ri_helper%';
+-- the helper index is built on the plain column "a", not the generated column "g"
+SELECT citus_move_shard_placement(:shardid_genhelper, 'localhost', :src_genhelper, 'localhost', :tgt_genhelper, shard_transfer_mode:='force_logical_auto_identity');
+NOTICE:  issuing CREATE INDEX citus_ri_helper_8990200_8990200 ON move_no_ri.t_gen_helper_8990200 USING btree (a)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+ citus_move_shard_placement
+---------------------------------------------------------------------
+
+(1 row)
+
+RESET citus.grep_remote_commands;
+RESET citus.log_remote_commands;
+SET client_min_messages TO WARNING;
+SELECT public.wait_for_resource_cleanup();
+ wait_for_resource_cleanup
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT count(*) FROM t_gen_helper;
+ count
+---------------------------------------------------------------------
+   100
+(1 row)
+
+SELECT DISTINCT result FROM run_command_on_placements('t_gen_helper','SELECT relreplident FROM pg_class WHERE oid=''%s''::regclass');
+ result
+---------------------------------------------------------------------
+ d
+(1 row)
+
+DROP TABLE t_gen_helper;
+--
 -- SECTION 5: force_logical_auto_identity is a shard-MOVE-only capability. It only
 --            changes how LogicallyReplicateShards performs logical replication.
 --            Shard splits and tenant isolation (a split under the hood) do not go

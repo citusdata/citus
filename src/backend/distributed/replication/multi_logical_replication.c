@@ -490,6 +490,19 @@ ChooseHelperIndexColumn(MultiConnection *sourceConnection, ShardInterval *shardI
 			continue;
 		}
 
+		/*
+		 * The publisher does not send generated columns over logical replication,
+		 * so PostgreSQL cannot use a helper index built on one for the REPLICA
+		 * IDENTITY FULL tuple lookup on the subscriber (see
+		 * IsIndexUsableForReplicaIdentityFull in the PostgreSQL source). Building
+		 * the helper on a generated column would silently fall back to a sequential
+		 * scan, so exclude generated columns from the candidates.
+		 */
+		if (attributeForm->attgenerated != '\0')
+		{
+			continue;
+		}
+
 		/* the column type must have a default btree operator class to be indexable */
 		Oid opclass = GetDefaultOpClass(attributeForm->atttypid, BTREE_AM_OID);
 		if (!OidIsValid(opclass))
