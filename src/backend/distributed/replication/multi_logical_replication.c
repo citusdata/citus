@@ -485,20 +485,12 @@ ChooseHelperIndexColumn(MultiConnection *sourceConnection, ShardInterval *shardI
 	{
 		Form_pg_attribute attributeForm = TupleDescAttr(tupleDescriptor, attributeIndex);
 
-		if (attributeForm->attisdropped || attributeForm->attnum <= 0)
-		{
-			continue;
-		}
-
 		/*
-		 * The publisher does not send generated columns over logical replication,
-		 * so PostgreSQL cannot use a helper index built on one for the REPLICA
-		 * IDENTITY FULL tuple lookup on the subscriber (see
-		 * IsIndexUsableForReplicaIdentityFull in the PostgreSQL source). Building
-		 * the helper on a generated column would silently fall back to a sequential
-		 * scan, so exclude generated columns from the candidates.
+		 * Note that we should not build the index on a generated column too.
+		 * See IsIndexUsableForReplicaIdentityFull in the postgres source.
 		 */
-		if (attributeForm->attgenerated != '\0')
+		if (attributeForm->attisdropped || attributeForm->attnum <= 0 ||
+			attributeForm->attgenerated != '\0')
 		{
 			continue;
 		}
