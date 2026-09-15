@@ -180,7 +180,9 @@ InitializeFastPathContext(FastPathRestrictionContext *fastPathContext,
 	}
 	else if (IsA(distributionKeyValue, Param))
 	{
+		Param *distributionKeyParam = (Param *) distributionKeyValue;
 		fastPathContext->distributionKeyHasParam = true;
+		fastPathContext->distributionKeyParamId = distributionKeyParam->paramid;
 	}
 
 	/*

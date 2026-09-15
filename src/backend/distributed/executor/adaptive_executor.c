@@ -149,6 +149,7 @@
 #include "distributed/backend_data.h"
 #include "distributed/cancel_utils.h"
 #include "distributed/citus_custom_scan.h"
+#include "distributed/citus_ruleutils.h"
 #include "distributed/citus_safe_lib.h"
 #include "distributed/commands/multi_copy.h"
 #include "distributed/connection_management.h"
@@ -166,6 +167,7 @@
 #include "distributed/param_utils.h"
 #include "distributed/placement_access.h"
 #include "distributed/placement_connection.h"
+#include "distributed/prepared_statement_cache.h"
 #include "distributed/relation_access_tracking.h"
 #include "distributed/remote_commands.h"
 #include "distributed/repartition_join_execution.h"
@@ -739,6 +741,7 @@ static bool StartPlacementExecutionOnSession(TaskPlacementExecution *placementEx
 											 WorkerSession *session);
 static bool SendNextQuery(TaskPlacementExecution *placementExecution,
 						  WorkerSession *session);
+static bool SetRemoteRowMode(MultiConnection *connection);
 static void ConnectionStateMachine(WorkerSession *session);
 static bool HasUnfinishedTaskForSession(WorkerSession *session);
 static void HandleMultiConnectionSuccess(WorkerSession *session, bool newConnection);
@@ -927,8 +930,23 @@ AdaptiveExecutorStart(CitusScanState *scanState)
 	 */
 	if (paramListInfo && !paramListInfo->paramFetch)
 	{
+		/*
+		 * A cached statement is deparsed from the saved template, which still
+		 * carries the Params. job->jobQuery has them resolved to constants, so
+		 * marking against it would strip types the worker still needs.
+		 */
+		Node *queryForParams = (Node *) job->jobQuery;
+		if (taskList != NIL)
+		{
+			Task *firstTask = (Task *) linitial(taskList);
+			if (firstTask->jobQueryForPrepare != NULL)
+			{
+				queryForParams = (Node *) firstTask->jobQueryForPrepare;
+			}
+		}
+
 		paramListInfo = copyParamList(paramListInfo);
-		MarkUnreferencedExternParams((Node *) job->jobQuery, paramListInfo);
+		MarkUnreferencedExternParams(queryForParams, paramListInfo);
 	}
 
 	DistributedExecution *execution = CreateDistributedExecution(
@@ -4256,7 +4274,29 @@ SendNextQuery(TaskPlacementExecution *placementExecution,
 	uint32 queryIndex = placementExecution->queryIndex;
 
 	Assert(queryIndex < task->queryCount);
-	char *queryString = TaskQueryStringAtIndex(task, queryIndex);
+	char *queryString = NULL;
+
+	/*
+	 * Must be attempted before the paramListInfo path below: a fast-path task
+	 * reports its parameters as resolved, so that path would send plain SQL.
+	 */
+	PreparedStatementSendStatus cacheStatus =
+		PreparedStatementCacheSendQuery(connection, task, paramListInfo,
+										binaryResults, &queryString);
+	if (cacheStatus == PREPARED_STMT_SENT)
+	{
+		return SetRemoteRowMode(connection);
+	}
+	else if (cacheStatus == PREPARED_STMT_FAILED)
+	{
+		return false;
+	}
+
+	/* resolve queryString if not already set (e.g. from cache-full fallback) */
+	if (queryString == NULL)
+	{
+		queryString = TaskQueryStringAtIndex(task, queryIndex);
+	}
 
 	if (paramListInfo != NULL && !task->parametersInQueryStringResolved)
 	{
@@ -4304,6 +4344,17 @@ SendNextQuery(TaskPlacementExecution *placementExecution,
 		return false;
 	}
 
+	return SetRemoteRowMode(connection);
+}
+
+
+/*
+ * SetRemoteRowMode puts the connection into the incremental result mode the
+ * executor expects, chunked where libpq supports it.
+ */
+static bool
+SetRemoteRowMode(MultiConnection *connection)
+{
 #ifdef LIBPQ_HAS_CHUNK_MODE
 	int rowMode = PQsetChunkedRowsMode(connection->pgConn, ExecutorChunkSize);
 #else
