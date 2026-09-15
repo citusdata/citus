@@ -37,6 +37,7 @@
 #include "distributed/colocation_utils.h"
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
+#include "distributed/connection_management.h"
 #include "distributed/coordinator_protocol.h"
 #include "distributed/deparse_shard_query.h"
 #include "distributed/deparser.h"
@@ -51,6 +52,8 @@
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/reference_table_utils.h"
 #include "distributed/relation_access_tracking.h"
+#include "distributed/relay_utility.h"
+#include "distributed/remote_commands.h"
 #include "distributed/resource_lock.h"
 #include "distributed/tenant_schema_metadata.h"
 #include "distributed/version_compat.h"
@@ -115,6 +118,11 @@ static void ErrorIfUnsupportedAlterAddConstraintStmt(AlterTableStmt *alterTableS
 static List * CreateRightShardListForInterShardDDLTask(Oid rightRelationId,
 													   Oid leftRelationId,
 													   List *leftShardList);
+static List * ConcurrentDetachPartitionTaskList(Oid parentRelationId,
+												Oid partitionRelationId);
+static char * ConcurrentDetachPartitionCommand(ShardPlacement *placement,
+											   const char *parentRelation,
+											   const char *partitionRelation);
 static void SetInterShardDDLTaskPlacementList(Task *task,
 											  ShardInterval *leftShardInterval,
 											  ShardInterval *rightShardInterval);
@@ -1336,6 +1344,7 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 	 */
 	bool deparseAT = false;
 	bool propagateCommandToRemoteNodes = true;
+	bool concurrentPartitionDetach = false;
 
 	/*
 	 * Sometimes we want to run a different DDL Command string on remote MX workers
@@ -1666,6 +1675,19 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 			Assert(list_length(commandList) <= 1);
 
 			rightRelationId = RangeVarGetRelid(partitionCommand->name, NoLock, false);
+			concurrentPartitionDetach = partitionCommand->concurrent;
+		}
+		else if (alterTableType == AT_DetachPartitionFinalize)
+		{
+			PartitionCmd *partitionCommand = (PartitionCmd *) command->def;
+
+			rightRelationId = RangeVarGetRelid(partitionCommand->name, NoLock, false);
+			concurrentPartitionDetach = true;
+			alterTableCommand = psprintf("ALTER TABLE %s DETACH PARTITION %s "
+										 "CONCURRENTLY",
+										 generate_qualified_relation_name(leftRelationId),
+										 generate_qualified_relation_name(rightRelationId)
+										 );
 		}
 		else if (AlterTableCommandTypeIsTrigger(alterTableType))
 		{
@@ -1709,8 +1731,18 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 		else
 		{
 			/* if foreign key or attaching partition index related, use specialized task list function ... */
-			ddlJob->taskList = InterShardDDLTaskList(leftRelationId, rightRelationId,
-													 alterTableCommand);
+			if (concurrentPartitionDetach)
+			{
+				ddlJob->taskList = ConcurrentDetachPartitionTaskList(leftRelationId,
+																	 rightRelationId);
+				ddlJob->warnForPartialFailure = true;
+				ddlJob->executeBeforeLocalCommand = true;
+			}
+			else
+			{
+				ddlJob->taskList = InterShardDDLTaskList(leftRelationId, rightRelationId,
+														 alterTableCommand);
+			}
 		}
 	}
 	else
@@ -3813,8 +3845,6 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 
 			case AT_DetachPartitionFinalize:
 			{
-				ereport(ERROR, (errmsg("ALTER TABLE .. DETACH PARTITION .. FINALIZE "
-									   "commands are currently unsupported.")));
 				break;
 			}
 
@@ -3828,15 +3858,6 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 										   "with other subcommands"),
 									errhint("You can issue each subcommand "
 											"separately.")));
-				}
-
-				PartitionCmd *partitionCommand = (PartitionCmd *) command->def;
-
-				if (partitionCommand->concurrent)
-				{
-					ereport(ERROR, (errmsg("ALTER TABLE .. DETACH PARTITION .. "
-										   "CONCURRENTLY commands are currently "
-										   "unsupported.")));
 				}
 
 				break;
@@ -4147,6 +4168,142 @@ InterShardDDLTaskList(Oid leftRelationId, Oid rightRelationId,
 	}
 
 	return taskList;
+}
+
+
+/*
+ * Build top-level commands for DETACH PARTITION CONCURRENTLY.  Unlike other
+ * inter-shard DDL, these commands cannot run through
+ * worker_apply_inter_shard_ddl_command(), because PostgreSQL implements the
+ * detach using multiple transactions.
+ */
+static List *
+ConcurrentDetachPartitionTaskList(Oid parentRelationId, Oid partitionRelationId)
+{
+	List *parentShardList = LoadShardIntervalList(parentRelationId);
+	List *partitionShardList = CreateRightShardListForInterShardDDLTask(
+		partitionRelationId, parentRelationId, parentShardList);
+	List *taskList = NIL;
+	uint64 jobId = INVALID_JOB_ID;
+	int taskId = 1;
+	char *parentSchemaName = get_namespace_name(get_rel_namespace(parentRelationId));
+	char *partitionSchemaName = get_namespace_name(get_rel_namespace(partitionRelationId))
+	;
+	char *parentRelationName = get_rel_name(parentRelationId);
+	char *partitionRelationName = get_rel_name(partitionRelationId);
+
+	LockShardListMetadata(parentShardList, ShareLock);
+
+	ShardInterval *parentShard = NULL;
+	ShardInterval *partitionShard = NULL;
+	forboth_ptr(parentShard, parentShardList, partitionShard, partitionShardList)
+	{
+		char *parentShardName = pstrdup(parentRelationName);
+		char *partitionShardName = pstrdup(partitionRelationName);
+
+		AppendShardIdToName(&parentShardName, parentShard->shardId);
+		AppendShardIdToName(&partitionShardName, partitionShard->shardId);
+		char *parentShardRelation = quote_qualified_identifier(parentSchemaName,
+															   parentShardName);
+		char *partitionShardRelation = quote_qualified_identifier(partitionSchemaName,
+																  partitionShardName);
+
+		Task placementTask = { 0 };
+		SetInterShardDDLTaskPlacementList(&placementTask, parentShard, partitionShard);
+
+		ShardPlacement *placement = NULL;
+		foreach_declared_ptr(placement, placementTask.taskPlacementList)
+		{
+			char *command = ConcurrentDetachPartitionCommand(placement,
+															 parentShardRelation,
+															 partitionShardRelation);
+			if (command == NULL)
+			{
+				continue;
+			}
+
+			Task *task = CitusMakeNode(Task);
+
+			task->jobId = jobId;
+			task->taskId = taskId++;
+			task->taskType = DDL_TASK;
+			SetTaskQueryString(task, command);
+			task->replicationModel = REPLICATION_MODEL_INVALID;
+			task->anchorShardId = parentShard->shardId;
+			task->cannotBeExecutedInTransaction = true;
+			task->taskPlacementList = list_make1(placement);
+			SetInterShardDDLTaskRelationShardList(task, parentShard, partitionShard);
+
+			taskList = lappend(taskList, task);
+		}
+	}
+
+	return taskList;
+}
+
+
+/*
+ * Return the command needed to advance one placement's detach operation.  A
+ * placement can be attached, pending after PostgreSQL's first detach
+ * transaction, or already detached after a previous partial attempt.
+ */
+static char *
+ConcurrentDetachPartitionCommand(ShardPlacement *placement,
+								 const char *parentRelation,
+								 const char *partitionRelation)
+{
+	char *stateQuery = psprintf(
+		"SELECT COALESCE((SELECT CASE WHEN inhdetachpending THEN 'pending' "
+		"ELSE 'attached' END FROM pg_catalog.pg_inherits "
+		"WHERE inhparent = pg_catalog.to_regclass(%s) "
+		"AND inhrelid = pg_catalog.to_regclass(%s)), 'detached')",
+		quote_literal_cstr(parentRelation), quote_literal_cstr(partitionRelation));
+
+	int connectionFlags = OUTSIDE_TRANSACTION | FORCE_NEW_CONNECTION;
+	MultiConnection *connection = GetNodeUserDatabaseConnection(connectionFlags,
+																placement->nodeName,
+																placement->nodePort,
+																CurrentUserName(), NULL);
+	ClaimConnectionExclusively(connection);
+
+	if (SendRemoteCommand(connection, stateQuery) == 0)
+	{
+		ReportConnectionError(connection, ERROR);
+	}
+
+	bool raiseInterrupts = true;
+	PGresult *result = GetRemoteCommandResult(connection, raiseInterrupts);
+	if (!IsResponseOK(result))
+	{
+		ReportResultError(connection, result, ERROR);
+	}
+	if (PQntuples(result) != 1 || PQnfields(result) != 1)
+	{
+		elog(ERROR, "unexpected result while checking partition detach state");
+	}
+
+	char *state = pstrdup(PQgetvalue(result, 0, 0));
+	PQclear(result);
+	ForgetResults(connection);
+	UnclaimConnection(connection);
+
+	if (strcmp(state, "attached") == 0)
+	{
+		return psprintf("ALTER TABLE %s DETACH PARTITION %s CONCURRENTLY",
+						parentRelation, partitionRelation);
+	}
+	else if (strcmp(state, "pending") == 0)
+	{
+		return psprintf("ALTER TABLE %s DETACH PARTITION %s FINALIZE",
+						parentRelation, partitionRelation);
+	}
+	else if (strcmp(state, "detached") == 0)
+	{
+		return NULL;
+	}
+
+	elog(ERROR, "unexpected partition detach state: %s", state);
+	pg_unreachable();
 }
 
 
