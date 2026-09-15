@@ -1225,6 +1225,7 @@ DEBUG:  Creating router plan
 (1 row)
 
 EXECUTE use_local_query_cache(1);
+DEBUG:  Created and cached local plan for shard xxxxx and local group xxxxx
  count
 ---------------------------------------------------------------------
      1
