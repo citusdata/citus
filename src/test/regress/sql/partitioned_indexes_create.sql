@@ -1,5 +1,6 @@
 CREATE SCHEMA "partitioned indexes";
 SET search_path TO "partitioned indexes";
+GRANT ALL ON SCHEMA "partitioned indexes" TO regularuser;
 
 -- test with proper table
 CREATE TABLE dist_partitioned_table (dist_col int, another_col int, partition_col timestamp) PARTITION BY RANGE (partition_col);
