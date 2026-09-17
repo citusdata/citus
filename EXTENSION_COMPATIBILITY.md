@@ -61,7 +61,7 @@ Below table is created with Citus 15.0-1 on PG18.
 | plpgsql                      | Yes                 |         |
 | plpgsql_check                | Yes                 |         |
 | plv8                         | Yes                 |         |
-| pointcloud                   | Partially           | Works on distributed tables after manually synchronizing `pointcloud_formats` metadata to every node. |
+| pointcloud                   | Yes                 | Works on distributed tables after manually synchronizing `pointcloud_formats` metadata to every node. |
 | postgis                      | Yes                 |         |
 | postgis_raster               | Yes                 |         |
 | postgis_sfcgal               | Yes                 |         |
