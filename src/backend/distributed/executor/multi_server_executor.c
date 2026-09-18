@@ -25,10 +25,12 @@
 #include "distributed/coordinator_protocol.h"
 #include "distributed/listutils.h"
 #include "distributed/log_utils.h"
+#include "distributed/metadata_cache.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_router_planner.h"
 #include "distributed/multi_server_executor.h"
+#include "distributed/shardinterval_utils.h"
 #include "distributed/subplan_execution.h"
 #include "distributed/tuple_destination.h"
 #include "distributed/worker_protocol.h"
@@ -36,6 +38,7 @@
 int RemoteTaskCheckInterval = 10; /* per cycle sleep interval in millisecs */
 int TaskExecutorType = MULTI_EXECUTOR_ADAPTIVE; /* distributed executor type */
 bool EnableRepartitionJoins = false;
+bool EnableSingleTaskExecution = true;
 
 
 /*
@@ -99,6 +102,42 @@ JobExecutorType(DistributedPlan *distributedPlan)
 		}
 	}
 
-	return distributedPlan->useSortedMerge ? MULTI_EXECUTOR_SORTED_MERGE :
-		   MULTI_EXECUTOR_ADAPTIVE;
+	if (EnableSingleTaskExecution &&
+		distributedPlan->fastPathRouterPlan &&
+		list_length(job->dependentJobList) == 0 &&
+		!IsMultiRowInsert(job->jobQuery) &&
+		!(distributedPlan->modLevel > ROW_MODIFY_READONLY &&
+		  IsCitusTableType(distributedPlan->targetRelationId, REFERENCE_TABLE)))
+	{
+		/*
+		 * We get the relation OID from the task's relationShardList rather
+		 * than distributedPlan->relationIdList because the latter may contain
+		 * shard OIDs after CheckAndBuildDelayedFastPathPlan() replaces the
+		 * shell table OID with the shard OID for local execution plans.
+		 */
+		Oid relationId = distributedPlan->targetRelationId;
+		if (!OidIsValid(relationId) && list_length(job->taskList) == 1)
+		{
+			Task *task = (Task *) linitial(job->taskList);
+			if (list_length(task->relationShardList) > 0)
+			{
+				RelationShard *rs = (RelationShard *) linitial(
+					task->relationShardList);
+				relationId = rs->relationId;
+			}
+		}
+
+		if (!OidIsValid(relationId) ||
+			SingleReplicatedTable(relationId))
+		{
+			return MULTI_EXECUTOR_SINGLE_TASK;
+		}
+	}
+
+	if (distributedPlan->useSortedMerge)
+	{
+		return MULTI_EXECUTOR_SORTED_MERGE;
+	}
+
+	return MULTI_EXECUTOR_ADAPTIVE;
 }

@@ -31,7 +31,8 @@ typedef enum
 	MULTI_EXECUTOR_ADAPTIVE = 1,
 	MULTI_EXECUTOR_NON_PUSHABLE_INSERT_SELECT = 2,
 	MULTI_EXECUTOR_NON_PUSHABLE_MERGE_QUERY = 3,
-	MULTI_EXECUTOR_SORTED_MERGE = 4
+	MULTI_EXECUTOR_SORTED_MERGE = 4,
+	MULTI_EXECUTOR_SINGLE_TASK = 5
 } MultiExecutorType;
 
 
@@ -39,6 +40,7 @@ typedef enum
 extern int RemoteTaskCheckInterval;
 extern int TaskExecutorType;
 extern bool EnableRepartitionJoins;
+extern bool EnableSingleTaskExecution;
 extern int MultiTaskQueryLogLevel;
 
 

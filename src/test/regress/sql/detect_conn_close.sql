@@ -114,6 +114,27 @@ select kill_all_cached_internal_conns(citus_backend_gpid());
 -- even though the cached connections closed, the execution recovers and establishes new connections
 WITH cte_1 AS (SELECT * FROM socket_test_table LIMIT 1) SELECT count(*) FROM cte_1;
 
+-- single-task executor (STE) must also recover when several cached connections
+-- are dead. With max_cached_conns_per_worker >= 2 the pool can hand back more
+-- than one dead cached connection, so STE retries acquisition in a loop rather
+-- than probing once -- matching the adaptive executor's transparent recovery.
+SET citus.enable_single_task_execution TO on;
+SET citus.max_adaptive_executor_pool_size TO 16;
+SET citus.max_cached_conns_per_worker TO 16;
+SET citus.force_max_query_parallelization TO ON;
+-- cache many connections across the workers
+SELECT count(*) FROM socket_test_table;
+-- kill all the cached backends on the workers initiated by the current gpid
+select kill_all_cached_internal_conns(citus_backend_gpid());
+-- single-task SELECT on one shard must recover (loop past the dead cached conns)
+SELECT count(*) FROM socket_test_table WHERE id = 1;
+-- kill again; single-task UPDATE must also recover
+select kill_all_cached_internal_conns(citus_backend_gpid());
+UPDATE socket_test_table SET value = 'recovered' WHERE id = 1;
+SET citus.max_adaptive_executor_pool_size TO 1;
+SET citus.max_cached_conns_per_worker TO 1;
+SET citus.force_max_query_parallelization TO OFF;
+
 -- although should have no difference, we can recover from the failures on the workers as well
 \c - - - :worker_1_port
 SET search_path TO socket_close;

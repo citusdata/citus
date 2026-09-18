@@ -17,6 +17,7 @@
 #include "distributed/multi_server_executor.h"
 
 struct DistributedExecution;
+struct SingleTaskExecution;
 
 typedef struct CitusScanState
 {
@@ -37,6 +38,9 @@ typedef struct CitusScanState
 
 	/* execution state when using adaptive executor */
 	struct DistributedExecution *execution;
+
+	/* execution state when using single-task executor */
+	struct SingleTaskExecution *singleTaskState;
 } CitusScanState;
 
 
@@ -46,6 +50,7 @@ extern CustomScanMethods SortedMergeCustomScanMethods;
 extern CustomScanMethods NonPushableInsertSelectCustomScanMethods;
 extern CustomScanMethods DelayedErrorCustomScanMethods;
 extern CustomScanMethods NonPushableMergeCommandCustomScanMethods;
+extern CustomScanMethods SingleTaskExecutorCustomScanMethods;
 
 
 extern void RegisterCitusCustomScanMethods(void);

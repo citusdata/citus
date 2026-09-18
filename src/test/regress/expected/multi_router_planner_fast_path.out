@@ -1395,6 +1395,8 @@ DEBUG:  query has a single distribution column value: 1
 (1 row)
 
 -- prepare queries can be router plannable
+-- force custom plan to avoid flaky DEBUG output from generic plan transition
+SET plan_cache_mode TO force_custom_plan;
 PREPARE author_1_articles as
 	SELECT *
 	FROM articles_hash
@@ -1462,7 +1464,10 @@ EXECUTE author_1_articles;
  41 |         1 | aznavour     |      11814
 (5 rows)
 
+RESET plan_cache_mode;
 -- parametric prepare queries can be router plannable
+-- force custom plan to avoid flaky DEBUG output from generic plan transition
+SET plan_cache_mode TO force_custom_plan;
 PREPARE author_articles(int) as
 	SELECT *
 	FROM articles_hash
@@ -1540,36 +1545,50 @@ DEBUG:  Creating router plan
 (5 rows)
 
 EXECUTE author_articles(NULL);
+DEBUG:  Deferred pruning for a fast-path router query
+DEBUG:  Creating router plan
  id | author_id | title | word_count
 ---------------------------------------------------------------------
 (0 rows)
 
 EXECUTE author_articles(NULL);
+DEBUG:  Deferred pruning for a fast-path router query
+DEBUG:  Creating router plan
  id | author_id | title | word_count
 ---------------------------------------------------------------------
 (0 rows)
 
 EXECUTE author_articles(NULL);
+DEBUG:  Deferred pruning for a fast-path router query
+DEBUG:  Creating router plan
  id | author_id | title | word_count
 ---------------------------------------------------------------------
 (0 rows)
 
 EXECUTE author_articles(NULL);
+DEBUG:  Deferred pruning for a fast-path router query
+DEBUG:  Creating router plan
  id | author_id | title | word_count
 ---------------------------------------------------------------------
 (0 rows)
 
 EXECUTE author_articles(NULL);
+DEBUG:  Deferred pruning for a fast-path router query
+DEBUG:  Creating router plan
  id | author_id | title | word_count
 ---------------------------------------------------------------------
 (0 rows)
 
 EXECUTE author_articles(NULL);
+DEBUG:  Deferred pruning for a fast-path router query
+DEBUG:  Creating router plan
  id | author_id | title | word_count
 ---------------------------------------------------------------------
 (0 rows)
 
 EXECUTE author_articles(NULL);
+DEBUG:  Deferred pruning for a fast-path router query
+DEBUG:  Creating router plan
  id | author_id | title | word_count
 ---------------------------------------------------------------------
 (0 rows)
@@ -1595,6 +1614,9 @@ EXECUTE author_articles_update(NULL);
 DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
 EXECUTE author_articles_update(NULL);
+DEBUG:  Deferred pruning for a fast-path router query
+DEBUG:  Creating router plan
+RESET plan_cache_mode;
 -- queries inside plpgsql functions could be router plannable
 CREATE OR REPLACE FUNCTION author_articles_max_id() RETURNS int AS $$
 DECLARE
