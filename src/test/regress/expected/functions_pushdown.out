@@ -1,0 +1,331 @@
+create schema functions_pushdown;
+set search_path to functions_pushdown;
+set citus.shard_replication_factor TO 1;
+create table reference_table( id bigint primary key, t text);
+select create_reference_table('reference_table');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+create table distributed_table( id bigint primary key
+  , fk_id bigint REFERENCES reference_table (id)
+  , t text
+);
+select create_distributed_table('distributed_table', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE FUNCTION reference_function_sql(i_id bigint)
+RETURNS bigint LANGUAGE sql AS
+$function$
+SELECT count(*) FROM functions_pushdown.reference_table where id = i_id;
+$function$;
+CREATE FUNCTION reference_function_plpgsql(i_id bigint)
+RETURNS bigint LANGUAGE plpgsql AS
+$function$
+DECLARE
+    result bigint; -- Variable to hold the count
+BEGIN
+    -- Fetch the count into the variable
+    SELECT count(*) INTO result
+    FROM functions_pushdown.reference_table
+    WHERE id = i_id;
+    -- Return the result
+    RETURN result;
+END;
+$function$;
+CREATE FUNCTION distributed_function_sql(i_id bigint)
+RETURNS bigint LANGUAGE sql AS
+$function$
+SELECT count(*) FROM functions_pushdown.distributed_table where id = i_id;
+$function$;
+CREATE FUNCTION distributed_function_plpgsql(i_id bigint)
+RETURNS bigint LANGUAGE plpgsql AS
+$function$
+DECLARE
+    result bigint; -- Variable to hold the count
+BEGIN
+    -- Fetch the count into the variable
+    SELECT count(*) INTO result
+    FROM functions_pushdown.distributed_table
+    WHERE id = i_id;
+    -- Return the result
+    RETURN result;
+END;
+$function$;
+select create_distributed_function('distributed_function_sql(bigint)', '$1'
+            , colocate_with := 'distributed_table');
+ create_distributed_function
+---------------------------------------------------------------------
+
+(1 row)
+
+select create_distributed_function('distributed_function_plpgsql(bigint)', '$1'
+            , colocate_with := 'distributed_table');
+ create_distributed_function
+---------------------------------------------------------------------
+
+(1 row)
+
+insert into reference_table values (1, 'a');
+insert into reference_table values (2, 'b');
+insert into reference_table values (3, 'c');
+insert into distributed_table values (1, 1, 'aa');
+insert into distributed_table values (2, 2, 'bb');
+insert into distributed_table values (3, 3, 'cc');
+insert into distributed_table values (4, 2, 'BB');
+-- REFERENCE
+select *,reference_function_sql(id) from reference_table order by id;
+ id | t | reference_function_sql
+---------------------------------------------------------------------
+  1 | a |                      1
+  2 | b |                      1
+  3 | c |                      1
+(3 rows)
+
+select *,reference_function_sql(id) from reference_table where id = 1;
+ id | t | reference_function_sql
+---------------------------------------------------------------------
+  1 | a |                      1
+(1 row)
+
+select *,reference_function_plpgsql(id) from reference_table order by id;
+ id | t | reference_function_plpgsql
+---------------------------------------------------------------------
+  1 | a |                          1
+  2 | b |                          1
+  3 | c |                          1
+(3 rows)
+
+select *,reference_function_plpgsql(id) from reference_table where id = 1;
+ id | t | reference_function_plpgsql
+---------------------------------------------------------------------
+  1 | a |                          1
+(1 row)
+
+select *,reference_function_sql(id) from distributed_table order by id;
+ id | fk_id | t  | reference_function_sql
+---------------------------------------------------------------------
+  1 |     1 | aa |                      1
+  2 |     2 | bb |                      1
+  3 |     3 | cc |                      1
+  4 |     2 | BB |                      0
+(4 rows)
+
+select *,reference_function_sql(id) from distributed_table where id = 1;
+ id | fk_id | t  | reference_function_sql
+---------------------------------------------------------------------
+  1 |     1 | aa |                      1
+(1 row)
+
+select *,reference_function_sql(id) from distributed_table where id = 4;
+ id | fk_id | t  | reference_function_sql
+---------------------------------------------------------------------
+  4 |     2 | BB |                      0
+(1 row)
+
+select *,reference_function_plpgsql(id) from distributed_table order by id;
+ id | fk_id | t  | reference_function_plpgsql
+---------------------------------------------------------------------
+  1 |     1 | aa |                          1
+  2 |     2 | bb |                          1
+  3 |     3 | cc |                          1
+  4 |     2 | BB |                          0
+(4 rows)
+
+select *,reference_function_plpgsql(id) from distributed_table where id = 1;
+ id | fk_id | t  | reference_function_plpgsql
+---------------------------------------------------------------------
+  1 |     1 | aa |                          1
+(1 row)
+
+select *,reference_function_plpgsql(id) from distributed_table where id = 4;
+ id | fk_id | t  | reference_function_plpgsql
+---------------------------------------------------------------------
+  4 |     2 | BB |                          0
+(1 row)
+
+-- DISTRIBUTE (not supported yet)
+select *,distributed_function_sql(id) from reference_table order by id;
+ERROR:  cannot execute a distributed query from a query on a shard
+DETAIL:  Executing a distributed query in a function call that may be pushed to a remote node can lead to incorrect results.
+HINT:  Avoid nesting of distributed queries or use alter user current_user set citus.allow_nested_distributed_execution to on to allow it with possible incorrectness.
+CONTEXT:  SQL function "distributed_function_sql" statement 1
+while executing command on localhost:xxxxx
+select *,distributed_function_sql(id) from reference_table where id = 1;
+ERROR:  cannot execute a distributed query from a query on a shard
+DETAIL:  Executing a distributed query in a function call that may be pushed to a remote node can lead to incorrect results.
+HINT:  Avoid nesting of distributed queries or use alter user current_user set citus.allow_nested_distributed_execution to on to allow it with possible incorrectness.
+CONTEXT:  SQL function "distributed_function_sql" statement 1
+while executing command on localhost:xxxxx
+select *,distributed_function_plpgsql(id) from reference_table order by id;
+ERROR:  cannot execute a distributed query from a query on a shard
+DETAIL:  Executing a distributed query in a function call that may be pushed to a remote node can lead to incorrect results.
+HINT:  Avoid nesting of distributed queries or use alter user current_user set citus.allow_nested_distributed_execution to on to allow it with possible incorrectness.
+CONTEXT:  SQL function "distributed_function_sql" statement 1
+while executing command on localhost:xxxxx
+select *,distributed_function_plpgsql(id) from reference_table where id = 1;
+ERROR:  cannot execute a distributed query from a query on a shard
+DETAIL:  Executing a distributed query in a function call that may be pushed to a remote node can lead to incorrect results.
+HINT:  Avoid nesting of distributed queries or use alter user current_user set citus.allow_nested_distributed_execution to on to allow it with possible incorrectness.
+CONTEXT:  SQL function "distributed_function_sql" statement 1
+while executing command on localhost:xxxxx
+select *,distributed_function_sql(id) from distributed_table order by id;
+ERROR:  cannot execute a distributed query from a query on a shard
+DETAIL:  Executing a distributed query in a function call that may be pushed to a remote node can lead to incorrect results.
+HINT:  Avoid nesting of distributed queries or use alter user current_user set citus.allow_nested_distributed_execution to on to allow it with possible incorrectness.
+CONTEXT:  SQL function "distributed_function_sql" statement 1
+while executing command on localhost:xxxxx
+select *,distributed_function_sql(id) from distributed_table where id = 1;
+ERROR:  cannot execute a distributed query from a query on a shard
+DETAIL:  Executing a distributed query in a function call that may be pushed to a remote node can lead to incorrect results.
+HINT:  Avoid nesting of distributed queries or use alter user current_user set citus.allow_nested_distributed_execution to on to allow it with possible incorrectness.
+CONTEXT:  SQL function "distributed_function_sql" statement 1
+while executing command on localhost:xxxxx
+select *,distributed_function_plpgsql(id) from distributed_table order by id;
+ERROR:  cannot execute a distributed query from a query on a shard
+DETAIL:  Executing a distributed query in a function call that may be pushed to a remote node can lead to incorrect results.
+HINT:  Avoid nesting of distributed queries or use alter user current_user set citus.allow_nested_distributed_execution to on to allow it with possible incorrectness.
+CONTEXT:  SQL statement "SELECT count(*)                 FROM functions_pushdown.distributed_table
+    WHERE id = i_id"
+PL/pgSQL function functions_pushdown.distributed_function_plpgsql(bigint) line XX at SQL statement
+while executing command on localhost:xxxxx
+select *,distributed_function_plpgsql(id) from distributed_table where id = 1;
+ERROR:  cannot execute a distributed query from a query on a shard
+DETAIL:  Executing a distributed query in a function call that may be pushed to a remote node can lead to incorrect results.
+HINT:  Avoid nesting of distributed queries or use alter user current_user set citus.allow_nested_distributed_execution to on to allow it with possible incorrectness.
+CONTEXT:  SQL statement "SELECT count(*)                 FROM functions_pushdown.distributed_table
+    WHERE id = i_id"
+PL/pgSQL function functions_pushdown.distributed_function_plpgsql(bigint) line XX at SQL statement
+while executing command on localhost:xxxxx
+-- some other checks (all should pass)
+select reference_function_sql(1);
+ reference_function_sql
+---------------------------------------------------------------------
+                      1
+(1 row)
+
+select reference_function_sql(2);
+ reference_function_sql
+---------------------------------------------------------------------
+                      1
+(1 row)
+
+select reference_function_sql(3);
+ reference_function_sql
+---------------------------------------------------------------------
+                      1
+(1 row)
+
+select reference_function_sql(4);
+ reference_function_sql
+---------------------------------------------------------------------
+                      0
+(1 row)
+
+select reference_function_plpgsql(1);
+ reference_function_plpgsql
+---------------------------------------------------------------------
+                          1
+(1 row)
+
+select reference_function_plpgsql(2);
+ reference_function_plpgsql
+---------------------------------------------------------------------
+                          1
+(1 row)
+
+select reference_function_plpgsql(3);
+ reference_function_plpgsql
+---------------------------------------------------------------------
+                          1
+(1 row)
+
+select reference_function_plpgsql(4);
+ reference_function_plpgsql
+---------------------------------------------------------------------
+                          0
+(1 row)
+
+select distributed_function_sql(1);
+ distributed_function_sql
+---------------------------------------------------------------------
+                        1
+(1 row)
+
+select distributed_function_sql(2);
+ distributed_function_sql
+---------------------------------------------------------------------
+                        1
+(1 row)
+
+select distributed_function_sql(3);
+ distributed_function_sql
+---------------------------------------------------------------------
+                        1
+(1 row)
+
+select distributed_function_sql(4);
+ distributed_function_sql
+---------------------------------------------------------------------
+                        1
+(1 row)
+
+select distributed_function_plpgsql(1);
+ distributed_function_plpgsql
+---------------------------------------------------------------------
+                            1
+(1 row)
+
+select distributed_function_plpgsql(2);
+ distributed_function_plpgsql
+---------------------------------------------------------------------
+                            1
+(1 row)
+
+select distributed_function_plpgsql(3);
+ distributed_function_plpgsql
+---------------------------------------------------------------------
+                            1
+(1 row)
+
+select distributed_function_plpgsql(4);
+ distributed_function_plpgsql
+---------------------------------------------------------------------
+                            1
+(1 row)
+
+-- https://github.com/citusdata/citus/issues/5887
+CREATE TABLE functions_pushdown.test(a int);
+SELECT create_distributed_table('functions_pushdown.test', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO functions_pushdown.test SELECT i FROM generate_series(1,10)i;
+CREATE OR REPLACE FUNCTION some_func() RETURNS integer
+    AS 'select count(*) FROM functions_pushdown.test;'
+    LANGUAGE SQL
+    VOLATILE
+    RETURNS NULL ON NULL INPUT;
+SELECT some_func() FROM functions_pushdown.test;
+ERROR:  cannot execute a distributed query from a query on a shard
+DETAIL:  Executing a distributed query in a function call that may be pushed to a remote node can lead to incorrect results.
+HINT:  Avoid nesting of distributed queries or use alter user current_user set citus.allow_nested_distributed_execution to on to allow it with possible incorrectness.
+CONTEXT:  SQL function "some_func" statement 1
+while executing command on localhost:xxxxx
+drop table distributed_table;
+drop table reference_table;
+drop schema functions_pushdown cascade;
+NOTICE:  drop cascades to 6 other objects
+DETAIL:  drop cascades to function reference_function_sql(bigint)
+drop cascades to function reference_function_plpgsql(bigint)
+drop cascades to function distributed_function_sql(bigint)
+drop cascades to function distributed_function_plpgsql(bigint)
+drop cascades to table test
+drop cascades to function some_func()
+set citus.shard_replication_factor TO 2;
