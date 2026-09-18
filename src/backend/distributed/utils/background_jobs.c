@@ -245,85 +245,110 @@ citus_task_wait(PG_FUNCTION_ARGS)
 
 
 /*
- * citus_job_wait_internal implements the waiting on a job for reuse in other areas where
- * we want to wait on jobs. eg the background rebalancer.
+ * citus_job_wait_internal implements the waiting on a job, e.g. for the background
+ * rebalancer. If desiredStatus is provided, we throw an error if we reach a
+ * different terminal state that can never transition to the desired state.
  *
- * When a desiredStatus is provided it will provide an error when a different state is
- * reached and the state cannot ever reach the desired state anymore.
+ * With the PG_TRY/PG_CATCH block, if the user cancels this SQL statement
+ * (Ctrl+C, statement_timeout, etc.), we will cancel the job in progress
+ * so it doesn't remain running in background.
  */
 void
 citus_job_wait_internal(int64 jobid, BackgroundJobStatus *desiredStatus)
 {
-	/*
-	 * Since we are wait polling we will actually allocate memory on every poll. To make
-	 * sure we don't put unneeded pressure on the memory we create a context that we clear
-	 * every iteration.
-	 */
-	MemoryContext waitContext = AllocSetContextCreate(CurrentMemoryContext,
-													  "JobsWaitContext",
-													  ALLOCSET_DEFAULT_MINSIZE,
-													  ALLOCSET_DEFAULT_INITSIZE,
-													  ALLOCSET_DEFAULT_MAXSIZE);
-	MemoryContext oldContext = MemoryContextSwitchTo(waitContext);
-
-	while (true)
+	PG_TRY();
 	{
-		MemoryContextReset(waitContext);
+		/*
+		 * Since we are wait polling, we actually allocate memory on every poll. To avoid
+		 * putting unneeded pressure on memory, we create a context that we reset
+		 * every iteration.
+		 */
+		MemoryContext waitContext = AllocSetContextCreate(CurrentMemoryContext,
+														  "JobsWaitContext",
+														  ALLOCSET_DEFAULT_MINSIZE,
+														  ALLOCSET_DEFAULT_INITSIZE,
+														  ALLOCSET_DEFAULT_MAXSIZE);
+		MemoryContext oldContext = MemoryContextSwitchTo(waitContext);
 
-		BackgroundJob *job = GetBackgroundJobByJobId(jobid);
-		if (!job)
+		while (true)
 		{
-			ereport(ERROR, (errmsg("no job found for job with jobid: %ld", jobid)));
-		}
+			MemoryContextReset(waitContext);
 
-		if (desiredStatus && job->state == *desiredStatus)
-		{
-			/* job has reached its desired status, done waiting */
-			break;
-		}
-
-		if (IsBackgroundJobStatusTerminal(job->state))
-		{
-			if (desiredStatus)
+			BackgroundJob *job = GetBackgroundJobByJobId(jobid);
+			if (!job)
 			{
-				/*
-				 * We have reached a terminal state, which is not the desired state we
-				 * were waiting for, otherwise we would have escaped earlier. Since it is
-				 * a terminal state we know that we can never reach the desired state.
-				 */
-
-				Oid reachedStatusOid = BackgroundJobStatusOid(job->state);
-				Datum reachedStatusNameDatum = DirectFunctionCall1(enum_out,
-																   reachedStatusOid);
-				char *reachedStatusName = DatumGetCString(reachedStatusNameDatum);
-
-				Oid desiredStatusOid = BackgroundJobStatusOid(*desiredStatus);
-				Datum desiredStatusNameDatum = DirectFunctionCall1(enum_out,
-																   desiredStatusOid);
-				char *desiredStatusName = DatumGetCString(desiredStatusNameDatum);
-
 				ereport(ERROR,
-						(errmsg("Job reached terminal state \"%s\" instead of desired "
-								"state \"%s\"", reachedStatusName, desiredStatusName)));
+						(errmsg("no job found for job with jobid: %ld", jobid)));
 			}
 
-			/* job has reached its terminal state, done waiting */
-			break;
+			/* If we have a desiredStatus and we've reached it, we're done */
+			if (desiredStatus && job->state == *desiredStatus)
+			{
+				break;
+			}
+
+			/* If the job is in a terminal state (e.g. SUCCEEDED, FAILED, or CANCELED),
+			 * but not the desired state, throw an error or stop waiting.
+			 */
+			if (IsBackgroundJobStatusTerminal(job->state))
+			{
+				if (desiredStatus)
+				{
+					Oid reachedStatusOid = BackgroundJobStatusOid(job->state);
+					Datum reachedStatusNameDatum = DirectFunctionCall1(enum_out,
+																	   reachedStatusOid);
+					char *reachedStatusName = DatumGetCString(reachedStatusNameDatum);
+
+					Oid desiredStatusOid = BackgroundJobStatusOid(*desiredStatus);
+					Datum desiredStatusNameDatum = DirectFunctionCall1(enum_out,
+																	   desiredStatusOid);
+					char *desiredStatusName = DatumGetCString(desiredStatusNameDatum);
+
+					ereport(ERROR,
+							(errmsg(
+								 "Job reached terminal state \"%s\" instead of desired "
+								 "state \"%s\"", reachedStatusName,
+								 desiredStatusName)));
+				}
+
+				/* Otherwise, if no desiredStatus was given, we accept this terminal state. */
+				break;
+			}
+
+			/* Before sleeping, check for user interrupts (Ctrl+C, statement_timeout, etc.) */
+			CHECK_FOR_INTERRUPTS();
+
+			/* Sleep 1 second before re-checking the job status */
+			const long delay_ms = 1000;
+			(void) WaitLatch(MyLatch,
+							 WL_LATCH_SET | WL_TIMEOUT | WL_EXIT_ON_PM_DEATH,
+							 delay_ms,
+							 WAIT_EVENT_PG_SLEEP);
+
+			ResetLatch(MyLatch);
 		}
 
-		/* sleep for a while, before rechecking the job status */
-		CHECK_FOR_INTERRUPTS();
-		const long delay_ms = 1000;
-		(void) WaitLatch(MyLatch,
-						 WL_LATCH_SET | WL_TIMEOUT | WL_EXIT_ON_PM_DEATH,
-						 delay_ms,
-						 WAIT_EVENT_PG_SLEEP);
-
-		ResetLatch(MyLatch);
+		MemoryContextSwitchTo(oldContext);
+		MemoryContextDelete(waitContext);
 	}
+	PG_CATCH();
+	{
+		/*
+		 * If we get here, the user canceled the statement or an ERROR occurred.
+		 * We forcibly cancel the job so that it doesn't remain running in background.
+		 * This ensures no "zombie" shard moves or leftover replication slots.
+		 */
 
-	MemoryContextSwitchTo(oldContext);
-	MemoryContextDelete(waitContext);
+		/* Switch out of the waitContext so we can safely do cleanup in TopMemoryContext. */
+		MemoryContextSwitchTo(TopMemoryContext);
+
+		/* Attempt to cancel the job; if it's already in a terminal state, that's okay. */
+		(void) DirectFunctionCall1(citus_job_cancel, Int64GetDatum(jobid));
+
+		/* Re-throw the original error so Postgres knows this statement was canceled. */
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
 }
 
 
