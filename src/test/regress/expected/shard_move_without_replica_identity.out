@@ -966,6 +966,7 @@ VALUES (nextval('pg_dist_cleanup_recordid_seq'), 8989000, 7,
         :shardid_i_dropped::text,
         :src_i_dropped_group, 0);
 CALL citus_cleanup_orphaned_resources();
+WARNING:  restoring replica identity to NOTHING on move_no_ri.t_i_dropped_8989000 because the replica identity index was missing
 SELECT count(*) AS retained_i_dropped_cleanup
 FROM pg_dist_cleanup WHERE operation_id = 8989000;
  retained_i_dropped_cleanup
