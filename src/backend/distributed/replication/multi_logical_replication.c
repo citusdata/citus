@@ -495,6 +495,16 @@ ChooseHelperIndexColumn(MultiConnection *sourceConnection, ShardInterval *shardI
 			continue;
 		}
 
+		/*
+		 * A variable-width column can later receive a value that exceeds the btree
+		 * entry size limit. That would make the destination-only helper index reject
+		 * logical replication changes forever. Only fixed-width columns are safe.
+		 */
+		if (attributeForm->attlen <= 0)
+		{
+			continue;
+		}
+
 		/* the column type must have a default btree operator class to be indexable */
 		Oid opclass = GetDefaultOpClass(attributeForm->atttypid, BTREE_AM_OID);
 		if (!OidIsValid(opclass))

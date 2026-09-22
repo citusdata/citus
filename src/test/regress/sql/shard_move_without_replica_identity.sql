@@ -484,11 +484,11 @@ SET citus.next_shard_id TO 8983000;
 CREATE TABLE t_dropped_column (
     dist int,
     dropped_column int,
-    candidate text,
+    candidate int,
     low_cardinality int);
 SELECT create_distributed_table('t_dropped_column', 'dist', colocate_with:='none');
 INSERT INTO t_dropped_column
-SELECT 1, g, 'candidate-' || g, 1 FROM generate_series(1, 100) g;
+SELECT 1, g, g, 1 FROM generate_series(1, 100) g;
 ALTER TABLE t_dropped_column DROP COLUMN dropped_column;
 
 SELECT min(shardid) AS shardid_dropped_column
@@ -523,12 +523,12 @@ RESET citus.log_remote_commands;
 SET client_min_messages TO WARNING;
 
 --
--- 4f) The temporary helper index is only a catch-up optimization, so a failure
---     to build it must not abort the move. A column whose values exceed the btree
---     entry size limit cannot be indexed; the move must still succeed by falling
---     back to a sequential scan on the subscriber. The build failure surfaces as
---     the raw btree size WARNING forwarded from the worker together with our own
---     fallback WARNING; without the fix the move would ERROR out instead.
+-- 4f) The temporary helper index is only a catch-up optimization. Variable-width
+--     columns are skipped because a future value could exceed the btree entry size
+--     limit and stall logical replication on the destination. This table has a wide
+--     text column that the stats probe used to prefer, but the helper is now built
+--     on the fixed-width int column instead. The move must still succeed and
+--     preserve the data.
 --
 SET citus.shard_count TO 1;
 SET citus.shard_replication_factor TO 1;
@@ -536,7 +536,7 @@ SET citus.next_shard_id TO 8984000;
 CREATE TABLE t_unindexable (a int, wide text);
 SELECT create_distributed_table('t_unindexable', 'a', colocate_with:='none');
 -- low-cardinality int, but a wide incompressible column (deterministic md5 chunks,
--- 2880 bytes) that the stats probe prefers and that exceeds the btree entry limit
+-- 2880 bytes) that is no longer eligible for the helper index
 INSERT INTO t_unindexable
 SELECT (g % 3),
        (SELECT string_agg(md5((g * 1000 + s)::text), '') FROM generate_series(1, 90) s)
@@ -555,7 +555,7 @@ SELECT citus_move_shard_placement(:shardid_unindexable, 'localhost',
                                   :tgt_unindexable,
                                   shard_transfer_mode:='force_logical_auto_identity');
 SELECT public.wait_for_resource_cleanup();
--- the move succeeded and preserved the data despite the un-indexable column
+-- the move succeeded and preserved the data while using a fixed-width helper column
 SELECT count(*) FROM t_unindexable;
 SELECT nodeport, shardstate FROM pg_dist_shard_placement WHERE shardid = :shardid_unindexable ORDER BY nodeport;
 -- no leftover helper index and the original replica identity is restored
@@ -564,7 +564,41 @@ FROM run_command_on_placements('t_unindexable', 'SELECT count(*) FROM pg_class c
 SELECT DISTINCT result FROM run_command_on_placements('t_unindexable', 'SELECT relreplident FROM pg_class WHERE oid = ''%s''::regclass');
 
 --
--- 4g) When the distributed (shell) table is REPLICA IDENTITY USING INDEX but its
+-- 4g) A table whose only column is variable-width must not get a destination-only
+--     helper index. The move should report that no suitable fixed-width column was
+--     found, fall back to a sequential scan during catch-up, and preserve values
+--     that are too large for a btree helper index.
+--
+SET citus.next_shard_id TO 8992000;
+SET citus.shard_count TO 1;
+SET citus.shard_replication_factor TO 1;
+CREATE TABLE t_wide_only (wide text);
+SELECT create_distributed_table('t_wide_only', 'wide', colocate_with:='none');
+INSERT INTO t_wide_only VALUES ('small'), ('medium'), (repeat('x', 4000));
+
+SELECT min(shardid) AS shardid_wide_only
+FROM pg_dist_shard WHERE logicalrelid='t_wide_only'::regclass \gset
+SELECT nodeport AS src_wide_only,
+       CASE WHEN nodeport = :worker_1_port THEN :worker_2_port ELSE :worker_1_port END AS tgt_wide_only
+FROM pg_dist_shard_placement WHERE shardid = :shardid_wide_only \gset
+
+SET client_min_messages TO WARNING;
+SELECT citus_move_shard_placement(:shardid_wide_only, 'localhost',
+                                  :src_wide_only, 'localhost',
+                                  :tgt_wide_only,
+                                  shard_transfer_mode:='force_logical_auto_identity');
+SELECT public.wait_for_resource_cleanup();
+-- the move succeeded and preserved all rows without building a helper index
+SELECT count(*) FROM t_wide_only;
+SELECT nodeport, shardstate FROM pg_dist_shard_placement WHERE shardid = :shardid_wide_only ORDER BY nodeport;
+-- no leftover helper index and the original replica identity is restored
+SELECT bool_or(result::int > 0) AS any_leftover_helper_index
+FROM run_command_on_placements('t_wide_only', 'SELECT count(*) FROM pg_class c JOIN pg_index i ON i.indexrelid = c.oid WHERE i.indrelid = ''%s''::regclass AND c.relname LIKE ''citus_ri_helper_%%''');
+SELECT DISTINCT result FROM run_command_on_placements('t_wide_only', 'SELECT relreplident FROM pg_class WHERE oid = ''%s''::regclass');
+DROP TABLE t_wide_only;
+
+--
+-- 4h) When the distributed (shell) table is REPLICA IDENTITY USING INDEX but its
 --     replica identity index is no longer usable (dropped or invalid), a shard that
 --     cleanup restores is set to NOTHING rather than USING INDEX. An unusable
 --     replica identity index behaves like NOTHING (see pg_class.relreplident), and
@@ -1089,7 +1123,7 @@ DROP TABLE t_gen_helper;
 --             has USING INDEX too (the identity propagates). A shard left on REPLICA
 --             IDENTITY FULL is therefore restored back to USING INDEX, with cleanup
 --             reconstructing the shard-qualified index name from the shell's replica
---             identity index. This is the valid-index counterpart of 4g (where the
+--             identity index. This is the valid-index counterpart of 4h (where the
 --             shell's replica identity index is unusable and the shard falls back to
 --             NOTHING).
 --
