@@ -189,6 +189,8 @@ DEPS = {
     "multi_mx_copy_data": TestDeps(None, ["multi_mx_create_table"]),
     "multi_mx_modifications": TestDeps(None, ["multi_mx_create_table"]),
     "multi_mx_schema_support": TestDeps(None, ["multi_mx_copy_data"]),
+    "multi_mx_tpch_query1": TestDeps(None, ["multi_mx_copy_data"]),
+    "multi_mx_tpch_query10": TestDeps(None, ["multi_mx_copy_data"]),
     "multi_simple_queries": TestDeps("base_schedule"),
     "create_single_shard_table": TestDeps("minimal_schedule"),
     "isolation_schema_based_sharding_from_any_node": TestDeps(
