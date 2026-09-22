@@ -1702,25 +1702,48 @@ PrepareReplicaIdentitiesForPublication(MultiConnection *connection,
 
 			/*
 			 * Setting REPLICA IDENTITY FULL requires an AccessExclusiveLock on the
-			 * shard, which conflicts with any concurrent access to it. To avoid
-			 * blocking indefinitely (and blocking others queued behind us for the
-			 * lock) we set a short lock_timeout so that we fail fast if the shard is
-			 * busy. The whole transfer then errors out and can be retried; the
-			 * resource cleanup framework restores the original replica identity via
-			 * the record we registered above.
+			 * shard, which conflicts with any concurrent access to it. To avoid a
+			 * briefly-held conflicting lock failing the whole transfer, try a few times
+			 * with an increasing lock_timeout. This keeps a persistently-locked shard
+			 * failing in bounded time; the resource cleanup framework restores the
+			 * original replica identity via the record we registered above.
 			 *
 			 * DDL propagation is disabled because the ALTER targets a shard, which is
 			 * not a distributed object. Both settings use SET LOCAL and are therefore
 			 * scoped to the transaction opened by
-			 * SendCommandListToWorkerOutsideTransactionWithConnection, so they are
-			 * reset automatically once it commits.
+			 * SendOptionalCommandListToWorkerOutsideTransactionWithConnection, so they
+			 * are reset automatically once it commits or aborts.
 			 */
-			SendCommandListToWorkerOutsideTransactionWithConnection(
-				connection,
-				list_make3(
-					"SET LOCAL lock_timeout TO '1s'",
-					"SET LOCAL citus.enable_ddl_propagation TO OFF",
-					psprintf("ALTER TABLE %s REPLICA IDENTITY FULL", shardName)));
+			bool replicaIdentitySet = false;
+			int maxAttempts = 3;
+			for (int attempt = 1; attempt <= maxAttempts; attempt++)
+			{
+				int lockTimeoutSeconds = 1 << (attempt - 1);
+
+				replicaIdentitySet =
+					SendOptionalCommandListToWorkerOutsideTransactionWithConnection(
+						connection,
+						list_make3(
+							psprintf("SET LOCAL lock_timeout TO '%ds'",
+									 lockTimeoutSeconds),
+							"SET LOCAL citus.enable_ddl_propagation TO OFF",
+							psprintf("ALTER TABLE %s REPLICA IDENTITY FULL", shardName)));
+				if (replicaIdentitySet)
+				{
+					break;
+				}
+			}
+
+			if (!replicaIdentitySet)
+			{
+				ereport(ERROR, (errmsg("could not set REPLICA IDENTITY FULL on shard "
+									   "%s after %d attempts",
+									   shardName, maxAttempts),
+								errhint("A concurrent session may be holding a "
+										"conflicting lock on the shard. Retry "
+										"the shard move after that activity "
+										"completes.")));
+			}
 		}
 	}
 }
