@@ -14,6 +14,7 @@
 #include "miscadmin.h"
 
 #include "access/genam.h"
+#include "access/relation.h"
 #include "access/xact.h"
 #include "catalog/namespace.h"
 #include "catalog/pg_class.h"
@@ -23,12 +24,17 @@
 #include "postmaster/postmaster.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
+#include "utils/lsyscache.h"
+#include "utils/rel.h"
+#include "utils/relcache.h"
 
 #include "distributed/citus_safe_lib.h"
 #include "distributed/coordinator_protocol.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/metadata_utility.h"
 #include "distributed/pg_dist_cleanup.h"
+#include "distributed/relay_utility.h"
 #include "distributed/remote_commands.h"
 #include "distributed/resource_lock.h"
 #include "distributed/shard_cleaner.h"
@@ -976,9 +982,11 @@ TryDropDatabaseOutsideTransaction(char *databaseName, char *nodeName, int nodePo
  * that was temporarily set to REPLICA IDENTITY FULL for the duration of a logical
  * replication based transfer (see PrepareReplicaIdentitiesForPublication).
  *
- * The objectName encodes the original replica identity setting and the qualified
- * shard name as "<replident_char>:<qualified_shard_name>", where <replident_char>
- * is the relreplident value captured before the change.
+ * The objectName is the shard id. Rather than restoring a replica identity captured
+ * at move time, we restore the shard to match its distributed (shell) table's CURRENT
+ * replica identity. This is because, for Citus tables, normally we always make sure
+ * that a shard's replica identity mirrors its distributed table, except when setting
+ * up replica identity for the duration of the logical replication based transfer.
  *
  * We use ALTER TABLE IF EXISTS so that this is a no-op if the shard has already been
  * dropped (e.g. the source shard of a completed move).
@@ -986,11 +994,27 @@ TryDropDatabaseOutsideTransaction(char *databaseName, char *nodeName, int nodePo
 static bool
 TryResetReplicaIdentityOutsideTransaction(char *objectName, char *nodeName, int nodePort)
 {
-	char originalReplicaIdentity = objectName[0];
-	char *qualifiedShardName = objectName + 2;
+	uint64 shardId = strtou64(objectName, NULL, 10);
 
+	if (!ShardExists(shardId))
+	{
+		return true;
+	}
+
+	ShardInterval *shardInterval = LoadShardInterval(shardId);
+	char *qualifiedShardName = ConstructQualifiedShardName(shardInterval);
+
+	Oid shellTableId = shardInterval->relationId;
+	Relation shellTable = try_relation_open(shellTableId, AccessShareLock);
+	if (shellTable == NULL)
+	{
+		return true;
+	}
+
+	char replicaIdentity = shellTable->rd_rel->relreplident;
 	char *replicaIdentityClause = NULL;
-	switch (originalReplicaIdentity)
+
+	switch (replicaIdentity)
 	{
 		case REPLICA_IDENTITY_NOTHING:
 		{
@@ -1000,40 +1024,39 @@ TryResetReplicaIdentityOutsideTransaction(char *objectName, char *nodeName, int 
 
 		case REPLICA_IDENTITY_INDEX:
 		{
-			/*
-			 * We only ever capture 'i' when RelationGetReplicaIndex() returned
-			 * InvalidOid, i.e. the indisreplident index was already dropped or is
-			 * invalid.
-			 *
-			 * If we had it still been present and valid, then
-			 * RelationCanPublishAllModifications() would have been true and we would
-			 * never have set the shard to FULL.
-			 *
-			 * And a dropped/invalid replica identity index behaves the same as NOTHING
-			 * (see the pg_class.relreplident documentation), and we could not re-issue
-			 * REPLICA IDENTITY USING INDEX against a missing/invalid index anyway,
-			 * so in that case we restore to NOTHING.
-			 */
-			ereport(WARNING, (errmsg("restoring replica identity to NOTHING on %s "
-									 "because the replica identity index was "
-									 "missing or invalid", qualifiedShardName)));
-			replicaIdentityClause = "NOTHING";
+			Oid replicaIndexId = RelationGetReplicaIndex(shellTable);
+			if (OidIsValid(replicaIndexId))
+			{
+				/*
+				 * Restore REPLICA IDENTITY USING INDEX, shard-qualifying the index
+				 * name the same way normal replica-identity DDL propagation does
+				 * (see the AT_ReplicaIdentity handling in RelayEventExtendNames).
+				 */
+				char *indexName = pstrdup(get_rel_name(replicaIndexId));
+				AppendShardIdToName(&indexName, shardId);
+				replicaIdentityClause = psprintf("USING INDEX %s",
+												 quote_identifier(indexName));
+			}
+			else
+			{
+				/*
+				 * The shell table is marked REPLICA IDENTITY USING INDEX but has no
+				 * usable replica identity index (it was dropped or is invalid), which
+				 * behaves the same as NOTHING (see the pg_class.relreplident
+				 * documentation), so restore NOTHING.
+				 */
+				ereport(WARNING, (errmsg("restoring replica identity to NOTHING on %s "
+										 "because the replica identity index was "
+										 "missing", qualifiedShardName)));
+				 replicaIdentityClause = "NOTHING";
+			}
 			break;
 		}
 
 		case REPLICA_IDENTITY_FULL:
 		{
-			/*
-			 * This cannot happen: a table that is already REPLICA IDENTITY FULL
-			 * can publish all modifications, so PrepareReplicaIdentitiesForPublication()
-			 * skips it and never registers a cleanup record with 'f'. We still
-			 * handle it explicitly and re-issue FULL as redundant no-op, and warn
-			 * because reaching here means that invariant was violated.
-			 */
-			ereport(WARNING, (errmsg("unexpectedly restoring REPLICA IDENTITY FULL "
-									 "on %s", qualifiedShardName)));
-			replicaIdentityClause = "FULL";
-			break;
+			/* the shard is already set to REPLICA IDENTITY FULL, no need to change it */
+			return true;
 		}
 
 		case REPLICA_IDENTITY_DEFAULT:
@@ -1045,13 +1068,15 @@ TryResetReplicaIdentityOutsideTransaction(char *objectName, char *nodeName, int 
 		default:
 		{
 			/* not reachable today */
-			ereport(WARNING, (errmsg("unexpected original replica identity '%c' for "
-									 "%s; restoring DEFAULT", originalReplicaIdentity,
+			ereport(WARNING, (errmsg("unexpected replica identity '%c' for %s; "
+									 "restoring DEFAULT", replicaIdentity,
 									 qualifiedShardName)));
 			replicaIdentityClause = "DEFAULT";
 			break;
 		}
 	}
+
+	relation_close(shellTable, AccessShareLock);
 
 	int connectionFlags = OUTSIDE_TRANSACTION;
 	MultiConnection *connection = GetNodeUserDatabaseConnection(connectionFlags,

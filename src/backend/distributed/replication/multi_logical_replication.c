@@ -1676,19 +1676,15 @@ PrepareReplicaIdentitiesForPublication(MultiConnection *connection,
 				continue;
 			}
 
-			Relation relation = RelationIdGetRelation(shard->relationId);
-			char originalReplicaIdentity = relation->rd_rel->relreplident;
-			RelationClose(relation);
-
 			char *shardName = ConstructQualifiedShardName(shard);
 
 			/*
 			 * Register the cleanup record before making the change so that the
-			 * original replica identity is restored even if we crash right after
-			 * the ALTER TABLE below. The object name encodes the original setting.
+			 * shard's replica identity is restored even if we crash right after the
+			 * ALTER TABLE below. The object name is just the shard id, see
+			 * TryResetReplicaIdentityOutsideTransaction.
 			 */
-			char *cleanupObjectName = psprintf("%c:%s", originalReplicaIdentity,
-											   shardName);
+			char *cleanupObjectName = psprintf(UINT64_FORMAT, shard->shardId);
 			InsertCleanupRecordOutsideTransaction(CLEANUP_OBJECT_REPLICA_IDENTITY,
 												  cleanupObjectName,
 												  worker->groupId,

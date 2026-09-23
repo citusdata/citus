@@ -716,7 +716,7 @@ FOR TABLE :cleanup_dependency_shard;
 SET search_path TO move_no_ri;
 INSERT INTO pg_dist_cleanup
 VALUES (nextval('pg_dist_cleanup_recordid_seq'), 8982000, 7,
-        'd:' || :'cleanup_dependency_shard',
+        :shardid_cleanup_dependency::text,
         :src_cleanup_dependency_group, 0);
 CALL citus_cleanup_orphaned_resources();
 WARNING:  failed to clean up 1 orphaned resources out of 1
@@ -906,12 +906,13 @@ SELECT DISTINCT result FROM run_command_on_placements('t_unindexable', 'SELECT r
 (1 row)
 
 --
--- 4g) A source shard left at REPLICA IDENTITY 'i' (USING INDEX) whose replica
---     identity index is *missing* is restored to NOTHING, not back to 'i': the
---     named index is gone, so 'i' can no longer be re-issued and behaves like
---     NOTHING anyway (see pg_class.relreplident). This drives the cleanup restore
---     branch directly (as 4d does for the 'd' identity), so the restore is
---     observable on the surviving shard instead of a dropped move source.
+-- 4g) When the distributed (shell) table is REPLICA IDENTITY USING INDEX but its
+--     replica identity index is no longer usable (dropped or invalid), a shard that
+--     cleanup restores is set to NOTHING rather than USING INDEX. An unusable
+--     replica identity index behaves like NOTHING (see pg_class.relreplident), and
+--     USING INDEX cannot be re-issued against a missing index. Cleanup reads the
+--     shell table's *current* replica identity, so we drive this by dropping the
+--     shell's index while a simulated failed move has left the source shard on FULL.
 --
 SET citus.next_shard_id TO 8989000;
 SET citus.shard_count TO 1;
@@ -924,6 +925,17 @@ SELECT create_distributed_table('t_i_dropped', 'a', colocate_with:='none');
 (1 row)
 
 INSERT INTO t_i_dropped VALUES (1, 'before');
+-- give the shell table a replica identity via a unique index, then drop that index:
+-- the table stays REPLICA IDENTITY 'i' but its backing index is gone (unusable)
+CREATE UNIQUE INDEX t_i_dropped_ri ON t_i_dropped (a);
+ALTER TABLE t_i_dropped REPLICA IDENTITY USING INDEX t_i_dropped_ri;
+DROP INDEX t_i_dropped_ri;
+SELECT relreplident AS shell_ri FROM pg_class WHERE oid = 't_i_dropped'::regclass;
+ shell_ri
+---------------------------------------------------------------------
+ i
+(1 row)
+
 SELECT min(shardid) AS shardid_i_dropped
 FROM pg_dist_shard WHERE logicalrelid='t_i_dropped'::regclass \gset
 SELECT p.nodeport AS src_i_dropped,
@@ -934,31 +946,26 @@ JOIN pg_dist_shard_placement p USING (shardid)
 JOIN pg_dist_node n
   ON n.nodename = p.nodename AND n.nodeport = p.nodeport
 WHERE s.shardid = :shardid_i_dropped \gset
+-- simulate what a failed move left behind: the source shard on REPLICA IDENTITY FULL
 \c - - - :src_i_dropped
 SET citus.override_table_visibility TO off;
 SET citus.enable_ddl_propagation TO off;
-SET search_path TO move_no_ri;
--- put the shard into the 'i' (USING INDEX) state, then drop the index behind it
-CREATE UNIQUE INDEX t_i_dropped_ri ON :i_dropped_shard (a);
-ALTER TABLE :i_dropped_shard REPLICA IDENTITY USING INDEX t_i_dropped_ri;
-DROP INDEX t_i_dropped_ri;
--- relreplident is still 'i' even though the backing index no longer exists
+ALTER TABLE :i_dropped_shard REPLICA IDENTITY FULL;
 SELECT relreplident FROM pg_class WHERE oid = :'i_dropped_shard'::regclass;
  relreplident
 ---------------------------------------------------------------------
- i
+ f
 (1 row)
 
 \c - - - :master_port
 SET search_path TO move_no_ri;
+SET client_min_messages TO WARNING;
 -- record the shard for restore just as PrepareReplicaIdentitiesForPublication would
 INSERT INTO pg_dist_cleanup
 VALUES (nextval('pg_dist_cleanup_recordid_seq'), 8989000, 7,
-        'i:' || :'i_dropped_shard',
+        :shardid_i_dropped::text,
         :src_i_dropped_group, 0);
 CALL citus_cleanup_orphaned_resources();
-WARNING:  restoring replica identity to NOTHING on move_no_ri.t_i_dropped_8989000 because the replica identity index was missing or invalid
-NOTICE:  cleaned up 1 orphaned resources
 SELECT count(*) AS retained_i_dropped_cleanup
 FROM pg_dist_cleanup WHERE operation_id = 8989000;
  retained_i_dropped_cleanup
@@ -968,7 +975,8 @@ FROM pg_dist_cleanup WHERE operation_id = 8989000;
 
 \c - - - :src_i_dropped
 SET citus.override_table_visibility TO off;
--- restored to NOTHING ('n'), not 'i'
+-- the shell's replica identity index is unusable, so the shard is restored to
+-- NOTHING ('n'), not USING INDEX
 SELECT relreplident FROM pg_class WHERE oid = :'i_dropped_shard'::regclass;
  relreplident
 ---------------------------------------------------------------------
@@ -977,75 +985,7 @@ SELECT relreplident FROM pg_class WHERE oid = :'i_dropped_shard'::regclass;
 
 \c - - - :master_port
 SET search_path TO move_no_ri;
---
--- 4h) Same as 4g, but the replica identity index still *exists* and is only
---     marked invalid. An invalid index is excluded from the usable replica
---     identity just like a missing one, so the shard is likewise restored to
---     NOTHING.
---
-SET citus.next_shard_id TO 8989100;
-SET citus.shard_count TO 1;
-SET citus.shard_replication_factor TO 1;
-CREATE TABLE t_i_invalid (a int NOT NULL, b text);
-SELECT create_distributed_table('t_i_invalid', 'a', colocate_with:='none');
- create_distributed_table
----------------------------------------------------------------------
-
-(1 row)
-
-INSERT INTO t_i_invalid VALUES (1, 'before');
-SELECT min(shardid) AS shardid_i_invalid
-FROM pg_dist_shard WHERE logicalrelid='t_i_invalid'::regclass \gset
-SELECT p.nodeport AS src_i_invalid,
-       n.groupid AS src_i_invalid_group,
-       shard_name(s.logicalrelid, s.shardid) AS i_invalid_shard
-FROM pg_dist_shard s
-JOIN pg_dist_shard_placement p USING (shardid)
-JOIN pg_dist_node n
-  ON n.nodename = p.nodename AND n.nodeport = p.nodeport
-WHERE s.shardid = :shardid_i_invalid \gset
-\c - - - :src_i_invalid
-SET citus.override_table_visibility TO off;
-SET citus.enable_ddl_propagation TO off;
-SET search_path TO move_no_ri;
--- put the shard into the 'i' (USING INDEX) state, then invalidate the index
-CREATE UNIQUE INDEX t_i_invalid_ri ON :i_invalid_shard (a);
-ALTER TABLE :i_invalid_shard REPLICA IDENTITY USING INDEX t_i_invalid_ri;
-UPDATE pg_index SET indisvalid = false WHERE indexrelid = 't_i_invalid_ri'::regclass;
--- relreplident is 'i' but the backing index is invalid, i.e. not usable
-SELECT relreplident FROM pg_class WHERE oid = :'i_invalid_shard'::regclass;
- relreplident
----------------------------------------------------------------------
- i
-(1 row)
-
-\c - - - :master_port
-SET search_path TO move_no_ri;
-INSERT INTO pg_dist_cleanup
-VALUES (nextval('pg_dist_cleanup_recordid_seq'), 8989100, 7,
-        'i:' || :'i_invalid_shard',
-        :src_i_invalid_group, 0);
-CALL citus_cleanup_orphaned_resources();
-WARNING:  restoring replica identity to NOTHING on move_no_ri.t_i_invalid_8989100 because the replica identity index was missing or invalid
-NOTICE:  cleaned up 1 orphaned resources
-SELECT count(*) AS retained_i_invalid_cleanup
-FROM pg_dist_cleanup WHERE operation_id = 8989100;
- retained_i_invalid_cleanup
----------------------------------------------------------------------
-                          0
-(1 row)
-
-\c - - - :src_i_invalid
-SET citus.override_table_visibility TO off;
--- restored to NOTHING ('n'), not 'i'
-SELECT relreplident FROM pg_class WHERE oid = :'i_invalid_shard'::regclass;
- relreplident
----------------------------------------------------------------------
- n
-(1 row)
-
-\c - - - :master_port
-SET search_path TO move_no_ri;
+DROP TABLE t_i_dropped;
 -- no leftover cleanup records after all of the moves above
 SELECT count(*) AS leftover_cleanup_records FROM pg_dist_cleanup;
  leftover_cleanup_records
@@ -1880,6 +1820,105 @@ SELECT DISTINCT result FROM run_command_on_placements('t_gen_helper','SELECT rel
 
 DROP TABLE t_gen_helper;
 --
+-- SECTION 13: replica-identity cleanup restores a shard to its distributed (shell)
+--             table's replica identity, read from the shell at cleanup time. When
+--             the shell table is REPLICA IDENTITY USING INDEX, its shard implicitly
+--             has USING INDEX too (the identity propagates). A shard left on REPLICA
+--             IDENTITY FULL is therefore restored back to USING INDEX, with cleanup
+--             reconstructing the shard-qualified index name from the shell's replica
+--             identity index. This is the valid-index counterpart of 4g (where the
+--             shell's replica identity index is unusable and the shard falls back to
+--             NOTHING).
+--
+SET citus.shard_count TO 1;
+SET citus.shard_replication_factor TO 1;
+SET citus.next_shard_id TO 8991000;
+CREATE TABLE t_using_index (a int NOT NULL, b text);
+SELECT create_distributed_table('t_using_index', 'a', colocate_with:='none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- the table is REPLICA IDENTITY USING INDEX via a unique index on the distribution
+-- column; this propagates to the shard, so the shard is USING INDEX ('i') too
+CREATE UNIQUE INDEX t_using_index_uidx ON t_using_index (a);
+ALTER TABLE t_using_index REPLICA IDENTITY USING INDEX t_using_index_uidx;
+SELECT min(shardid) AS shardid_using_index
+FROM pg_dist_shard WHERE logicalrelid='t_using_index'::regclass \gset
+SELECT p.nodeport AS src_using_index,
+       n.groupid AS src_using_index_group,
+       shard_name(s.logicalrelid, s.shardid) AS using_index_shard
+FROM pg_dist_shard s
+JOIN pg_dist_shard_placement p USING (shardid)
+JOIN pg_dist_node n
+  ON n.nodename = p.nodename AND n.nodeport = p.nodeport
+WHERE s.shardid = :shardid_using_index \gset
+\c - - - :src_using_index
+SET citus.override_table_visibility TO off;
+SET citus.enable_ddl_propagation TO off;
+-- the identity propagated: the shard is REPLICA IDENTITY USING INDEX ('i')
+SELECT relreplident AS shard_ri_propagated
+FROM pg_class WHERE oid = :'using_index_shard'::regclass;
+ shard_ri_propagated
+---------------------------------------------------------------------
+ i
+(1 row)
+
+-- simulate what a failed force_logical_auto_identity move left behind: the source
+-- shard set to REPLICA IDENTITY FULL
+ALTER TABLE :using_index_shard REPLICA IDENTITY FULL;
+-- before cleanup the shard is FULL ('f')
+SELECT relreplident AS shard_ri_before
+FROM pg_class WHERE oid = :'using_index_shard'::regclass;
+ shard_ri_before
+---------------------------------------------------------------------
+ f
+(1 row)
+
+\c - - - :master_port
+SET search_path TO move_no_ri;
+SET client_min_messages TO WARNING;
+-- the deferred replica-identity cleanup record the failed move would have registered
+-- (object name is the shard id)
+INSERT INTO pg_dist_cleanup
+VALUES (nextval('pg_dist_cleanup_recordid_seq'), 8991000, 7,
+        :shardid_using_index::text,
+        :src_using_index_group, 0);
+CALL citus_cleanup_orphaned_resources();
+-- the record was applied and removed
+SELECT count(*) AS retained_using_index_cleanup
+FROM pg_dist_cleanup WHERE operation_id = 8991000;
+ retained_using_index_cleanup
+---------------------------------------------------------------------
+                            0
+(1 row)
+
+-- cleanup restored the shard to the shell table's replica identity USING INDEX ('i')
+\c - - - :src_using_index
+SET citus.override_table_visibility TO off;
+SELECT relreplident AS shard_ri_after
+FROM pg_class WHERE oid = :'using_index_shard'::regclass;
+ shard_ri_after
+---------------------------------------------------------------------
+ i
+(1 row)
+
+-- and it points at the shard-qualified replica identity index, i.e. cleanup
+-- reconstructed the index name for the shard rather than just landing on 'i'
+SELECT c.relname AS shard_ri_index
+FROM pg_index i
+JOIN pg_class c ON c.oid = i.indexrelid
+WHERE i.indrelid = :'using_index_shard'::regclass AND i.indisreplident;
+       shard_ri_index
+---------------------------------------------------------------------
+ t_using_index_uidx_8991000
+(1 row)
+
+\c - - - :master_port
+SET search_path TO move_no_ri;
+DROP TABLE t_using_index;
+--
 -- SECTION 5: force_logical_auto_identity is a shard-MOVE-only capability. It only
 --            changes how LogicallyReplicateShards performs logical replication.
 --            Shard splits and tenant isolation (a split under the hood) do not go
@@ -1887,6 +1926,10 @@ DROP TABLE t_gen_helper;
 --            LookupSplitMode instead of silently downgrading to a plain
 --            non-blocking split.
 --
+-- keep replication factor at 1 so isolate_tenant_to_new_shard reaches the shard
+-- transfer mode check (with replication factor > 1 it errors earlier, on the
+-- unrelated "cannot isolate tenants when using shard replication" rule)
+SET citus.shard_replication_factor TO 1;
 CREATE TABLE reject_split (a int, b int);
 SELECT create_distributed_table('reject_split', 'a', colocate_with:='none');
  create_distributed_table
