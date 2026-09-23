@@ -259,6 +259,10 @@ s/^(DETAIL:  "[a-z\ ]+ )pg_temp_[0-9]+(\..*" will be created only locally)$/\1pg
 #   WARNING:  "function func(bigint)" has dependency on unsupported object "schema pg_temp_xxx"
 s/^(WARNING|ERROR)(:  "[a-z\ ]+ .*" has dependency on unsupported object) "schema pg_temp_[0-9]+"$/\1\2 "schema pg_temp_xxx"/g
 
+# pg_depend does not guarantee which local table dependency is visited first.
+s/^(WARNING:  "view regular_schema_worker_5\.table_10_view_1" has dependency to "table regular_schema_worker_5\.local_table_)[56](" that is not in Citus' metadata)$/\1x\2/g
+s/^(HINT:  Distribute "table regular_schema_worker_5\.local_table_)[56](" first to distribute "view regular_schema_worker_5\.table_10_view_1")$/\1x\2/g
+
 # remove jobId's from the messages of the background rebalancer
 s/^ERROR:  A rebalance is already running as job [0-9]+$/ERROR:  A rebalance is already running as job xxx/g
 s/^NOTICE:  Scheduled ([0-9]+) moves as job [0-9]+$/NOTICE:  Scheduled \1 moves as job xxx/g
