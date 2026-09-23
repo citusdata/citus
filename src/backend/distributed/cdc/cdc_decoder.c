@@ -41,7 +41,9 @@ static bool replication_origin_filter_cb(LogicalDecodingContext *ctx, RepOriginI
 										 origin_id);
 
 static void TranslateChangesIfSchemaChanged(Relation relation, Relation targetRelation,
-											ReorderBufferChange *change);
+											ReorderBufferChange *change,
+											HeapTuple volatile *translatedNewTuple,
+											HeapTuple volatile *translatedOldTuple);
 
 static void TranslateAndPublishRelationForCDC(LogicalDecodingContext *ctx,
 											  ReorderBufferTXN *txn,
@@ -262,18 +264,79 @@ TranslateAndPublishRelationForCDC(LogicalDecodingContext *ctx, ReorderBufferTXN 
 	Relation targetRelation = RelationIdGetRelation(targetRelationid);
 
 	/*
-	 * Check if there has been a schema change (such as a dropped column), by comparing
-	 * the number of attributes in the shard table and the shell table.
+	 * Remember the tuple state that the reorder buffer handed us. Any tuple
+	 * that we substitute below is allocated by us, but the reorder buffer
+	 * cleans up both tuple fields of the change assuming they still refer to
+	 * its own storage. Restoring the original state after publishing keeps
+	 * each allocator freeing only what it owns.
 	 */
-	TranslateChangesIfSchemaChanged(relation, targetRelation, change);
+#if PG_VERSION_NUM >= PG_VERSION_17
+	HeapTuple originalNewTuple = change->data.tp.newtuple;
+	HeapTuple originalOldTuple = change->data.tp.oldtuple;
+#else
+	HeapTupleData originalNewTuple = { 0 };
+	HeapTupleData originalOldTuple = { 0 };
 
-	/*
-	 * Publish the change to the shard table as the change in the distributed table,
-	 * so that the CDC client can see the change in the distributed table,
-	 * instead of the shard table, by calling the pgoutput's callback function.
-	 */
-	ouputPluginChangeCB(ctx, txn, targetRelation, change);
-	RelationClose(targetRelation);
+	if (change->data.tp.newtuple != NULL)
+	{
+		originalNewTuple = change->data.tp.newtuple->tuple;
+	}
+
+	if (change->data.tp.oldtuple != NULL)
+	{
+		originalOldTuple = change->data.tp.oldtuple->tuple;
+	}
+#endif
+	HeapTuple volatile translatedNewTuple = NULL;
+	HeapTuple volatile translatedOldTuple = NULL;
+
+	PG_TRY();
+	{
+		/*
+		 * Check if there has been a schema change (such as a dropped column), by comparing
+		 * the number of attributes in the shard table and the shell table.
+		 */
+		TranslateChangesIfSchemaChanged(relation, targetRelation, change,
+										&translatedNewTuple, &translatedOldTuple);
+
+		/*
+		 * Publish the change to the shard table as the change in the distributed table,
+		 * so that the CDC client can see the change in the distributed table,
+		 * instead of the shard table, by calling the pgoutput's callback function.
+		 */
+		ouputPluginChangeCB(ctx, txn, targetRelation, change);
+	}
+	PG_FINALLY();
+	{
+		/*
+		 * Free the translated tuples and put the original ones back. A field that
+		 * was not translated still holds its original pointer, so it is left alone.
+		 * This also has to happen when the callback throws, because the reorder
+		 * buffer cleans the transaction up before the error propagates further.
+		 */
+		if (translatedNewTuple != NULL)
+		{
+			heap_freetuple(translatedNewTuple);
+#if PG_VERSION_NUM >= PG_VERSION_17
+			change->data.tp.newtuple = originalNewTuple;
+#else
+			change->data.tp.newtuple->tuple = originalNewTuple;
+#endif
+		}
+
+		if (translatedOldTuple != NULL)
+		{
+			heap_freetuple(translatedOldTuple);
+#if PG_VERSION_NUM >= PG_VERSION_17
+			change->data.tp.oldtuple = originalOldTuple;
+#else
+			change->data.tp.oldtuple->tuple = originalOldTuple;
+#endif
+		}
+
+		RelationClose(targetRelation);
+	}
+	PG_END_TRY();
 }
 
 
@@ -426,7 +489,9 @@ HasSchemaChanged(TupleDesc sourceRelationDesc, TupleDesc targetRelationDesc)
  */
 static void
 TranslateChangesIfSchemaChanged(Relation sourceRelation, Relation targetRelation,
-								ReorderBufferChange *change)
+								ReorderBufferChange *change,
+								HeapTuple volatile *translatedNewTuple,
+								HeapTuple volatile *translatedOldTuple)
 {
 	TupleDesc sourceRelationDesc = RelationGetDescr(sourceRelation);
 	TupleDesc targetRelationDesc = RelationGetDescr(targetRelation);
@@ -449,6 +514,7 @@ TranslateChangesIfSchemaChanged(Relation sourceRelation, Relation targetRelation
 			HeapTuple targetRelationNewTuple = GetTupleForTargetSchemaForCdc(
 				sourceRelationNewTuple, sourceRelationDesc, targetRelationDesc);
 			change->data.tp.newtuple = targetRelationNewTuple;
+			*translatedNewTuple = targetRelationNewTuple;
 			break;
 		}
 
@@ -465,6 +531,7 @@ TranslateChangesIfSchemaChanged(Relation sourceRelation, Relation targetRelation
 			HeapTuple targetRelationNewTuple = GetTupleForTargetSchemaForCdc(
 				sourceRelationNewTuple, sourceRelationDesc, targetRelationDesc);
 			change->data.tp.newtuple = targetRelationNewTuple;
+			*translatedNewTuple = targetRelationNewTuple;
 
 			/*
 			 * Format oldtuple according to the target relation. If the column values of replica
@@ -480,6 +547,7 @@ TranslateChangesIfSchemaChanged(Relation sourceRelation, Relation targetRelation
 					targetRelationDesc);
 
 				change->data.tp.oldtuple = targetRelationOldTuple;
+				*translatedOldTuple = targetRelationOldTuple;
 			}
 			break;
 		}
@@ -494,6 +562,7 @@ TranslateChangesIfSchemaChanged(Relation sourceRelation, Relation targetRelation
 				targetRelationDesc);
 
 			change->data.tp.oldtuple = targetRelationOldTuple;
+			*translatedOldTuple = targetRelationOldTuple;
 			break;
 		}
 
@@ -515,6 +584,7 @@ TranslateChangesIfSchemaChanged(Relation sourceRelation, Relation targetRelation
 			HeapTuple targetRelationNewTuple = GetTupleForTargetSchemaForCdc(
 				sourceRelationNewTuple, sourceRelationDesc, targetRelationDesc);
 			change->data.tp.newtuple->tuple = *targetRelationNewTuple;
+			*translatedNewTuple = targetRelationNewTuple;
 			break;
 		}
 
@@ -531,6 +601,7 @@ TranslateChangesIfSchemaChanged(Relation sourceRelation, Relation targetRelation
 			HeapTuple targetRelationNewTuple = GetTupleForTargetSchemaForCdc(
 				sourceRelationNewTuple, sourceRelationDesc, targetRelationDesc);
 			change->data.tp.newtuple->tuple = *targetRelationNewTuple;
+			*translatedNewTuple = targetRelationNewTuple;
 
 			/*
 			 * Format oldtuple according to the target relation. If the column values of replica
@@ -546,6 +617,7 @@ TranslateChangesIfSchemaChanged(Relation sourceRelation, Relation targetRelation
 					targetRelationDesc);
 
 				change->data.tp.oldtuple->tuple = *targetRelationOldTuple;
+				*translatedOldTuple = targetRelationOldTuple;
 			}
 			break;
 		}
@@ -560,6 +632,7 @@ TranslateChangesIfSchemaChanged(Relation sourceRelation, Relation targetRelation
 				targetRelationDesc);
 
 			change->data.tp.oldtuple->tuple = *targetRelationOldTuple;
+			*translatedOldTuple = targetRelationOldTuple;
 			break;
 		}
 
