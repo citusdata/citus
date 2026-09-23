@@ -1048,7 +1048,7 @@ TryResetReplicaIdentityOutsideTransaction(char *objectName, char *nodeName, int 
 				ereport(WARNING, (errmsg("restoring replica identity to NOTHING on %s "
 										 "because the replica identity index was "
 										 "missing", qualifiedShardName)));
-				 replicaIdentityClause = "NOTHING";
+				replicaIdentityClause = "NOTHING";
 			}
 			break;
 		}
