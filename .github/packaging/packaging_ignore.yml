@@ -1,3 +1,4 @@
 base:
   - ".* warning: ignoring old recipe for target [`']check'"
   - ".* warning: overriding recipe for target [`']check'"
+  - ".*: warning: no previous declaration for '.*' \\[-Wmissing-variable-declarations\\]"

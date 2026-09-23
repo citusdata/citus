@@ -67,6 +67,9 @@ s/name_len_12345678901234567890123456789012345678_fcd8ab6f_[0-9]+/name_len_12345
 /DEBUG:  concurrent ROOT page split/d
 /DEBUG: .+creating and filling new WAL file/d
 
+# ignore asynchronous I/O diagnostics that can randomly appear with pg18
+/^DEBUG:  io [0-9]+ +\|op .*\|target .*\|state .*: /d
+
 # normalize debug connection failure
 s/DEBUG:  connection to the remote node/WARNING:  connection to the remote node/g
 
@@ -258,6 +261,10 @@ s/^(DETAIL:  "[a-z\ ]+ )pg_temp_[0-9]+(\..*" will be created only locally)$/\1pg
 # will be replaced with
 #   WARNING:  "function func(bigint)" has dependency on unsupported object "schema pg_temp_xxx"
 s/^(WARNING|ERROR)(:  "[a-z\ ]+ .*" has dependency on unsupported object) "schema pg_temp_[0-9]+"$/\1\2 "schema pg_temp_xxx"/g
+
+# pg_depend does not guarantee which local table dependency is visited first.
+s/^(WARNING:  "view regular_schema_worker_5\.table_10_view_1" has dependency to "table regular_schema_worker_5\.local_table_)[56](" that is not in Citus' metadata)$/\1x\2/g
+s/^(HINT:  Distribute "table regular_schema_worker_5\.local_table_)[56](" first to distribute "view regular_schema_worker_5\.table_10_view_1")$/\1x\2/g
 
 # remove jobId's from the messages of the background rebalancer
 s/^ERROR:  A rebalance is already running as job [0-9]+$/ERROR:  A rebalance is already running as job xxx/g
