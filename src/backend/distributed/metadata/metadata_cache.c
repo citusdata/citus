@@ -1042,6 +1042,22 @@ RelationIdForShard(uint64 shardId)
 
 
 /*
+ * RelationIdAndColocationIdForShard returns the relationId of the distributed
+ * table that the given shard belongs to, and sets *colocationId to that table's
+ * colocation id. Both values come from a single shard id cache lookup.
+ */
+Oid
+RelationIdAndColocationIdForShard(uint64 shardId, uint32 *colocationId)
+{
+	bool missingOk = false;
+	ShardIdCacheEntry *shardIdEntry = LookupShardIdCacheEntry(shardId, missingOk);
+	CitusTableCacheEntry *tableEntry = shardIdEntry->tableEntry;
+	*colocationId = tableEntry->colocationId;
+	return tableEntry->relationId;
+}
+
+
+/*
  * ReferenceTableShardId returns true if the given shardId belongs to
  * a reference table.
  */
