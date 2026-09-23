@@ -1028,12 +1028,8 @@ ChooseReplicationHelperIndexToBuildEarly(Oid relationId)
 		bool leftmostFieldIsColumn = AttributeNumberIsValid(leftmostAttNum);
 
 		/*
-		 * The leftmost column must also be a non-generated column. The publisher
-		 * does not send generated columns over logical replication, so they are
-		 * absent from the subscriber's attribute map and PostgreSQL refuses an index
-		 * whose leftmost key is generated for the REPLICA IDENTITY FULL tuple lookup
-		 * (see IsIndexUsableForReplicaIdentityFull in the PostgreSQL source).
-		 * Building such an index early would therefore not accelerate catch-up.
+		 * The leftmost column must also be a non-generated column, see
+		 * IsIndexUsableForReplicaIdentityFull in the postgres source.
 		 */
 		bool leftmostFieldIsNonGenerated =
 			leftmostFieldIsColumn &&

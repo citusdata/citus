@@ -1541,9 +1541,7 @@ VerifyTablesHaveReplicaIdentity(List *colocatedTableList)
  * btree/hash equality operator for every replicated column. Tables that already have
  * a replica identity or primary key are published through that index instead and are
  * not affected, so we only check the tables that would be published via
- * REPLICA IDENTITY FULL. Note that a table the user has already set to REPLICA
- * IDENTITY FULL is one of those (the subscriber still compares the whole old row for
- * it), so it is checked here too.
+ * REPLICA IDENTITY FULL.
  */
 void
 ErrorIfTablesCannotUseReplicaIdentityFull(List *tableIdList)
@@ -1561,9 +1559,8 @@ ErrorIfTablesCannotUseReplicaIdentityFull(List *tableIdList)
 		 *
 		 * We deliberately do NOT use RelationCanPublishAllModifications() here: it
 		 * also returns true for a table the user has already set to REPLICA IDENTITY
-		 * FULL, but such a table does need every replicated column to be comparable
-		 * (the subscriber matches rows by comparing the whole old tuple), so we must
-		 * still check it here.
+		 * FULL, but such a table does need every replicated column to be comparable,
+		 * so we must still check it here.
 		 */
 		if (PartitionedTable(relationId) ||
 			OidIsValid(GetRelationIdentityOrPK(relation)))
