@@ -474,6 +474,61 @@ FROM pg_class WHERE oid = :'cleanup_dependency_shard'::regclass;
 SET search_path TO move_no_ri;
 
 --
+-- 4d2) The counterpart of 4d: an INSERT-only publication on the source shard does
+--      NOT block the replica identity restore. Only a publication that publishes
+--      UPDATE or DELETE requires the shard to keep a replica identity, so cleanup
+--      restores the shard and removes the record even while an INSERT-only
+--      publication still includes it.
+--
+SET citus.next_shard_id TO 8982100;
+SET citus.shard_count TO 1;
+SET citus.shard_replication_factor TO 1;
+CREATE TABLE t_insert_only_pub (a int, b text);
+SELECT create_distributed_table('t_insert_only_pub', 'a', colocate_with:='none');
+INSERT INTO t_insert_only_pub VALUES (1, 'before');
+
+SELECT min(shardid) AS shardid_insert_only_pub
+FROM pg_dist_shard WHERE logicalrelid='t_insert_only_pub'::regclass \gset
+SELECT p.nodeport AS src_insert_only_pub,
+       n.groupid AS src_insert_only_pub_group,
+       shard_name(s.logicalrelid, s.shardid) AS insert_only_pub_shard
+FROM pg_dist_shard s
+JOIN pg_dist_shard_placement p USING (shardid)
+JOIN pg_dist_node n
+  ON n.nodename = p.nodename AND n.nodeport = p.nodeport
+WHERE s.shardid = :shardid_insert_only_pub \gset
+
+\c - - - :src_insert_only_pub
+SET citus.override_table_visibility TO off;
+SET citus.enable_ddl_propagation TO off;
+ALTER TABLE :insert_only_pub_shard REPLICA IDENTITY FULL;
+-- an INSERT-only publication does not require the shard to have a replica identity
+CREATE PUBLICATION insert_only_publication
+FOR TABLE :insert_only_pub_shard WITH (publish = 'insert');
+\c - - - :master_port
+SET search_path TO move_no_ri;
+SET client_min_messages TO WARNING;
+
+INSERT INTO pg_dist_cleanup
+VALUES (nextval('pg_dist_cleanup_recordid_seq'), 8982100, 7,
+        :shardid_insert_only_pub::text,
+        :src_insert_only_pub_group, 0);
+CALL citus_cleanup_orphaned_resources();
+-- the record was applied and removed despite the INSERT-only publication
+SELECT count(*) AS retained_insert_only_pub_cleanup
+FROM pg_dist_cleanup WHERE operation_id = 8982100;
+
+\c - - - :src_insert_only_pub
+SET citus.override_table_visibility TO off;
+-- the shard was restored away from FULL, to the shell table's identity ('d')
+SELECT relreplident
+FROM pg_class WHERE oid = :'insert_only_pub_shard'::regclass;
+DROP PUBLICATION insert_only_publication;
+\c - - - :master_port
+SET search_path TO move_no_ri;
+DROP TABLE t_insert_only_pub;
+
+--
 -- 4e) Match candidate columns by name, not attnum. Recreated shard placements
 --     compact dropped-column gaps while the coordinator relation keeps them, so
 --     coordinator and shard attnums can refer to different columns.

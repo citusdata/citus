@@ -103,8 +103,8 @@ static bool TryDropDatabaseOutsideTransaction(char *databaseName, char *nodeName
 											  int nodePort);
 static bool TryResetReplicaIdentityOutsideTransaction(char *objectName, char *nodeName,
 													  int nodePort);
-static bool RelationHasPublication(MultiConnection *connection,
-								   char *qualifiedRelationName);
+static bool RelationHasUpdateOrDeletePublication(MultiConnection *connection,
+												 char *qualifiedRelationName);
 static bool TryDropIndexOutsideTransaction(char *qualifiedIndexName, char *nodeName,
 										   int nodePort);
 
@@ -1085,13 +1085,19 @@ TryResetReplicaIdentityOutsideTransaction(char *objectName, char *nodeName, int 
 																NULL);
 
 	/*
-	 * A publication that still includes the shard can publish UPDATE and DELETE only
-	 * while the shard has a usable replica identity. Publication cleanup is ordered
-	 * before replica identity cleanup, but cleanup continues after an individual
-	 * resource fails. Keep the cleanup record for a later retry instead of making
-	 * writes fail while the publication is still present.
+	 * Only a publication that publishes UPDATE or DELETE forces the shard to keep a
+	 * usable replica identity: PostgreSQL rejects an UPDATE/DELETE on a table that
+	 * has no replica identity while it is in such a publication, whereas INSERT and
+	 * TRUNCATE never need one. So we only defer the restore while an UPDATE/DELETE
+	 * publication still includes the shard (e.g. our own move publication, which is
+	 * dropped by an earlier cleanup record). Publication cleanup is ordered before
+	 * replica identity cleanup, but cleanup continues after an individual resource
+	 * fails, so keep the cleanup record for a later retry instead of making writes
+	 * fail while such a publication is still present. An INSERT/TRUNCATE-only
+	 * publication a user put on the shard does not block the restore, because losing
+	 * the replica identity cannot break those.
 	 */
-	if (RelationHasPublication(connection, qualifiedShardName))
+	if (RelationHasUpdateOrDeletePublication(connection, qualifiedShardName))
 	{
 		return false;
 	}
@@ -1113,26 +1119,33 @@ TryResetReplicaIdentityOutsideTransaction(char *objectName, char *nodeName, int 
 
 
 /*
- * RelationHasPublication returns whether the given relation is part of any
- * publication. If the check itself fails, it conservatively returns true so
- * replica identity cleanup is retried later.
+ * RelationHasUpdateOrDeletePublication returns whether the given relation belongs to
+ * any publication that publishes UPDATE or DELETE. Only such publications require the
+ * relation to keep a usable replica identity (PostgreSQL rejects an UPDATE/DELETE on a
+ * relation with no replica identity that is part of a publication publishing that
+ * operation; INSERT and TRUNCATE never need one). An INSERT/TRUNCATE-only publication
+ * is therefore ignored here. If the check itself fails, it conservatively returns true
+ * so replica identity cleanup is retried later.
  */
 static bool
-RelationHasPublication(MultiConnection *connection, char *qualifiedRelationName)
+RelationHasUpdateOrDeletePublication(MultiConnection *connection,
+									 char *qualifiedRelationName)
 {
 	char *command = psprintf(
 		"SELECT EXISTS ("
-		"SELECT 1 FROM pg_catalog.pg_publication_rel "
-		"WHERE prrelid = pg_catalog.to_regclass(%s))",
+		"SELECT 1 FROM pg_catalog.pg_publication_rel pr "
+		"JOIN pg_catalog.pg_publication p ON p.oid = pr.prpubid "
+		"WHERE pr.prrelid = pg_catalog.to_regclass(%s) "
+		"AND (p.pubupdate OR p.pubdelete))",
 		quote_literal_cstr(qualifiedRelationName));
 
 	PGresult *result = NULL;
 	int response = ExecuteOptionalRemoteCommand(connection, command, &result);
 	if (response != RESPONSE_OKAY)
 	{
-		ereport(WARNING, (errmsg("failed to determine if relation %s is part of any "
-								 "publication because the check failed, assuming "
-								 "the relation has publication",
+		ereport(WARNING, (errmsg("failed to determine if relation %s is part of a "
+								 "publication that publishes UPDATE or DELETE because "
+								 "the check failed, assuming it is",
 								 qualifiedRelationName)));
 		return true;
 	}
@@ -1141,9 +1154,9 @@ RelationHasPublication(MultiConnection *connection, char *qualifiedRelationName)
 					   !PQgetisnull(result, 0, 0);
 	if (!validResult)
 	{
-		ereport(WARNING, (errmsg("failed to determine if relation %s is part of any "
-								 "publication because of an invalid result from the "
-								 "check, assuming the relation has publication",
+		ereport(WARNING, (errmsg("failed to determine if relation %s is part of a "
+								 "publication that publishes UPDATE or DELETE because "
+								 "of an invalid result from the check, assuming it is",
 								 qualifiedRelationName)));
 	}
 
