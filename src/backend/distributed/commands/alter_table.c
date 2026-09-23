@@ -1371,7 +1371,7 @@ CreateTableConversion(TableConversionParameters *params)
 								   relam)));
 		}
 		Form_pg_am amForm = (Form_pg_am) GETSTRUCT(amTuple);
-		con->originalAccessMethod = NameStr(amForm->amname);
+		con->originalAccessMethod = pstrdup(NameStr(amForm->amname));
 		ReleaseSysCache(amTuple);
 	}
 
