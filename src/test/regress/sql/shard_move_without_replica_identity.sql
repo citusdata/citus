@@ -1247,6 +1247,105 @@ SET search_path TO move_no_ri;
 DROP TABLE t_using_index;
 
 --
+-- SECTION 14: the catch-up indexes are built on the destination in parallel, as one
+--             task list. A throwaway helper index is only a catch-up optimization, so
+--             failing to build it must not fail the move: the destination worker
+--             raises a WARNING and the catch-up falls back to a sequential scan. An
+--             existing index that is built early is a real index of the table (the
+--             late index phase skips it), so failing to build it must fail the move.
+--             The failures are injected with an event trigger on both workers.
+--
+SET citus.shard_count TO 1;
+SET citus.shard_replication_factor TO 1;
+SET citus.next_shard_id TO 8992000;
+CREATE TABLE t_fail_helper (a int, b text);
+SELECT create_distributed_table('t_fail_helper', 'a', colocate_with:='none');
+INSERT INTO t_fail_helper SELECT g, 'v'||g FROM generate_series(1,100) g;
+SET citus.next_shard_id TO 8992100;
+CREATE TABLE t_fail_existing (a int, b text);
+CREATE INDEX t_fail_existing_a ON t_fail_existing (a);
+SELECT create_distributed_table('t_fail_existing', 'a', colocate_with:='none');
+INSERT INTO t_fail_existing SELECT g, 'v'||g FROM generate_series(1,100) g;
+
+SELECT min(shardid) AS shardid_fail_helper FROM pg_dist_shard WHERE logicalrelid='t_fail_helper'::regclass \gset
+SELECT nodeport AS src_fail_helper,
+       CASE WHEN nodeport = :worker_1_port THEN :worker_2_port ELSE :worker_1_port END AS tgt_fail_helper
+FROM pg_dist_shard_placement WHERE shardid = :shardid_fail_helper \gset
+SELECT min(shardid) AS shardid_fail_existing FROM pg_dist_shard WHERE logicalrelid='t_fail_existing'::regclass \gset
+SELECT nodeport AS src_fail_existing,
+       CASE WHEN nodeport = :worker_1_port THEN :worker_2_port ELSE :worker_1_port END AS tgt_fail_existing
+FROM pg_dist_shard_placement WHERE shardid = :shardid_fail_existing \gset
+
+-- make CREATE INDEX of these two tables' catch-up indexes fail on both workers
+\c - - - :worker_1_port
+SET citus.enable_ddl_propagation TO off;
+CREATE FUNCTION public.move_no_ri_fail_index() RETURNS event_trigger LANGUAGE plpgsql AS $fn$
+BEGIN
+  IF current_query() LIKE '%citus_ri_helper%t_fail_helper%' THEN
+    RAISE EXCEPTION 'injected helper index failure';
+  ELSIF current_query() LIKE '%CREATE INDEX t_fail_existing_a%' THEN
+    RAISE EXCEPTION 'injected existing index failure';
+  END IF;
+END;
+$fn$;
+CREATE EVENT TRIGGER move_no_ri_fail_index ON ddl_command_start WHEN TAG IN ('CREATE INDEX')
+  EXECUTE FUNCTION public.move_no_ri_fail_index();
+\c - - - :worker_2_port
+SET citus.enable_ddl_propagation TO off;
+CREATE FUNCTION public.move_no_ri_fail_index() RETURNS event_trigger LANGUAGE plpgsql AS $fn$
+BEGIN
+  IF current_query() LIKE '%citus_ri_helper%t_fail_helper%' THEN
+    RAISE EXCEPTION 'injected helper index failure';
+  ELSIF current_query() LIKE '%CREATE INDEX t_fail_existing_a%' THEN
+    RAISE EXCEPTION 'injected existing index failure';
+  END IF;
+END;
+$fn$;
+CREATE EVENT TRIGGER move_no_ri_fail_index ON ddl_command_start WHEN TAG IN ('CREATE INDEX')
+  EXECUTE FUNCTION public.move_no_ri_fail_index();
+\c - - - :master_port
+SET search_path TO move_no_ri;
+SET client_min_messages TO WARNING;
+
+-- 14a) the helper index fails to build: the destination worker's WARNING is shown,
+--      and the move still succeeds with all rows and no helper index left behind
+SELECT citus_move_shard_placement(:shardid_fail_helper, 'localhost', :src_fail_helper, 'localhost', :tgt_fail_helper, shard_transfer_mode:='force_logical_auto_identity');
+SELECT public.wait_for_resource_cleanup();
+SELECT count(*) FROM t_fail_helper;
+SELECT nodeport = :tgt_fail_helper AS moved_to_target
+FROM pg_dist_shard_placement WHERE shardid = :shardid_fail_helper;
+SELECT DISTINCT result FROM run_command_on_placements('t_fail_helper','SELECT count(*) FROM pg_index WHERE indrelid=''%s''::regclass');
+SELECT DISTINCT result FROM run_command_on_placements('t_fail_helper','SELECT relreplident FROM pg_class WHERE oid=''%s''::regclass');
+
+-- 14b) the existing index fails to build early: the move fails, the shard stays on
+--      the source with all rows, and the source replica identity is restored
+\set VERBOSITY terse
+SELECT citus_move_shard_placement(:shardid_fail_existing, 'localhost', :src_fail_existing, 'localhost', :tgt_fail_existing, shard_transfer_mode:='force_logical_auto_identity');
+\set VERBOSITY default
+SELECT public.wait_for_resource_cleanup();
+SELECT count(*) FROM t_fail_existing;
+SELECT nodeport = :src_fail_existing AS still_on_source
+FROM pg_dist_shard_placement WHERE shardid = :shardid_fail_existing;
+SELECT DISTINCT result FROM run_command_on_placements('t_fail_existing','SELECT relreplident FROM pg_class WHERE oid=''%s''::regclass');
+
+\c - - - :worker_1_port
+DROP EVENT TRIGGER move_no_ri_fail_index;
+DROP FUNCTION public.move_no_ri_fail_index();
+\c - - - :worker_2_port
+DROP EVENT TRIGGER move_no_ri_fail_index;
+DROP FUNCTION public.move_no_ri_fail_index();
+\c - - - :master_port
+SET search_path TO move_no_ri;
+SET client_min_messages TO WARNING;
+
+-- 14c) without the injected failure, the same move succeeds
+SELECT citus_move_shard_placement(:shardid_fail_existing, 'localhost', :src_fail_existing, 'localhost', :tgt_fail_existing, shard_transfer_mode:='force_logical_auto_identity');
+SELECT public.wait_for_resource_cleanup();
+SELECT count(*) FROM t_fail_existing;
+SELECT DISTINCT result FROM run_command_on_placements('t_fail_existing','SELECT count(*) FROM pg_index WHERE indrelid=''%s''::regclass');
+DROP TABLE t_fail_helper, t_fail_existing;
+
+--
 -- SECTION 5: force_logical_auto_identity is a shard-MOVE-only capability. It only
 --            changes how LogicallyReplicateShards performs logical replication.
 --            Shard splits and tenant isolation (a split under the hood) do not go

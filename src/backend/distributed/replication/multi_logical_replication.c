@@ -67,6 +67,7 @@
 #include "distributed/shard_rebalancer.h"
 #include "distributed/shard_transfer.h"
 #include "distributed/version_compat.h"
+#include "distributed/worker_log_messages.h"
 
 #define CURRENT_LOG_POSITION_COMMAND "SELECT pg_current_wal_lsn()"
 
@@ -334,12 +335,18 @@ LogicallyReplicateShards(List *shardList, char *sourceNodeName, int sourceNodePo
  *
  * Every index here is built on the destination shard, which is not yet visible to
  * users, so a plain (blocking) CREATE INDEX is safe and cheaper than CONCURRENTLY.
+ *
+ * The per-shard loop only decides what to build; the CREATE INDEX commands for all
+ * shards are then run in parallel through the adaptive executor, exactly like the
+ * late CREATE INDEX phase (see ExecuteCreateIndexCommands) does.
  */
 static void
 CreateCatchupIndexesForLogicalReplication(List *shardList,
 										  MultiConnection *sourceConnection,
 										  WorkerNode *targetNode)
 {
+	List *catchupIndexCommandList = NIL;
+
 	ShardInterval *shardInterval = NULL;
 	foreach_declared_ptr(shardInterval, shardList)
 	{
@@ -385,9 +392,13 @@ CreateCatchupIndexesForLogicalReplication(List *shardList,
 									shardInterval->shardId,
 									targetNode->workerName, targetNode->workerPort)));
 
-			SendCommandListToWorkerOutsideTransaction(
-				targetNode->workerName, targetNode->workerPort,
-				TableOwner(relationId), shardCreateIndexCommandList);
+			/*
+			 * This index is excluded from the late CREATE INDEX phase, so a
+			 * failure to build it here must abort the move rather than silently
+			 * leave the destination shard without it.
+			 */
+			catchupIndexCommandList = list_concat(catchupIndexCommandList,
+												  shardCreateIndexCommandList);
 
 			continue;
 		}
@@ -438,29 +449,62 @@ CreateCatchupIndexesForLogicalReplication(List *shardList,
 								columnName, shardInterval->shardId,
 								targetNode->workerName, targetNode->workerPort)));
 
+		char *createHelperIndexCommand =
+			psprintf("CREATE INDEX %s ON %s USING btree (%s)",
+					 quote_identifier(indexName), qualifiedShardName,
+					 quote_identifier(columnName));
+
 		/*
 		 * The helper index only speeds up the catch-up phase, so a failure to
-		 * build it (e.g. a column value larger than the btree entry limit) must
-		 * not abort the whole move. Use an optional command and, on failure, fall
-		 * back to a sequential scan on the subscriber. The CLEANUP_ALWAYS record
-		 * registered above drops the (absent) index with DROP INDEX IF EXISTS at
-		 * the end of the operation.
+		 * build it must not abort the whole move. So we wrap the CREATE INDEX in
+		 * a PL/pgSQL block that turns an error into a WARNING on the destination
+		 * node, and the subscriber then falls back to a sequential scan. WHEN
+		 * OTHERS does not catch a query cancel, so cancelling the move still
+		 * works. The CLEANUP_ALWAYS record registered above drops the (possibly
+		 * absent) index with DROP INDEX IF EXISTS at the end of the operation.
 		 */
-		bool helperIndexCreated = SendOptionalCommandListToWorkerOutsideTransaction(
-			targetNode->workerName, targetNode->workerPort,
-			TableOwner(relationId),
-			list_make1(psprintf("CREATE INDEX %s ON %s USING btree (%s)",
-								quote_identifier(indexName), qualifiedShardName,
-								quote_identifier(columnName))));
+		char *optionalHelperIndexBlock =
+			psprintf("BEGIN %s; "
+					 "EXCEPTION WHEN OTHERS THEN "
+					 "RAISE WARNING 'could not build temporary replica identity "
+					 "helper index on shard " UINT64_FORMAT "; falling back to a "
+					 "sequential scan during catch-up: %%', SQLERRM; "
+					 "END",
+					 createHelperIndexCommand, shardInterval->shardId);
 
-		if (!helperIndexCreated)
-		{
-			ereport(WARNING, (errmsg("could not build temporary replica identity "
-									 "helper index on shard " UINT64_FORMAT
-									 "; falling back to a sequential scan during "
-									 "catch-up", shardInterval->shardId)));
-		}
+		catchupIndexCommandList =
+			lappend(catchupIndexCommandList,
+					psprintf("DO %s", quote_literal_cstr(optionalHelperIndexBlock)));
 	}
+
+	if (catchupIndexCommandList == NIL)
+	{
+		return;
+	}
+
+	/*
+	 * Build all the indexes in parallel outside of the coordinated transaction, as
+	 * the current user, which owns all the moved tables (an index always belongs to
+	 * the owner of its table anyway). CREATE INDEX takes a ShareLock, so the
+	 * commands can run concurrently on different shards.
+	 */
+	List *catchupIndexTaskList =
+		ConvertNonExistingPlacementDDLCommandsToTasks(catchupIndexCommandList,
+													  targetNode->workerName,
+													  targetNode->workerPort);
+
+	/*
+	 * By default, messages from the workers are only reported at DEBUG1. Report
+	 * them with their original level here, so that a user still sees the WARNING
+	 * raised on the destination node when a helper index cannot be built. The
+	 * transaction end callbacks turn this off again if the execution errors out.
+	 */
+	EnableWorkerMessagePropagation();
+
+	ExecuteTaskListOutsideTransaction(ROW_MODIFY_NONE, catchupIndexTaskList,
+									  MaxAdaptiveExecutorPoolSize, NIL);
+
+	DisableWorkerMessagePropagation();
 }
 
 
