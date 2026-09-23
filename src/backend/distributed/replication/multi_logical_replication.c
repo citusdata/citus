@@ -1658,8 +1658,9 @@ GetQueryResultStringList(MultiConnection *connection, char *query)
  * only invokes this in the force_logical_auto_identity shard transfer mode.
  *
  * Also note that setting REPLICA IDENTITY FULL requires a brief AccessExclusiveLock
- * on the source shard, so we bound it with a short lock_timeout (see below) so that
- * a busy shard fails the transfer fast.
+ * on the source shard. We retry the ALTER a few times with an increasing
+ * lock_timeout (see below), so that a transiently-locked shard does not fail the
+ * transfer; only a shard that stays locked fails it, in bounded time.
  */
 static void
 PrepareReplicaIdentitiesForPublication(MultiConnection *connection,
