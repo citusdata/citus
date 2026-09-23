@@ -67,6 +67,9 @@ s/name_len_12345678901234567890123456789012345678_fcd8ab6f_[0-9]+/name_len_12345
 /DEBUG:  concurrent ROOT page split/d
 /DEBUG: .+creating and filling new WAL file/d
 
+# ignore asynchronous I/O diagnostics that can randomly appear with pg18
+/^DEBUG:  io [0-9]+ +\|op .*\|target .*\|state .*: /d
+
 # normalize debug connection failure
 s/DEBUG:  connection to the remote node/WARNING:  connection to the remote node/g
 
