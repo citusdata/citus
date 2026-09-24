@@ -497,18 +497,21 @@ jobs:
         tests=${detected_changes}
 
         # split the tests to be skipped --today we only skip upgrade tests,
-        # snapshot based node addition tests and the output plugin allowlist
-        # test.
+        # snapshot based node addition tests, non-repeatable pruning tests and
+        # the output plugin allowlist test.
         # split_output_plugin_denied only reports its expected error when the
         # cluster starts without "citus" in output_plugin_libraries, which only
         # the check-split-output-plugin-denied target arranges.
         # snapshot based node addition tests are not flaky, as they promote
         # the streaming replica (clone) to a PostgreSQL primary node that is one way
         # operation
+        # multi_hash_pruning shares a schedule line with multi_join_pruning, which
+        # consumes and drops tables created by multi_partition_pruning. The line
+        # therefore cannot be repeated in the same cluster.
         skipped_tests=""
         not_skipped_tests=""
         for test in $tests; do
-            if [[ $test =~ ^src/test/regress/sql/upgrade_ ]] || [[ $test =~ ^src/test/regress/sql/multi_add_node_from_backup ]] || [[ $test =~ ^src/test/regress/sql/split_output_plugin_denied ]]; then
+            if [[ $test =~ ^src/test/regress/sql/upgrade_ ]] || [[ $test =~ ^src/test/regress/sql/multi_add_node_from_backup ]] || [[ $test =~ ^src/test/regress/sql/multi_(join|hash)_pruning\.sql$ ]] || [[ $test =~ ^src/test/regress/sql/split_output_plugin_denied ]]; then
                 skipped_tests="$skipped_tests $test"
             else
                 not_skipped_tests="$not_skipped_tests $test"
