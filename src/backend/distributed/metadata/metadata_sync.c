@@ -5619,7 +5619,9 @@ SendDependencyCreationCommands(MetadataSyncContext *context)
 		if (!IsAnyObjectAddressOwnedByExtension(list_make1(dependency), NULL))
 		{
 			/* dependency creation commands */
-			List *ddlCommands = GetAllDependencyCreateDDLCommands(list_make1(dependency));
+			bool bundlePartitionMetadata = true;
+			List *ddlCommands = GetAllDependencyCreateDDLCommands(list_make1(dependency),
+																  bundlePartitionMetadata);
 			SendOrCollectCommandListToActivatedNodes(context, ddlCommands);
 		}
 
@@ -5753,7 +5755,18 @@ AppendRelationMetadataBatchRows(Oid relationId, StringInfo partitionValues,
 {
 	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
 
-	AppendDistributionMetadataBatchRow(partitionValues, cacheEntry);
+	/*
+	 * The pg_dist_partition row is bundled with the shell table CREATE for
+	 * tables that get a shell table bundle (see SendDependencyCreationCommands);
+	 * only emit it here for the excluded tables, i.e., extension-owned shell tables,
+	 * so we neither duplicate the row nor leave it out.
+	 */
+	ObjectAddress tableAddress = { 0 };
+	ObjectAddressSet(tableAddress, RelationRelationId, relationId);
+	if (IsAnyObjectAddressOwnedByExtension(list_make1(&tableAddress), NULL))
+	{
+		AppendDistributionMetadataBatchRow(partitionValues, cacheEntry);
+	}
 
 	List *shardIntervalList = LoadShardIntervalList(relationId);
 	AppendShardMetadataBatchRows(shardValues, placementValues, shardIntervalList);
