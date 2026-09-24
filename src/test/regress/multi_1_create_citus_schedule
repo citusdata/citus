@@ -127,3 +127,10 @@ test: citus_cluster_changes_block
 # ----------
 test: allow_unsafe_insert_select_pushdown
 test: extract_deparse
+
+# ----------
+# multi_having_var_remapping covers a planner fix introduced in 13.5, absent from
+# the N-1 (13.4.0) Citus binary. Keep these cases out of the N-1 test matrix;
+# they remain part of multi_having_pushdown on main.
+# ----------
+test: multi_having_var_remapping
