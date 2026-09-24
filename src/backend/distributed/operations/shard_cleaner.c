@@ -14,20 +14,27 @@
 #include "miscadmin.h"
 
 #include "access/genam.h"
+#include "access/relation.h"
 #include "access/xact.h"
 #include "catalog/namespace.h"
+#include "catalog/pg_class.h"
 #include "commands/dbcommands.h"
 #include "commands/sequence.h"
 #include "nodes/makefuncs.h"
 #include "postmaster/postmaster.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
+#include "utils/lsyscache.h"
+#include "utils/rel.h"
+#include "utils/relcache.h"
 
 #include "distributed/citus_safe_lib.h"
 #include "distributed/coordinator_protocol.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/metadata_utility.h"
 #include "distributed/pg_dist_cleanup.h"
+#include "distributed/relay_utility.h"
 #include "distributed/remote_commands.h"
 #include "distributed/resource_lock.h"
 #include "distributed/shard_cleaner.h"
@@ -94,6 +101,12 @@ static bool TryDropReplicationSlotOutsideTransaction(char *replicationSlotName,
 static bool TryDropUserOutsideTransaction(char *username, char *nodeName, int nodePort);
 static bool TryDropDatabaseOutsideTransaction(char *databaseName, char *nodeName,
 											  int nodePort);
+static bool TryResetReplicaIdentityOutsideTransaction(char *objectName, char *nodeName,
+													  int nodePort);
+static bool RelationHasUpdateOrDeletePublication(MultiConnection *connection,
+												 char *qualifiedRelationName);
+static bool TryDropIndexOutsideTransaction(char *qualifiedIndexName, char *nodeName,
+										   int nodePort);
 
 static CleanupRecord * GetCleanupRecordByNameAndType(char *objectName,
 													 CleanupObject type);
@@ -609,6 +622,18 @@ TryDropResourceByCleanupRecordOutsideTransaction(CleanupRecord *record,
 													 nodePort);
 		}
 
+		case CLEANUP_OBJECT_REPLICA_IDENTITY:
+		{
+			return TryResetReplicaIdentityOutsideTransaction(record->objectName,
+															 nodeName, nodePort);
+		}
+
+		case CLEANUP_OBJECT_INDEX:
+		{
+			return TryDropIndexOutsideTransaction(record->objectName,
+												  nodeName, nodePort);
+		}
+
 		default:
 		{
 			ereport(WARNING, (errmsg(
@@ -953,9 +978,231 @@ TryDropDatabaseOutsideTransaction(char *databaseName, char *nodeName, int nodePo
 
 
 /*
- * ErrorIfCleanupRecordForShardExists errors out if a cleanup record for the given
- * shard name exists.
+ * TryResetReplicaIdentityOutsideTransaction restores the replica identity of a shard
+ * that was temporarily set to REPLICA IDENTITY FULL for the duration of a logical
+ * replication based transfer (see PrepareReplicaIdentitiesForPublication).
+ *
+ * The objectName is the shard id. Rather than restoring a replica identity captured
+ * at move time, we restore the shard to match its distributed (shell) table's CURRENT
+ * replica identity. This is because, for Citus tables, normally we always make sure
+ * that a shard's replica identity mirrors its distributed table, except when setting
+ * up replica identity for the duration of the logical replication based transfer.
+ *
+ * We use ALTER TABLE IF EXISTS so that this is a no-op if the shard has already been
+ * dropped (e.g. the source shard of a completed move).
  */
+static bool
+TryResetReplicaIdentityOutsideTransaction(char *objectName, char *nodeName, int nodePort)
+{
+	uint64 shardId = strtou64(objectName, NULL, 10);
+
+	if (!ShardExists(shardId))
+	{
+		return true;
+	}
+
+	ShardInterval *shardInterval = LoadShardInterval(shardId);
+	char *qualifiedShardName = ConstructQualifiedShardName(shardInterval);
+
+	Oid shellTableId = shardInterval->relationId;
+	Relation shellTable = try_relation_open(shellTableId, AccessShareLock);
+	if (shellTable == NULL)
+	{
+		return true;
+	}
+
+	char replicaIdentity = shellTable->rd_rel->relreplident;
+	char *replicaIdentityClause = NULL;
+
+	switch (replicaIdentity)
+	{
+		case REPLICA_IDENTITY_NOTHING:
+		{
+			replicaIdentityClause = "NOTHING";
+			break;
+		}
+
+		case REPLICA_IDENTITY_INDEX:
+		{
+			Oid replicaIndexId = RelationGetReplicaIndex(shellTable);
+			if (OidIsValid(replicaIndexId))
+			{
+				/*
+				 * Restore REPLICA IDENTITY USING INDEX, shard-qualifying the index
+				 * name the same way normal replica-identity DDL propagation does
+				 * (see the AT_ReplicaIdentity handling in RelayEventExtendNames).
+				 */
+				char *indexName = pstrdup(get_rel_name(replicaIndexId));
+				AppendShardIdToName(&indexName, shardId);
+				replicaIdentityClause = psprintf("USING INDEX %s",
+												 quote_identifier(indexName));
+			}
+			else
+			{
+				/*
+				 * The shell table is marked REPLICA IDENTITY USING INDEX but has no
+				 * usable replica identity index (it was dropped or is invalid), which
+				 * behaves the same as NOTHING (see the pg_class.relreplident
+				 * documentation), so restore NOTHING.
+				 */
+				ereport(WARNING, (errmsg("restoring replica identity to NOTHING on %s "
+										 "because the replica identity index was "
+										 "missing", qualifiedShardName)));
+				replicaIdentityClause = "NOTHING";
+			}
+			break;
+		}
+
+		case REPLICA_IDENTITY_FULL:
+		{
+			/* the shard is already set to REPLICA IDENTITY FULL, no need to change it */
+			return true;
+		}
+
+		case REPLICA_IDENTITY_DEFAULT:
+		{
+			replicaIdentityClause = "DEFAULT";
+			break;
+		}
+
+		default:
+		{
+			/* not reachable today */
+			ereport(WARNING, (errmsg("unexpected replica identity '%c' for %s; "
+									 "restoring DEFAULT", replicaIdentity,
+									 qualifiedShardName)));
+			replicaIdentityClause = "DEFAULT";
+			break;
+		}
+	}
+
+	relation_close(shellTable, AccessShareLock);
+
+	int connectionFlags = OUTSIDE_TRANSACTION;
+	MultiConnection *connection = GetNodeUserDatabaseConnection(connectionFlags,
+																nodeName, nodePort,
+																CitusExtensionOwnerName(),
+																NULL);
+
+	/*
+	 * Only a publication that publishes UPDATE or DELETE forces the shard to keep a
+	 * usable replica identity: PostgreSQL rejects an UPDATE/DELETE on a table that
+	 * has no replica identity while it is in such a publication, whereas INSERT and
+	 * TRUNCATE never need one. So we only defer the restore while an UPDATE/DELETE
+	 * publication still includes the shard (e.g. our own move publication, which is
+	 * dropped by an earlier cleanup record). Publication cleanup is ordered before
+	 * replica identity cleanup, but cleanup continues after an individual resource
+	 * fails, so keep the cleanup record for a later retry instead of making writes
+	 * fail while such a publication is still present. An INSERT/TRUNCATE-only
+	 * publication a user put on the shard does not block the restore, because losing
+	 * the replica identity cannot break those.
+	 */
+	if (RelationHasUpdateOrDeletePublication(connection, qualifiedShardName))
+	{
+		return false;
+	}
+
+	/*
+	 * The ALTER TABLE command targets a shard, which is not a distributed object,
+	 * so we temporarily disable DDL propagation.
+	 */
+	bool success = SendOptionalCommandListToWorkerOutsideTransactionWithConnection(
+		connection,
+		list_make3(
+			"SET LOCAL lock_timeout TO '1s'",
+			"SET LOCAL citus.enable_ddl_propagation TO OFF;",
+			psprintf("ALTER TABLE IF EXISTS %s REPLICA IDENTITY %s;",
+					 qualifiedShardName, replicaIdentityClause)));
+
+	return success;
+}
+
+
+/*
+ * RelationHasUpdateOrDeletePublication returns whether the given relation belongs to
+ * any publication that publishes UPDATE or DELETE. Only such publications require the
+ * relation to keep a usable replica identity (PostgreSQL rejects an UPDATE/DELETE on a
+ * relation with no replica identity that is part of a publication publishing that
+ * operation; INSERT and TRUNCATE never need one). An INSERT/TRUNCATE-only publication
+ * is therefore ignored here. If the check itself fails, it conservatively returns true
+ * so replica identity cleanup is retried later.
+ */
+static bool
+RelationHasUpdateOrDeletePublication(MultiConnection *connection,
+									 char *qualifiedRelationName)
+{
+	char *command = psprintf(
+		"SELECT EXISTS ("
+		"SELECT 1 FROM pg_catalog.pg_publication_rel pr "
+		"JOIN pg_catalog.pg_publication p ON p.oid = pr.prpubid "
+		"WHERE pr.prrelid = pg_catalog.to_regclass(%s) "
+		"AND (p.pubupdate OR p.pubdelete))",
+		quote_literal_cstr(qualifiedRelationName));
+
+	PGresult *result = NULL;
+	int response = ExecuteOptionalRemoteCommand(connection, command, &result);
+	if (response != RESPONSE_OKAY)
+	{
+		ereport(WARNING, (errmsg("failed to determine if relation %s is part of a "
+								 "publication that publishes UPDATE or DELETE because "
+								 "the check failed, assuming it is",
+								 qualifiedRelationName)));
+		return true;
+	}
+
+	bool validResult = PQntuples(result) == 1 && PQnfields(result) == 1 &&
+					   !PQgetisnull(result, 0, 0);
+	if (!validResult)
+	{
+		ereport(WARNING, (errmsg("failed to determine if relation %s is part of a "
+								 "publication that publishes UPDATE or DELETE because "
+								 "of an invalid result from the check, assuming it is",
+								 qualifiedRelationName)));
+	}
+
+	bool assumePublicationExists =
+		!validResult || strcmp(PQgetvalue(result, 0, 0), "t") == 0;
+
+	PQclear(result);
+	ForgetResults(connection);
+
+	return assumePublicationExists;
+}
+
+
+/*
+ * TryDropIndexOutsideTransaction drops a temporary "helper" index that was built on
+ * the destination shard of a logical-replication based transfer (see
+ * CreateCatchupIndexesForLogicalReplication). The objectName is the schema-qualified
+ * index name. We use DROP INDEX IF EXISTS so that this is a no-op if the index (or
+ * its shard) has already been dropped, e.g. when the destination shard placement was
+ * removed by an earlier cleanup record on a failed transfer.
+ */
+static bool
+TryDropIndexOutsideTransaction(char *qualifiedIndexName, char *nodeName, int nodePort)
+{
+	int connectionFlags = OUTSIDE_TRANSACTION;
+	MultiConnection *connection = GetNodeUserDatabaseConnection(connectionFlags,
+																nodeName, nodePort,
+																CitusExtensionOwnerName(),
+																NULL);
+
+	/*
+	 * The DROP INDEX command targets a shard index, which is not a distributed
+	 * object, so we temporarily disable DDL propagation. A short lock_timeout keeps
+	 * us from blocking indefinitely on a busy destination shard.
+	 */
+	bool success = SendOptionalCommandListToWorkerOutsideTransactionWithConnection(
+		connection,
+		list_make3(
+			"SET LOCAL lock_timeout TO '1s'",
+			"SET LOCAL citus.enable_ddl_propagation TO OFF;",
+			psprintf("DROP INDEX IF EXISTS %s;", qualifiedIndexName)));
+
+	return success;
+}
+
+
 void
 ErrorIfCleanupRecordForShardExists(char *shardName)
 {

@@ -31,3 +31,7 @@ DROP FUNCTION IF EXISTS pg_catalog.worker_apply_sequence_command(text, regtype);
 
 -- fix citus_finish_citus_upgrade to always update last_upgrade_version
 #include "udfs/citus_finish_citus_upgrade/15.0-1.sql"
+
+-- add the force_logical_auto_identity shard transfer mode, which enables the extra
+-- logical-replication capabilities for tables that lack a usable replica identity
+ALTER TYPE citus.shard_transfer_mode ADD VALUE IF NOT EXISTS 'force_logical_auto_identity';

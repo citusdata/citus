@@ -1631,13 +1631,20 @@ NonBlockingShardSplit(SplitOperation splitOperation,
 	 */
 	bool skipInterShardRelationshipCreation = false;
 
+	/*
+	 * For now we don't support automatically creating replica identities
+	 * (and maybe an index) for non-blocking shard splits, so we pass
+	 * useAutoIdentityLogicalReplication as false here.
+	 */
+	bool useAutoIdentityLogicalReplication = false;
 	CompleteNonBlockingShardTransfer(sourceColocatedShardIntervalList,
 									 sourceConnection,
 									 publicationInfoHash,
 									 logicalRepTargetList,
 									 groupedLogicalRepTargetsHash,
 									 SHARD_SPLIT,
-									 skipInterShardRelationshipCreation);
+									 skipInterShardRelationshipCreation,
+									 useAutoIdentityLogicalReplication);
 
 	/*
 	 * 10) Delete old shards metadata and mark the shards as to be deferred drop.
