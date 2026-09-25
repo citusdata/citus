@@ -126,7 +126,7 @@ SELECT 1 FROM citus_add_node('localhost', :worker_4_port);
 
 SELECT * FROM get_rebalance_table_shards_plan() ORDER BY shardid;
 
-SET client_min_messages TO DEBUG1;
+SET client_min_messages TO NOTICE;
 
 SELECT citus_rebalance_start AS job_id from citus_rebalance_start(
     shard_transfer_mode := 'force_logical',
@@ -142,9 +142,12 @@ SELECT citus_rebalance_wait();
 -- see the dependencies of the tasks scheduled by the background rebalancer
 SELECT * from pg_dist_background_task_depend ORDER BY job_id, task_id, depends_on;
 
+-- Omit unstable move task IDs; reference IDs distinguish copies and relationship tasks.
 -- Temporary hack to eliminate SET application name from command until we get the
 -- background job enhancement done.
-SELECT D.task_id,
+SELECT CASE WHEN (SELECT T.command LIKE '%pg_catalog.citus_move_shard_placement%'
+                  FROM pg_dist_background_task T WHERE T.task_id = D.task_id)
+            THEN NULL ELSE D.task_id END AS task_id,
        (SELECT
         CASE
             WHEN T.command LIKE '%citus_internal.citus_internal_copy_single_shard_placement%' THEN
@@ -166,7 +169,7 @@ SELECT D.task_id,
             T.command
        END
        FROM pg_dist_background_task T WHERE T.task_id = D.depends_on)
-FROM pg_dist_background_task_depend D  WHERE job_id in (:job_id) ORDER BY D.task_id, D.depends_on ASC;
+FROM pg_dist_background_task_depend D  WHERE job_id in (:job_id) ORDER BY 1, 2, 3, 4;
 
 
 TRUNCATE pg_dist_background_job CASCADE;
@@ -200,7 +203,7 @@ SELECT 1 FROM citus_add_node('localhost', :worker_6_port);
 
 SELECT * FROM get_rebalance_table_shards_plan() ORDER BY shardid;
 
-SET client_min_messages TO DEBUG1;
+SET client_min_messages TO NOTICE;
 
 SELECT citus_rebalance_start AS job_id from citus_rebalance_start(
     shard_transfer_mode := 'block_writes',
@@ -214,9 +217,12 @@ SELECT citus_rebalance_wait();
 
 -- see the dependencies of the tasks scheduled by the background rebalancer
 SELECT * from pg_dist_background_task_depend ORDER BY job_id, task_id, depends_on;
+-- Omit unstable move task IDs; reference IDs distinguish copies and relationship tasks.
 -- Temporary hack to eliminate SET application name from command until we get the
 -- background job enhancement done.
-SELECT D.task_id,
+SELECT CASE WHEN (SELECT T.command LIKE '%pg_catalog.citus_move_shard_placement%'
+                  FROM pg_dist_background_task T WHERE T.task_id = D.task_id)
+            THEN NULL ELSE D.task_id END AS task_id,
        (SELECT
         CASE
             WHEN T.command LIKE '%citus_internal.citus_internal_copy_single_shard_placement%' THEN
@@ -238,7 +244,7 @@ SELECT D.task_id,
             T.command
        END
        FROM pg_dist_background_task T WHERE T.task_id = D.depends_on)
-FROM pg_dist_background_task_depend D  WHERE job_id in (:job_id) ORDER BY D.task_id, D.depends_on ASC;
+FROM pg_dist_background_task_depend D  WHERE job_id in (:job_id) ORDER BY 1, 2, 3, 4;
 
 SELECT
     c.id AS customer_id,
