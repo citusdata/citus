@@ -236,12 +236,6 @@ s/issuing SELECT pg_cancel_backend\([0-9]+::integer\)/issuing SELECT pg_cancel_b
 # shard_rebalancer output for flaky nodeIds
 s/issuing SELECT pg_catalog.citus_copy_shard_placement\(43[0-9]+,[0-9]+,[0-9]+,'block_writes'\)/issuing SELECT pg_catalog.citus_copy_shard_placement(43xxxx,xx,xx,'block_writes')/g
 
-# shard_rebalancer intentionally removed the coordinator before this size query.
-# Its missing-node diagnostic depends on cache state; keep all Size Query output.
-/^SELECT \* FROM get_rebalance_table_shards_plan\('colocated_t1', rebalance_strategy := 'by_disk_size'\);$/,/^RESET client_min_messages;$/ {
-    /^DEBUG:  there is no active node with group id '0' on pg_dist_node$/d
-}
-
 # node id in run_command_on_all_nodes warning
 s/Error on node with node id [0-9]+/Error on node with node id xxxxx/g
 
