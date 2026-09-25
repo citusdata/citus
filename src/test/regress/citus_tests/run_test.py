@@ -180,6 +180,12 @@ DEPS = {
         repeatable=False,
         worker_count=6,
     ),
+    "background_rebalance_parallel_reference_fkeys": TestDeps(
+        None,
+        ["multi_test_helpers", "multi_cluster_management"],
+        repeatable=False,
+        worker_count=6,
+    ),
     "function_propagation": TestDeps("minimal_schedule"),
     "citus_shards": TestDeps("minimal_schedule"),
     "grant_on_foreign_server_propagation": TestDeps("minimal_schedule"),
