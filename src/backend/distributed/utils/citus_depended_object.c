@@ -257,7 +257,7 @@ HideCitusDependentObjectsOnQueriesOfPgMetaTables(Node *node, void *context)
 					 * We found a valid pg meta class in query,
 					 * so we assert below conditions.
 					 */
-					Assert(mergeJoinCondition ||
+					Assert(query->mergeJoinCondition ||
 						   (query->jointree != NULL &&
 							query->jointree->fromlist != NULL));
 
