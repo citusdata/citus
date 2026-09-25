@@ -1873,6 +1873,28 @@ SELECT * FROM multi_extension.print_extension_changes();
  function worker_apply_sequence_command(text,regtype) void        |
 (2 rows)
 
+-- Exercise time_partitions after upgrading to the planner-safe definition.
+-- Keep this here rather than in multi_partitioning, which also runs against N-1 SQL.
+BEGIN;
+CREATE TABLE multi_extension.range_parent (k int) PARTITION BY RANGE (k);
+CREATE TABLE multi_extension.range_child PARTITION OF multi_extension.range_parent FOR VALUES FROM (0) TO (10);
+CREATE TABLE multi_extension.hash_parent (k int) PARTITION BY HASH (k);
+CREATE TABLE multi_extension.hash_child PARTITION OF multi_extension.hash_parent FOR VALUES WITH (MODULUS 1, REMAINDER 0);
+SET LOCAL geqo_threshold = 2;
+SET LOCAL geqo_pool_size = 2;
+SET LOCAL geqo_generations = 1;
+-- EXECUTE replans each query, including join orders that call the function
+-- before matching the child to its parent and applying the partition filters.
+DO $$
+BEGIN
+  FOR seed IN 0..20 LOOP
+    PERFORM set_config('geqo_seed', (seed / 20.0)::text, true);
+    EXECUTE 'SELECT * FROM time_partitions';
+    EXECUTE 'SELECT parent_table, partition_column, partition, from_value, to_value FROM time_partitions';
+  END LOOP;
+END;
+$$;
+ROLLBACK;
 DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;
 -- show running version
 SHOW citus.version;
