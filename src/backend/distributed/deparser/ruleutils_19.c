@@ -43,11 +43,6 @@
 #include "catalog/pg_operator.h"
 #include "catalog/pg_partitioned_table.h"
 #include "catalog/pg_proc.h"
-#include "catalog/pg_propgraph_element.h"
-#include "catalog/pg_propgraph_element_label.h"
-#include "catalog/pg_propgraph_label.h"
-#include "catalog/pg_propgraph_label_property.h"
-#include "catalog/pg_propgraph_property.h"
 #include "catalog/pg_statistic_ext.h"
 #include "catalog/pg_trigger.h"
 #include "catalog/pg_type.h"
@@ -4305,170 +4300,6 @@ get_utility_query_def(Query *query, deparse_context *context)
 
 
 /*
- * Parse back a graph label expression
- */
-static void
-get_graph_label_expr(Node *label_expr, deparse_context *context)
-{
-	StringInfo	buf = context->buf;
-
-	check_stack_depth();
-
-	switch (nodeTag(label_expr))
-	{
-		case T_GraphLabelRef:
-			{
-				GraphLabelRef *lref = (GraphLabelRef *) label_expr;
-
-				appendStringInfoString(buf, quote_identifier(get_propgraph_label_name(lref->labelid)));
-				break;
-			}
-
-		case T_BoolExpr:
-			{
-				BoolExpr   *be = (BoolExpr *) label_expr;
-				ListCell   *lc;
-				bool		first = true;
-
-				Assert(be->boolop == OR_EXPR);
-
-				foreach(lc, be->args)
-				{
-					if (!first)
-					{
-						if (be->boolop == OR_EXPR)
-							appendStringInfoChar(buf, '|');
-					}
-					else
-						first = false;
-					get_graph_label_expr(lfirst(lc), context);
-				}
-
-				break;
-			}
-
-		default:
-			elog(ERROR, "unrecognized node type: %d", (int) nodeTag(label_expr));
-			break;
-	}
-}
-
-/*
- * Parse back a path pattern expression
- */
-static void
-get_path_pattern_expr_def(List *path_pattern_expr, deparse_context *context)
-{
-	StringInfo	buf = context->buf;
-	ListCell   *lc;
-
-	foreach(lc, path_pattern_expr)
-	{
-		GraphElementPattern *gep = lfirst_node(GraphElementPattern, lc);
-		const char *sep = "";
-
-		switch (gep->kind)
-		{
-			case VERTEX_PATTERN:
-				appendStringInfoChar(buf, '(');
-				break;
-			case EDGE_PATTERN_LEFT:
-				appendStringInfoString(buf, "<-[");
-				break;
-			case EDGE_PATTERN_RIGHT:
-			case EDGE_PATTERN_ANY:
-				appendStringInfoString(buf, "-[");
-				break;
-			case PAREN_EXPR:
-				appendStringInfoChar(buf, '(');
-				break;
-		}
-
-		if (gep->variable)
-		{
-			appendStringInfoString(buf, quote_identifier(gep->variable));
-			sep = " ";
-		}
-
-		if (gep->labelexpr)
-		{
-			appendStringInfoString(buf, sep);
-			appendStringInfoString(buf, "IS ");
-			get_graph_label_expr(gep->labelexpr, context);
-			sep = " ";
-		}
-
-		if (gep->subexpr)
-		{
-			appendStringInfoString(buf, sep);
-			get_path_pattern_expr_def(gep->subexpr, context);
-			sep = " ";
-		}
-
-		if (gep->whereClause)
-		{
-			appendStringInfoString(buf, sep);
-			appendStringInfoString(buf, "WHERE ");
-			get_rule_expr(gep->whereClause, context, false);
-		}
-
-		switch (gep->kind)
-		{
-			case VERTEX_PATTERN:
-				appendStringInfoChar(buf, ')');
-				break;
-			case EDGE_PATTERN_LEFT:
-			case EDGE_PATTERN_ANY:
-				appendStringInfoString(buf, "]-");
-				break;
-			case EDGE_PATTERN_RIGHT:
-				appendStringInfoString(buf, "]->");
-				break;
-			case PAREN_EXPR:
-				appendStringInfoChar(buf, ')');
-				break;
-		}
-
-		if (gep->quantifier)
-		{
-			int			lower = linitial_int(gep->quantifier);
-			int			upper = lsecond_int(gep->quantifier);
-
-			appendStringInfo(buf, "{%d,%d}", lower, upper);
-		}
-	}
-}
-
-/*
- * Parse back a graph pattern
- */
-static void
-get_graph_pattern_def(GraphPattern *graph_pattern, deparse_context *context)
-{
-	StringInfo	buf = context->buf;
-	ListCell   *lc;
-	bool		first = true;
-
-	foreach(lc, graph_pattern->path_pattern_list)
-	{
-		List	   *path_pattern_expr = lfirst_node(List, lc);
-
-		if (!first)
-			appendStringInfoString(buf, ", ");
-		else
-			first = false;
-
-		get_path_pattern_expr_def(path_pattern_expr, context);
-	}
-
-	if (graph_pattern->whereClause)
-	{
-		appendStringInfoString(buf, "WHERE ");
-		get_rule_expr(graph_pattern->whereClause, context, false);
-	}
-}
-
-/*
  * Display a Var appropriately.
  *
  * In some cases (currently only when recursing into an unnamed join)
@@ -5178,7 +5009,6 @@ get_name_for_var_field(Var *var, int fieldno,
 		case RTE_RELATION:
 		case RTE_VALUES:
 		case RTE_NAMEDTUPLESTORE:
-		case RTE_GRAPH_TABLE:
 		case RTE_RESULT:
 		case RTE_SUBQUERY:
 			/* Subselect-in-FROM: examine sub-select's output expr */
@@ -9600,29 +9430,6 @@ get_from_clause_item(Node *jtnode, Query *query, deparse_context *context)
 				break;
 			case RTE_TABLEFUNC:
 				get_tablefunc(rte->tablefunc, context, true);
-				break;
-			case RTE_GRAPH_TABLE:
-				appendStringInfoString(buf, "GRAPH_TABLE (");
-				appendStringInfoString(buf, generate_relation_name(rte->relid, context->namespaces));
-				appendStringInfoString(buf, " MATCH ");
-				get_graph_pattern_def(rte->graph_pattern, context);
-				appendStringInfoString(buf, " COLUMNS (");
-				{
-					bool		first = true;
-
-					foreach_node(TargetEntry, te, rte->graph_table_columns)
-					{
-						if (!first)
-							appendStringInfoString(buf, ", ");
-						else
-							first = false;
-
-						get_rule_expr((Node *) te->expr, context, false);
-						appendStringInfoString(buf, " AS ");
-						appendStringInfoString(buf, quote_identifier(te->resname));
-					}
-				}
-				appendStringInfoString(buf, "))");
 				break;
 			case RTE_VALUES:
 				/* Values list RTE */
