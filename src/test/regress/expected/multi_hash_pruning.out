@@ -9,6 +9,11 @@ SET citus.shard_replication_factor to 1;
 -- router planner, so we're explicitly disabling it in this file.
 -- We've bunch of other tests that triggers fast-path-router
 SET citus.enable_fast_path_router_planner TO false;
+-- Keep this shared N-1 test focused on the existing hash-pruning behavior.
+SELECT CASE
+	WHEN current_setting('citus.enable_or_clause_arm_pruning', true) IS NOT NULL
+	THEN set_config('citus.enable_or_clause_arm_pruning', 'off', false)
+	END AS enable_or_clause_arm_pruning \gset
 -- Create a table partitioned on integer column and update partition type to
 -- hash. Then load data into this table and update shard min max values with
 -- hashed ones. Hash value of 1, 2, 3  and 4 are consecutively -1905060026,
@@ -513,10 +518,6 @@ DEBUG:  shard count after pruning for orders_hash_partitioned: 4
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  no shard pruning constraints on orders_hash_partitioned found
 DEBUG:  shard count after pruning for orders_hash_partitioned: 4
-DEBUG:  constraint value: 1
-DEBUG:  shard count after pruning for orders_hash_partitioned: 1
-DEBUG:  no shard pruning constraints on orders_hash_partitioned found
-DEBUG:  shard count after pruning for orders_hash_partitioned: 4
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
@@ -549,10 +550,6 @@ DEBUG:  shard count after pruning for orders_hash_partitioned: 4
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  no shard pruning constraints on orders_hash_partitioned found
 DEBUG:  shard count after pruning for orders_hash_partitioned: 4
-DEBUG:  no shard pruning constraints on orders_hash_partitioned found
-DEBUG:  shard count after pruning for orders_hash_partitioned: 4
-DEBUG:  constraint value: 1
-DEBUG:  shard count after pruning for orders_hash_partitioned: 1
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
@@ -673,10 +670,6 @@ DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  constraint value: 1
 DEBUG:  constraint value: 2
 DEBUG:  shard count after pruning for orders_hash_partitioned: 2
-DEBUG:  constraint value: 1
-DEBUG:  shard count after pruning for orders_hash_partitioned: 1
-DEBUG:  constraint value: 2
-DEBUG:  shard count after pruning for orders_hash_partitioned: 1
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
  count
@@ -694,14 +687,6 @@ DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  constraint value: 1
 DEBUG:  constraint value: 2
 DEBUG:  shard count after pruning for orders_hash_partitioned: 2
-DEBUG:  constraint value: 1
-DEBUG:  shard count after pruning for orders_hash_partitioned: 1
-DEBUG:  constraint value: 2
-DEBUG:  shard count after pruning for orders_hash_partitioned: 1
-DEBUG:  no shard pruning constraints on orders_hash_partitioned found
-DEBUG:  shard count after pruning for orders_hash_partitioned: 4
-DEBUG:  no shard pruning constraints on orders_hash_partitioned found
-DEBUG:  shard count after pruning for orders_hash_partitioned: 4
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
  count
@@ -723,14 +708,6 @@ DEBUG:  constraint value: 1
 DEBUG:  constraint value: 2
 DEBUG:  constraint value: 2
 DEBUG:  shard count after pruning for orders_hash_partitioned: 2
-DEBUG:  constraint value: 1
-DEBUG:  shard count after pruning for orders_hash_partitioned: 1
-DEBUG:  constraint value: 1
-DEBUG:  shard count after pruning for orders_hash_partitioned: 1
-DEBUG:  constraint value: 2
-DEBUG:  shard count after pruning for orders_hash_partitioned: 1
-DEBUG:  constraint value: 2
-DEBUG:  shard count after pruning for orders_hash_partitioned: 1
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
  count
@@ -748,12 +725,6 @@ DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  constraint value: 1
 DEBUG:  constraint value: 2
 DEBUG:  shard count after pruning for orders_hash_partitioned: 2
-DEBUG:  no shard pruning constraints on orders_hash_partitioned found
-DEBUG:  shard count after pruning for orders_hash_partitioned: 4
-DEBUG:  no shard pruning constraints on orders_hash_partitioned found
-DEBUG:  shard count after pruning for orders_hash_partitioned: 4
-DEBUG:  no shard pruning constraints on orders_hash_partitioned found
-DEBUG:  shard count after pruning for orders_hash_partitioned: 4
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
  count
@@ -771,14 +742,6 @@ DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  constraint value: 1
 DEBUG:  constraint value: 2
 DEBUG:  shard count after pruning for orders_hash_partitioned: 2
-DEBUG:  no shard pruning constraints on orders_hash_partitioned found
-DEBUG:  shard count after pruning for orders_hash_partitioned: 4
-DEBUG:  no shard pruning constraints on orders_hash_partitioned found
-DEBUG:  shard count after pruning for orders_hash_partitioned: 4
-DEBUG:  no shard pruning constraints on orders_hash_partitioned found
-DEBUG:  shard count after pruning for orders_hash_partitioned: 4
-DEBUG:  no shard pruning constraints on orders_hash_partitioned found
-DEBUG:  shard count after pruning for orders_hash_partitioned: 4
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
  count
@@ -800,12 +763,6 @@ DEBUG:  constraint value: 2
 DEBUG:  constraint value: 2
 DEBUG:  constraint value: 3
 DEBUG:  shard count after pruning for orders_hash_partitioned: 3
-DEBUG:  constraint value: 1
-DEBUG:  constraint value: 2
-DEBUG:  shard count after pruning for orders_hash_partitioned: 2
-DEBUG:  constraint value: 2
-DEBUG:  constraint value: 3
-DEBUG:  shard count after pruning for orders_hash_partitioned: 2
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
@@ -820,11 +777,6 @@ SELECT count(*) FROM orders_hash_partitioned
 DEBUG:  no shard pruning constraints on orders_hash_partitioned found
 DEBUG:  shard count after pruning for orders_hash_partitioned: 4
 DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  no shard pruning constraints on orders_hash_partitioned found
-DEBUG:  shard count after pruning for orders_hash_partitioned: 4
-DEBUG:  constraint value: 1
-DEBUG:  constraint value: 2
-DEBUG:  shard count after pruning for orders_hash_partitioned: 2
 DEBUG:  no shard pruning constraints on orders_hash_partitioned found
 DEBUG:  shard count after pruning for orders_hash_partitioned: 4
 DEBUG:  assigned task to node localhost:xxxxx
@@ -848,12 +800,6 @@ DEBUG:  constraint value: 1
 DEBUG:  constraint value: 2
 DEBUG:  constraint value: 3
 DEBUG:  shard count after pruning for orders_hash_partitioned: 3
-DEBUG:  constraint value: 1
-DEBUG:  shard count after pruning for orders_hash_partitioned: 1
-DEBUG:  constraint value: 2
-DEBUG:  shard count after pruning for orders_hash_partitioned: 1
-DEBUG:  constraint value: 3
-DEBUG:  shard count after pruning for orders_hash_partitioned: 1
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
@@ -872,10 +818,6 @@ DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  constraint value: 1
 DEBUG:  constraint value: 2
 DEBUG:  shard count after pruning for orders_hash_partitioned: 2
-DEBUG:  constraint value: 1
-DEBUG:  shard count after pruning for orders_hash_partitioned: 1
-DEBUG:  constraint value: 2
-DEBUG:  shard count after pruning for orders_hash_partitioned: 1
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
  count
@@ -893,12 +835,6 @@ DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  constraint value: 1
 DEBUG:  constraint value: 2
 DEBUG:  shard count after pruning for orders_hash_partitioned: 2
-DEBUG:  no shard pruning constraints on orders_hash_partitioned found
-DEBUG:  shard count after pruning for orders_hash_partitioned: 4
-DEBUG:  no shard pruning constraints on orders_hash_partitioned found
-DEBUG:  shard count after pruning for orders_hash_partitioned: 4
-DEBUG:  no shard pruning constraints on orders_hash_partitioned found
-DEBUG:  shard count after pruning for orders_hash_partitioned: 4
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
  count
@@ -916,10 +852,6 @@ DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  constraint value: 1
 DEBUG:  constraint value: 2
 DEBUG:  shard count after pruning for orders_hash_partitioned: 2
-DEBUG:  no shard pruning constraints on orders_hash_partitioned found
-DEBUG:  shard count after pruning for orders_hash_partitioned: 4
-DEBUG:  no shard pruning constraints on orders_hash_partitioned found
-DEBUG:  shard count after pruning for orders_hash_partitioned: 4
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
  count
@@ -933,11 +865,6 @@ SELECT count(*) FROM orders_hash_partitioned
 DEBUG:  no shard pruning constraints on orders_hash_partitioned found
 DEBUG:  shard count after pruning for orders_hash_partitioned: 4
 DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  no shard pruning constraints on orders_hash_partitioned found
-DEBUG:  shard count after pruning for orders_hash_partitioned: 4
-DEBUG:  constraint value: 1
-DEBUG:  constraint value: 2
-DEBUG:  shard count after pruning for orders_hash_partitioned: 2
 DEBUG:  no shard pruning constraints on orders_hash_partitioned found
 DEBUG:  shard count after pruning for orders_hash_partitioned: 4
 DEBUG:  assigned task to node localhost:xxxxx
@@ -961,11 +888,6 @@ DEBUG:  constraint value: 3
 DEBUG:  constraint value: 1
 DEBUG:  constraint value: 2
 DEBUG:  shard count after pruning for orders_hash_partitioned: 3
-DEBUG:  constraint value: 1
-DEBUG:  constraint value: 2
-DEBUG:  shard count after pruning for orders_hash_partitioned: 2
-DEBUG:  constraint value: 3
-DEBUG:  shard count after pruning for orders_hash_partitioned: 1
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
@@ -982,10 +904,6 @@ DEBUG:  shard count after pruning for orders_hash_partitioned: 4
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  no shard pruning constraints on orders_hash_partitioned found
 DEBUG:  shard count after pruning for orders_hash_partitioned: 4
-DEBUG:  no shard pruning constraints on orders_hash_partitioned found
-DEBUG:  shard count after pruning for orders_hash_partitioned: 4
-DEBUG:  constraint value: 2
-DEBUG:  shard count after pruning for orders_hash_partitioned: 1
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
@@ -1030,11 +948,6 @@ DEBUG:  constraint value: 1
 DEBUG:  constraint value: 2
 DEBUG:  constraint value: 3
 DEBUG:  shard count after pruning for orders_hash_partitioned: 3
-DEBUG:  constraint value: 1
-DEBUG:  shard count after pruning for orders_hash_partitioned: 1
-DEBUG:  constraint value: 2
-DEBUG:  constraint value: 3
-DEBUG:  shard count after pruning for orders_hash_partitioned: 2
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
@@ -1049,10 +962,6 @@ SELECT count(*) FROM orders_hash_partitioned
 DEBUG:  no shard pruning constraints on orders_hash_partitioned found
 DEBUG:  shard count after pruning for orders_hash_partitioned: 4
 DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  no shard pruning constraints on orders_hash_partitioned found
-DEBUG:  shard count after pruning for orders_hash_partitioned: 4
-DEBUG:  constraint value: 1
-DEBUG:  shard count after pruning for orders_hash_partitioned: 1
 DEBUG:  no shard pruning constraints on orders_hash_partitioned found
 DEBUG:  shard count after pruning for orders_hash_partitioned: 4
 DEBUG:  assigned task to node localhost:xxxxx
@@ -1072,10 +981,6 @@ DEBUG:  shard count after pruning for orders_hash_partitioned: 4
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  no shard pruning constraints on orders_hash_partitioned found
 DEBUG:  shard count after pruning for orders_hash_partitioned: 4
-DEBUG:  constraint value: 1
-DEBUG:  shard count after pruning for orders_hash_partitioned: 1
-DEBUG:  no shard pruning constraints on orders_hash_partitioned found
-DEBUG:  shard count after pruning for orders_hash_partitioned: 4
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
@@ -1093,10 +998,6 @@ DEBUG:  shard count after pruning for orders_hash_partitioned: 4
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  no shard pruning constraints on orders_hash_partitioned found
 DEBUG:  shard count after pruning for orders_hash_partitioned: 4
-DEBUG:  constraint value: 1
-DEBUG:  shard count after pruning for orders_hash_partitioned: 1
-DEBUG:  no shard pruning constraints on orders_hash_partitioned found
-DEBUG:  shard count after pruning for orders_hash_partitioned: 4
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
@@ -1112,10 +1013,6 @@ SELECT count(*) FROM orders_hash_partitioned
 DEBUG:  no shard pruning constraints on orders_hash_partitioned found
 DEBUG:  shard count after pruning for orders_hash_partitioned: 4
 DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  no shard pruning constraints on orders_hash_partitioned found
-DEBUG:  shard count after pruning for orders_hash_partitioned: 4
-DEBUG:  constraint value: 1
-DEBUG:  shard count after pruning for orders_hash_partitioned: 1
 DEBUG:  no shard pruning constraints on orders_hash_partitioned found
 DEBUG:  shard count after pruning for orders_hash_partitioned: 4
 DEBUG:  assigned task to node localhost:xxxxx
@@ -1163,10 +1060,6 @@ DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  constraint value: 2
 DEBUG:  constraint value: 3
 DEBUG:  shard count after pruning for orders_hash_partitioned: 2
-DEBUG:  constraint value: 2
-DEBUG:  shard count after pruning for orders_hash_partitioned: 1
-DEBUG:  constraint value: 3
-DEBUG:  shard count after pruning for orders_hash_partitioned: 1
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
  count
@@ -1180,10 +1073,6 @@ SELECT count(*) FROM orders_hash_partitioned
 DEBUG:  no shard pruning constraints on orders_hash_partitioned found
 DEBUG:  shard count after pruning for orders_hash_partitioned: 4
 DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  no shard pruning constraints on orders_hash_partitioned found
-DEBUG:  shard count after pruning for orders_hash_partitioned: 4
-DEBUG:  no shard pruning constraints on orders_hash_partitioned found
-DEBUG:  shard count after pruning for orders_hash_partitioned: 4
 DEBUG:  no shard pruning constraints on orders_hash_partitioned found
 DEBUG:  shard count after pruning for orders_hash_partitioned: 4
 DEBUG:  assigned task to node localhost:xxxxx
