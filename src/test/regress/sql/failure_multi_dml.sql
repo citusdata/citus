@@ -114,6 +114,9 @@ SELECT master_run_on_worker(
     ARRAY['localhost']::text[],
     ARRAY[:master_port]::int[],
     ARRAY['
+-- use the adaptive executor for a stable error message (the single-task
+-- executor reports a 2PC prepare failure differently on a fresh connection)
+SET citus.enable_single_task_execution TO off;
 BEGIN;
 DELETE FROM dml_test WHERE id = 1;
 DELETE FROM dml_test WHERE id = 2;
