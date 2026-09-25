@@ -346,6 +346,21 @@ FROM run_command_on_workers($$
     GROUP BY p.puballtables, p.puballsequences
 $$);
 
+-- Exercise Citus's copied pg_get_object_address() compatibility shim for the
+-- PG19 Beta 4 object type. Publication relation rows are intentionally not
+-- distributable objects, but the address must be resolved before rejecting it.
+BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
+SELECT assign_distributed_transaction_id(0, 8, '2021-07-09 15:41:55.542377+02');
+SET LOCAL application_name TO 'citus_internal gpid=10000000001';
+\set VERBOSITY terse
+SELECT citus_internal.add_object_metadata(
+    'publication excluded relation',
+    ARRAY['publication_excluded_2']::text[],
+    ARRAY['publication_all_except']::text[],
+    -1, 0, false);
+ROLLBACK;
+\set VERBOSITY default
+
 DROP PUBLICATION publication_all_except;
 
 -- A table that is excluded while it is still a local table cannot be named on
