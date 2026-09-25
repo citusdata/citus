@@ -1151,7 +1151,6 @@ RangeVarCallbackForReindexIndex(const RangeVar *relation, Oid relId, Oid oldRelI
 
 	/* Check permissions */
 
-	#if PG_VERSION_NUM >= PG_VERSION_17
 	table_oid = IndexGetRelation(relId, true);
 	if (OidIsValid(table_oid))
 	{
@@ -1159,10 +1158,6 @@ RangeVarCallbackForReindexIndex(const RangeVar *relation, Oid relId, Oid oldRelI
 		if (aclresult != ACLCHECK_OK)
 			aclcheck_error(aclresult, OBJECT_INDEX, relation->relname);
 	}
-	#else
-	if (!object_ownercheck(RelationRelationId, relId, GetUserId()))
-		aclcheck_error(ACLCHECK_NOT_OWNER, OBJECT_INDEX, relation->relname);
-	#endif
 
 	/* Lock heap before index to avoid deadlock. */
 	if (relId != oldRelId)

@@ -16,7 +16,6 @@ HAVING (
        ) > 0;
 
 -- lets pin the plan in the test as well
-SELECT public.explain_with_pg17_initplan_format($Q$
 EXPLAIN (COSTS OFF)
 SELECT count(*),
        o_orderstatus
@@ -26,4 +25,3 @@ HAVING (
            SELECT count(*)
            FROM customer
        ) > 0;
-$Q$) as "QUERY PLAN";

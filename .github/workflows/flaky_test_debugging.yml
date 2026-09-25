@@ -27,7 +27,7 @@ jobs:
     name: Build Citus
     runs-on: ubuntu-latest
     container:
-      image: ${{ vars.build_image_name }}:${{ vars.pg16_version  }}${{ vars.image_suffix }}
+      image: ${{ vars.build_image_name }}:${{ vars.pg17_version  }}${{ vars.image_suffix }}
       options: --user root
     steps:
     - uses: actions/checkout@v5
@@ -57,7 +57,7 @@ jobs:
     name: Test flakyness
     runs-on: ubuntu-latest
     container:
-      image: ${{ vars.fail_test_image_name }}:${{ vars.pg16_version  }}${{ vars.image_suffix }}
+      image: ${{ vars.fail_test_image_name }}:${{ vars.pg17_version  }}${{ vars.image_suffix }}
       options: --user root
     needs:
       [build, prepare_parallelization_matrix]

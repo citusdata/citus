@@ -156,6 +156,12 @@ DEPS = {
     "multi_test_catalog_views": TestDeps(None),
     "multi_insert_select": TestDeps("base_schedule"),
     "multi_partitioning": TestDeps("base_schedule"),
+    "multi_join_pruning": TestDeps(
+        "base_schedule", ["multi_partition_pruning"], repeatable=False
+    ),
+    "multi_hash_pruning": TestDeps(
+        "base_schedule", ["multi_agg_distinct"], repeatable=False
+    ),
     "multi_mx_create_table": TestDeps(
         None,
         [
@@ -180,12 +186,19 @@ DEPS = {
         repeatable=False,
         worker_count=6,
     ),
+    "background_rebalance_parallel_reference_fkeys": TestDeps(
+        None,
+        ["multi_test_helpers", "multi_cluster_management"],
+        repeatable=False,
+        worker_count=6,
+    ),
     "function_propagation": TestDeps("minimal_schedule"),
     "citus_shards": TestDeps("minimal_schedule"),
     "grant_on_foreign_server_propagation": TestDeps("minimal_schedule"),
     "multi_modifying_xacts": TestDeps("minimal_schedule"),
     "multi_mx_modifying_xacts": TestDeps(None, ["multi_mx_create_table"]),
     "multi_mx_router_planner": TestDeps(None, ["multi_mx_create_table"]),
+    "ch_bench_having_mx": TestDeps(None, ["multi_mx_copy_data"]),
     "multi_mx_copy_data": TestDeps(None, ["multi_mx_create_table"]),
     "multi_mx_explain": TestDeps(None, ["multi_mx_copy_data"]),
     "multi_mx_modifications": TestDeps(None, ["multi_mx_create_table"]),
@@ -286,6 +299,18 @@ DEPS = {
         repeatable=False,
     ),
     "pg17": TestDeps("minimal_schedule", ["multi_behavioral_analytics_create_table"]),
+    # pg17_json shares a schedule line with pg17, so it needs pg17's deps too.
+    "pg17_json": TestDeps(
+        "minimal_schedule", ["multi_behavioral_analytics_create_table"]
+    ),
+    # ch_bench_having and having_subquery share their schedule lines with tests
+    # that query lineitem and the tpch tables, and ch_bench_having itself needs
+    # public.supplier/nation; base_schedule creates and loads all of them.
+    "ch_bench_having": TestDeps("base_schedule"),
+    "having_subquery": TestDeps("base_schedule"),
+    # multi_subquery shares its schedule line with cross_join, and neither drops
+    # the tables it creates, so the line cannot be run more than once.
+    "multi_subquery": TestDeps("base_schedule", repeatable=False),
     "multi_subquery_misc": TestDeps(
         "minimal_schedule", ["multi_behavioral_analytics_create_table"]
     ),

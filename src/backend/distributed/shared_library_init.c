@@ -161,6 +161,7 @@ DEFINE_COLUMNAR_PASSTHROUGH_FUNC(columnar_relation_storageid)
 DEFINE_COLUMNAR_PASSTHROUGH_FUNC(columnar_storage_info)
 DEFINE_COLUMNAR_PASSTHROUGH_FUNC(columnar_store_memory_stats)
 DEFINE_COLUMNAR_PASSTHROUGH_FUNC(test_columnar_storage_write_new_page)
+DEFINE_COLUMNAR_PASSTHROUGH_FUNC(test_columnar_metadata_xmin_aborted)
 
 #define DUMMY_REAL_TIME_EXECUTOR_ENUM_VALUE 9999999
 static char *CitusVersion = CITUS_VERSION;
@@ -210,6 +211,8 @@ static bool ErrorIfNotASuitableDeadlockFactor(double *newval, void **extra,
 static bool WarnIfDeprecatedExecutorUsed(int *newval, void **extra, GucSource source);
 static bool WarnIfReplicationModelIsSet(int *newval, void **extra, GucSource source);
 static bool NoticeIfSubqueryPushdownEnabled(bool *newval, void **extra, GucSource source);
+static bool WarnIfDeprecatedPseudoconstantQualsGucIsSet(bool *newval, void **extra,
+														GucSource source);
 static bool ShowShardsForAppNamePrefixesCheckHook(char **newval, void **extra,
 												  GucSource source);
 static void ShowShardsForAppNamePrefixesAssignHook(const char *newval, void *extra);
@@ -617,6 +620,7 @@ _PG_init(void)
 	INIT_COLUMNAR_SYMBOL(PGFunction, columnar_storage_info);
 	INIT_COLUMNAR_SYMBOL(PGFunction, columnar_store_memory_stats);
 	INIT_COLUMNAR_SYMBOL(PGFunction, test_columnar_storage_write_new_page);
+	INIT_COLUMNAR_SYMBOL(PGFunction, test_columnar_metadata_xmin_aborted);
 
 	/*
 	 * This part is only for SECURITY LABEL tests
@@ -1590,20 +1594,15 @@ RegisterCitusConfigVariables(void)
 
 	DefineCustomBoolVariable(
 		"citus.enable_outer_joins_with_pseudoconstant_quals_pre_pg17",
-		gettext_noop("Enables running distributed queries with outer joins "
-					 "and pseudoconstant quals pre PG17."),
-		gettext_noop("Set to false by default. If set to true, enables "
-					 "running distributed queries with outer joins and  "
-					 "pseudoconstant quals, at user's own risk, because "
-					 "pre PG17, Citus doesn't have access to "
-					 "set_join_pathlist_hook, which doesn't guarantee correct"
-					 "query results. Note that in PG17+, this GUC has no effect"
-					 "and the user can run such queries"),
+		gettext_noop("This setting has no effect and is deprecated."),
+		gettext_noop("It only applied to PostgreSQL 16, which Citus no longer "
+					 "supports. The setting is retained so existing configurations "
+					 "keep loading, and will be removed in a future Citus release."),
 		&EnableOuterJoinsWithPseudoconstantQualsPrePG17,
 		false,
 		PGC_USERSET,
 		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
-		NULL, NULL, NULL);
+		WarnIfDeprecatedPseudoconstantQualsGucIsSet, NULL, NULL);
 
 	DefineCustomBoolVariable(
 		"citus.enable_procedure_transaction_skip",
@@ -3125,6 +3124,31 @@ NoticeIfSubqueryPushdownEnabled(bool *newval, void **extra, GucSource source)
 
 
 /*
+ * WarnIfDeprecatedPseudoconstantQualsGucIsSet emits a deprecation warning when
+ * citus.enable_outer_joins_with_pseudoconstant_quals_pre_pg17 is set explicitly.
+ * The GUC only ever applied to PG16, which Citus no longer supports.
+ */
+static bool
+WarnIfDeprecatedPseudoconstantQualsGucIsSet(bool *newval, void **extra,
+											GucSource source)
+{
+	/* warn whenever the value comes from anywhere other than the built-in default */
+	if (source != PGC_S_DEFAULT)
+	{
+		ereport(WARNING, (errcode(ERRCODE_WARNING_DEPRECATED_FEATURE),
+						  errmsg("citus.enable_outer_joins_with_pseudoconstant_"
+								 "quals_pre_pg17 has no effect and is deprecated"),
+						  errdetail("This setting only applied to PostgreSQL 16, "
+									"which Citus no longer supports."),
+						  errhint("Remove it from your configuration. It will be "
+								  "removed in a future Citus release.")));
+	}
+
+	return true;
+}
+
+
+/*
  * WarnIfReplicationModelIsSet prints a warning when a user sets
  * citus.replication_model.
  */
@@ -3287,9 +3311,7 @@ NodeConninfoGucCheckHook(char **newval, void **extra, GucSource source)
 		"sslkeylogfile",
 #endif
 		"sslmode",
-#if PG_VERSION_NUM >= PG_VERSION_17
 		"sslnegotiation",
-#endif
 		"sslrootcert",
 		"tcp_user_timeout",
 	};

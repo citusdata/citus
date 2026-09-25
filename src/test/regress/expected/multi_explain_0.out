@@ -1463,13 +1463,11 @@ Custom Scan (Citus INSERT ... SELECT)
   INSERT/SELECT method: pull to coordinator
   ->  Function Scan on generate_series s
 -- WHERE EXISTS forces pg12 to materialize cte
-SELECT public.explain_with_pg17_initplan_format($Q$
 EXPLAIN (COSTS OFF)
 WITH cte1 AS (SELECT s FROM generate_series(1,10) s)
 INSERT INTO lineitem_hash_part
 WITH cte1 AS (SELECT * FROM cte1 WHERE EXISTS (SELECT * FROM cte1) LIMIT 5)
 SELECT s FROM cte1 WHERE EXISTS (SELECT * FROM cte1);
-$Q$);
 Custom Scan (Citus INSERT ... SELECT)
   INSERT/SELECT method: pull to coordinator
   ->  Result
@@ -2395,11 +2393,9 @@ Aggregate (actual rows=1 loops=1)
                                 Sort Key: ref_table.a
                                 Sort Method: quicksort  Memory: 25kB
                                 ->  Seq Scan on ref_table_570021 ref_table (actual rows=10 loops=1)
-SELECT public.explain_with_pg17_initplan_format($Q$
 EXPLAIN (ANALYZE on, COSTS off, TIMING off, SUMMARY off, BUFFERS OFF)
 SELECT count(distinct a) FROM dist_table
 WHERE EXISTS(SELECT random() < 2 FROM dist_table NATURAL JOIN ref_table);
-$Q$);
 Aggregate (actual rows=1 loops=1)
   ->  Custom Scan (Citus Adaptive) (actual rows=4 loops=1)
         ->  Distributed Subplan XXX_1

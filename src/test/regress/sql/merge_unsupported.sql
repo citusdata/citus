@@ -1,7 +1,6 @@
 SHOW server_version \gset
 SELECT CASE
            WHEN substring(current_setting('server_version'), '\d+')::int >= 17 THEN '17+'
-           WHEN substring(current_setting('server_version'), '\d+')::int IN (15, 16) THEN '15_16'
            ELSE 'Unsupported version'
        END AS version_category;
 
@@ -78,3 +77,6 @@ WHEN MATCHED AND tid < 2 THEN
         DELETE
 RETURNING *;
 ROLLBACK;
+
+SET client_min_messages TO WARNING;
+DROP SCHEMA pgmerge_schema CASCADE;

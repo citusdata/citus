@@ -1888,14 +1888,12 @@ ContainsRecurringRangeTable(List *rangeTable, RecurringTuplesType *recurType)
 bool
 IsJsonTableRTE(RangeTblEntry *rte)
 {
-#if PG_VERSION_NUM >= PG_VERSION_17
 	if (rte == NULL)
 	{
 		return false;
 	}
 	return (rte->rtekind == RTE_TABLEFUNC &&
 			rte->tablefunc->functype == TFT_JSON_TABLE);
-#endif
 
 	return false;
 }

@@ -8078,7 +8078,8 @@ get_func_sql_syntax(FuncExpr *expr, deparse_context *context)
 				Assert(IsA(con, Const) &&
 					   con->consttype == TEXTOID &&
 					   !con->constisnull);
-				appendStringInfoString(buf, TextDatumGetCString(con->constvalue));
+				appendStringInfoString(buf,
+									   quote_identifier(TextDatumGetCString(con->constvalue)));
 			}
 			appendStringInfoString(buf, " FROM ");
 			get_rule_expr((Node *) lsecond(expr->args), context, false);
@@ -10356,4 +10357,4 @@ get_insert_column_names_list(List *targetList, StringInfo buf,
 
 	return strippedexprs;
 }
-#endif /* (PG_VERSION_NUM >= PG_VERSION_17) && (PG_VERSION_NUM < PG_VERSION_18) */
+#endif /* (PG_VERSION_NUM >= PG_VERSION_18) && (PG_VERSION_NUM < PG_VERSION_19) */
