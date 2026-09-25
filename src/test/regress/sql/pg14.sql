@@ -42,6 +42,12 @@ reindex(verbose, TABLESPACE test_tablespace) index idx ;
 -- should error saying table space doesn't exist
 reindex(TABLESPACE test_tablespace1) index idx;
 reset citus.log_remote_commands;
+-- a tablespace name that needs quoting must stay quoted on the shards
+ALTER TABLESPACE test_tablespace RENAME TO "Test Tablespace";
+SELECT result FROM run_command_on_workers('ALTER TABLESPACE test_tablespace RENAME TO "Test Tablespace"');
+reindex(TABLESPACE "Test Tablespace") index idx;
+ALTER TABLESPACE "Test Tablespace" RENAME TO test_tablespace;
+SELECT result FROM run_command_on_workers('ALTER TABLESPACE "Test Tablespace" RENAME TO test_tablespace');
 -- CREATE STATISTICS allows table references too
 CREATE TABLE tbl1(a timestamp, b int);
 SELECT create_distributed_table('tbl1','a');
