@@ -889,8 +889,11 @@ AdaptiveExecutorStart(CitusScanState *scanState)
 		 * be part of the same transaction.
 		 */
 		UseCoordinatedTransaction();
+
+		ParamListInfo boundParams = copyParamList(paramListInfo);
+
 		taskList = ExplainAnalyzeTaskList(taskList, defaultTupleDest, tupleDescriptor,
-										  paramListInfo);
+										  boundParams);
 
 		/*
 		 * Multiple queries per task is not supported with local execution. See the Assert in
