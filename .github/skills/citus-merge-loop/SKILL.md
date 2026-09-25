@@ -33,8 +33,9 @@ For each PR, in order:
 
 - `state == "MERGED"` → record outcome `skipped (already merged)`, move to the next PR.
 
-### 2. Give up on drafts
+### 2. Give up if draft or not approved
 - `isDraft == true` → record outcome `given up (draft)`, move to the next PR.
+- PR is not approved → record outcome `given up (not approved)`, move to the next PR.
 
 ### 3. Sync-and-check loop
 Repeat the steps below until **both** are true: the PR's `mergeStateStatus` is `CLEAN` (fully
