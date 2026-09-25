@@ -383,6 +383,7 @@ DEBUG:  generating subplan XXX_1 for subquery SELECT id, word_count FROM fast_pa
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT articles_hash.id, test.word_count FROM fast_path_router_select.articles_hash, (SELECT intermediate_result.id, intermediate_result.word_count FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, word_count integer)) test WHERE (test.id OPERATOR(pg_catalog.=) articles_hash.id) ORDER BY test.word_count DESC, articles_hash.id LIMIT 5
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  push down of limit count: 5
+DEBUG:  sorted merge: per-task work_mem 2048 kB × 2 tasks (aggregate floor 4096 kB), session work_mem 4096 kB
  id | word_count
 ---------------------------------------------------------------------
  50 |      19519

@@ -28,6 +28,7 @@ DEBUG:  generating subplan XXX_1 for subquery SELECT key, value, other_value FRO
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT test_table.value, test_table.key, test_table.other_value, cte_1.key, cte_1.other_value FROM (cte_inline.test_table LEFT JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.other_value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, other_value jsonb)) cte_1 USING (value)) ORDER BY test_table.value DESC LIMIT 3
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  push down of limit count: 3
+DEBUG:  sorted merge: per-task work_mem 1024 kB × 4 tasks (aggregate floor 4096 kB), session work_mem 4096 kB
  value  | key |              other_value               | key |              other_value
 ---------------------------------------------------------------------
  test99 |   9 | {"f1": 99, "f2": 1782, "f3": "test99"} |   9 | {"f1": 99, "f2": 1782, "f3": "test99"}
@@ -49,6 +50,7 @@ DEBUG:  generating subplan XXX_1 for subquery SELECT key, value, other_value FRO
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT test_table.value, test_table.key, test_table.other_value, cte_1.key, cte_1.other_value FROM (cte_inline.test_table LEFT JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.other_value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, other_value jsonb)) cte_1 USING (value)) ORDER BY test_table.key DESC LIMIT 1
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  push down of limit count: 1
+DEBUG:  sorted merge: per-task work_mem 1024 kB × 4 tasks (aggregate floor 4096 kB), session work_mem 4096 kB
  value | key |             other_value             | key |             other_value
 ---------------------------------------------------------------------
  test9 |   9 | {"f1": 9, "f2": 162, "f3": "test9"} |   9 | {"f1": 9, "f2": 162, "f3": "test9"}
@@ -120,6 +122,7 @@ ORDER BY 2 DESC LIMIT 1;
 DEBUG:  CTE cte_1 is going to be inlined via distributed planning
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  push down of limit count: 1
+DEBUG:  sorted merge: per-task work_mem 1024 kB × 4 tasks (aggregate floor 4096 kB), session work_mem 4096 kB
  key | value  |              other_value               | ?column?
 ---------------------------------------------------------------------
    9 | test99 | {"f1": 99, "f2": 1782, "f3": "test99"} |        1
@@ -625,6 +628,7 @@ DEBUG:  push down of limit count: 5
 DEBUG:  generating subplan XXX_1 for subquery SELECT key, value, other_value FROM (SELECT test_table.key, test_table.value, test_table.other_value FROM cte_inline.test_table) cte_1 ORDER BY key, value, other_value LIMIT 5
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT key, value, other_value FROM (SELECT ct2.key, ct2.value, ct2.other_value FROM (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.other_value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, other_value jsonb)) ct2) foo ORDER BY key DESC, value DESC, other_value DESC LIMIT 5
 DEBUG:  Creating router plan
+DEBUG:  sorted merge: per-task work_mem 1024 kB × 4 tasks (aggregate floor 4096 kB), session work_mem 4096 kB
  key |  value  |               other_value
 ---------------------------------------------------------------------
    0 | test30  | {"f1": 30, "f2": 540, "f3": "test30"}
@@ -707,6 +711,7 @@ DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan XXX_3 for subquery SELECT key, value, other_value, 1 FROM cte_inline.test_table
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.other_value, intermediate_result."?column?" FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, other_value jsonb, "?column?" integer) EXCEPT SELECT intermediate_result.key, intermediate_result.value, intermediate_result.other_value, intermediate_result."?column?" FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, other_value jsonb, "?column?" integer)) UNION SELECT cte_2.key, cte_2.value, cte_2.other_value, 1 FROM (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.other_value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, other_value jsonb)) cte_2 ORDER BY 1, 2
 DEBUG:  Creating router plan
+DEBUG:  sorted merge: per-task work_mem 1024 kB × 4 tasks (aggregate floor 4096 kB), session work_mem 4096 kB
  key | value  |              other_value              | ?column?
 ---------------------------------------------------------------------
    9 | test19 | {"f1": 19, "f2": 342, "f3": "test19"} |        1
@@ -901,6 +906,7 @@ DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT test_table.key, test_table.value, test_table.other_value, bar.z, bar.y, bar.key, bar.t, bar.m, bar.cte_2_key FROM cte_inline.test_table, (SELECT cte_2.z, cte_2.y, cte_2.key, cte_3.t, cte_3.m, cte_3.cte_2_key FROM (SELECT intermediate_result.value AS z, intermediate_result.other_value AS y, intermediate_result.key FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(value text, other_value jsonb, key integer)) cte_2, (SELECT cte_2_1.z AS t, cte_2_1.y AS m, cte_2_1.key AS cte_2_key FROM (SELECT intermediate_result.value AS z, intermediate_result.other_value AS y, intermediate_result.key FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(value text, other_value jsonb, key integer)) cte_2_1) cte_3) bar ORDER BY test_table.value, test_table.other_value, bar.z, bar.y, bar.t, bar.m, bar.cte_2_key LIMIT 5
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  push down of limit count: 5
+DEBUG:  sorted merge: per-task work_mem 1024 kB × 4 tasks (aggregate floor 4096 kB), session work_mem 4096 kB
  key | value  |              other_value              |   z    |                   y                   | key |   t    |                   m                   | cte_2_key
 ---------------------------------------------------------------------
    2 | test12 | {"f1": 12, "f2": 216, "f3": "test12"} | test12 | {"f1": 12, "f2": 216, "f3": "test12"} |   2 | test12 | {"f1": 12, "f2": 216, "f3": "test12"} |         2
@@ -954,6 +960,7 @@ DEBUG:  generating subplan XXX_1 for subquery SELECT max(key) AS max FROM cte_in
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT test_table.key FROM (cte_inline.test_table JOIN (SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max integer)) cte_1 ON ((test_table.key OPERATOR(pg_catalog.=) cte_1.max))) ORDER BY cte_1.max LIMIT 3
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  push down of limit count: 3
+DEBUG:  sorted merge: per-task work_mem 1024 kB × 4 tasks (aggregate floor 4096 kB), session work_mem 4096 kB
  key
 ---------------------------------------------------------------------
    8
@@ -989,6 +996,7 @@ EXECUTE inlined_cte_without_params;
 DEBUG:  CTE cte_1 is going to be inlined via distributed planning
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  push down of limit count: 3
+DEBUG:  sorted merge: per-task work_mem 1024 kB × 4 tasks (aggregate floor 4096 kB), session work_mem 4096 kB
  count
 ---------------------------------------------------------------------
     40
@@ -997,6 +1005,7 @@ DEBUG:  push down of limit count: 3
 (3 rows)
 
 EXECUTE inlined_cte_without_params;
+DEBUG:  sorted merge: per-task work_mem 1024 kB × 4 tasks (aggregate floor 4096 kB), session work_mem 4096 kB
  count
 ---------------------------------------------------------------------
     40
@@ -1005,6 +1014,7 @@ EXECUTE inlined_cte_without_params;
 (3 rows)
 
 EXECUTE inlined_cte_without_params;
+DEBUG:  sorted merge: per-task work_mem 1024 kB × 4 tasks (aggregate floor 4096 kB), session work_mem 4096 kB
  count
 ---------------------------------------------------------------------
     40
@@ -1013,6 +1023,7 @@ EXECUTE inlined_cte_without_params;
 (3 rows)
 
 EXECUTE inlined_cte_without_params;
+DEBUG:  sorted merge: per-task work_mem 1024 kB × 4 tasks (aggregate floor 4096 kB), session work_mem 4096 kB
  count
 ---------------------------------------------------------------------
     40
@@ -1021,6 +1032,7 @@ EXECUTE inlined_cte_without_params;
 (3 rows)
 
 EXECUTE inlined_cte_without_params;
+DEBUG:  sorted merge: per-task work_mem 1024 kB × 4 tasks (aggregate floor 4096 kB), session work_mem 4096 kB
  count
 ---------------------------------------------------------------------
     40
@@ -1029,6 +1041,7 @@ EXECUTE inlined_cte_without_params;
 (3 rows)
 
 EXECUTE inlined_cte_without_params;
+DEBUG:  sorted merge: per-task work_mem 1024 kB × 4 tasks (aggregate floor 4096 kB), session work_mem 4096 kB
  count
 ---------------------------------------------------------------------
     40
@@ -1044,6 +1057,7 @@ DEBUG:  generating subplan XXX_1 for subquery SELECT key, value, other_value FRO
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT test_table.value, test_table.key, test_table.other_value, cte_1.key, cte_1.other_value FROM (cte_inline.test_table LEFT JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.other_value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, other_value jsonb)) cte_1 USING (value)) ORDER BY test_table.value DESC, test_table.key DESC, test_table.other_value DESC LIMIT 3
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  push down of limit count: 3
+DEBUG:  sorted merge: per-task work_mem 1024 kB × 4 tasks (aggregate floor 4096 kB), session work_mem 4096 kB
  value  | key | other_value | key | other_value
 ---------------------------------------------------------------------
  test98 |   8 |             |   8 |
@@ -1052,6 +1066,7 @@ DEBUG:  push down of limit count: 3
 (3 rows)
 
 EXECUTE non_inlined_cte_without_params;
+DEBUG:  sorted merge: per-task work_mem 1024 kB × 4 tasks (aggregate floor 4096 kB), session work_mem 4096 kB
  value  | key | other_value | key | other_value
 ---------------------------------------------------------------------
  test98 |   8 |             |   8 |
@@ -1060,6 +1075,7 @@ EXECUTE non_inlined_cte_without_params;
 (3 rows)
 
 EXECUTE non_inlined_cte_without_params;
+DEBUG:  sorted merge: per-task work_mem 1024 kB × 4 tasks (aggregate floor 4096 kB), session work_mem 4096 kB
  value  | key | other_value | key | other_value
 ---------------------------------------------------------------------
  test98 |   8 |             |   8 |
@@ -1068,6 +1084,7 @@ EXECUTE non_inlined_cte_without_params;
 (3 rows)
 
 EXECUTE non_inlined_cte_without_params;
+DEBUG:  sorted merge: per-task work_mem 1024 kB × 4 tasks (aggregate floor 4096 kB), session work_mem 4096 kB
  value  | key | other_value | key | other_value
 ---------------------------------------------------------------------
  test98 |   8 |             |   8 |
@@ -1076,6 +1093,7 @@ EXECUTE non_inlined_cte_without_params;
 (3 rows)
 
 EXECUTE non_inlined_cte_without_params;
+DEBUG:  sorted merge: per-task work_mem 1024 kB × 4 tasks (aggregate floor 4096 kB), session work_mem 4096 kB
  value  | key | other_value | key | other_value
 ---------------------------------------------------------------------
  test98 |   8 |             |   8 |
@@ -1084,6 +1102,7 @@ EXECUTE non_inlined_cte_without_params;
 (3 rows)
 
 EXECUTE non_inlined_cte_without_params;
+DEBUG:  sorted merge: per-task work_mem 1024 kB × 4 tasks (aggregate floor 4096 kB), session work_mem 4096 kB
  value  | key | other_value | key | other_value
 ---------------------------------------------------------------------
  test98 |   8 |             |   8 |
@@ -1095,6 +1114,7 @@ EXECUTE inlined_cte_has_parameter_on_non_dist_key('test1');
 DEBUG:  CTE cte_1 is going to be inlined via distributed planning
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  push down of limit count: 3
+DEBUG:  sorted merge: per-task work_mem 1024 kB × 4 tasks (aggregate floor 4096 kB), session work_mem 4096 kB
  count
 ---------------------------------------------------------------------
 (0 rows)
@@ -1103,6 +1123,7 @@ EXECUTE inlined_cte_has_parameter_on_non_dist_key('test2');
 DEBUG:  CTE cte_1 is going to be inlined via distributed planning
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  push down of limit count: 3
+DEBUG:  sorted merge: per-task work_mem 1024 kB × 4 tasks (aggregate floor 4096 kB), session work_mem 4096 kB
  count
 ---------------------------------------------------------------------
      4
@@ -1112,6 +1133,7 @@ EXECUTE inlined_cte_has_parameter_on_non_dist_key('test3');
 DEBUG:  CTE cte_1 is going to be inlined via distributed planning
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  push down of limit count: 3
+DEBUG:  sorted merge: per-task work_mem 1024 kB × 4 tasks (aggregate floor 4096 kB), session work_mem 4096 kB
  count
 ---------------------------------------------------------------------
 (0 rows)
@@ -1120,6 +1142,7 @@ EXECUTE inlined_cte_has_parameter_on_non_dist_key('test4');
 DEBUG:  CTE cte_1 is going to be inlined via distributed planning
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  push down of limit count: 3
+DEBUG:  sorted merge: per-task work_mem 1024 kB × 4 tasks (aggregate floor 4096 kB), session work_mem 4096 kB
  count
 ---------------------------------------------------------------------
 (0 rows)
@@ -1128,6 +1151,7 @@ EXECUTE inlined_cte_has_parameter_on_non_dist_key('test5');
 DEBUG:  CTE cte_1 is going to be inlined via distributed planning
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  push down of limit count: 3
+DEBUG:  sorted merge: per-task work_mem 1024 kB × 4 tasks (aggregate floor 4096 kB), session work_mem 4096 kB
  count
 ---------------------------------------------------------------------
      4
@@ -1139,6 +1163,7 @@ DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  CTE cte_1 is going to be inlined via distributed planning
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  push down of limit count: 3
+DEBUG:  sorted merge: per-task work_mem 1024 kB × 4 tasks (aggregate floor 4096 kB), session work_mem 4096 kB
  count
 ---------------------------------------------------------------------
 (0 rows)
@@ -1147,6 +1172,7 @@ EXECUTE inlined_cte_has_parameter_on_dist_key(1);
 DEBUG:  CTE cte_1 is going to be inlined via distributed planning
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  push down of limit count: 3
+DEBUG:  sorted merge: per-task work_mem 1024 kB × 4 tasks (aggregate floor 4096 kB), session work_mem 4096 kB
  count
 ---------------------------------------------------------------------
     40
@@ -1158,6 +1184,7 @@ EXECUTE inlined_cte_has_parameter_on_dist_key(2);
 DEBUG:  CTE cte_1 is going to be inlined via distributed planning
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  push down of limit count: 3
+DEBUG:  sorted merge: per-task work_mem 1024 kB × 4 tasks (aggregate floor 4096 kB), session work_mem 4096 kB
  count
 ---------------------------------------------------------------------
     40
@@ -1168,6 +1195,7 @@ EXECUTE inlined_cte_has_parameter_on_dist_key(3);
 DEBUG:  CTE cte_1 is going to be inlined via distributed planning
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  push down of limit count: 3
+DEBUG:  sorted merge: per-task work_mem 1024 kB × 4 tasks (aggregate floor 4096 kB), session work_mem 4096 kB
  count
 ---------------------------------------------------------------------
     40
@@ -1178,6 +1206,7 @@ EXECUTE inlined_cte_has_parameter_on_dist_key(4);
 DEBUG:  CTE cte_1 is going to be inlined via distributed planning
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  push down of limit count: 3
+DEBUG:  sorted merge: per-task work_mem 1024 kB × 4 tasks (aggregate floor 4096 kB), session work_mem 4096 kB
  count
 ---------------------------------------------------------------------
     40
@@ -1188,6 +1217,7 @@ EXECUTE inlined_cte_has_parameter_on_dist_key(5);
 DEBUG:  CTE cte_1 is going to be inlined via distributed planning
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  push down of limit count: 3
+DEBUG:  sorted merge: per-task work_mem 1024 kB × 4 tasks (aggregate floor 4096 kB), session work_mem 4096 kB
  count
 ---------------------------------------------------------------------
     40
@@ -1199,6 +1229,7 @@ DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  CTE cte_1 is going to be inlined via distributed planning
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  push down of limit count: 3
+DEBUG:  sorted merge: per-task work_mem 1024 kB × 4 tasks (aggregate floor 4096 kB), session work_mem 4096 kB
  count
 ---------------------------------------------------------------------
     40
@@ -1212,6 +1243,7 @@ DEBUG:  generating subplan XXX_1 for subquery SELECT key, value, other_value FRO
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT test_table.value, test_table.key, test_table.other_value, cte_1.key, cte_1.other_value FROM (cte_inline.test_table LEFT JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.other_value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, other_value jsonb)) cte_1 USING (value)) ORDER BY test_table.value DESC, test_table.key DESC, test_table.other_value DESC LIMIT 3
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  push down of limit count: 3
+DEBUG:  sorted merge: per-task work_mem 1024 kB × 4 tasks (aggregate floor 4096 kB), session work_mem 4096 kB
  value  | key | other_value | key | other_value
 ---------------------------------------------------------------------
  test98 |   8 |             |   8 |
@@ -1227,6 +1259,7 @@ DEBUG:  generating subplan XXX_1 for subquery SELECT key, value, other_value FRO
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT test_table.value, test_table.key, test_table.other_value, cte_1.key, cte_1.other_value FROM (cte_inline.test_table LEFT JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.other_value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, other_value jsonb)) cte_1 USING (value)) ORDER BY test_table.value DESC, test_table.key DESC, test_table.other_value DESC LIMIT 3
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  push down of limit count: 3
+DEBUG:  sorted merge: per-task work_mem 1024 kB × 4 tasks (aggregate floor 4096 kB), session work_mem 4096 kB
  value  | key | other_value | key | other_value
 ---------------------------------------------------------------------
  test98 |   8 |             |   8 |
@@ -1242,6 +1275,7 @@ DEBUG:  generating subplan XXX_1 for subquery SELECT key, value, other_value FRO
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT test_table.value, test_table.key, test_table.other_value, cte_1.key, cte_1.other_value FROM (cte_inline.test_table LEFT JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.other_value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, other_value jsonb)) cte_1 USING (value)) ORDER BY test_table.value DESC, test_table.key DESC, test_table.other_value DESC LIMIT 3
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  push down of limit count: 3
+DEBUG:  sorted merge: per-task work_mem 1024 kB × 4 tasks (aggregate floor 4096 kB), session work_mem 4096 kB
  value  | key | other_value | key | other_value
 ---------------------------------------------------------------------
  test98 |   8 |             |   8 |
@@ -1257,6 +1291,7 @@ DEBUG:  generating subplan XXX_1 for subquery SELECT key, value, other_value FRO
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT test_table.value, test_table.key, test_table.other_value, cte_1.key, cte_1.other_value FROM (cte_inline.test_table LEFT JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.other_value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, other_value jsonb)) cte_1 USING (value)) ORDER BY test_table.value DESC, test_table.key DESC, test_table.other_value DESC LIMIT 3
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  push down of limit count: 3
+DEBUG:  sorted merge: per-task work_mem 1024 kB × 4 tasks (aggregate floor 4096 kB), session work_mem 4096 kB
  value  | key | other_value | key | other_value
 ---------------------------------------------------------------------
  test98 |   8 |             |   8 |
@@ -1272,6 +1307,7 @@ DEBUG:  generating subplan XXX_1 for subquery SELECT key, value, other_value FRO
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT test_table.value, test_table.key, test_table.other_value, cte_1.key, cte_1.other_value FROM (cte_inline.test_table LEFT JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.other_value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, other_value jsonb)) cte_1 USING (value)) ORDER BY test_table.value DESC, test_table.key DESC, test_table.other_value DESC LIMIT 3
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  push down of limit count: 3
+DEBUG:  sorted merge: per-task work_mem 1024 kB × 4 tasks (aggregate floor 4096 kB), session work_mem 4096 kB
  value  | key | other_value | key | other_value
 ---------------------------------------------------------------------
  test98 |   8 |             |   8 |
@@ -1289,6 +1325,7 @@ DEBUG:  generating subplan XXX_1 for subquery SELECT key, value, other_value FRO
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT test_table.value, test_table.key, test_table.other_value, cte_1.key, cte_1.other_value FROM (cte_inline.test_table LEFT JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.other_value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, other_value jsonb)) cte_1 USING (value)) ORDER BY test_table.value DESC, test_table.key DESC, test_table.other_value DESC LIMIT 3
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  push down of limit count: 3
+DEBUG:  sorted merge: per-task work_mem 1024 kB × 4 tasks (aggregate floor 4096 kB), session work_mem 4096 kB
  value  | key | other_value | key | other_value
 ---------------------------------------------------------------------
  test98 |   8 |             |   8 |
@@ -1412,6 +1449,7 @@ DEBUG:  generating subplan XXX_1 for subquery SELECT key, value, other_value FRO
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT cte_1.key, cte_1.value, cte_1.other_value, cte_2.key, cte_2.value, cte_2.other_value FROM ((SELECT test_table.key, test_table.value, test_table.other_value FROM cte_inline.test_table) cte_1 JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.other_value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, other_value jsonb)) cte_2 ON ((cte_1.value OPERATOR(pg_catalog.>) cte_2.value))) ORDER BY cte_1.key, cte_1.value, cte_1.other_value, cte_2.key, cte_2.value, cte_2.other_value DESC LIMIT 3
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  push down of limit count: 3
+DEBUG:  sorted merge: per-task work_mem 1024 kB × 4 tasks (aggregate floor 4096 kB), session work_mem 4096 kB
  key | value |            other_value             | key | value  | other_value
 ---------------------------------------------------------------------
    2 | test2 | {"f1": 2, "f2": 36, "f3": "test2"} |   2 | test12 |

@@ -260,6 +260,7 @@ DEBUG:  Creating router plan
 -- within a subquery, some unions can be pushed down
 SELECT * FROM ((SELECT * FROM test) UNION (SELECT * FROM test)) u ORDER BY 1,2;
 DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  sorted merge: per-task work_mem 1024 kB × 4 tasks (aggregate floor 4096 kB), session work_mem 4096 kB
  x | y
 ---------------------------------------------------------------------
  1 | 1
@@ -307,6 +308,7 @@ DEBUG:  Creating router plan
 
 SELECT * FROM ((SELECT * FROM test) UNION ALL (SELECT * FROM test)) u ORDER BY 1,2;
 DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  sorted merge: per-task work_mem 1024 kB × 4 tasks (aggregate floor 4096 kB), session work_mem 4096 kB
  x | y
 ---------------------------------------------------------------------
  1 | 1
@@ -462,6 +464,7 @@ DEBUG:  Creating router plan
 -- unions can even be pushed down within a join
 SELECT * FROM ((SELECT * FROM test) UNION (SELECT * FROM test)) u JOIN test USING (x) ORDER BY 1,2;
 DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  sorted merge: per-task work_mem 1024 kB × 4 tasks (aggregate floor 4096 kB), session work_mem 4096 kB
  x | y | y
 ---------------------------------------------------------------------
  1 | 1 | 1
@@ -470,6 +473,7 @@ DEBUG:  Router planner cannot handle multi-shard select queries
 
 SELECT * FROM ((SELECT * FROM test) UNION ALL (SELECT * FROM test)) u LEFT JOIN test USING (x) ORDER BY 1,2;
 DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  sorted merge: per-task work_mem 1024 kB × 4 tasks (aggregate floor 4096 kB), session work_mem 4096 kB
  x | y | y
 ---------------------------------------------------------------------
  1 | 1 | 1
@@ -490,6 +494,8 @@ DEBUG:  Creating router plan
 DEBUG:  generating subplan XXX_3 for subquery SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer) UNION SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT u.x, u.y, test.y FROM ((SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)) u JOIN recursive_union.test USING (x)) ORDER BY u.x, u.y
 DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  sorted merge: per-task work_mem 1024 kB × 4 tasks (aggregate floor 4096 kB), session work_mem 4096 kB
+DEBUG:  sorted merge: per-task work_mem 1024 kB × 4 tasks (aggregate floor 4096 kB), session work_mem 4096 kB
  x | y | y
 ---------------------------------------------------------------------
  1 | 1 | 1
@@ -512,6 +518,7 @@ DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan XXX_4 for subquery SELECT x, y FROM recursive_union.test WHERE true
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT u.x, u.y, test.y FROM ((SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)) u LEFT JOIN (SELECT test_1.x, test_1.y FROM (SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('XXX_4'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)) test_1) test USING (x)) ORDER BY u.x, u.y
 DEBUG:  Creating router plan
+DEBUG:  sorted merge: per-task work_mem 1024 kB × 4 tasks (aggregate floor 4096 kB), session work_mem 4096 kB
  x | y | y
 ---------------------------------------------------------------------
  1 | 1 | 1
@@ -530,6 +537,7 @@ DEBUG:  Creating router plan
 DEBUG:  generating subplan XXX_3 for subquery SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer) UNION SELECT intermediate_result.y, intermediate_result.x FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(y integer, x integer)
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT u.x, u.y, test.y FROM ((SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)) u JOIN recursive_union.test USING (x)) ORDER BY u.x, u.y
 DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  sorted merge: per-task work_mem 1024 kB × 4 tasks (aggregate floor 4096 kB), session work_mem 4096 kB
  x | y | y
 ---------------------------------------------------------------------
  1 | 1 | 1
@@ -546,6 +554,7 @@ DEBUG:  Creating router plan
 DEBUG:  generating subplan XXX_3 for subquery SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer) UNION SELECT intermediate_result."?column?", intermediate_result."?column?_1" FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result("?column?" integer, "?column?_1" integer)
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT u.x, u.y, test.y FROM ((SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)) u JOIN recursive_union.test USING (x)) ORDER BY u.x, u.y
 DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  sorted merge: per-task work_mem 1024 kB × 4 tasks (aggregate floor 4096 kB), session work_mem 4096 kB
  x | y | y
 ---------------------------------------------------------------------
  1 | 1 | 1
@@ -555,6 +564,7 @@ DEBUG:  Router planner cannot handle multi-shard select queries
 -- a join between a set operation and a generate_series which is pushdownable
  SELECT * FROM ((SELECT * FROM test) UNION (SELECT * FROM test ORDER BY x)) u JOIN generate_series(1,10) x USING (x) ORDER BY 1,2;
 DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  sorted merge: per-task work_mem 1024 kB × 4 tasks (aggregate floor 4096 kB), session work_mem 4096 kB
  x | y
 ---------------------------------------------------------------------
  1 | 1
@@ -572,6 +582,7 @@ DEBUG:  Creating router plan
 DEBUG:  generating subplan XXX_3 for subquery SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer) EXCEPT SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT u.x, u.y FROM ((SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)) u JOIN (SELECT x_1.x FROM generate_series(1, 10) x_1(x)) x USING (x)) ORDER BY u.x, u.y
 DEBUG:  Creating router plan
+DEBUG:  sorted merge: per-task work_mem 1024 kB × 4 tasks (aggregate floor 4096 kB), session work_mem 4096 kB
  x | y
 ---------------------------------------------------------------------
 (0 rows)
@@ -589,6 +600,8 @@ DEBUG:  push down of limit count: 4
 DEBUG:  generating subplan XXX_1 for subquery SELECT y FROM recursive_union.test ORDER BY y LIMIT 4
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT x, y FROM (SELECT test.x, test.y FROM recursive_union.test UNION SELECT test.x, test.y FROM recursive_union.test) foo WHERE (x OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.y FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(y integer))) ORDER BY x
 DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  sorted merge: per-task work_mem 1024 kB × 4 tasks (aggregate floor 4096 kB), session work_mem 4096 kB
+DEBUG:  sorted merge: per-task work_mem 1024 kB × 4 tasks (aggregate floor 4096 kB), session work_mem 4096 kB
  x | y
 ---------------------------------------------------------------------
  1 | 1
@@ -609,6 +622,7 @@ DEBUG:  Creating router plan
 DEBUG:  generating subplan XXX_4 for subquery SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer) UNION SELECT intermediate_result.y, intermediate_result.x FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(y integer, x integer)
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT x, y FROM (SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('XXX_4'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)) foo WHERE (x OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.y FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(y integer))) ORDER BY x
 DEBUG:  Creating router plan
+DEBUG:  sorted merge: per-task work_mem 1024 kB × 4 tasks (aggregate floor 4096 kB), session work_mem 4096 kB
  x | y
 ---------------------------------------------------------------------
  1 | 1
@@ -682,6 +696,8 @@ DEBUG:  Creating router plan
 DEBUG:  generating subplan XXX_3 for subquery SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer) EXCEPT SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT u.x, u.y, test.y FROM ((SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)) u JOIN recursive_union.test USING (x)) ORDER BY u.x, u.y
 DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  sorted merge: per-task work_mem 1024 kB × 4 tasks (aggregate floor 4096 kB), session work_mem 4096 kB
+DEBUG:  sorted merge: per-task work_mem 1024 kB × 4 tasks (aggregate floor 4096 kB), session work_mem 4096 kB
  x | y | y
 ---------------------------------------------------------------------
  2 | 2 | 2
@@ -703,6 +719,7 @@ DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan XXX_4 for subquery SELECT x, y FROM recursive_union.test WHERE true
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT u.x, u.y, test.y FROM ((SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)) u LEFT JOIN (SELECT test_1.x, test_1.y FROM (SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('XXX_4'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)) test_1) test USING (x)) ORDER BY u.x, u.y
 DEBUG:  Creating router plan
+DEBUG:  sorted merge: per-task work_mem 1024 kB × 4 tasks (aggregate floor 4096 kB), session work_mem 4096 kB
  x | y | y
 ---------------------------------------------------------------------
  1 | 1 | 1
@@ -730,6 +747,7 @@ DEBUG:  Creating router plan
 -- subquery union in WHERE clause with partition column equality and implicit join is pushed down
 SELECT * FROM test a WHERE x IN (SELECT x FROM test b WHERE y = 1 UNION SELECT x FROM test c WHERE y = 2) ORDER BY 1,2;
 DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  sorted merge: per-task work_mem 1024 kB × 4 tasks (aggregate floor 4096 kB), session work_mem 4096 kB
  x | y
 ---------------------------------------------------------------------
  1 | 1
@@ -749,6 +767,7 @@ DEBUG:  Creating router plan
 DEBUG:  generating subplan XXX_1 for subquery SELECT b.x FROM recursive_union.test b WHERE (b.y OPERATOR(pg_catalog.=) 1) UNION SELECT c.x FROM recursive_union.test c WHERE (c.y OPERATOR(pg_catalog.=) 2)
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT x, y FROM recursive_union.test a WHERE (NOT (x OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.x FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer)))) ORDER BY x, y
 DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  sorted merge: per-task work_mem 1024 kB × 4 tasks (aggregate floor 4096 kB), session work_mem 4096 kB
  x | y
 ---------------------------------------------------------------------
 (0 rows)
@@ -764,6 +783,7 @@ DEBUG:  Creating router plan
 DEBUG:  generating subplan XXX_3 for subquery SELECT intermediate_result.x FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer) UNION SELECT intermediate_result.y FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(y integer)
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT x, y FROM recursive_union.test a WHERE (x OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.x FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(x integer))) ORDER BY x, y
 DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  sorted merge: per-task work_mem 1024 kB × 4 tasks (aggregate floor 4096 kB), session work_mem 4096 kB
  x | y
 ---------------------------------------------------------------------
  1 | 1
@@ -1068,6 +1088,7 @@ DEBUG:  Creating router plan
 CREATE VIEW set_view_pushdown AS (SELECT x FROM test) UNION (SELECT x FROM test);
 SELECT * FROM set_view_pushdown ORDER BY 1 DESC;
 DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  sorted merge: per-task work_mem 1024 kB × 4 tasks (aggregate floor 4096 kB), session work_mem 4096 kB
  x
 ---------------------------------------------------------------------
  2
@@ -1086,6 +1107,7 @@ DEBUG:  Creating router plan
 DEBUG:  generating subplan XXX_3 for subquery SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer) UNION SELECT intermediate_result."?column?", intermediate_result."?column?_1" FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result("?column?" integer, "?column?_1" integer)
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT x, y FROM (SELECT u.x, test.y FROM ((SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)) u JOIN recursive_union.test USING (x)) ORDER BY u.x, test.y) set_view_recursive_second ORDER BY x, y
 DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  sorted merge: per-task work_mem 1024 kB × 4 tasks (aggregate floor 4096 kB), session work_mem 4096 kB
  x | y
 ---------------------------------------------------------------------
  1 | 1
