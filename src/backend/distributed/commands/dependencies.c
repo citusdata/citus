@@ -20,6 +20,7 @@
 #include "lib/stringinfo.h"
 #include "storage/lmgr.h"
 #include "utils/builtins.h"
+#include "utils/inval.h"
 #include "utils/lsyscache.h"
 
 #include "distributed/commands.h"
@@ -55,7 +56,8 @@ static void EnsureObjectExistsOnAllNodes(const ObjectAddress *target,
 static char * ObjectExistsOnNodeCommand(const ObjectAddress *target);
 static bool RemoteCommandOnNodeReturnsRow(const char *nodeName, uint32 nodePort,
 										  const char *command);
-static List * GetDependencyCreateDDLCommands(const ObjectAddress *dependency);
+static List * GetDependencyCreateDDLCommands(const ObjectAddress *dependency,
+											 bool bundlePartitionMetadata);
 static bool ShouldPropagateObject(const ObjectAddress *address);
 static char * DropTableIfExistsCommand(Oid relationId);
 
@@ -194,7 +196,9 @@ EnsureObjectAndDependenciesExistOnAllNodes(const ObjectAddress *target)
 static void
 EnsureObjectExistsOnAllNodes(const ObjectAddress *target, bool forceRecreate)
 {
-	List *ddlCommands = GetDependencyCreateDDLCommands(target);
+	bool bundlePartitionMetadata = false;
+	List *ddlCommands = GetDependencyCreateDDLCommands(target,
+													   bundlePartitionMetadata);
 
 	if (list_length(ddlCommands) == 0)
 	{
@@ -438,7 +442,9 @@ EnsureRequiredObjectSetExistOnAllNodes(const ObjectAddress *target,
 	ObjectAddress *object = NULL;
 	foreach_declared_ptr(object, objectsToBeCreated)
 	{
-		List *dependencyCommands = GetDependencyCreateDDLCommands(object);
+		bool bundlePartitionMetadata = false;
+		List *dependencyCommands = GetDependencyCreateDDLCommands(object,
+																  bundlePartitionMetadata);
 		ddlCommands = list_concat(ddlCommands, dependencyCommands);
 
 		/* create a new list with objects that actually created commands */
@@ -715,7 +721,9 @@ GetDistributableDependenciesForObject(const ObjectAddress *target)
 		 * in nodes, but we utilize logic it follows to choose the objects that could
 		 * be distributed
 		 */
-		List *dependencyCommands = GetDependencyCreateDDLCommands(dependency);
+		bool bundlePartitionMetadata = false;
+		List *dependencyCommands = GetDependencyCreateDDLCommands(dependency,
+																  bundlePartitionMetadata);
 
 		/* create a new list with dependencies that actually created commands */
 		if (list_length(dependencyCommands) > 0)
@@ -748,7 +756,8 @@ DropTableIfExistsCommand(Oid relationId)
  * commands to execute on a worker to create the object.
  */
 static List *
-GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
+GetDependencyCreateDDLCommands(const ObjectAddress *dependency,
+							   bool bundlePartitionMetadata)
 {
 	switch (getObjectClass(dependency))
 	{
@@ -785,30 +794,8 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 
 				if (IsCitusTable(relationId))
 				{
-					bool creatingShellTableOnRemoteNode = true;
-					List *tableDDLCommands = GetFullTableCreationCommands(relationId,
-																		  WORKER_NEXTVAL_SEQUENCE_DEFAULTS,
-																		  INCLUDE_IDENTITY,
-																		  creatingShellTableOnRemoteNode);
-					TableDDLCommand *tableDDLCommand = NULL;
-					foreach_declared_ptr(tableDDLCommand, tableDDLCommands)
-					{
-						Assert(CitusIsA(tableDDLCommand, TableDDLCommand));
-						commandList = lappend(commandList, GetTableDDLCommand(
-												  tableDDLCommand));
-					}
-
-					/*
-					 * We need to drop table, if exists, first to make table creation
-					 * idempotent. Before dropping the table, we should also break
-					 * dependencies with sequences since `drop cascade table` would also
-					 * drop depended sequences. This is safe as we still record dependency
-					 * with the sequence during table creation.
-					 */
-					commandList = lcons(DropTableIfExistsCommand(relationId),
-										commandList);
-					commandList = lcons(WorkerDropSequenceDependencyCommand(relationId),
-										commandList);
+					commandList = ShellTableCreationCommandList(relationId,
+																bundlePartitionMetadata);
 				}
 
 				return commandList;
@@ -957,18 +944,61 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 
 
 /*
+ * ShellTableCreationCommandList returns the ordered list of DDL command strings
+ * that (re)create the shell table for the given Citus table on a worker node.
+ */
+List *
+ShellTableCreationCommandList(Oid relationId, bool bundlePartitionMetadata)
+{
+	List *commandList = NIL;
+
+	bool creatingShellTableOnRemoteNode = true;
+	List *tableDDLCommands = GetFullTableCreationCommands(relationId,
+														  WORKER_NEXTVAL_SEQUENCE_DEFAULTS,
+														  INCLUDE_IDENTITY,
+														  creatingShellTableOnRemoteNode);
+	TableDDLCommand *tableDDLCommand = NULL;
+	foreach_declared_ptr(tableDDLCommand, tableDDLCommands)
+	{
+		Assert(CitusIsA(tableDDLCommand, TableDDLCommand));
+		commandList = lappend(commandList, GetTableDDLCommand(tableDDLCommand));
+	}
+
+	/*
+	 * We need to drop table, if exists, first to make table creation
+	 * idempotent. Before dropping the table, we should also break
+	 * dependencies with sequences since `drop cascade table` would also
+	 * drop depended sequences. This is safe as we still record dependency
+	 * with the sequence during table creation.
+	 */
+	commandList = lcons(DropTableIfExistsCommand(relationId), commandList);
+	commandList = lcons(WorkerDropSequenceDependencyCommand(relationId), commandList);
+
+	if (bundlePartitionMetadata)
+	{
+		CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
+		commandList = lappend(commandList, DistributionCreateCommand(cacheEntry));
+	}
+
+	return commandList;
+}
+
+
+/*
  * GetAllDependencyCreateDDLCommands iteratively calls GetDependencyCreateDDLCommands
  * for given dependencies.
  */
 List *
-GetAllDependencyCreateDDLCommands(const List *dependencies)
+GetAllDependencyCreateDDLCommands(const List *dependencies, bool bundlePartitionMetadata)
 {
 	List *commands = NIL;
 
 	ObjectAddress *dependency = NULL;
 	foreach_declared_ptr(dependency, dependencies)
 	{
-		commands = list_concat(commands, GetDependencyCreateDDLCommands(dependency));
+		commands = list_concat(commands,
+							   GetDependencyCreateDDLCommands(dependency,
+															  bundlePartitionMetadata));
 	}
 
 	return commands;
@@ -1129,18 +1159,37 @@ ShouldPropagateAnyObject(List *addresses)
 /*
  * FilterObjectAddressListByPredicate takes a list of ObjectAddress *'s and returns a list
  * only containing the ObjectAddress *'s for which the predicate returned true.
+ *
+ * When flushCaches is true, the caller opts into periodically flushing the coordinator
+ * caches that grow while the predicate opens each object.
  */
 List *
-FilterObjectAddressListByPredicate(List *objectAddressList, AddressPredicate predicate)
+FilterObjectAddressListByPredicate(List *objectAddressList, AddressPredicate predicate,
+								   bool flushCaches)
 {
 	List *result = NIL;
 
+	int64 processedCount = 0;
 	ObjectAddress *address = NULL;
 	foreach_declared_ptr(address, objectAddressList)
 	{
 		if (predicate(address))
 		{
 			result = lappend(result, address);
+		}
+
+		/*
+		 * This loop opens each Citus table (and its dependencies), which accumulates
+		 * postgres relcache/catcache and Citus metadata cache entries on the
+		 * coordinator. For a very large number of distributed objects this transient
+		 * cache growth can exhaust coordinator memory during metadata sync.
+		 *
+		 * Both the input and result lists only hold ObjectAddresses, so it's safe to
+		 * flush the caches.
+		 */
+		if (flushCaches && MetadataSyncCacheFlushIntervalReached(++processedCount))
+		{
+			FlushCachesForMetadataSync();
 		}
 	}
 

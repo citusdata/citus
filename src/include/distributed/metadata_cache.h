@@ -190,6 +190,7 @@ extern void CitusInvalidateRelcacheByRelid(Oid relationId);
 extern void CitusInvalidateRelcacheByShardId(int64 shardId);
 extern void InvalidateForeignKeyGraph(void);
 extern void FlushDistTableCache(void);
+extern void FlushDistObjectCache(void);
 extern void InvalidateMetadataSystemCache(void);
 extern List * CitusTableTypeIdList(CitusTableType citusTableType);
 extern Datum DistNodeMetadata(void);

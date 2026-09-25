@@ -4974,13 +4974,37 @@ FlushDistTableCache(void)
 
 	while ((cacheSlot = (CitusTableCacheEntrySlot *) hash_seq_search(&status)) != NULL)
 	{
-		ResetCitusTableCacheEntry(cacheSlot->citusTableMetadata);
+		/*
+		 * Negative cache entries (non-Citus relations) have no metadata, so
+		 * skip them.
+		 */
+		if (cacheSlot->citusTableMetadata != NULL)
+		{
+			ResetCitusTableCacheEntry(cacheSlot->citusTableMetadata);
+		}
 	}
 
 	hash_destroy(DistTableCacheHash);
 	hash_destroy(ShardIdCacheHash);
 	CreateDistTableCache();
 	CreateShardIdCache();
+}
+
+
+/*
+ * FlushDistObjectCache flushes the entire distributed object cache, frees all
+ * entries, and recreates the cache.
+ */
+void
+FlushDistObjectCache(void)
+{
+	if (DistObjectCacheHash == NULL)
+	{
+		return;
+	}
+
+	hash_destroy(DistObjectCacheHash);
+	CreateDistObjectCache();
 }
 
 

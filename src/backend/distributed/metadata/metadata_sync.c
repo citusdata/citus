@@ -51,6 +51,7 @@
 #include "storage/lmgr.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
+#include "utils/inval.h"
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
 #include "utils/snapmgr.h"
@@ -100,6 +101,8 @@
 /* managed via a GUC */
 char *EnableManualMetadataChangesForUser = "";
 int MetadataSyncTransMode = METADATA_SYNC_TRANSACTIONAL;
+int MetadataSyncCacheFlushInterval = 1000;
+int MetadataSyncSetBatchSize = 1000;
 
 
 static void EnsureObjectMetadataIsSane(int distributionArgumentIndex,
@@ -116,6 +119,26 @@ static NodeMetadataSyncResult SyncNodeMetadataToNodesOptional(void);
 static bool ShouldSyncTableMetadataInternal(bool hashDistributed,
 											bool citusTableWithNoDistKey);
 static bool SyncNodeMetadataSnapshotToNode(WorkerNode *workerNode, bool raiseOnError);
+static void FlushMetadataSyncCachesIfNeeded(MetadataSyncContext *context,
+											int64 processedCount);
+static char * ColocationMetadataBatchCommand(List *valueRows);
+static char * TenantSchemaMetadataBatchCommand(List *valueRows);
+static void AppendRelationMetadataBatchRows(Oid relationId,
+											StringInfo partitionValues,
+											StringInfo shardValues,
+											StringInfo placementValues);
+static void AppendDistributionMetadataBatchRow(StringInfo partitionValues,
+											   CitusTableCacheEntry *cacheEntry);
+static void AppendShardMetadataBatchRows(StringInfo shardValues,
+										 StringInfo placementValues,
+										 List *shardIntervalList);
+static void AppendShardMetadataRow(StringInfo shardValues,
+								   ShardInterval *shardInterval);
+static void AppendPlacementMetadataRow(StringInfo placementValues,
+									   uint64 shardId, ShardPlacement *placement);
+static List * DistTableMetadataBatchCommandList(StringInfo partitionValues,
+												StringInfo shardValues,
+												StringInfo placementValues);
 static void DropMetadataSnapshotOnNode(WorkerNode *workerNode);
 static void FetchSequenceState(Oid sequenceId, int64 *lastValue, bool *isCalled);
 static void AppendSequenceRangeAdjustCommand(Oid sequenceId, List **commandList);
@@ -164,6 +187,10 @@ static char * GetRemoteTypeNamespace(Oid typeId);
 static char * RemoteCollationIdExpression(Oid colocationId);
 static char * RemoteTableIdExpression(Oid relationId);
 
+static void LogMetadataSyncPhaseBoundary(const char *state, const char *phase);
+static void LogMetadataSyncProgress(const char *label, int64 currentCount,
+									int64 totalCount);
+
 
 PG_FUNCTION_INFO_V1(start_metadata_sync_to_all_nodes);
 PG_FUNCTION_INFO_V1(start_metadata_sync_to_node);
@@ -198,6 +225,7 @@ static bool got_SIGTERM = false;
 static bool got_SIGALRM = false;
 
 #define METADATA_SYNC_APP_NAME "Citus Metadata Sync Daemon"
+#define METADATA_SYNC_PROGRESS_LOG_INTERVAL 1000
 
 
 /*
@@ -686,6 +714,35 @@ ShouldSyncSequenceMetadata(Oid relationId)
 	ObjectAddressSet(*sequenceAddress, RelationRelationId, relationId);
 
 	return IsAnyObjectDistributed(list_make1(sequenceAddress));
+}
+
+
+/*
+ * MetadataSyncCacheFlushIntervalReached returns true if the number of processed
+ * distributed relations has reached the configured flush interval.
+ * See citus.metadata_sync_cache_flush_interval GUC.
+ */
+bool
+MetadataSyncCacheFlushIntervalReached(int64 processedCount)
+{
+	return MetadataSyncCacheFlushInterval > 0 &&
+		   processedCount % MetadataSyncCacheFlushInterval == 0;
+}
+
+
+/*
+ * FlushCachesForMetadataSync flushes the Citus distributed-table and distributed-object
+ * caches, as well as the postgres relcache/catcache entries.
+ */
+void
+FlushCachesForMetadataSync(void)
+{
+	/* free the Citus distributed-table and distributed-object caches built so far */
+	FlushDistTableCache();
+	FlushDistObjectCache();
+
+	/* free the PostgreSQL relcache/catcache entries built so far */
+	InvalidateSystemCaches();
 }
 
 
@@ -1289,35 +1346,25 @@ ShardListInsertCommand(List *shardIntervalList)
 					 "WITH placement_data(shardid, "
 					 "shardlength, groupid, placementid)  AS (VALUES ");
 
+	StringInfo shardRows = makeStringInfo();
+	StringInfo placementRows = makeStringInfo();
+
 	ShardInterval *shardInterval = NULL;
-	bool firstPlacementProcessed = false;
 	foreach_declared_ptr(shardInterval, shardIntervalList)
 	{
+		AppendShardMetadataRow(shardRows, shardInterval);
+
 		uint64 shardId = shardInterval->shardId;
 		List *shardPlacementList = ActiveShardPlacementList(shardId);
 
 		ShardPlacement *placement = NULL;
 		foreach_declared_ptr(placement, shardPlacementList)
 		{
-			if (firstPlacementProcessed)
-			{
-				/*
-				 * As long as this is not the first placement of the first shard,
-				 * append the comma.
-				 */
-				appendStringInfo(insertPlacementCommand, ", ");
-			}
-			firstPlacementProcessed = true;
-
-			appendStringInfo(insertPlacementCommand,
-							 "(%ld, %ld, %d, %ld)",
-							 shardId,
-							 placement->shardLength,
-							 placement->groupId,
-							 placement->placementId);
+			AppendPlacementMetadataRow(placementRows, shardId, placement);
 		}
 	}
 
+	appendStringInfoString(insertPlacementCommand, placementRows->data);
 	appendStringInfo(insertPlacementCommand, ") ");
 
 	appendStringInfo(insertPlacementCommand,
@@ -1331,49 +1378,7 @@ ShardListInsertCommand(List *shardIntervalList)
 					 "WITH shard_data(relationname, shardid, storagetype, "
 					 "shardminvalue, shardmaxvalue)  AS (VALUES ");
 
-	foreach_declared_ptr(shardInterval, shardIntervalList)
-	{
-		uint64 shardId = shardInterval->shardId;
-		Oid distributedRelationId = shardInterval->relationId;
-		char *qualifiedRelationName = generate_qualified_relation_name(
-			distributedRelationId);
-		StringInfo minHashToken = makeStringInfo();
-		StringInfo maxHashToken = makeStringInfo();
-
-		if (shardInterval->minValueExists)
-		{
-			appendStringInfo(minHashToken, "'%d'", DatumGetInt32(
-								 shardInterval->minValue));
-		}
-		else
-		{
-			appendStringInfo(minHashToken, "NULL");
-		}
-
-		if (shardInterval->maxValueExists)
-		{
-			appendStringInfo(maxHashToken, "'%d'", DatumGetInt32(
-								 shardInterval->maxValue));
-		}
-		else
-		{
-			appendStringInfo(maxHashToken, "NULL");
-		}
-
-		appendStringInfo(insertShardCommand,
-						 "(%s::regclass, %ld, '%c'::\"char\", %s, %s)",
-						 quote_literal_cstr(qualifiedRelationName),
-						 shardId,
-						 shardInterval->storageType,
-						 minHashToken->data,
-						 maxHashToken->data);
-
-		if (llast(shardIntervalList) != shardInterval)
-		{
-			appendStringInfo(insertShardCommand, ", ");
-		}
-	}
-
+	appendStringInfoString(insertShardCommand, shardRows->data);
 	appendStringInfo(insertShardCommand, ") ");
 
 	appendStringInfo(insertShardCommand,
@@ -1394,7 +1399,7 @@ ShardListInsertCommand(List *shardIntervalList)
 	 * TODO: remove this check once citus_disable_node errors out for
 	 * the above scenario.
 	 */
-	if (firstPlacementProcessed)
+	if (placementRows->len > 0)
 	{
 		/* first insert shards, than the placements */
 		commandList = lappend(commandList, insertShardCommand->data);
@@ -5130,7 +5135,9 @@ SyncDistributedObjects(MetadataSyncContext *context)
 	Assert(ShouldPropagate());
 
 	/* Send systemwide objects, only roles for now */
+	LogMetadataSyncPhaseBoundary("starting", "node-wide objects");
 	SendNodeWideObjectsSyncCommands(context);
+	LogMetadataSyncPhaseBoundary("finished", "node-wide objects");
 
 	/*
 	 * Break dependencies between sequences-shell tables, then remove shell tables,
@@ -5138,23 +5145,38 @@ SyncDistributedObjects(MetadataSyncContext *context)
 	 * We should delete shell tables before metadata entries as we look inside
 	 * pg_dist_partition to figure out shell tables.
 	 */
+	LogMetadataSyncPhaseBoundary("starting", "shell table deletion");
 	SendShellTableDeletionCommands(context);
+	LogMetadataSyncPhaseBoundary("finished", "shell table deletion");
+
+	LogMetadataSyncPhaseBoundary("starting", "metadata deletion");
 	SendMetadataDeletionCommands(context);
+	LogMetadataSyncPhaseBoundary("finished", "metadata deletion");
 
 	/*
 	 * Commands to insert pg_dist_colocation entries.
 	 * Replicating dist objects and their metadata depends on this step.
 	 */
+	LogMetadataSyncPhaseBoundary("starting", "colocation metadata");
 	SendColocationMetadataCommands(context);
+	LogMetadataSyncPhaseBoundary("finished", "colocation metadata");
 
 	/*
 	 * Replicate all objects of the pg_dist_object to the remote node and
 	 * create metadata entries for Citus tables (pg_dist_shard, pg_dist_shard_placement,
 	 * pg_dist_partition, pg_dist_object).
 	 */
+	LogMetadataSyncPhaseBoundary("starting", "dependency creation");
 	SendDependencyCreationCommands(context);
+	LogMetadataSyncPhaseBoundary("finished", "dependency creation");
+
+	LogMetadataSyncPhaseBoundary("starting", "dist table metadata");
 	SendDistTableMetadataCommands(context);
+	LogMetadataSyncPhaseBoundary("finished", "dist table metadata");
+
+	LogMetadataSyncPhaseBoundary("starting", "dist object metadata");
 	SendDistObjectCommands(context);
+	LogMetadataSyncPhaseBoundary("finished", "dist object metadata");
 
 	/*
 	 * Commands to insert pg_dist_schema entries.
@@ -5162,13 +5184,17 @@ SyncDistributedObjects(MetadataSyncContext *context)
 	 * Need to be done after syncing distributed objects because the schemas
 	 * need to exist on the worker.
 	 */
+	LogMetadataSyncPhaseBoundary("starting", "tenant schema metadata");
 	SendTenantSchemaMetadataCommands(context);
+	LogMetadataSyncPhaseBoundary("finished", "tenant schema metadata");
 
 	/*
 	 * After creating each table, handle the inter table relationship between
 	 * those tables.
 	 */
+	LogMetadataSyncPhaseBoundary("starting", "inter-table relationship");
 	SendInterTableRelationshipCommands(context);
+	LogMetadataSyncPhaseBoundary("finished", "inter-table relationship");
 }
 
 
@@ -5258,24 +5284,27 @@ SendColocationMetadataCommands(MetadataSyncContext *context)
 											  scanKeyCount, scanKey);
 
 	MemoryContext oldContext = MemoryContextSwitchTo(context->context);
+
+	bool collecting = MetadataSyncCollectsCommands(context);
+	int batchSize = collecting ? 1 : Max(MetadataSyncSetBatchSize, 1);
+	MemoryContext batchContext =
+		AllocSetContextCreate(context->context, "colocation metadata batch context",
+							  ALLOCSET_DEFAULT_SIZES);
+
+	List *valueRows = NIL;
+	int batchCount = 0;
+	int64 processedCount = 0;
+
+	MemoryContextSwitchTo(batchContext);
+
 	HeapTuple nextTuple = NULL;
 	while (true)
 	{
-		ResetMetadataSyncMemoryContext(context);
-
 		nextTuple = systable_getnext(scanDesc);
 		if (!HeapTupleIsValid(nextTuple))
 		{
 			break;
 		}
-
-		StringInfo colocationGroupCreateCommand = makeStringInfo();
-		appendStringInfo(colocationGroupCreateCommand,
-						 "WITH colocation_group_data (colocationid, shardcount, "
-						 "replicationfactor, distributioncolumntypeschema, "
-						 "distributioncolumntypename, "
-						 "distributioncolumncollationname, "
-						 "distributioncolumncollationschema)  AS (VALUES ");
 
 		Form_pg_dist_colocation colocationForm =
 			(Form_pg_dist_colocation) GETSTRUCT(nextTuple);
@@ -5290,7 +5319,8 @@ SendColocationMetadataCommands(MetadataSyncContext *context)
 		char *typeSchemaName =
 			GetRemoteTypeNamespace(colocationForm->distributioncolumntype);
 
-		appendStringInfo(colocationGroupCreateCommand,
+		StringInfo valueRow = makeStringInfo();
+		appendStringInfo(valueRow,
 						 "(%d, %d, %d, ",
 						 colocationForm->colocationid,
 						 colocationForm->shardcount,
@@ -5300,7 +5330,7 @@ SendColocationMetadataCommands(MetadataSyncContext *context)
 		if (typeSchemaName != NULL && typeName != NULL)
 		{
 			/* Use quote_identifier so the schema name can be cast to regnamespace */
-			appendStringInfo(colocationGroupCreateCommand,
+			appendStringInfo(valueRow,
 							 "%s, %s, ",
 							 quote_literal_cstr(quote_identifier(typeSchemaName)),
 							 quote_literal_cstr(typeName));
@@ -5308,14 +5338,14 @@ SendColocationMetadataCommands(MetadataSyncContext *context)
 		else if (typeName != NULL)
 		{
 			/* Type is in pg_catalog or no schema qualifier needed */
-			appendStringInfo(colocationGroupCreateCommand,
+			appendStringInfo(valueRow,
 							 "NULL, %s, ",
 							 quote_literal_cstr(typeName));
 		}
 		else
 		{
 			/* InvalidOid or unknown type */
-			appendStringInfo(colocationGroupCreateCommand,
+			appendStringInfo(valueRow,
 							 "NULL, NULL, ");
 		}
 
@@ -5335,7 +5365,7 @@ SendColocationMetadataCommands(MetadataSyncContext *context)
 				char *collationName = NameStr(collationform->collname);
 				char *collationSchemaName =
 					get_namespace_name(collationform->collnamespace);
-				appendStringInfo(colocationGroupCreateCommand,
+				appendStringInfo(valueRow,
 								 "%s, %s)",
 								 quote_literal_cstr(collationName),
 								 quote_literal_cstr(collationSchemaName));
@@ -5343,40 +5373,46 @@ SendColocationMetadataCommands(MetadataSyncContext *context)
 			}
 			else
 			{
-				appendStringInfo(colocationGroupCreateCommand,
-								 "NULL, NULL)");
+				appendStringInfo(valueRow, "NULL, NULL)");
 			}
 		}
 		else
 		{
-			appendStringInfo(colocationGroupCreateCommand,
-							 "NULL, NULL)");
+			appendStringInfo(valueRow, "NULL, NULL)");
 		}
 
-		/*
-		 * Use LEFT JOIN with pg_type to resolve the type OID at runtime.
-		 * This defers type resolution until execution on the worker, allowing
-		 * the type and its schema to be created first by dependency commands.
-		 */
-		appendStringInfo(colocationGroupCreateCommand,
-						 ") SELECT citus_internal.add_colocation_metadata("
-						 "colocationid, shardcount, replicationfactor, "
-						 "coalesce(t.oid, 0), coalesce(c.oid, 0)) "
-						 "FROM colocation_group_data d "
-						 "LEFT JOIN pg_type t ON ("
-						 "d.distributioncolumntypename = t.typname "
-						 "AND (d.distributioncolumntypeschema IS NULL OR "
-						 "t.typnamespace = (SELECT oid FROM pg_namespace WHERE "
-						 "nspname = d.distributioncolumntypeschema))) "
-						 "LEFT JOIN pg_collation c "
-						 "ON (d.distributioncolumncollationname = c.collname "
-						 "AND c.collnamespace = (SELECT oid FROM pg_namespace WHERE "
-						 "nspname = d.distributioncolumncollationschema))");
+		valueRows = lappend(valueRows, valueRow->data);
+		batchCount++;
 
-		List *commandList = list_make1(colocationGroupCreateCommand->data);
-		SendOrCollectCommandListToActivatedNodes(context, commandList);
+		if (batchCount >= batchSize)
+		{
+			MemoryContext buildContext = collecting ? context->context : batchContext;
+			MemoryContext prev = MemoryContextSwitchTo(buildContext);
+			List *commandList = list_make1(ColocationMetadataBatchCommand(valueRows));
+			SendOrCollectCommandListToActivatedNodes(context, commandList);
+			MemoryContextSwitchTo(prev);
+
+			MemoryContextReset(batchContext);
+			valueRows = NIL;
+			batchCount = 0;
+		}
+
+		FlushMetadataSyncCachesIfNeeded(context, ++processedCount);
+		LogMetadataSyncProgress("colocation groups", processedCount, -1);
 	}
+
+	/* flush the final partial batch */
+	if (batchCount > 0)
+	{
+		MemoryContext buildContext = collecting ? context->context : batchContext;
+		MemoryContext prev = MemoryContextSwitchTo(buildContext);
+		List *commandList = list_make1(ColocationMetadataBatchCommand(valueRows));
+		SendOrCollectCommandListToActivatedNodes(context, commandList);
+		MemoryContextSwitchTo(prev);
+	}
+
 	MemoryContextSwitchTo(oldContext);
+	MemoryContextDelete(batchContext);
 
 	systable_endscan(scanDesc);
 	table_close(relation, AccessShareLock);
@@ -5400,11 +5436,22 @@ SendTenantSchemaMetadataCommands(MetadataSyncContext *context)
 											  scanKeyCount, scanKey);
 
 	MemoryContext oldContext = MemoryContextSwitchTo(context->context);
+
+	bool collecting = MetadataSyncCollectsCommands(context);
+	int batchSize = collecting ? 1 : Max(MetadataSyncSetBatchSize, 1);
+	MemoryContext batchContext =
+		AllocSetContextCreate(context->context, "tenant schema metadata batch context",
+							  ALLOCSET_DEFAULT_SIZES);
+
+	List *valueRows = NIL;
+	int batchCount = 0;
+	int64 processedCount = 0;
+
+	MemoryContextSwitchTo(batchContext);
+
 	HeapTuple heapTuple = NULL;
 	while (true)
 	{
-		ResetMetadataSyncMemoryContext(context);
-
 		heapTuple = systable_getnext(scanDesc);
 		if (!HeapTupleIsValid(heapTuple))
 		{
@@ -5414,19 +5461,136 @@ SendTenantSchemaMetadataCommands(MetadataSyncContext *context)
 		Form_pg_dist_schema tenantSchemaForm =
 			(Form_pg_dist_schema) GETSTRUCT(heapTuple);
 
-		StringInfo insertTenantSchemaCommand = makeStringInfo();
-		appendStringInfo(insertTenantSchemaCommand,
-						 "SELECT citus_internal.add_tenant_schema(%s, %u)",
+		StringInfo valueRow = makeStringInfo();
+		appendStringInfo(valueRow,
+						 "(%s, %u)",
 						 RemoteSchemaIdExpressionById(tenantSchemaForm->schemaid),
 						 tenantSchemaForm->colocationid);
 
-		List *commandList = list_make1(insertTenantSchemaCommand->data);
-		SendOrCollectCommandListToActivatedNodes(context, commandList);
+		valueRows = lappend(valueRows, valueRow->data);
+		batchCount++;
+
+		if (batchCount >= batchSize)
+		{
+			MemoryContext buildContext = collecting ? context->context : batchContext;
+			MemoryContext prev = MemoryContextSwitchTo(buildContext);
+			char *command = collecting ?
+							psprintf(
+				"SELECT citus_internal.add_tenant_schema%s",
+				(char *) linitial(valueRows)) :
+							TenantSchemaMetadataBatchCommand(valueRows);
+			List *commandList = list_make1(command);
+			SendOrCollectCommandListToActivatedNodes(context, commandList);
+			MemoryContextSwitchTo(prev);
+
+			MemoryContextReset(batchContext);
+			valueRows = NIL;
+			batchCount = 0;
+		}
+
+		FlushMetadataSyncCachesIfNeeded(context, ++processedCount);
+		LogMetadataSyncProgress("tenant schemas", processedCount, -1);
 	}
+
+	/* flush the final partial batch */
+	if (batchCount > 0)
+	{
+		MemoryContext buildContext = collecting ? context->context : batchContext;
+		MemoryContext prev = MemoryContextSwitchTo(buildContext);
+		char *command = collecting ?
+						psprintf(
+			"SELECT citus_internal.add_tenant_schema%s",
+			(char *) linitial(valueRows)) :
+						TenantSchemaMetadataBatchCommand(valueRows);
+		List *commandList = list_make1(command);
+		SendOrCollectCommandListToActivatedNodes(context, commandList);
+		MemoryContextSwitchTo(prev);
+	}
+
 	MemoryContextSwitchTo(oldContext);
+	MemoryContextDelete(batchContext);
 
 	systable_endscan(scanDesc);
 	table_close(pgDistTenantSchema, AccessShareLock);
+}
+
+
+/*
+ * ColocationMetadataBatchCommand builds a single set-based colocation metadata
+ * (re)creation command for a batch of colocation groups. valueRows is a list of
+ * pre-rendered "(colocationid, shardcount, replicationfactor,
+ * distributioncolumntypeschema, distributioncolumntypename,
+ * distributioncolumncollationname, distributioncolumncollationschema)" VALUES
+ * tuples (see SendColocationMetadataCommands).
+ */
+static char *
+ColocationMetadataBatchCommand(List *valueRows)
+{
+	StringInfo command = makeStringInfo();
+	appendStringInfoString(command,
+						   "WITH colocation_group_data (colocationid, shardcount, "
+						   "replicationfactor, distributioncolumntypeschema, "
+						   "distributioncolumntypename, "
+						   "distributioncolumncollationname, "
+						   "distributioncolumncollationschema)  AS (VALUES ");
+
+	char *valueRow = NULL;
+	bool firstRow = true;
+	foreach_declared_ptr(valueRow, valueRows)
+	{
+		appendStringInfo(command, "%s%s", firstRow ? "" : ", ", valueRow);
+		firstRow = false;
+	}
+
+	/*
+	 * Use LEFT JOIN with pg_type to resolve the type OID at runtime.
+	 * This defers type resolution until execution on the worker, allowing
+	 * the type and its schema to be created first by dependency commands.
+	 */
+	appendStringInfoString(command,
+						   ") SELECT citus_internal.add_colocation_metadata("
+						   "colocationid, shardcount, replicationfactor, "
+						   "coalesce(t.oid, 0), coalesce(c.oid, 0)) "
+						   "FROM colocation_group_data d "
+						   "LEFT JOIN pg_type t ON ("
+						   "d.distributioncolumntypename = t.typname "
+						   "AND (d.distributioncolumntypeschema IS NULL OR "
+						   "t.typnamespace = (SELECT oid FROM pg_namespace WHERE "
+						   "nspname = d.distributioncolumntypeschema))) "
+						   "LEFT JOIN pg_collation c "
+						   "ON (d.distributioncolumncollationname = c.collname "
+						   "AND c.collnamespace = (SELECT oid FROM pg_namespace WHERE "
+						   "nspname = d.distributioncolumncollationschema))");
+
+	return command->data;
+}
+
+
+/*
+ * TenantSchemaMetadataBatchCommand builds a single set-based tenant schema
+ * metadata (re)creation command for a batch of tenant schemas. valueRows is a
+ * list of pre-rendered "(schemaid, colocationid)" VALUES tuples (see
+ * SendTenantSchemaMetadataCommands).
+ */
+static char *
+TenantSchemaMetadataBatchCommand(List *valueRows)
+{
+	StringInfo command = makeStringInfo();
+	appendStringInfoString(command,
+						   "SELECT citus_internal.add_tenant_schema("
+						   "d.schemaid, d.colocationid) FROM (VALUES ");
+
+	char *valueRow = NULL;
+	bool firstRow = true;
+	foreach_declared_ptr(valueRow, valueRows)
+	{
+		appendStringInfo(command, "%s%s", firstRow ? "" : ", ", valueRow);
+		firstRow = false;
+	}
+
+	appendStringInfoString(command, ") d(schemaid, colocationid)");
+
+	return command->data;
 }
 
 
@@ -5452,10 +5616,12 @@ SendDependencyCreationCommands(MetadataSyncContext *context)
 	 * there might be objects in the distributed object address list that should currently
 	 * not be propagated by citus as they are 'not supported'.
 	 */
+	bool flushCaches = true;
 	dependencies = FilterObjectAddressListByPredicate(dependencies,
-													  &SupportedDependencyByCitus);
+													  &SupportedDependencyByCitus,
+													  flushCaches);
 
-	dependencies = OrderObjectAddressListInDependencyOrder(dependencies);
+	dependencies = OrderObjectAddressListInDependencyOrder(dependencies, flushCaches);
 
 	/*
 	 * We need to create a subcontext as we reset the context after each dependency
@@ -5466,6 +5632,8 @@ SendDependencyCreationCommands(MetadataSyncContext *context)
 														  ALLOCSET_DEFAULT_SIZES);
 	MemoryContextSwitchTo(commandsContext);
 	ObjectAddress *dependency = NULL;
+	int64 processedCount = 0;
+	int64 totalDependencies = list_length(dependencies);
 	foreach_declared_ptr(dependency, dependencies)
 	{
 		if (!MetadataSyncCollectsCommands(context))
@@ -5473,19 +5641,29 @@ SendDependencyCreationCommands(MetadataSyncContext *context)
 			MemoryContextReset(commandsContext);
 		}
 
-		if (IsAnyObjectAddressOwnedByExtension(list_make1(dependency), NULL))
+		/*
+		 * We expect extension-owned objects to be created as a result
+		 * of the extension being created.
+		 */
+		if (!IsAnyObjectAddressOwnedByExtension(list_make1(dependency), NULL))
 		{
-			/*
-			 * We expect extension-owned objects to be created as a result
-			 * of the extension being created.
-			 */
-			continue;
+			/* dependency creation commands */
+			bool bundlePartitionMetadata = true;
+			List *ddlCommands = GetAllDependencyCreateDDLCommands(list_make1(dependency),
+																  bundlePartitionMetadata);
+			SendOrCollectCommandListToActivatedNodes(context, ddlCommands);
 		}
 
-		/* dependency creation commands */
-		List *ddlCommands = GetAllDependencyCreateDDLCommands(list_make1(dependency));
-		SendOrCollectCommandListToActivatedNodes(context, ddlCommands);
+		/*
+		 * We flush the caches even when we skip the dependency creation commands
+		 * because we still opened catalog entries to reach this decision, so
+		 * advance the cache-flush counter and flush if needed on this skip path
+		 * too.
+		 */
+		FlushMetadataSyncCachesIfNeeded(context, ++processedCount);
+		LogMetadataSyncProgress("dependency objects", processedCount, totalDependencies);
 	}
+
 	MemoryContextSwitchTo(oldContext);
 
 	if (!MetadataSyncCollectsCommands(context))
@@ -5517,34 +5695,339 @@ SendDistTableMetadataCommands(MetadataSyncContext *context)
 											  scanKeyCount, scanKey);
 
 	MemoryContext oldContext = MemoryContextSwitchTo(context->context);
+
+	bool collecting = MetadataSyncCollectsCommands(context);
+	int batchSize = collecting ? 1 : Max(MetadataSyncSetBatchSize, 1);
+	MemoryContext batchContext = AllocSetContextCreate(context->context,
+													   "dist table metadata batch context",
+													   ALLOCSET_DEFAULT_SIZES);
+
+	MemoryContextSwitchTo(batchContext);
+
+	StringInfo partitionValues = makeStringInfo();
+	StringInfo shardValues = makeStringInfo();
+	StringInfo placementValues = makeStringInfo();
+	int batchCount = 0;
+	int64 processedCount = 0;
+
 	HeapTuple nextTuple = NULL;
 	while (true)
 	{
-		ResetMetadataSyncMemoryContext(context);
-
 		nextTuple = systable_getnext(scanDesc);
 		if (!HeapTupleIsValid(nextTuple))
 		{
 			break;
 		}
 
-		/*
-		 * Create Citus table metadata commands (pg_dist_shard, pg_dist_shard_placement,
-		 * pg_dist_partition). Only Citus tables have shard metadata.
-		 */
 		Oid relationId = FetchRelationIdFromPgPartitionHeapTuple(nextTuple, tupleDesc);
-		if (!ShouldSyncTableMetadata(relationId))
+		if (ShouldSyncTableMetadata(relationId))
 		{
-			continue;
+			AppendRelationMetadataBatchRows(relationId, partitionValues,
+											shardValues, placementValues);
+			batchCount++;
 		}
 
-		List *commandList = CitusTableMetadataCreateCommandList(relationId);
-		SendOrCollectCommandListToActivatedNodes(context, commandList);
+		/*
+		 * We advance the cache-flush counter even for relations whose metadata is
+		 * skipped, because reaching that decision still opened the relation through
+		 * the metadata cache.
+		 */
+		FlushMetadataSyncCachesIfNeeded(context, ++processedCount);
+		LogMetadataSyncProgress("metadata entry groups for tables", processedCount, -1);
+
+		if (batchCount >= batchSize)
+		{
+			MemoryContext buildContext = collecting ? context->context : batchContext;
+			MemoryContext prev = MemoryContextSwitchTo(buildContext);
+			List *commandList = DistTableMetadataBatchCommandList(partitionValues,
+																  shardValues,
+																  placementValues);
+
+			SendOrCollectCommandListToActivatedNodes(context, commandList);
+			MemoryContextSwitchTo(prev);
+
+			MemoryContextReset(batchContext);
+			partitionValues = makeStringInfo();
+			shardValues = makeStringInfo();
+			placementValues = makeStringInfo();
+			batchCount = 0;
+		}
 	}
+
+	/* flush the final partial batch */
+	if (batchCount > 0)
+	{
+		MemoryContext buildContext = collecting ? context->context : batchContext;
+		MemoryContext prev = MemoryContextSwitchTo(buildContext);
+		List *commandList = DistTableMetadataBatchCommandList(partitionValues,
+															  shardValues,
+															  placementValues);
+
+		SendOrCollectCommandListToActivatedNodes(context, commandList);
+		MemoryContextSwitchTo(prev);
+	}
+
 	MemoryContextSwitchTo(oldContext);
+
+	MemoryContextDelete(batchContext);
 
 	systable_endscan(scanDesc);
 	table_close(relation, AccessShareLock);
+}
+
+
+/*
+ * AppendRelationMetadataBatchRows appends relationId's pg_dist_partition,
+ * pg_dist_shard and pg_dist_placement VALUES rows to the batch StringInfos.
+ */
+static void
+AppendRelationMetadataBatchRows(Oid relationId, StringInfo partitionValues,
+								StringInfo shardValues, StringInfo placementValues)
+{
+	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
+
+	/*
+	 * The pg_dist_partition row is bundled with the shell table CREATE for
+	 * tables that get a shell table bundle (see SendDependencyCreationCommands);
+	 * only emit it here for the excluded tables, i.e., extension-owned shell tables,
+	 * so we neither duplicate the row nor leave it out.
+	 */
+	ObjectAddress tableAddress = { 0 };
+	ObjectAddressSet(tableAddress, RelationRelationId, relationId);
+	if (IsAnyObjectAddressOwnedByExtension(list_make1(&tableAddress), NULL))
+	{
+		AppendDistributionMetadataBatchRow(partitionValues, cacheEntry);
+	}
+
+	List *shardIntervalList = LoadShardIntervalList(relationId);
+	AppendShardMetadataBatchRows(shardValues, placementValues, shardIntervalList);
+}
+
+
+/*
+ * AppendDistributionMetadataBatchRow appends one VALUES row describing the
+ * pg_dist_partition entry of cacheEntry's relation to partitionValues.
+ */
+static void
+AppendDistributionMetadataBatchRow(StringInfo partitionValues,
+								   CitusTableCacheEntry *cacheEntry)
+{
+	Oid relationId = cacheEntry->relationId;
+	char distributionMethod = cacheEntry->partitionMethod;
+	char *qualifiedRelationName = generate_qualified_relation_name(relationId);
+	uint32 colocationId = cacheEntry->colocationId;
+	char replicationModel = cacheEntry->replicationModel;
+
+	StringInfo tablePartitionKeyNameString = makeStringInfo();
+	if (!HasDistributionKeyCacheEntry(cacheEntry))
+	{
+		appendStringInfoString(tablePartitionKeyNameString, "NULL");
+	}
+	else
+	{
+		char *partitionKeyColumnName =
+			ColumnToColumnName(relationId, (Node *) cacheEntry->partitionColumn);
+		appendStringInfo(tablePartitionKeyNameString, "%s",
+						 quote_literal_cstr(partitionKeyColumnName));
+	}
+
+	if (partitionValues->len > 0)
+	{
+		appendStringInfoString(partitionValues, ", ");
+	}
+
+	appendStringInfo(partitionValues,
+					 "(%s::regclass, '%c'::\"char\", %s::text, %d, '%c'::\"char\")",
+					 quote_literal_cstr(qualifiedRelationName),
+					 distributionMethod,
+					 tablePartitionKeyNameString->data,
+					 colocationId,
+					 replicationModel);
+}
+
+
+/*
+ * AppendShardMetadataBatchRows appends the pg_dist_shard and pg_dist_placement
+ * VALUES rows for the given shard intervals to shardValues and placementValues.
+ * Each shard row carries its own relationname::regclass, so intervals from different
+ * relations can share one batched statement.
+ */
+static void
+AppendShardMetadataBatchRows(StringInfo shardValues, StringInfo placementValues,
+							 List *shardIntervalList)
+{
+	/*
+	 * Render this relation's rows into local buffers first so we can honor the
+	 * all-zero-placement suppression per relation: a shard with no active placement
+	 * still contributes its pg_dist_shard row (so the worker keeps the full shard
+	 * interval map), but if the whole relation has no active placement we emit
+	 * neither its shard rows nor an empty placement statement.
+	 */
+	StringInfo relationShardRows = makeStringInfo();
+	StringInfo relationPlacementRows = makeStringInfo();
+
+	ShardInterval *shardInterval = NULL;
+	foreach_declared_ptr(shardInterval, shardIntervalList)
+	{
+		AppendShardMetadataRow(relationShardRows, shardInterval);
+
+		uint64 shardId = shardInterval->shardId;
+		List *shardPlacementList = ActiveShardPlacementList(shardId);
+		ShardPlacement *placement = NULL;
+		foreach_declared_ptr(placement, shardPlacementList)
+		{
+			AppendPlacementMetadataRow(relationPlacementRows, shardId, placement);
+		}
+	}
+
+	if (relationPlacementRows->len == 0)
+	{
+		/* no active placement on any shard of this relation, emit nothing */
+		return;
+	}
+
+	if (shardValues->len > 0)
+	{
+		appendStringInfoString(shardValues, ", ");
+	}
+
+	appendStringInfoString(shardValues, relationShardRows->data);
+
+	if (placementValues->len > 0)
+	{
+		appendStringInfoString(placementValues, ", ");
+	}
+
+	appendStringInfoString(placementValues, relationPlacementRows->data);
+}
+
+
+/*
+ * AppendShardMetadataRow appends a single pg_dist_shard VALUES tuple for the given
+ * shard interval to shardValues, prefixing a comma separator when shardValues
+ * already holds a row. The tuple layout matches the shard_data CTE consumed by
+ * citus_internal_add_shard_metadata.
+ */
+static void
+AppendShardMetadataRow(StringInfo shardValues, ShardInterval *shardInterval)
+{
+	uint64 shardId = shardInterval->shardId;
+	Oid distributedRelationId = shardInterval->relationId;
+	char *qualifiedRelationName =
+		generate_qualified_relation_name(distributedRelationId);
+
+	StringInfo minHashToken = makeStringInfo();
+	if (shardInterval->minValueExists)
+	{
+		appendStringInfo(minHashToken, "'%d'",
+						 DatumGetInt32(shardInterval->minValue));
+	}
+	else
+	{
+		appendStringInfoString(minHashToken, "NULL");
+	}
+
+	StringInfo maxHashToken = makeStringInfo();
+	if (shardInterval->maxValueExists)
+	{
+		appendStringInfo(maxHashToken, "'%d'",
+						 DatumGetInt32(shardInterval->maxValue));
+	}
+	else
+	{
+		appendStringInfoString(maxHashToken, "NULL");
+	}
+
+	if (shardValues->len > 0)
+	{
+		appendStringInfoString(shardValues, ", ");
+	}
+
+	appendStringInfo(shardValues,
+					 "(%s::regclass, %ld, '%c'::\"char\", %s, %s)",
+					 quote_literal_cstr(qualifiedRelationName),
+					 shardId,
+					 shardInterval->storageType,
+					 minHashToken->data,
+					 maxHashToken->data);
+}
+
+
+/*
+ * AppendPlacementMetadataRow appends a single pg_dist_placement VALUES tuple for
+ * the given placement of shardId to placementValues, prefixing a comma separator
+ * when placementValues already holds a row. The tuple layout matches the
+ * placement_data CTE consumed by citus_internal_add_placement_metadata.
+ */
+static void
+AppendPlacementMetadataRow(StringInfo placementValues, uint64 shardId,
+						   ShardPlacement *placement)
+{
+	if (placementValues->len > 0)
+	{
+		appendStringInfoString(placementValues, ", ");
+	}
+
+	appendStringInfo(placementValues,
+					 "(%ld, %ld, %d, %ld)",
+					 shardId,
+					 placement->shardLength,
+					 placement->groupId,
+					 placement->placementId);
+}
+
+
+/*
+ * DistTableMetadataBatchCommandList wraps the accumulated pg_dist_partition,
+ * pg_dist_shard and pg_dist_placement VALUES rows into up to three set-based
+ * statements, in the order partition -> shard -> placement so the shard/placement
+ * metadata UDFs find the pg_dist_partition and pg_dist_shard entries they require.
+ * Returns NIL when the batch produced no rows (e.g. every relation was skipped).
+ */
+static List *
+DistTableMetadataBatchCommandList(StringInfo partitionValues, StringInfo shardValues,
+								  StringInfo placementValues)
+{
+	List *commandList = NIL;
+
+	if (partitionValues->len > 0)
+	{
+		StringInfo command = makeStringInfo();
+		appendStringInfo(command,
+						 "WITH partition_data(relationname, distributionmethod, "
+						 "distributioncolumn, colocationid, repmodel) AS (VALUES %s) "
+						 "SELECT citus_internal_add_partition_metadata(relationname, "
+						 "distributionmethod, distributioncolumn, colocationid, repmodel) "
+						 "FROM partition_data;",
+						 partitionValues->data);
+		commandList = lappend(commandList, command->data);
+	}
+
+	if (shardValues->len > 0)
+	{
+		StringInfo command = makeStringInfo();
+		appendStringInfo(command,
+						 "WITH shard_data(relationname, shardid, storagetype, "
+						 "shardminvalue, shardmaxvalue) AS (VALUES %s) "
+						 "SELECT citus_internal_add_shard_metadata(relationname, shardid, "
+						 "storagetype, shardminvalue, shardmaxvalue) FROM shard_data;",
+						 shardValues->data);
+		commandList = lappend(commandList, command->data);
+	}
+
+	if (placementValues->len > 0)
+	{
+		StringInfo command = makeStringInfo();
+		appendStringInfo(command,
+						 "WITH placement_data(shardid, shardlength, groupid, placementid) "
+						 "AS (VALUES %s) "
+						 "SELECT citus_internal_add_placement_metadata(shardid, shardlength, "
+						 "groupid, placementid) FROM placement_data;",
+						 placementValues->data);
+		commandList = lappend(commandList, command->data);
+	}
+
+	return commandList;
 }
 
 
@@ -5566,11 +6049,25 @@ SendDistObjectCommands(MetadataSyncContext *context)
 											  scanKeyCount, scanKey);
 
 	MemoryContext oldContext = MemoryContextSwitchTo(context->context);
+
+	bool collecting = MetadataSyncCollectsCommands(context);
+	int batchSize = collecting ? 1 : Max(MetadataSyncSetBatchSize, 1);
+	MemoryContext batchContext = AllocSetContextCreate(context->context,
+													   "dist object commands batch context",
+													   ALLOCSET_DEFAULT_SIZES);
+
+	List *addresses = NIL;
+	List *distributionArgumentIndexes = NIL;
+	List *colocationIds = NIL;
+	List *forceDelegations = NIL;
+	int batchCount = 0;
+	int64 processedCount = 0;
+
+	MemoryContextSwitchTo(batchContext);
+
 	HeapTuple nextTuple = NULL;
 	while (true)
 	{
-		ResetMetadataSyncMemoryContext(context);
-
 		nextTuple = systable_getnext(scanDesc);
 		if (!HeapTupleIsValid(nextTuple))
 		{
@@ -5623,16 +6120,60 @@ SendDistObjectCommands(MetadataSyncContext *context)
 			forceDelegation = NO_FORCE_PUSHDOWN;
 		}
 
-		char *workerMetadataUpdateCommand =
-			MarkObjectsDistributedCreateCommand(list_make1(address),
-												NIL,
-												list_make1_int(distributionArgumentIndex),
-												list_make1_int(colocationId),
-												list_make1_int(forceDelegation));
-		SendOrCollectCommandListToActivatedNodes(context,
-												 list_make1(workerMetadataUpdateCommand));
+		addresses = lappend(addresses, address);
+		distributionArgumentIndexes = lappend_int(distributionArgumentIndexes,
+												  distributionArgumentIndex);
+		colocationIds = lappend_int(colocationIds, colocationId);
+		forceDelegations = lappend_int(forceDelegations, forceDelegation);
+		batchCount++;
+
+		if (batchCount >= batchSize)
+		{
+			MemoryContext buildContext = collecting ? context->context : batchContext;
+			MemoryContext prev = MemoryContextSwitchTo(buildContext);
+			char *command =
+				MarkObjectsDistributedCreateCommand(addresses,
+													NIL,
+													distributionArgumentIndexes,
+													colocationIds,
+													forceDelegations);
+			List *commandList = list_make1(command);
+
+			SendOrCollectCommandListToActivatedNodes(context, commandList);
+			MemoryContextSwitchTo(prev);
+
+			MemoryContextReset(batchContext);
+			addresses = NIL;
+			distributionArgumentIndexes = NIL;
+			colocationIds = NIL;
+			forceDelegations = NIL;
+			batchCount = 0;
+		}
+
+		FlushMetadataSyncCachesIfNeeded(context, ++processedCount);
+		LogMetadataSyncProgress("dist object marks", processedCount, -1);
 	}
+
+	/* flush the final partial batch */
+	if (batchCount > 0)
+	{
+		MemoryContext buildContext = collecting ? context->context : batchContext;
+		MemoryContext prev = MemoryContextSwitchTo(buildContext);
+		char *command =
+			MarkObjectsDistributedCreateCommand(addresses,
+												NIL,
+												distributionArgumentIndexes,
+												colocationIds,
+												forceDelegations);
+		List *commandList = list_make1(command);
+
+		SendOrCollectCommandListToActivatedNodes(context, commandList);
+		MemoryContextSwitchTo(prev);
+	}
+
 	MemoryContextSwitchTo(oldContext);
+
+	MemoryContextDelete(batchContext);
 
 	systable_endscan(scanDesc);
 	relation_close(relation, NoLock);
@@ -5663,6 +6204,7 @@ SendInterTableRelationshipCommands(MetadataSyncContext *context)
 
 	MemoryContext oldContext = MemoryContextSwitchTo(context->context);
 	HeapTuple nextTuple = NULL;
+	int64 processedCount = 0;
 	while (true)
 	{
 		ResetMetadataSyncMemoryContext(context);
@@ -5673,23 +6215,25 @@ SendInterTableRelationshipCommands(MetadataSyncContext *context)
 			break;
 		}
 
+		/*
+		 * Skip foreign key and partition creation when the Citus table is
+		 * owned by an extension or when the table doesn't need to be synced.
+		 */
 		Oid relationId = FetchRelationIdFromPgPartitionHeapTuple(nextTuple, tupleDesc);
-		if (!ShouldSyncTableMetadata(relationId))
+		if (ShouldSyncTableMetadata(relationId) && !IsTableOwnedByExtension(relationId))
 		{
-			continue;
+			List *commandList = InterTableRelationshipOfRelationCommandList(relationId);
+			SendOrCollectCommandListToActivatedNodes(context, commandList);
 		}
 
 		/*
-		 * Skip foreign key and partition creation when the Citus table is
-		 * owned by an extension.
+		 * We flush the caches even when we skip the dependency creation commands
+		 * because we still opened catalog entries to reach this decision, so advance
+		 * the cache-flush counter and flush if needed on this skip path too.
 		 */
-		if (IsTableOwnedByExtension(relationId))
-		{
-			continue;
-		}
-
-		List *commandList = InterTableRelationshipOfRelationCommandList(relationId);
-		SendOrCollectCommandListToActivatedNodes(context, commandList);
+		FlushMetadataSyncCachesIfNeeded(context, ++processedCount);
+		LogMetadataSyncProgress("tables scanned for inter-table relationships",
+								processedCount, -1);
 	}
 	MemoryContextSwitchTo(oldContext);
 
@@ -5698,4 +6242,71 @@ SendInterTableRelationshipCommands(MetadataSyncContext *context)
 
 	/* enable ddl propagation */
 	SendOrCollectCommandListToActivatedNodes(context, list_make1(ENABLE_DDL_PROPAGATION));
+}
+
+
+/*
+ * LogMetadataSyncPhaseBoundary is used to emit a single log line before and
+ * after each major metadata-sync phase in SyncDistributedObjects.
+ */
+static void
+LogMetadataSyncPhaseBoundary(const char *state, const char *phase)
+{
+	ereport(DEBUG1, (errmsg("metadata sync: %s %s", state, phase)));
+}
+
+
+/*
+ * LogMetadataSyncProgress is used to emit a periodic LOG line from the long
+ * per-object loops of metadata sync, once each time the running count crosses a
+ * multiple of METADATA_SYNC_PROGRESS_LOG_INTERVAL.
+ */
+static void
+LogMetadataSyncProgress(const char *label, int64 currentCount, int64 totalCount)
+{
+	int64 interval = METADATA_SYNC_PROGRESS_LOG_INTERVAL;
+
+	if (currentCount % interval != 0)
+	{
+		return;
+	}
+
+	if (totalCount > 0)
+	{
+		ereport(DEBUG2, (errmsg("metadata sync: processed %ld / %ld %s",
+								(long) currentCount, (long) totalCount, label)));
+	}
+	else
+	{
+		ereport(DEBUG2, (errmsg("metadata sync: processed %ld %s",
+								(long) currentCount, label)));
+	}
+}
+
+
+/*
+ * FlushMetadataSyncCachesIfNeeded drops the distributed-table cache, the
+ * distributed-object cache, and the postgres relation/catalog caches that
+ * accumulate while metadata sync opens each Citus table to build its
+ * DDL and metadata commands if needed.
+ *
+ * We flush caches when actually sending commands to workers, not while merely
+ * collecting.
+ *
+ * The caches are transparently rebuilt on the next access.
+ */
+static void
+FlushMetadataSyncCachesIfNeeded(MetadataSyncContext *context, int64 processedCount)
+{
+	if (MetadataSyncCollectsCommands(context))
+	{
+		return;
+	}
+
+	if (!MetadataSyncCacheFlushIntervalReached(processedCount))
+	{
+		return;
+	}
+
+	FlushCachesForMetadataSync();
 }
