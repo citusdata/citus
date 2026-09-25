@@ -161,6 +161,7 @@ DEFINE_COLUMNAR_PASSTHROUGH_FUNC(columnar_relation_storageid)
 DEFINE_COLUMNAR_PASSTHROUGH_FUNC(columnar_storage_info)
 DEFINE_COLUMNAR_PASSTHROUGH_FUNC(columnar_store_memory_stats)
 DEFINE_COLUMNAR_PASSTHROUGH_FUNC(test_columnar_storage_write_new_page)
+DEFINE_COLUMNAR_PASSTHROUGH_FUNC(test_columnar_metadata_xmin_aborted)
 
 #define DUMMY_REAL_TIME_EXECUTOR_ENUM_VALUE 9999999
 static char *CitusVersion = CITUS_VERSION;
@@ -619,6 +620,7 @@ _PG_init(void)
 	INIT_COLUMNAR_SYMBOL(PGFunction, columnar_storage_info);
 	INIT_COLUMNAR_SYMBOL(PGFunction, columnar_store_memory_stats);
 	INIT_COLUMNAR_SYMBOL(PGFunction, test_columnar_storage_write_new_page);
+	INIT_COLUMNAR_SYMBOL(PGFunction, test_columnar_metadata_xmin_aborted);
 
 	/*
 	 * This part is only for SECURITY LABEL tests

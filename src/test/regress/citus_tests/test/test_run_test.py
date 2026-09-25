@@ -52,6 +52,30 @@ def test_merged_dependencies_include_all_requirements():
     assert merged_dependencies.follower_cluster
 
 
+def test_pruning_tests_include_required_fixtures():
+    args = {
+        "use_base_schedule": False,
+        "use_whole_schedule_line": False,
+    }
+    schedule_line = (
+        "test: multi_join_pruning multi_hash_pruning " "intermediate_result_pruning\n"
+    )
+
+    join_dependencies = get_test_dependencies(
+        "multi_join_pruning", "multi_schedule", schedule_line, args
+    )
+    assert join_dependencies.schedule == "base_schedule"
+    assert join_dependencies.extra_tests() == ["multi_partition_pruning"]
+    assert not join_dependencies.repeatable
+
+    hash_dependencies = get_test_dependencies(
+        "multi_hash_pruning", "multi_schedule", schedule_line, args
+    )
+    assert hash_dependencies.schedule == "base_schedule"
+    assert hash_dependencies.extra_tests() == ["multi_agg_distinct"]
+    assert not hash_dependencies.repeatable
+
+
 def test_follower_schedule_selects_follower_custom_target(monkeypatch):
     args = {
         "use_base_schedule": False,
