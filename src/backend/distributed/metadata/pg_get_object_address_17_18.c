@@ -182,7 +182,9 @@ PgGetObjectAddress(char *ttype, ArrayType *namearr, ArrayType *argsarr)
 		case OBJECT_DOMCONSTRAINT:
 		case OBJECT_CAST:
 		case OBJECT_USER_MAPPING:
+#if PG_VERSION_NUM >= PG_VERSION_19
 		case OBJECT_PUBLICATION_EXCLUDED_REL:
+#endif
 		case OBJECT_PUBLICATION_REL:
 		case OBJECT_DEFACL:
 		case OBJECT_TRANSFORM:
@@ -316,7 +318,9 @@ PgGetObjectAddress(char *ttype, ArrayType *namearr, ArrayType *argsarr)
 			break;
 		}
 
+#if PG_VERSION_NUM >= PG_VERSION_19
 		case OBJECT_PUBLICATION_EXCLUDED_REL:
+#endif
 		case OBJECT_PUBLICATION_REL:
 		{
 			objnode = (Node *) list_make2(name, linitial(args));
