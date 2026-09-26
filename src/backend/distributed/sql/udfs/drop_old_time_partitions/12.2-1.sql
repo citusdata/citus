@@ -2,11 +2,9 @@ CREATE OR REPLACE PROCEDURE pg_catalog.drop_old_time_partitions(
     table_name regclass,
     older_than timestamptz)
 LANGUAGE plpgsql
-SET search_path = pg_catalog, pg_temp
 AS $$
 DECLARE
     -- properties of the partitioned table
-    table_display_name text;
     number_of_partition_columns int;
     partition_column_index int;
     partition_column_type regtype;
@@ -18,11 +16,6 @@ DECLARE
 
     r record;
 BEGIN
-    SELECT pg_catalog.quote_ident(relname)
-    INTO table_display_name
-    FROM pg_catalog.pg_class
-    WHERE oid = table_name;
-
     -- check whether the table is time partitioned table, if not error out
     SELECT partnatts, partattrs[0]
     INTO number_of_partition_columns, partition_column_index
@@ -30,7 +23,7 @@ BEGIN
     WHERE partrelid = table_name;
 
     IF NOT FOUND THEN
-        RAISE '% is not partitioned', table_display_name;
+        RAISE '% is not partitioned', table_name::text;
     ELSIF number_of_partition_columns <> 1 THEN
         RAISE 'partitioned tables with multiple partition columns are not supported';
     END IF;
@@ -51,7 +44,7 @@ BEGIN
              EXISTS(SELECT OID FROM pg_cast WHERE castsource = 'timestamptz'::regtype AND casttarget = partition_column_type)
       INTO is_partition_column_castable;
       IF not is_partition_column_castable THEN
-        RAISE 'type of the partition column of the table % must be date, timestamp or timestamptz', table_display_name;
+        RAISE 'type of the partition column of the table % must be date, timestamp or timestamptz', table_name;
       END IF;
       custom_cast = format('::%s', partition_column_type);
     END IF;
@@ -64,7 +57,8 @@ BEGIN
         ORDER BY to_value%1$s::timestamptz', custom_cast);
     FOR r IN EXECUTE older_partitions_query USING table_name, older_than
     LOOP
-        RAISE NOTICE 'dropping % with start time % and end time %', pg_catalog.quote_ident(r.table_name), r.from_value, r.to_value;
+        RAISE NOTICE 'dropping % with start time % and end time % using DETACH PARTITION partition_name AND THEN DROP IT. ', r.partition, r.from_value, r.to_value;
+        EXECUTE format('ALTER TABLE %I.%I DETACH PARTITION %I',r.schema_name, r.table_name, r.partition);
         EXECUTE format('DROP TABLE %I.%I', r.schema_name, r.table_name);
     END LOOP;
 END;
