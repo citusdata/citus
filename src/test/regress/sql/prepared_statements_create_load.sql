@@ -1,5 +1,6 @@
 CREATE SCHEMA "prepared statements";
 SET search_path TO "prepared statements";
+GRANT ALL ON SCHEMA "prepared statements" TO regularuser;
 
 CREATE TABLE repartition_prepared_test (a int, b int);
 SELECT create_distributed_table('repartition_prepared_test', 'a');

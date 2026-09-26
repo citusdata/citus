@@ -1,6 +1,7 @@
 \set VERBOSITY terse
 CREATE SCHEMA function_create;
 SET search_path TO function_create;
+GRANT ALL ON SCHEMA function_create TO regularuser;
 
 -- helper function to verify the function of a coordinator is the same on all workers
 CREATE OR REPLACE FUNCTION verify_function_is_same_on_workers(funcname text)

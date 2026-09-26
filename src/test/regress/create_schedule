@@ -1,3 +1,4 @@
+test: auto_grant_all_to_regularuser
 test: intermediate_result_pruning_create
 test: prepared_statements_create_load ch_benchmarks_create_load
 test: dropped_columns_create_load distributed_planning_create_load
