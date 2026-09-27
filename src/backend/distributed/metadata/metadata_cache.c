@@ -4888,8 +4888,16 @@ InvalidateDistRelationCacheCallback(Datum argument, Oid relationId)
 		{
 			InvalidateDistObjectCache();
 
-			/* REINDEX can replace pg_dist_object_pkey with a new OID. */
-			InvalidateMetadataSystemCache();
+			/* WAL senders cannot rebuild the worker node cache during decoding. */
+			if (MyBackendType == B_WAL_SENDER)
+			{
+				memset(&MetadataCache, 0, sizeof(MetadataCache));
+			}
+			else
+			{
+				/* REINDEX can replace Citus catalog indexes with new OIDs. */
+				InvalidateMetadataSystemCache();
+			}
 		}
 	}
 }
