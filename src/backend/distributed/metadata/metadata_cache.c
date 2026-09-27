@@ -4887,6 +4887,9 @@ InvalidateDistRelationCacheCallback(Datum argument, Oid relationId)
 		if (relationId == MetadataCache.distObjectRelationId)
 		{
 			InvalidateDistObjectCache();
+
+			/* REINDEX can replace pg_dist_object_pkey with a new OID. */
+			InvalidateMetadataSystemCache();
 		}
 	}
 }
