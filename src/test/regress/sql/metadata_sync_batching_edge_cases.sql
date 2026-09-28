@@ -1,0 +1,417 @@
+--
+-- METADATA_SYNC_BATCHING_EDGE_CASES
+--
+-- Edge cases for syncing metadata to a node while the coordinator
+-- periodically flushes its caches (citus.metadata_sync_cache_flush_interval)
+-- and batches per-object metadata into set-based statements
+-- (citus.metadata_sync_set_batch_size).
+--
+-- Each section removes worker_2, creates a small fixture, syncs the metadata
+-- to worker_2 by adding it back in transactional mode, and then compares
+-- the metadata of the fixture on the coordinator and on worker_2.
+--
+
+CREATE SCHEMA metadata_sync_batching_edge_cases;
+SET search_path TO metadata_sync_batching_edge_cases;
+
+-- Returns the number of metadata records for the objects in the schemas
+-- whose names match schema_pattern, plus the number of foreign keys
+-- defined on the Citus tables in those schemas.
+CREATE FUNCTION metadata_counts(schema_pattern text)
+RETURNS TABLE (metadata text, count bigint)
+LANGUAGE sql
+AS $func$
+    WITH citus_tables AS (
+        SELECT p.logicalrelid, p.colocationid
+        FROM pg_dist_partition p
+        JOIN pg_class c ON c.oid = p.logicalrelid
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE n.nspname LIKE schema_pattern
+    )
+    SELECT 'pg_dist_partition', count(*) FROM citus_tables
+    UNION ALL
+    SELECT 'pg_dist_shard', count(*)
+    FROM pg_dist_shard s JOIN citus_tables USING (logicalrelid)
+    UNION ALL
+    SELECT 'pg_dist_placement', count(*)
+    FROM pg_dist_placement pl
+    JOIN pg_dist_shard s USING (shardid)
+    JOIN citus_tables USING (logicalrelid)
+    UNION ALL
+    SELECT 'pg_dist_object', count(*)
+    FROM pg_dist_object o,
+         LATERAL pg_identify_object(o.classid, o.objid, o.objsubid) i
+    WHERE i.schema LIKE schema_pattern OR
+          (o.classid = 'pg_namespace'::regclass AND
+           (SELECT nspname FROM pg_namespace WHERE oid = o.objid) LIKE schema_pattern)
+    UNION ALL
+    SELECT 'pg_dist_colocation', count(*)
+    FROM pg_dist_colocation
+    WHERE colocationid IN (SELECT colocationid FROM citus_tables)
+    UNION ALL
+    SELECT 'pg_dist_schema', count(*)
+    FROM pg_dist_schema ds
+    JOIN pg_namespace n ON n.oid = ds.schemaid
+    WHERE n.nspname LIKE schema_pattern
+    UNION ALL
+    SELECT 'foreign keys', count(*)
+    FROM citus_tables
+    JOIN pg_constraint con ON con.conrelid = citus_tables.logicalrelid
+    WHERE con.contype = 'f'
+$func$;
+
+-- local (non-Citus) table, used to create a negative Citus table cache entry
+CREATE TABLE local_table (id int);
+
+SET citus.next_shard_id TO 9300000;
+SET citus.shard_replication_factor TO 1;
+
+-- store the current sequence values to restart them before adding the node back
+SELECT nextval('pg_catalog.pg_dist_groupid_seq') - 1 AS last_group_id \gset
+SELECT nextval('pg_catalog.pg_dist_node_nodeid_seq') - 1 AS last_node_id \gset
+
+--
+-- Section 1: flush the caches after every object
+-- (citus.metadata_sync_cache_flush_interval = 1).
+--
+-- Before syncing, we query a local table in the same session so that a
+-- negative (non-Citus) entry exists in the Citus table cache when the first
+-- flush happens.
+--
+SELECT citus_remove_node('localhost', :worker_2_port);
+
+-- 3 distributed schemas with 2 tables each and a foreign key between them
+SET citus.enable_schema_based_sharding TO ON;
+\set ECHO none
+SELECT format('CREATE SCHEMA msbe_small_t%s', i) FROM generate_series(1, 3) i \gexec
+SELECT format('CREATE TABLE msbe_small_t%s.referenced_table (id int PRIMARY KEY)', i)
+FROM generate_series(1, 3) i \gexec
+SELECT format('CREATE TABLE msbe_small_t%1$s.referencing_table (id int, '
+              'ref_id int REFERENCES msbe_small_t%1$s.referenced_table (id))', i)
+FROM generate_series(1, 3) i \gexec
+\set ECHO all
+RESET citus.enable_schema_based_sharding;
+
+SET citus.metadata_sync_cache_flush_interval TO 1;
+
+SELECT count(*) FROM local_table;
+
+ALTER SEQUENCE pg_catalog.pg_dist_groupid_seq RESTART :last_group_id;
+ALTER SEQUENCE pg_catalog.pg_dist_node_nodeid_seq RESTART :last_node_id;
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
+
+RESET citus.metadata_sync_cache_flush_interval;
+
+SELECT jsonb_object_agg(metadata, count) AS coordinator_counts
+FROM metadata_counts('msbe\_small%') \gset
+
+\c - - - :worker_2_port
+SET search_path TO metadata_sync_batching_edge_cases;
+SELECT metadata,
+       (:'coordinator_counts'::jsonb ->> metadata)::bigint AS coordinator,
+       count AS worker,
+       (:'coordinator_counts'::jsonb ->> metadata)::bigint = count AS equal
+FROM metadata_counts('msbe\_small%') ORDER BY metadata;
+
+\c - - - :master_port
+SET search_path TO metadata_sync_batching_edge_cases;
+SET citus.shard_replication_factor TO 1;
+
+SET client_min_messages TO WARNING;
+\set ECHO none
+SELECT format('DROP SCHEMA msbe_small_t%s CASCADE', i) FROM generate_series(1, 3) i \gexec
+\set ECHO all
+RESET client_min_messages;
+
+--
+-- Section 2: never flush the caches
+-- (citus.metadata_sync_cache_flush_interval = 0).
+--
+SELECT citus_remove_node('localhost', :worker_2_port);
+
+SET citus.enable_schema_based_sharding TO ON;
+\set ECHO none
+SELECT format('CREATE SCHEMA msbe_small_t%s', i) FROM generate_series(1, 3) i \gexec
+SELECT format('CREATE TABLE msbe_small_t%s.referenced_table (id int PRIMARY KEY)', i)
+FROM generate_series(1, 3) i \gexec
+SELECT format('CREATE TABLE msbe_small_t%1$s.referencing_table (id int, '
+              'ref_id int REFERENCES msbe_small_t%1$s.referenced_table (id))', i)
+FROM generate_series(1, 3) i \gexec
+\set ECHO all
+RESET citus.enable_schema_based_sharding;
+
+SET citus.metadata_sync_cache_flush_interval TO 0;
+
+ALTER SEQUENCE pg_catalog.pg_dist_groupid_seq RESTART :last_group_id;
+ALTER SEQUENCE pg_catalog.pg_dist_node_nodeid_seq RESTART :last_node_id;
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
+
+RESET citus.metadata_sync_cache_flush_interval;
+
+SELECT jsonb_object_agg(metadata, count) AS coordinator_counts
+FROM metadata_counts('msbe\_small%') \gset
+
+\c - - - :worker_2_port
+SET search_path TO metadata_sync_batching_edge_cases;
+SELECT metadata,
+       (:'coordinator_counts'::jsonb ->> metadata)::bigint AS coordinator,
+       count AS worker,
+       (:'coordinator_counts'::jsonb ->> metadata)::bigint = count AS equal
+FROM metadata_counts('msbe\_small%') ORDER BY metadata;
+
+\c - - - :master_port
+SET search_path TO metadata_sync_batching_edge_cases;
+SET citus.shard_replication_factor TO 1;
+
+SET client_min_messages TO WARNING;
+\set ECHO none
+SELECT format('DROP SCHEMA msbe_small_t%s CASCADE', i) FROM generate_series(1, 3) i \gexec
+\set ECHO all
+RESET client_min_messages;
+
+--
+-- Section 3: one object per statement
+-- (citus.metadata_sync_set_batch_size = 1).
+--
+SELECT citus_remove_node('localhost', :worker_2_port);
+
+SET citus.enable_schema_based_sharding TO ON;
+\set ECHO none
+SELECT format('CREATE SCHEMA msbe_small_t%s', i) FROM generate_series(1, 3) i \gexec
+SELECT format('CREATE TABLE msbe_small_t%s.referenced_table (id int PRIMARY KEY)', i)
+FROM generate_series(1, 3) i \gexec
+SELECT format('CREATE TABLE msbe_small_t%1$s.referencing_table (id int, '
+              'ref_id int REFERENCES msbe_small_t%1$s.referenced_table (id))', i)
+FROM generate_series(1, 3) i \gexec
+\set ECHO all
+RESET citus.enable_schema_based_sharding;
+
+SET citus.metadata_sync_set_batch_size TO 1;
+
+ALTER SEQUENCE pg_catalog.pg_dist_groupid_seq RESTART :last_group_id;
+ALTER SEQUENCE pg_catalog.pg_dist_node_nodeid_seq RESTART :last_node_id;
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
+
+RESET citus.metadata_sync_set_batch_size;
+
+SELECT jsonb_object_agg(metadata, count) AS coordinator_counts
+FROM metadata_counts('msbe\_small%') \gset
+
+\c - - - :worker_2_port
+SET search_path TO metadata_sync_batching_edge_cases;
+SELECT metadata,
+       (:'coordinator_counts'::jsonb ->> metadata)::bigint AS coordinator,
+       count AS worker,
+       (:'coordinator_counts'::jsonb ->> metadata)::bigint = count AS equal
+FROM metadata_counts('msbe\_small%') ORDER BY metadata;
+
+\c - - - :master_port
+SET search_path TO metadata_sync_batching_edge_cases;
+SET citus.shard_replication_factor TO 1;
+
+SET client_min_messages TO WARNING;
+\set ECHO none
+SELECT format('DROP SCHEMA msbe_small_t%s CASCADE', i) FROM generate_series(1, 3) i \gexec
+\set ECHO all
+RESET client_min_messages;
+
+--
+-- Section 4: different kinds of objects in the same batch.
+--
+SELECT citus_remove_node('localhost', :worker_2_port);
+
+-- An inactive node, used to create a relation that has no active placements.
+SELECT 1 FROM citus_add_inactive_node('localhost', 57699);
+SELECT groupid AS inactive_group_id FROM pg_dist_node WHERE nodeport = 57699 \gset
+SELECT groupid AS worker_1_group_id FROM pg_dist_node WHERE nodeport = :worker_1_port \gset
+
+-- An extension creates its extension-owned tables on each node by itself, so
+-- metadata sync doesn't create the shell tables for them. Pretend that this
+-- is the case by creating the table and adding it to an extension on the
+-- workers too, including worker_2 which is not in the metadata right now.
+--
+-- Metadata sync sends the colocation groups before it creates the types and
+-- collations on the node. So the colocation groups can refer to a custom
+-- type or collation only if it already exists on the node. For this reason,
+-- we create the custom type and collation used by the distribution columns
+-- on worker_2 in advance too.
+\c - - - :worker_2_port
+SET citus.enable_ddl_propagation TO off;
+CREATE SCHEMA msbe_mixed;
+CREATE TABLE msbe_mixed.extension_owned_table (x int);
+ALTER EXTENSION plpgsql ADD TABLE msbe_mixed.extension_owned_table;
+CREATE TYPE msbe_mixed.mood AS ENUM ('sad', 'ok', 'happy');
+CREATE COLLATION msbe_mixed.c_collation (provider = libc, locale = 'C');
+
+\c - - - :master_port
+SET search_path TO metadata_sync_batching_edge_cases;
+SET citus.next_shard_id TO 9310000;
+SET citus.shard_replication_factor TO 1;
+
+CREATE SCHEMA msbe_mixed;
+CREATE TABLE msbe_mixed.extension_owned_table (x int);
+SET client_min_messages TO WARNING;
+ALTER EXTENSION plpgsql ADD TABLE msbe_mixed.extension_owned_table;
+RESET client_min_messages;
+SELECT run_command_on_workers($$
+    CREATE TABLE msbe_mixed.extension_owned_table (x int);
+    ALTER EXTENSION plpgsql ADD TABLE msbe_mixed.extension_owned_table;
+$$);
+SELECT create_distributed_table('msbe_mixed.extension_owned_table', 'x');
+
+-- distribution column types and collations in a custom schema
+CREATE TYPE msbe_mixed.mood AS ENUM ('sad', 'ok', 'happy');
+CREATE COLLATION msbe_mixed.c_collation (provider = libc, locale = 'C');
+
+CREATE TABLE msbe_mixed.reference_table (id int PRIMARY KEY);
+SELECT create_reference_table('msbe_mixed.reference_table');
+
+CREATE TABLE msbe_mixed.hash_table (id int PRIMARY KEY,
+                                    ref_id int REFERENCES msbe_mixed.reference_table (id));
+SELECT create_distributed_table('msbe_mixed.hash_table', 'id', shard_count := 4);
+
+CREATE TABLE msbe_mixed.colocated_hash_table (hash_id int REFERENCES msbe_mixed.hash_table (id));
+SELECT create_distributed_table('msbe_mixed.colocated_hash_table', 'hash_id',
+                                colocate_with := 'msbe_mixed.hash_table');
+
+CREATE TABLE msbe_mixed.enum_table (m msbe_mixed.mood);
+SELECT create_distributed_table('msbe_mixed.enum_table', 'm', shard_count := 3);
+
+CREATE TABLE msbe_mixed.collation_table (t text COLLATE msbe_mixed.c_collation);
+SELECT create_distributed_table('msbe_mixed.collation_table', 't', shard_count := 5);
+
+CREATE TABLE msbe_mixed.builtin_collation_table (t text COLLATE "C");
+SELECT create_distributed_table('msbe_mixed.builtin_collation_table', 't', shard_count := 6);
+
+CREATE TABLE msbe_mixed.partitioned_table (id int, d date) PARTITION BY RANGE (d);
+CREATE TABLE msbe_mixed.partitioned_table_2025 PARTITION OF msbe_mixed.partitioned_table
+    FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');
+CREATE TABLE msbe_mixed.partitioned_table_2026 PARTITION OF msbe_mixed.partitioned_table
+    FOR VALUES FROM ('2026-01-01') TO ('2027-01-01');
+SELECT create_distributed_table('msbe_mixed.partitioned_table', 'id', shard_count := 2);
+
+CREATE TABLE msbe_mixed.citus_local_table (id int REFERENCES msbe_mixed.reference_table (id));
+SELECT citus_add_local_table_to_metadata('msbe_mixed.citus_local_table');
+
+CREATE FUNCTION msbe_mixed.hash_table_func(id int) RETURNS int
+LANGUAGE sql AS 'SELECT $1';
+SELECT create_distributed_function('msbe_mixed.hash_table_func(int)', 'id',
+                                   colocate_with := 'msbe_mixed.hash_table',
+                                   force_delegation := true);
+
+-- quoted and mixed-case schema, table and column names
+CREATE SCHEMA "msbe_mixed Quoted!";
+CREATE TABLE "msbe_mixed Quoted!"."Weird Table!" ("Dist Col" int PRIMARY KEY);
+SELECT create_distributed_table('"msbe_mixed Quoted!"."Weird Table!"', 'Dist Col',
+                                shard_count := 2);
+
+SET citus.enable_schema_based_sharding TO ON;
+CREATE SCHEMA "msbe_mixed Tenant Quoted!";
+CREATE TABLE "msbe_mixed Tenant Quoted!"."Referenced Table" ("Id" int PRIMARY KEY);
+CREATE TABLE "msbe_mixed Tenant Quoted!"."Referencing Table" (
+    "Ref Id" int REFERENCES "msbe_mixed Tenant Quoted!"."Referenced Table" ("Id"));
+RESET citus.enable_schema_based_sharding;
+
+-- a relation whose placements are all on the inactive node, and a relation
+-- that has one shard with and one shard without an active placement
+CREATE SCHEMA msbe_no_active_placements;
+CREATE TABLE msbe_no_active_placements.dist_table (id int);
+-- use colocate_with := 'none' so that neither relation gets colocated with a
+-- relation whose placements are on the inactive node
+SELECT create_distributed_table('msbe_no_active_placements.dist_table', 'id', shard_count := 2,
+                                colocate_with := 'none');
+UPDATE pg_dist_placement SET groupid = :inactive_group_id
+WHERE shardid IN (SELECT shardid FROM pg_dist_shard
+                  WHERE logicalrelid = 'msbe_no_active_placements.dist_table'::regclass);
+CREATE TABLE msbe_no_active_placements.partial_table (id int);
+SELECT create_distributed_table('msbe_no_active_placements.partial_table', 'id', shard_count := 2,
+                                colocate_with := 'none');
+UPDATE pg_dist_placement SET groupid = :inactive_group_id
+WHERE shardid = (SELECT min(shardid) FROM pg_dist_shard
+                 WHERE logicalrelid = 'msbe_no_active_placements.partial_table'::regclass);
+
+ALTER SEQUENCE pg_catalog.pg_dist_groupid_seq RESTART :last_group_id;
+ALTER SEQUENCE pg_catalog.pg_dist_node_nodeid_seq RESTART :last_node_id;
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
+
+SELECT jsonb_object_agg(metadata, count) AS coordinator_counts
+FROM metadata_counts('msbe\_mixed%') \gset
+
+SELECT string_agg(format('%s %s %s %s', c.shardcount, c.replicationfactor,
+                         c.distributioncolumntype::regtype,
+                         c.distributioncolumncollation::regcollation),
+                  ', ' ORDER BY c.colocationid) AS coordinator_colocations
+FROM pg_dist_colocation c
+WHERE c.colocationid IN (
+    SELECT colocationid FROM pg_dist_partition
+    WHERE logicalrelid::regclass::text LIKE 'msbe\_mixed.%') \gset
+
+SELECT distribution_argument_index, colocationid AS function_colocation_id, force_delegation
+FROM pg_dist_object
+WHERE objid = 'msbe_mixed.hash_table_func(int)'::regprocedure \gset coordinator_
+
+\c - - - :worker_2_port
+SET search_path TO metadata_sync_batching_edge_cases;
+SELECT metadata,
+       (:'coordinator_counts'::jsonb ->> metadata)::bigint AS coordinator,
+       count AS worker,
+       (:'coordinator_counts'::jsonb ->> metadata)::bigint = count AS equal
+FROM metadata_counts('msbe\_mixed%') ORDER BY metadata;
+
+-- the distribution column types and collations of the colocation groups
+SELECT string_agg(format('%s %s %s %s', c.shardcount, c.replicationfactor,
+                         c.distributioncolumntype::regtype,
+                         c.distributioncolumncollation::regcollation),
+                  ', ' ORDER BY c.colocationid) = :'coordinator_colocations' AS colocations_equal
+FROM pg_dist_colocation c
+WHERE c.colocationid IN (
+    SELECT colocationid FROM pg_dist_partition
+    WHERE logicalrelid::regclass::text LIKE 'msbe\_mixed.%');
+
+-- the distribution argument, colocation group and force delegation of the function
+SELECT distribution_argument_index = :coordinator_distribution_argument_index AS distribution_argument_index_equal,
+       colocationid = :coordinator_function_colocation_id AS colocation_id_equal,
+       force_delegation = :'coordinator_force_delegation'::boolean AS force_delegation_equal
+FROM pg_dist_object
+WHERE objid = 'msbe_mixed.hash_table_func(int)'::regprocedure;
+
+-- On worker_2, the relation with no active placements only has its
+-- pg_dist_partition record, but not its pg_dist_shard or pg_dist_placement
+-- records. The relation that has one shard with an active placement has
+-- both of its pg_dist_shard records, but only the active pg_dist_placement
+-- record.
+SELECT logicalrelid::regclass,
+       (SELECT count(*) FROM pg_dist_shard s
+        WHERE s.logicalrelid = p.logicalrelid) AS shards,
+       (SELECT count(*) FROM pg_dist_placement pl JOIN pg_dist_shard s USING (shardid)
+        WHERE s.logicalrelid = p.logicalrelid) AS placements
+FROM pg_dist_partition p
+WHERE logicalrelid::regclass::text LIKE 'msbe\_no\_active\_placements.%'
+ORDER BY 1;
+
+\c - - - :master_port
+SET search_path TO metadata_sync_batching_edge_cases;
+
+-- cleanup
+SET client_min_messages TO WARNING;
+UPDATE pg_dist_placement SET groupid = :worker_1_group_id
+WHERE shardid IN (SELECT shardid FROM pg_dist_shard
+                  WHERE logicalrelid IN ('msbe_no_active_placements.dist_table'::regclass,
+                                         'msbe_no_active_placements.partial_table'::regclass))
+      AND groupid = :inactive_group_id;
+DROP SCHEMA msbe_no_active_placements CASCADE;
+SELECT citus_remove_node('localhost', 57699);
+
+ALTER EXTENSION plpgsql DROP TABLE msbe_mixed.extension_owned_table;
+SELECT run_command_on_workers($$
+    ALTER EXTENSION plpgsql DROP TABLE msbe_mixed.extension_owned_table;
+$$);
+DROP TABLE msbe_mixed.extension_owned_table;
+-- DROP SCHEMA ... CASCADE fails with "cache lookup failed for type" when a table
+-- is distributed on a type from the same schema, because the sql_drop trigger
+-- rebuilds the table's cache entry after the type is gone. This also happens on
+-- main without any metadata sync, so drop the table first. This is a known issue,
+-- see https://github.com/citusdata/citus/issues/6392.
+DROP TABLE msbe_mixed.enum_table;
+DROP SCHEMA msbe_mixed, "msbe_mixed Quoted!", "msbe_mixed Tenant Quoted!" CASCADE;
+DROP SCHEMA metadata_sync_batching_edge_cases CASCADE;
