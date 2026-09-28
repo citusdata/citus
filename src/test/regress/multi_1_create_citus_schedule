@@ -158,3 +158,11 @@ test: multi_or_arm_pruning
 # test matrix. Move back to multi_schedule at Citus 15.
 # ----------
 test: multi_orderby_pushdown
+
+# ----------
+# adaptive_executor_batching exercises executor batching GUCs introduced in
+# 14.3; they are not present in the N-1 (14.2-1) Citus library. Run it only
+# under check-multi-1-create-citus, which is not part of the N-1 test matrix.
+# Move back to multi_schedule at Citus 15.
+# ----------
+test: adaptive_executor_batching
