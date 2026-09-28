@@ -1201,9 +1201,9 @@ citus_rebalance_start(PG_FUNCTION_ARGS)
 		.rebalanceStrategy = strategy,
 		.improvementThreshold = strategy->improvementThreshold,
 	};
-	int jobId = RebalanceTableShardsBackground(&options, shardTransferModeOid,
-											   ParallelTransferReferenceTables,
-											   ParallelTransferColocatedShards);
+	int64 jobId = RebalanceTableShardsBackground(&options, shardTransferModeOid,
+												 ParallelTransferReferenceTables,
+												 ParallelTransferColocatedShards);
 
 	if (jobId == 0)
 	{
