@@ -16,6 +16,7 @@
 -- Creates the test tables and data used by the sorted merge tests below.
 --
 
+SET citus.enable_sorted_merge TO on;
 SET citus.next_shard_id TO 960000;
 
 -- =================================================================
@@ -1315,7 +1316,9 @@ DROP TABLE sorted_merge_single;
 -- test exercises.
 CREATE TABLE sorted_merge_append (id int, val text);
 SELECT create_distributed_table('sorted_merge_append', 'id', 'append');
+SET client_min_messages TO WARNING;
 SELECT 1 FROM master_create_empty_shard('sorted_merge_append');
+RESET client_min_messages;
 
 INSERT INTO sorted_merge_append VALUES (0, 'a'), (1, 'b');
 SELECT id, val FROM sorted_merge_append ORDER BY id, val;

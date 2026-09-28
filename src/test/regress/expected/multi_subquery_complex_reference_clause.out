@@ -458,7 +458,6 @@ SELECT * FROM
 	 SELECT user_id FROM user_buy_test_table) sub
 ORDER BY 1 DESC;
 DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  sorted merge: per-task work_mem 1024 kB × 4 tasks (aggregate floor 4096 kB), session work_mem 4096 kB
  user_id
 ---------------------------------------------------------------------
        7
@@ -475,7 +474,6 @@ SELECT * FROM
 	 SELECT user_id, random() * 0 FROM (SELECT user_id FROM user_buy_test_table) sub2) sub
 ORDER BY 1 DESC;
 DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  sorted merge: per-task work_mem 1024 kB × 4 tasks (aggregate floor 4096 kB), session work_mem 4096 kB
  user_id | ?column?
 ---------------------------------------------------------------------
        7 |        0
@@ -491,7 +489,6 @@ SELECT * FROM
 	 SELECT user_id FROM user_buy_test_table) sub
 ORDER BY 1 DESC;
 DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  sorted merge: per-task work_mem 1024 kB × 4 tasks (aggregate floor 4096 kB), session work_mem 4096 kB
  user_id
 ---------------------------------------------------------------------
        7
@@ -507,7 +504,6 @@ SELECT * FROM
 	 SELECT user_id FROM user_buy_test_table WHERE user_id in (select id from users_ref_test_table)) sub
 ORDER BY 1 DESC;
 DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  sorted merge: per-task work_mem 1024 kB × 4 tasks (aggregate floor 4096 kB), session work_mem 4096 kB
  user_id
 ---------------------------------------------------------------------
        3
@@ -525,7 +521,6 @@ SELECT * FROM
 	 SELECT user_id FROM user_buy_test_table) sub
 ORDER BY 1 DESC;
 DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  sorted merge: per-task work_mem 1024 kB × 4 tasks (aggregate floor 4096 kB), session work_mem 4096 kB
  user_id
 ---------------------------------------------------------------------
        7
