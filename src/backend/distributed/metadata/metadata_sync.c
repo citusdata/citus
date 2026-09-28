@@ -4470,10 +4470,10 @@ ColocationGroupCreateCommand(uint32 colocationId, int shardCount, int replicatio
 
 	if (typeSchemaName != NULL && typeName != NULL)
 	{
-		/* Use quote_identifier so the schema name can be cast to regnamespace */
+		/* the worker compares the schema name against pg_namespace.nspname */
 		appendStringInfo(insertColocationCommand,
 						 "%s, %s, ",
-						 quote_literal_cstr(quote_identifier(typeSchemaName)),
+						 quote_literal_cstr(typeSchemaName),
 						 quote_literal_cstr(typeName));
 	}
 	else if (typeName != NULL)
@@ -5329,10 +5329,10 @@ SendColocationMetadataCommands(MetadataSyncContext *context)
 		/* Add type schema and name */
 		if (typeSchemaName != NULL && typeName != NULL)
 		{
-			/* Use quote_identifier so the schema name can be cast to regnamespace */
+			/* the worker compares the schema name against pg_namespace.nspname */
 			appendStringInfo(valueRow,
 							 "%s, %s, ",
-							 quote_literal_cstr(quote_identifier(typeSchemaName)),
+							 quote_literal_cstr(typeSchemaName),
 							 quote_literal_cstr(typeName));
 		}
 		else if (typeName != NULL)

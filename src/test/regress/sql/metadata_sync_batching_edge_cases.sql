@@ -242,6 +242,8 @@ CREATE TABLE msbe_mixed.extension_owned_table (x int);
 ALTER EXTENSION plpgsql ADD TABLE msbe_mixed.extension_owned_table;
 CREATE TYPE msbe_mixed.mood AS ENUM ('sad', 'ok', 'happy');
 CREATE COLLATION msbe_mixed.c_collation (provider = libc, locale = 'C');
+CREATE SCHEMA "msbe_mixed Quoted!";
+CREATE TYPE "msbe_mixed Quoted!"."Quoted Mood" AS ENUM ('sad', 'ok', 'happy');
 
 \c - - - :master_port
 SET search_path TO metadata_sync_batching_edge_cases;
@@ -305,6 +307,11 @@ CREATE TABLE "msbe_mixed Quoted!"."Weird Table!" ("Dist Col" int PRIMARY KEY);
 SELECT create_distributed_table('"msbe_mixed Quoted!"."Weird Table!"', 'Dist Col',
                                 shard_count := 2);
 
+-- a distribution column type in a schema whose name needs quoting
+CREATE TYPE "msbe_mixed Quoted!"."Quoted Mood" AS ENUM ('sad', 'ok', 'happy');
+CREATE TABLE msbe_mixed.quoted_enum_table (m "msbe_mixed Quoted!"."Quoted Mood");
+SELECT create_distributed_table('msbe_mixed.quoted_enum_table', 'm', shard_count := 7);
+
 SET citus.enable_schema_based_sharding TO ON;
 CREATE SCHEMA "msbe_mixed Tenant Quoted!";
 CREATE TABLE "msbe_mixed Tenant Quoted!"."Referenced Table" ("Id" int PRIMARY KEY);
@@ -349,6 +356,17 @@ WHERE c.colocationid IN (
 SELECT distribution_argument_index, colocationid AS function_colocation_id, force_delegation
 FROM pg_dist_object
 WHERE objid = 'msbe_mixed.hash_table_func(int)'::regprocedure \gset coordinator_
+
+-- worker_1 got the colocation groups when the tables were distributed
+\c - - - :worker_1_port
+SELECT string_agg(format('%s %s %s %s', c.shardcount, c.replicationfactor,
+                         c.distributioncolumntype::regtype,
+                         c.distributioncolumncollation::regcollation),
+                  ', ' ORDER BY c.colocationid) = :'coordinator_colocations' AS colocations_equal
+FROM pg_dist_colocation c
+WHERE c.colocationid IN (
+    SELECT colocationid FROM pg_dist_partition
+    WHERE logicalrelid::regclass::text LIKE 'msbe\_mixed.%');
 
 \c - - - :worker_2_port
 SET search_path TO metadata_sync_batching_edge_cases;
@@ -412,6 +430,6 @@ DROP TABLE msbe_mixed.extension_owned_table;
 -- rebuilds the table's cache entry after the type is gone. This also happens on
 -- main without any metadata sync, so drop the table first. This is a known issue,
 -- see https://github.com/citusdata/citus/issues/6392.
-DROP TABLE msbe_mixed.enum_table;
+DROP TABLE msbe_mixed.enum_table, msbe_mixed.quoted_enum_table;
 DROP SCHEMA msbe_mixed, "msbe_mixed Quoted!", "msbe_mixed Tenant Quoted!" CASCADE;
 DROP SCHEMA metadata_sync_batching_edge_cases CASCADE;
