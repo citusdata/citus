@@ -229,21 +229,11 @@ SELECT groupid AS worker_1_group_id FROM pg_dist_node WHERE nodeport = :worker_1
 -- metadata sync doesn't create the shell tables for them. Pretend that this
 -- is the case by creating the table and adding it to an extension on the
 -- workers too, including worker_2 which is not in the metadata right now.
---
--- Metadata sync sends the colocation groups before it creates the types and
--- collations on the node. So the colocation groups can refer to a custom
--- type or collation only if it already exists on the node. For this reason,
--- we create the custom type and collation used by the distribution columns
--- on worker_2 in advance too.
 \c - - - :worker_2_port
 SET citus.enable_ddl_propagation TO off;
 CREATE SCHEMA msbe_mixed;
 CREATE TABLE msbe_mixed.extension_owned_table (x int);
 ALTER EXTENSION plpgsql ADD TABLE msbe_mixed.extension_owned_table;
-CREATE TYPE msbe_mixed.mood AS ENUM ('sad', 'ok', 'happy');
-CREATE COLLATION msbe_mixed.c_collation (provider = libc, locale = 'C');
-CREATE SCHEMA "msbe_mixed Quoted!";
-CREATE TYPE "msbe_mixed Quoted!"."Quoted Mood" AS ENUM ('sad', 'ok', 'happy');
 
 \c - - - :master_port
 SET search_path TO metadata_sync_batching_edge_cases;

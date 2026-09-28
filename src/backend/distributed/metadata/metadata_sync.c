@@ -5145,14 +5145,6 @@ SyncDistributedObjects(MetadataSyncContext *context)
 	LogMetadataSyncPhaseBoundary("finished", "metadata deletion");
 
 	/*
-	 * Commands to insert pg_dist_colocation entries.
-	 * Replicating dist objects and their metadata depends on this step.
-	 */
-	LogMetadataSyncPhaseBoundary("starting", "colocation metadata");
-	SendColocationMetadataCommands(context);
-	LogMetadataSyncPhaseBoundary("finished", "colocation metadata");
-
-	/*
 	 * Replicate all objects of the pg_dist_object to the remote node and
 	 * create metadata entries for Citus tables (pg_dist_shard, pg_dist_shard_placement,
 	 * pg_dist_partition, pg_dist_object).
@@ -5160,6 +5152,19 @@ SyncDistributedObjects(MetadataSyncContext *context)
 	LogMetadataSyncPhaseBoundary("starting", "dependency creation");
 	SendDependencyCreationCommands(context);
 	LogMetadataSyncPhaseBoundary("finished", "dependency creation");
+
+	/*
+	 * Commands to insert pg_dist_colocation entries.
+	 *
+	 * This must run after the dependencies are created, because the worker
+	 * looks up the distribution column type and collation of each colocation
+	 * group by name. If they do not exist yet, the worker stores 0 instead.
+	 * No worker-side code reads pg_dist_colocation while the dependencies
+	 * and their metadata are created, so running this later is safe.
+	 */
+	LogMetadataSyncPhaseBoundary("starting", "colocation metadata");
+	SendColocationMetadataCommands(context);
+	LogMetadataSyncPhaseBoundary("finished", "colocation metadata");
 
 	LogMetadataSyncPhaseBoundary("starting", "dist table metadata");
 	SendDistTableMetadataCommands(context);
