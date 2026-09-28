@@ -283,6 +283,17 @@ distributed_planner(Query *parse,
 			planContext.plan = standard_planner(planContext.query, NULL,
 												planContext.cursorOptions,
 												planContext.boundParams);
+#if PG_VERSION_NUM >= PG_VERSION_19
+
+			/* PG19 join removal edits the jointree that Citus plans below. */
+			if (needsDistributedPlanning &&
+				list_length(UsedTableEntryList(planContext.query)) < list_length(
+					UsedTableEntryList(planContext.originalQuery)))
+			{
+				planContext.query->jointree =
+					copyObject(planContext.originalQuery->jointree);
+			}
+#endif
 #if PG_VERSION_NUM >= PG_VERSION_18
 			if (needsDistributedPlanning)
 			{
