@@ -4476,12 +4476,6 @@ ColocationGroupCreateCommand(uint32 colocationId, int shardCount, int replicatio
 						 quote_literal_cstr(typeSchemaName),
 						 quote_literal_cstr(typeName));
 	}
-	else if (typeName != NULL)
-	{
-		appendStringInfo(insertColocationCommand,
-						 "NULL, %s, ",
-						 quote_literal_cstr(typeName));
-	}
 	else
 	{
 		appendStringInfo(insertColocationCommand,
@@ -4496,9 +4490,8 @@ ColocationGroupCreateCommand(uint32 colocationId, int shardCount, int replicatio
 					 "FROM colocation_data "
 					 "LEFT JOIN pg_type t ON ("
 					 "typename = t.typname "
-					 "AND (typeschema IS NULL OR "
-					 "t.typnamespace = "
-					 "(SELECT oid FROM pg_namespace WHERE nspname = typeschema)))",
+					 "AND t.typnamespace = "
+					 "(SELECT oid FROM pg_namespace WHERE nspname = typeschema))",
 					 RemoteCollationIdExpression(distributionColumnCollation));
 
 	return insertColocationCommand->data;
@@ -4533,7 +4526,11 @@ GetRemoteTypeName(Oid typeId)
 
 /*
  * GetRemoteTypeNamespace returns the schema name of a type.
- * Returns NULL for InvalidOid or types in pg_catalog.
+ * Returns NULL for InvalidOid.
+ *
+ * We return the schema name for pg_catalog types too. Otherwise, the node
+ * would look up the type by its name alone, which also matches a user type
+ * that has the same name in another schema.
  */
 static char *
 GetRemoteTypeNamespace(Oid typeId)
@@ -4553,12 +4550,6 @@ GetRemoteTypeNamespace(Oid typeId)
 	Oid typeNamespace = typeForm->typnamespace;
 
 	ReleaseSysCache(typeTuple);
-
-	/* Don't include schema for pg_catalog types for backward compatibility */
-	if (typeNamespace == PG_CATALOG_NAMESPACE)
-	{
-		return NULL;
-	}
 
 	return get_namespace_name(typeNamespace);
 }
@@ -5335,13 +5326,6 @@ SendColocationMetadataCommands(MetadataSyncContext *context)
 							 quote_literal_cstr(typeSchemaName),
 							 quote_literal_cstr(typeName));
 		}
-		else if (typeName != NULL)
-		{
-			/* Type is in pg_catalog or no schema qualifier needed */
-			appendStringInfo(valueRow,
-							 "NULL, %s, ",
-							 quote_literal_cstr(typeName));
-		}
 		else
 		{
 			/* InvalidOid or unknown type */
@@ -5554,9 +5538,8 @@ ColocationMetadataBatchCommand(List *valueRows)
 						   "FROM colocation_group_data d "
 						   "LEFT JOIN pg_type t ON ("
 						   "d.distributioncolumntypename = t.typname "
-						   "AND (d.distributioncolumntypeschema IS NULL OR "
-						   "t.typnamespace = (SELECT oid FROM pg_namespace WHERE "
-						   "nspname = d.distributioncolumntypeschema))) "
+						   "AND t.typnamespace = (SELECT oid FROM pg_namespace WHERE "
+						   "nspname = d.distributioncolumntypeschema)) "
 						   "LEFT JOIN pg_collation c "
 						   "ON (d.distributioncolumncollationname = c.collname "
 						   "AND c.collnamespace = (SELECT oid FROM pg_namespace WHERE "

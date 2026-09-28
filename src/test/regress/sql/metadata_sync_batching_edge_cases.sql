@@ -264,6 +264,10 @@ SELECT create_distributed_table('msbe_mixed.extension_owned_table', 'x');
 -- distribution column types and collations in a custom schema
 CREATE TYPE msbe_mixed.mood AS ENUM ('sad', 'ok', 'happy');
 CREATE COLLATION msbe_mixed.c_collation (provider = libc, locale = 'C');
+-- user types that have the same names as the pg_catalog types that the
+-- distribution columns below use
+CREATE DOMAIN msbe_mixed.int4 AS bigint;
+CREATE DOMAIN msbe_mixed.text AS varchar;
 
 CREATE TABLE msbe_mixed.reference_table (id int PRIMARY KEY);
 SELECT create_reference_table('msbe_mixed.reference_table');
