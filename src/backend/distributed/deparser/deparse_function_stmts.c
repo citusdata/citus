@@ -296,7 +296,8 @@ AppendDefElemSet(StringInfo buf, DefElem *def)
 static void
 AppendDefElemSupport(StringInfo buf, DefElem *def)
 {
-	appendStringInfo(buf, " SUPPORT %s", defGetString(def));
+	appendStringInfo(buf, " SUPPORT %s",
+					 NameListToQuotedString(castNode(List, def->arg)));
 }
 
 
