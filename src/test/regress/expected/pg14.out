@@ -208,6 +208,24 @@ DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 reindex(TABLESPACE test_tablespace1) index idx;
 ERROR:  tablespace "test_tablespace1" does not exist
 reset citus.log_remote_commands;
+-- a tablespace name that needs quoting must stay quoted on the shards
+ALTER TABLESPACE test_tablespace RENAME TO "Test Tablespace";
+SELECT result FROM run_command_on_workers('ALTER TABLESPACE test_tablespace RENAME TO "Test Tablespace"');
+      result
+---------------------------------------------------------------------
+ ALTER TABLESPACE
+ ALTER TABLESPACE
+(2 rows)
+
+reindex(TABLESPACE "Test Tablespace") index idx;
+ALTER TABLESPACE "Test Tablespace" RENAME TO test_tablespace;
+SELECT result FROM run_command_on_workers('ALTER TABLESPACE "Test Tablespace" RENAME TO test_tablespace');
+      result
+---------------------------------------------------------------------
+ ALTER TABLESPACE
+ ALTER TABLESPACE
+(2 rows)
+
 -- CREATE STATISTICS allows table references too
 CREATE TABLE tbl1(a timestamp, b int);
 SELECT create_distributed_table('tbl1','a');
