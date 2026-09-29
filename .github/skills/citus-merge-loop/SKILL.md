@@ -44,8 +44,8 @@ For each PR, in order:
 
 ### 3. Sync-and-check loop
 Repeat the steps below until **both** are true: the PR's `mergeStateStatus` is `CLEAN` (fully
-merged up to date with its base, no conflicts) **and** every check is passing. Re-fetch
-PR state at the top of every iteration — do not act on stale data.
+merged up to date with its base, no conflicts) **and** every non-Codecov check is passing.
+Re-fetch PR state at the top of every iteration — do not act on stale data.
 
 **a. Bring the branch up to date with its target.**
 If `mergeStateStatus` is `BEHIND`, run `gh pr update-branch <pr>` (this merges the base branch
@@ -64,11 +64,15 @@ that only mirrors the result of the jobs it depends on. `check-style` and the fl
 appear in `--required` output, so the special-case rules below would be unreachable. Read every
 check instead, so you can see and act on the individual job that actually failed.
 
-- All `pass` (or `skipping`, which does not block merge) and none `pending` → sync-and-check loop
-  is done, go to step 4.
+- **Ignore checks whose name contains `codecov` (case-insensitive)**, regardless of whether their
+  bucket is `pass`, `fail`, `pending`, `skipping`, or `cancel`. Codecov checks do not block
+  merging in this repository.
+- All non-Codecov checks are `pass` (or `skipping`, which does not block merge) and none are
+  `pending` → sync-and-check loop is done, go to step 4.
 - Any `pending` and nothing actionable to do → wait for up to 15mins (e.g. `gh pr checks <pr>
-  --watch`), then loop back to re-fetch state.
-- Any `fail` or `cancel` → handle the failing ones as follows, most specific rule first:
+  --watch`), then loop back to re-fetch state. Do not wait on pending Codecov checks.
+- Any non-Codecov `fail` or `cancel` → handle the failing ones as follows, most specific rule
+  first:
 
   1. **A check named `check-style` failed** — this loop is responsible for setting up the
      environment; the reindent skill only works on whatever is already checked out. Concretely:
@@ -131,7 +135,7 @@ check instead, so you can see and act on the individual job that actually failed
      After triggering the reruns, loop back to re-fetch state and wait for them to finish.
 
 ### 4. Squash-merge
-The PR is in sync with its base and every check is green. Merge it with the PR
+The PR is in sync with its base and every non-Codecov check is green. Merge it with the PR
 description as the commit message, pinned to the exact commit you just validated:
 
 ```bash
