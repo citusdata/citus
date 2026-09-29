@@ -161,11 +161,15 @@ PostprocessReassignOwnedStmt(Node *node, const char *queryString)
 
 /*
  * GetNewRoleAddress returns the ObjectAddress of the new role
+ *
+ * We use get_rolespec_oid() rather than get_role_oid() because the TO clause
+ * may hold a keyword role specification such as CURRENT_USER or SESSION_USER,
+ * in which case rolename is NULL.
  */
 static ObjectAddress *
 GetNewRoleAddress(ReassignOwnedStmt *stmt)
 {
-	Oid roleOid = get_role_oid(stmt->newrole->rolename, false);
+	Oid roleOid = get_rolespec_oid(stmt->newrole, false);
 	ObjectAddress *address = palloc0(sizeof(ObjectAddress));
 	ObjectAddressSet(*address, AuthIdRelationId, roleOid);
 	return address;

@@ -393,20 +393,15 @@ CitusBeginReadOnlyScan(CustomScanState *node, EState *estate, int eflags)
 	/* parameters are filled in, so we can generate a task for this execution */
 	RegenerateTaskForFasthPathQuery(workerJob);
 
-	if (IsLocalPlanCachingSupported(workerJob, originalDistributedPlan))
-	{
-		Task *task = linitial(workerJob->taskList);
+	bool planAddedToCache = false;
+	CacheLocalPlanForShardQuery(workerJob, originalDistributedPlan,
+								estate->es_param_list_info, &planAddedToCache);
 
-		/*
-		 * We are going to execute this task locally. If it's not already in
-		 * the cache, create a local plan now and add it to the cache. During
-		 * execution, we will get the plan from the cache.
-		 *
-		 * The plan will be cached across executions when originalDistributedPlan
-		 * represents a prepared statement.
-		 */
-		CacheLocalPlanForShardQuery(task, originalDistributedPlan,
-									estate->es_param_list_info);
+	/* Use a newly cached plan for the current execution as well. */
+	if (planAddedToCache)
+	{
+		currentPlan->workerJob->localPlannedStatements =
+			originalDistributedPlan->workerJob->localPlannedStatements;
 	}
 }
 
@@ -520,29 +515,15 @@ CitusBeginModifyScan(CustomScanState *node, EState *estate, int eflags)
 	}
 
 
-	/*
-	 * Now that we have populated the task placements we can determine whether
-	 * any of them are local to this node and cache a plan if needed.
-	 */
-	if (IsLocalPlanCachingSupported(workerJob, originalDistributedPlan))
-	{
-		Task *task = linitial(workerJob->taskList);
+	bool planAddedToCache = false;
+	CacheLocalPlanForShardQuery(workerJob, originalDistributedPlan,
+								estate->es_param_list_info, &planAddedToCache);
 
-		/*
-		 * We are going to execute this task locally. If it's not already in
-		 * the cache, create a local plan now and add it to the cache. During
-		 * execution, we will get the plan from the cache.
-		 *
-		 * WARNING: In this function we'll use the original plan with the original
-		 * query tree, meaning parameters and function calls are back and we'll
-		 * redo evaluation in the local (Postgres) executor. The reason we do this
-		 * is that we only need to cache one generic plan per shard.
-		 *
-		 * The plan will be cached across executions when originalDistributedPlan
-		 * represents a prepared statement.
-		 */
-		CacheLocalPlanForShardQuery(task, originalDistributedPlan,
-									estate->es_param_list_info);
+	/* Use a newly cached plan for the current execution as well. */
+	if (planAddedToCache)
+	{
+		currentPlan->workerJob->localPlannedStatements =
+			originalDistributedPlan->workerJob->localPlannedStatements;
 	}
 
 	MemoryContextSwitchTo(oldContext);

@@ -14,6 +14,12 @@ SET citus.shard_replication_factor to 1;
 -- We've bunch of other tests that triggers fast-path-router
 SET citus.enable_fast_path_router_planner TO false;
 
+-- Keep this shared N-1 test focused on the existing hash-pruning behavior.
+SELECT CASE
+	WHEN current_setting('citus.enable_or_clause_arm_pruning', true) IS NOT NULL
+	THEN set_config('citus.enable_or_clause_arm_pruning', 'off', false)
+	END AS enable_or_clause_arm_pruning \gset
+
 
 -- Create a table partitioned on integer column and update partition type to
 -- hash. Then load data into this table and update shard min max values with

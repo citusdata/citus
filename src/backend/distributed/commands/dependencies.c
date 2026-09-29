@@ -1013,7 +1013,7 @@ ShouldPropagate(void)
  * the object is actually used.
  */
 bool
-ShouldPropagateCreateInCoordinatedTransction()
+ShouldPropagateCreateInCoordinatedTransction(void)
 {
 	if (!IsMultiStatementTransaction())
 	{

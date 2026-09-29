@@ -334,6 +334,7 @@ GetRangeTblKind(RangeTblEntry *rte)
 		}
 
 		#endif
+
 		case RTE_FUNCTION:
 		{
 			/*

@@ -47,7 +47,11 @@ QualifyPublicationObjects(List *publicationObjects)
 
 	foreach_declared_ptr(publicationObject, publicationObjects)
 	{
-		if (publicationObject->pubobjtype == PUBLICATIONOBJ_TABLE)
+		if (publicationObject->pubobjtype == PUBLICATIONOBJ_TABLE
+#if PG_VERSION_NUM >= PG_VERSION_19
+			|| publicationObject->pubobjtype == PUBLICATIONOBJ_EXCEPT_TABLE
+#endif
+			)
 		{
 			/* FOR TABLE ... */
 			PublicationTable *publicationTable = publicationObject->pubtable;

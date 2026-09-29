@@ -1,6 +1,6 @@
 /*-------------------------------------------------------------------------
  *
- * pg_get_object_address_16_17_18.c
+ * pg_get_object_address_17_18.c
  *
  * Copied functions from Postgres pg_get_object_address with acl/owner check.
  * Since we need to use intermediate data types Relation and Node from
@@ -182,6 +182,9 @@ PgGetObjectAddress(char *ttype, ArrayType *namearr, ArrayType *argsarr)
 		case OBJECT_DOMCONSTRAINT:
 		case OBJECT_CAST:
 		case OBJECT_USER_MAPPING:
+#if PG_VERSION_NUM >= PG_VERSION_19
+		case OBJECT_PUBLICATION_EXCLUDED_REL:
+#endif
 		case OBJECT_PUBLICATION_REL:
 		case OBJECT_DEFACL:
 		case OBJECT_TRANSFORM:
@@ -315,6 +318,9 @@ PgGetObjectAddress(char *ttype, ArrayType *namearr, ArrayType *argsarr)
 			break;
 		}
 
+#if PG_VERSION_NUM >= PG_VERSION_19
+		case OBJECT_PUBLICATION_EXCLUDED_REL:
+#endif
 		case OBJECT_PUBLICATION_REL:
 		{
 			objnode = (Node *) list_make2(name, linitial(args));

@@ -176,6 +176,19 @@ GROUP BY ut.user_id
 ORDER BY 2, AVG(ut.value_1), 1 DESC
 LIMIT 2;
 
+-- PG19 eager aggregation changes worker plans; keep this EXPLAIN focused on Citus pushdown.
+BEGIN;
+
+SET LOCAL citus.propagate_set_commands TO 'local';
+
+DO $$
+BEGIN
+	IF current_setting('server_version_num')::int >= 190000 THEN
+		EXECUTE 'SET LOCAL min_eager_agg_group_size TO 1e308';
+	END IF;
+END;
+$$;
+
 EXPLAIN (COSTS OFF)
 SELECT ut.user_id, avg(ut.value_2)
 FROM users_table ut, events_table et
@@ -183,3 +196,5 @@ WHERE ut.user_id = et.user_id and et.value_2 < 5
 GROUP BY ut.user_id
 ORDER BY 2, AVG(ut.value_1), 1 DESC
 LIMIT 5;
+
+ROLLBACK;

@@ -114,7 +114,7 @@
 
 
 /* constant used in binary protocol */
-static const char BinarySignature[11] = "PGCOPY\n\377\r\n\0";
+static const char BinarySignature[11] pg_attribute_nonstring = "PGCOPY\n\377\r\n\0";
 
 /* if true, skip validation of JSONB columns during COPY */
 bool SkipJsonbValidationInCopy = true;
@@ -1233,7 +1233,7 @@ ConversionPathForTypes(Oid inputType, Oid destType, CopyCoercionData *result)
 			}
 		}
 
-		/* fallthrough */
+			pg_fallthrough;
 
 		case COERCION_PATH_COERCEVIAIO:
 		{
@@ -2851,7 +2851,6 @@ CopyStatementHasFormat(CopyStmt *copyStatement, char *formatName)
 static void
 ErrorIfCopyHasOnErrorLogVerbosity(CopyStmt *copyStatement)
 {
-#if PG_VERSION_NUM >= PG_VERSION_17
 	bool log_verbosity = false;
 	foreach_ptr(DefElem, option, copyStatement->options)
 	{
@@ -2878,7 +2877,6 @@ ErrorIfCopyHasOnErrorLogVerbosity(CopyStmt *copyStatement)
 		ereport(ERROR, (errmsg("Citus does not support "
 							   "COPY FROM with LOG_VERBOSITY option.")));
 	}
-#endif
 }
 
 
@@ -2992,12 +2990,14 @@ ProcessCopyStmt(CopyStmt *copyStatement, QueryCompletion *completionTag, const
 				return NULL;
 			}
 			else if (copyStatement->filename == NULL && !copyStatement->is_program &&
-					 !CopyStatementHasFormat(copyStatement, "binary"))
+					 !CopyStatementHasFormat(copyStatement, "binary") &&
+					 !CopyStatementHasFormat(copyStatement, "json"))
 			{
 				/*
 				 * COPY table TO STDOUT is handled by specialized logic to
 				 * avoid buffering the table on the coordinator. This enables
-				 * pg_dump of large tables.
+				 * pg_dump of large tables. Formats with coordinator-owned
+				 * framing use the query path, which may batch or spill rows.
 				 */
 				CitusCopyTo(copyStatement, completionTag);
 				return NULL;
@@ -3033,19 +3033,17 @@ CitusCopySelect(CopyStmt *copyStatement)
 
 	Relation distributedRelation = table_openrv(copyStatement->relation, AccessShareLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(distributedRelation);
+	List *attributeNumberList = CopyGetAttnums(tupleDescriptor, distributedRelation,
+											   copyStatement->attlist);
 	List *targetList = NIL;
 
-	for (int i = 0; i < tupleDescriptor->natts; i++)
+	ListCell *attributeNumberCell = NULL;
+	foreach(attributeNumberCell, attributeNumberList)
 	{
-		Form_pg_attribute attr = TupleDescAttr(tupleDescriptor, i);
-
-		if (IsDroppedOrGenerated(attr))
-		{
-			continue;
-		}
-
+		int attributeNumber = lfirst_int(attributeNumberCell);
+		Form_pg_attribute attribute = TupleDescAttr(tupleDescriptor, attributeNumber - 1);
 		ColumnRef *column = makeNode(ColumnRef);
-		column->fields = list_make1(makeString(pstrdup(attr->attname.data)));
+		column->fields = list_make1(makeString(pstrdup(attribute->attname.data)));
 		column->location = -1;
 
 		ResTarget *selectTarget = makeNode(ResTarget);

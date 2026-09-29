@@ -1,4 +1,4 @@
-| **<br/>The Citus database is 100% open source.<br/><img width=1000/><br/>Learn what's new in the [Citus 13.0 release blog](https://www.citusdata.com/blog/2025/02/06/distribute-postgresql-17-with-citus-13/) and the [Citus Updates page](https://www.citusdata.com/updates/).<br/><br/>**|
+| **<br/>The Citus database is 100% open source.<br/><img width=1000/><br/>Learn what's new in the [Citus 14 release blog](https://www.citusdata.com/blog/2026/02/17/distribute-postgresql-18-with-citus-14/) and the [Citus Updates page](https://www.citusdata.com/updates/).<br/><br/>**|
 |---|
 <br/>
 
@@ -65,11 +65,11 @@ Developers choose Citus for two reasons:
 
 ## Getting Started
 
-The quickest way to get started with Citus is to use the [Azure Cosmos DB for PostgreSQL](https://learn.microsoft.com/azure/cosmos-db/postgresql/quickstart-create-portal) managed service in the cloud—or [set up Citus locally](https://docs.citusdata.com/en/stable/installation/single_node.html).
+The quickest way to get started with Citus is to use the [Elastic Clusters in Azure Database for PostgreSQL Flexible Server](https://learn.microsoft.com/en-us/azure/postgresql/elastic-clusters/create-elastic-cluster?tabs=portal-create-elastic-cluster) managed service in the cloud—or [set up Citus locally](https://docs.citusdata.com/en/stable/installation/single_node.html).
 
 ### Citus Managed Service on Azure
 
-You can get a fully-managed Citus cluster in minutes through the [Azure Cosmos DB for PostgreSQL portal](https://azure.microsoft.com/products/cosmos-db/). Azure will manage your backups, high availability through auto-failover, software updates, monitoring, and more for all of your servers. To get started with Citus on Azure, use the [Azure Cosmos DB for PostgreSQL Quickstart](https://learn.microsoft.com/azure/cosmos-db/postgresql/quickstart-create-portal).
+You can get a fully-managed Citus cluster in minutes through [Elastic Clusters in Azure Database for PostgreSQL Flexible Server](https://docs.azure.cn/en-us/postgresql/elastic-clusters/concepts-elastic-clusters). Azure will manage your backups, high availability through auto-failover, software updates, monitoring, and more for all of your servers. To get started with Citus on Azure, use the [Elastic Cluster quickstart](https://learn.microsoft.com/en-us/azure/postgresql/elastic-clusters/create-elastic-cluster?tabs=portal-create-elastic-cluster).
 
 ### Running Citus using Docker
 
@@ -93,16 +93,14 @@ If you already have a local PostgreSQL installation, the easiest way to install 
 Install packages on Ubuntu / Debian:
 
 ```bash
-curl https://install.citusdata.com/community/deb.sh > add-citus-repo.sh
-sudo bash add-citus-repo.sh
-sudo apt-get -y install postgresql-17-citus-13.0
+curl https://install.citusdata.com/community/deb.sh | sudo bash
+sudo apt-get -y install postgresql-18-citus-14.1
 ```
 
 Install packages on Red Hat:
 ```bash
-curl https://install.citusdata.com/community/rpm.sh > add-citus-repo.sh
-sudo bash add-citus-repo.sh
-sudo yum install -y citus130_17
+curl https://install.citusdata.com/community/rpm.sh | sudo bash
+sudo yum install -y citus141_18
 ```
 
 To add Citus to your local PostgreSQL database, add the following to `postgresql.conf`:
@@ -413,7 +411,7 @@ postgres@coord1:~$ patronictl list demo
 
 ## Documentation
 
-If you’re ready to get started with Citus or want to know more, we recommend reading the [Citus open source documentation](https://docs.citusdata.com/en/stable/). Or, if you are using Citus on Azure, then the [Azure Cosmos DB for PostgreSQL](https://learn.microsoft.com/azure/cosmos-db/postgresql/introduction) is the place to start.
+If you’re ready to get started with Citus or want to know more, we recommend reading the [Citus open source documentation](https://docs.citusdata.com/en/stable/). Or, if you are using Citus on Azure, start with the [Elastic Clusters documentation](https://docs.azure.cn/en-us/postgresql/elastic-clusters/concepts-elastic-clusters).
 
 Our Citus docs contain comprehensive use case guides on how to build a [multi-tenant SaaS application](https://docs.citusdata.com/en/stable/use_cases/multi_tenant.html), [real-time analytics dashboard]( https://docs.citusdata.com/en/stable/use_cases/realtime_analytics.html), or work with [time series data](https://docs.citusdata.com/en/stable/use_cases/timeseries.html).
 
@@ -485,9 +483,8 @@ contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additio
 
 - **Twitter**: Follow us [@citusdata](https://twitter.com/citusdata) to track the latest posts & updates on what’s happening.
 - **Citus Blog**: Read our popular [Citus Open Source Blog](https://www.citusdata.com/blog/) for posts about PostgreSQL and Citus.
-- **Citus Newsletter**: Subscribe to our monthly technical [Citus Newsletter](https://www.citusdata.com/join-newsletter) to get a curated collection of our favorite posts, videos, docs, talks, & other Postgres goodies.
 - **Slack**: Our [Citus Public slack](https://slack.citusdata.com/) is a good way to stay connected, not just with us but with other Citus users.
-- **Sister Blog**: Read the PostgreSQL posts on the [Azure Cosmos DB for PostgreSQL blog](https://devblogs.microsoft.com/cosmosdb/category/postgresql/) about our managed service on Azure.
+- **Sister Blog**: Read the PostgreSQL posts on the [Microsoft Blog for PostgreSQL](https://techcommunity.microsoft.com/category/azuredatabases/blog/adforpostgresql) about our managed service on Azure.
 - **Videos**: Check out this [YouTube playlist](https://www.youtube.com/playlist?list=PLixnExCn6lRq261O0iwo4ClYxHpM9qfVy) of some of our favorite Citus videos and demos. If you want to deep dive into how Citus extends PostgreSQL, you might want to check out Marco Slot’s talk at Carnegie Mellon titled [Citus: Distributed PostgreSQL as an Extension](https://youtu.be/X-aAgXJZRqM) that was part of Andy Pavlo’s Vaccination Database Talks series at CMUDB.
 - **Our other Postgres projects**: Our team also works on other awesome PostgreSQL open source extensions & projects, including: [pg_cron](https://github.com/citusdata/pg_cron), [HyperLogLog](https://github.com/citusdata/postgresql-hll), [TopN](https://github.com/citusdata/postgresql-topn), [pg_auto_failover](https://github.com/citusdata/pg_auto_failover), [activerecord-multi-tenant](https://github.com/citusdata/activerecord-multi-tenant), and [django-multitenant](https://github.com/citusdata/django-multitenant).
 

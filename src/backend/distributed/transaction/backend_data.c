@@ -554,9 +554,7 @@ BackendManagementShmemInit(void)
 		memset(backendManagementShmemData, 0,
 			   BackendManagementShmemSize());
 
-		namedLockTranche->trancheId = LWLockNewTrancheId();
-
-		LWLockRegisterTranche(namedLockTranche->trancheId, trancheName);
+		namedLockTranche->trancheId = LWLockNewTrancheIdCompat(trancheName);
 		LWLockInitialize(&backendManagementShmemData->lock,
 						 namedLockTranche->trancheId);
 

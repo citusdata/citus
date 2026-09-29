@@ -172,9 +172,8 @@ LogicalClockShmemInit(void)
 		memset(&LogicalClockShmem->clusterClockValue, 0, sizeof(ClusterClock));
 
 		LogicalClockShmem->namedLockTranche.trancheName = "Cluster Clock Setup Tranche";
-		LogicalClockShmem->namedLockTranche.trancheId = LWLockNewTrancheId();
-		LWLockRegisterTranche(LogicalClockShmem->namedLockTranche.trancheId,
-							  LogicalClockShmem->namedLockTranche.trancheName);
+		LogicalClockShmem->namedLockTranche.trancheId =
+			LWLockNewTrancheIdCompat(LogicalClockShmem->namedLockTranche.trancheName);
 		LWLockInitialize(&LogicalClockShmem->clockLock,
 						 LogicalClockShmem->namedLockTranche.trancheId);
 

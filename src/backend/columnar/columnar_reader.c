@@ -307,7 +307,7 @@ ColumnarReadFlushPendingWrites(ColumnarReadState *readState)
  * reading a stripe.
  */
 static MemoryContext
-CreateStripeReadMemoryContext()
+CreateStripeReadMemoryContext(void)
 {
 	return AllocSetContextCreate(CurrentMemoryContext, "Stripe Read Memory Context",
 								 ALLOCSET_DEFAULT_SIZES);

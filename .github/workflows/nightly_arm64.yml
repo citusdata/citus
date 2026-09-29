@@ -1,0 +1,176 @@
+name: Nightly arm64
+run-name: Nightly arm64 (${{ github.ref_name }})
+
+# Native arm64 (aarch64) validation for Citus -- upstream half of the multi-arch effort tracked
+# by https://github.com/citusdata/citus/issues/8612. Docker (multi-arch alpine) and packaging
+# (gated arm64 .deb legs) already ship arm64 support; the remaining gap is that no CI proves
+# Citus itself builds and its regression tests pass on arm64. This nightly closes that gap.
+#
+# Unlike nightly_cassert.yml, this is a CLEAN pass/fail gate: it builds an assert-OFF PostgreSQL
+# (setup_cassert_pg with cassert: false) so a GREEN run unambiguously means "arm works". A cassert
+# build here would be "expected red" as pre-existing asserts surface, muddying the arm signal.
+#
+# PHASE 1 -- the matrix is INTENTIONALLY BOUNDED to cap arm-runner cost: PG 17/18 only and the
+# core `regress` + `isolation` groups only (~4 test jobs). It deliberately drops the cassert
+# nightly's fan-out (arbitrary-configs, pg-upgrade, citus-upgrade, columnar, failure, tap,
+# generator). Expand this matrix once the phase-1 gate is reliably green.
+#
+# NOT covered here: gating PRs on arm64. build_and_test.yml / run_tests.yml run inside prebuilt
+# amd64-only containers (ghcr.io/citusdata/extbuilder:*, exttester:*); arm64 PR-gating would first
+# require rebuilding that toolchain multi-arch in citusdata/the-process. That is the natural
+# follow-up, out of scope for this workflow.
+
+on:
+  schedule:
+    - cron: '0 4 * * *'          # 04:00 UTC daily (offset from the 03:00 cassert nightly cron)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write                  # required by the failure-issue job
+
+concurrency:
+  group: nightly-arm64-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  # ---- version matrix: single source of truth (mirrors nightly_cassert.yml's params job) ----
+  # Bounded to the two newest majors for phase 1; bump here to widen the arm coverage.
+  params:
+    name: Initialize parameters
+    runs-on: ubuntu-latest
+    outputs:
+      pg_versions: '[{ "major": "17", "full": "17.11" }, { "major": "18", "full": "18.6" }]'
+    steps:
+      - name: Set up parameters
+        run: echo 'noop'
+
+  # ---- core suites on native arm64: one job per (major x suite-group) ----
+  test:
+    needs: params
+    name: arm64 PG${{ matrix.pg.major }} - ${{ matrix.group }}
+    runs-on: ubuntu-24.04-arm
+    strategy:
+      fail-fast: false
+      matrix:
+        pg: ${{ fromJson(needs.params.outputs.pg_versions) }}
+        # PHASE 1: regress + isolation only. Add columnar/failure/tap/generator once green.
+        group: [ regress, isolation ]
+    steps:
+      - uses: actions/checkout@v5
+      # Assert-off PG built natively on arm64 (cassert: false -> clean pass/fail signal).
+      - uses: ./.github/actions/setup_cassert_pg
+        with:
+          pg_full: ${{ matrix.pg.full }}
+          cassert: "false"
+      - name: Run ${{ matrix.group }}
+        shell: bash
+        timeout-minutes: 90
+        run: |
+          set -euo pipefail
+          case "${{ matrix.group }}" in
+            regress)
+              make -C src/test/regress \
+                check-multi check-multi-1 check-multi-1-create-citus check-multi-mx \
+                check-split check-operations check-follower-cluster \
+                check-vanilla check-enterprise check-add-backup-node ;;
+            isolation)
+              make -C src/test/regress \
+                check-isolation check-enterprise-isolation check-columnar-isolation \
+                check-enterprise-isolation-logicalrep-1 \
+                check-enterprise-isolation-logicalrep-2 \
+                check-enterprise-isolation-logicalrep-3 ;;
+          esac
+      - uses: ./.github/actions/save_logs_and_results
+        if: always()
+        with:
+          folder: arm64_${{ matrix.pg.major }}_${{ matrix.group }}
+
+  # ---- failure notification: open/append a dated GitHub issue if anything failed ----
+  # Uses an arm64-specific label + marker so its issues never collide with nightly-cassert's.
+  notify:
+    name: Open issue on failure
+    needs: [ test ]
+    if: failure()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const day = new Date().toISOString().slice(0, 10);
+            const label = 'nightly-arm64';
+            const url = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+
+            // Failure signature = sorted set of failed job names in this run.
+            const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: context.runId,
+              per_page: 100,
+            });
+            const failed = jobs.filter(j => j.conclusion === 'failure').map(j => j.name).sort();
+            const signature = JSON.stringify(failed);
+            const marker = `<!-- arm64-failures: ${signature} -->`;
+
+            // Existing open issues and the failure sets they already track.
+            const open = await github.paginate(github.rest.issues.listForRepo, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: label,
+            });
+            const sigOf = (i) => {
+              const m = (i.body || '').match(/<!-- arm64-failures: (.*?) -->/);
+              if (!m) return null;
+              try { return JSON.stringify(JSON.parse(m[1]).sort()); } catch { return null; }
+            };
+
+            const intro = [
+              'Nightly arm64 run failed.',
+              '',
+              `Run: ${url}`,
+              '',
+              'Failing jobs:',
+              ...failed.map(n => `- ${n}`),
+            ].join('\n');
+
+            // Same failing set as an open issue -> append; otherwise open a new issue.
+            const match = open.find(i => sigOf(i) === signature);
+            if (match) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: match.number,
+                body: `Same failing set recurred (${day}).\n\nRun: ${url}`,
+              });
+              return;
+            }
+
+            // New/different set: highlight failures not already tracked by any open issue.
+            const tracked = new Set();
+            for (const i of open) {
+              const s = sigOf(i);
+              if (s) for (const n of JSON.parse(s)) tracked.add(n);
+            }
+            const newOnes = failed.filter(n => !tracked.has(n));
+            const newSection = (tracked.size && newOnes.length)
+              ? ['', 'New failures not previously tracked:', ...newOnes.map(n => `- ${n}`)].join('\n')
+              : '';
+
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `Nightly arm64 failures (${day})`,
+              body: [
+                intro,
+                newSection,
+                '',
+                'This is the phase-1 arm64 gate (assert-off): a failure here means Citus did not',
+                'build or pass core regression/isolation tests natively on arm64.',
+                marker,
+              ].join('\n'),
+              labels: [label],
+            });

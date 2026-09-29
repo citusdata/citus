@@ -16,6 +16,11 @@
 
 #include "postgres.h"
 
+#include "storage/lwlock.h"
+#include "storage/shmem.h"
+
+#include "pg_version_compat.h"
+
 /*
  * In-memory mapping of a split child shard.
  */

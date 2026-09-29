@@ -1,0 +1,27 @@
+-- Negative coverage for the "output_plugin_libraries" allowlist that PostgreSQL
+-- 14.24, 15.19, 16.15, 17.11 and 18.6 introduced. This test is only run by the
+-- check-split-output-plugin-denied target, which deliberately starts the cluster
+-- without adding "citus" to the allowlist.
+CREATE SCHEMA split_output_plugin_denied;
+SET search_path TO split_output_plugin_denied;
+SET citus.shard_count TO 2;
+SET citus.shard_replication_factor TO 1;
+SET citus.next_shard_id TO 8990000;
+CREATE TABLE table_to_split (id bigint PRIMARY KEY, value char);
+SELECT create_distributed_table('table_to_split', 'id');
+SELECT nodeid AS worker_1_node FROM pg_dist_node WHERE nodeport=:worker_1_port \gset
+SELECT nodeid AS worker_2_node FROM pg_dist_node WHERE nodeport=:worker_2_port \gset
+-- The split must be rejected up front. Terse verbosity keeps the node address
+-- and the current allowlist value out of the expected output.
+\set VERBOSITY terse
+SELECT citus_split_shard_by_split_points(
+	8990000,
+	ARRAY['-1073741826'],
+	ARRAY[:worker_1_node, :worker_2_node],
+	'force_logical');
+\set VERBOSITY default
+-- Nothing must have been created before the split was rejected.
+SELECT count(*) FROM pg_dist_shard WHERE logicalrelid = 'table_to_split'::regclass;
+SELECT run_command_on_workers($$SELECT count(*) FROM pg_replication_slots$$);
+SELECT run_command_on_workers($$SELECT count(*) FROM pg_publication$$);
+DROP SCHEMA split_output_plugin_denied CASCADE;

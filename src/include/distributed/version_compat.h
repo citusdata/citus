@@ -13,6 +13,8 @@
 
 #include "postgres.h"
 
+#include "fmgr.h"
+
 #include "access/heapam.h"
 #include "access/sdir.h"
 #include "catalog/namespace.h"
@@ -21,6 +23,7 @@
 #include "nodes/parsenodes.h"
 #include "optimizer/optimizer.h"
 #include "parser/parse_func.h"
+#include "storage/fd.h"
 #include "tcop/tcopprot.h"
 
 #include "pg_version_compat.h"

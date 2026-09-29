@@ -97,7 +97,8 @@ OLDEST_SUPPORTED_CITUS_VERSION_MATRIX = {
     15: "11.1.5",
     16: "12.1.5",
     17: "13.0.1",
-    18: "15.0devel",
+    18: "14.1.0",
+    19: "15.0devel",
 }
 
 OLDEST_SUPPORTED_CITUS_VERSION = OLDEST_SUPPORTED_CITUS_VERSION_MATRIX[PG_MAJOR_VERSION]
@@ -300,9 +301,8 @@ def _run_pg_regress(
         output_dir,
         "--use-existing",
     ]
-    if PG_MAJOR_VERSION >= 16:
-        command.append("--expecteddir")
-        command.append(output_dir)
+    command.append("--expecteddir")
+    command.append(output_dir)
     if extra_tests != "":
         command.append(extra_tests)
 

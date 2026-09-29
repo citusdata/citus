@@ -9,7 +9,7 @@
  *
  *
  * IDENTIFICATION
- *	  src/backend/distributed/deparser/ruleutils_16.c
+ *	  src/backend/distributed/deparser/ruleutils_17.c
  *
  * This needs to be closely in sync with the core code.
  *-------------------------------------------------------------------------
@@ -7644,7 +7644,8 @@ get_func_sql_syntax(FuncExpr *expr, deparse_context *context)
 				Assert(IsA(con, Const) &&
 					   con->consttype == TEXTOID &&
 					   !con->constisnull);
-				appendStringInfoString(buf, TextDatumGetCString(con->constvalue));
+				appendStringInfoString(buf,
+									   quote_identifier(TextDatumGetCString(con->constvalue)));
 			}
 			appendStringInfoString(buf, " FROM ");
 			get_rule_expr((Node *) lsecond(expr->args), context, false);

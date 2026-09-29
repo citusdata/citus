@@ -14,8 +14,11 @@
 #include "executor/execdesc.h"
 #include "executor/executor.h"
 #include "storage/lwlock.h"
+#include "storage/spin.h"
 #include "utils/datetime.h"
 #include "utils/hsearch.h"
+
+#include "pg_version_compat.h"
 
 #include "distributed/hash_helpers.h"
 

@@ -1808,6 +1808,14 @@ GetDistributeObjectOps(Node *node)
 
 		case T_ClusterStmt:
 		{
+			/*
+			 * On PG19 T_ClusterStmt aliases T_RepackStmt, so this case is
+			 * reached for both CLUSTER and REPACK.  Citus propagates REPACK
+			 * like CLUSTER, so both intentionally route to the same ops; the
+			 * two are discriminated for messaging inside PreprocessClusterStmt
+			 * (via ClusterStmtIsRepack).  VACUUM FULL does not arrive here --
+			 * it stays on the T_VacuumStmt path.
+			 */
 			return &Any_Cluster;
 		}
 

@@ -1,7 +1,12 @@
 #include "postgres.h"
 
+#include "miscadmin.h"
+
+#include "portability/instr_time.h"
+#include "storage/latch.h"
 #include "utils/fmgrprotos.h"
 #include "utils/pg_lsn.h"
+#include "utils/wait_event.h"
 
 #include "distributed/argutils.h"
 #include "distributed/clonenode_utils.h"
@@ -15,6 +20,7 @@
 
 
 static void BlockAllWritesToWorkerNode(WorkerNode *workerNode);
+static XLogRecPtr GetNodeWalPosition(MultiConnection *connection, bool replay);
 static bool GetNodeIsInRecoveryStatus(WorkerNode *workerNode);
 static void PromoteCloneNode(WorkerNode *cloneWorkerNode);
 static void EnsureSingleNodePromotion(WorkerNode *primaryNode);
@@ -24,24 +30,37 @@ PG_FUNCTION_INFO_V1(citus_promote_clone_and_rebalance);
 
 /*
  * citus_promote_clone_and_rebalance promotes an inactive clone node to become
- * the new primary node, replacing its original primary node.
+ * an additional primary node, sharing shards with its original primary node.
  *
  * This function performs the following steps:
  * 1. Validates that the clone node exists and is properly configured
  * 2. Ensures the clone is inactive and has a valid primary node reference
  * 3. Blocks all writes to the primary node to prevent data divergence
- * 4. Waits for the clone to catch up with the primary's WAL position
+ * 4. Waits for clone replay to reach a fixed source WAL insertion position
  * 5. Promotes the clone node to become a standalone primary
  * 6. Updates metadata to mark the clone as active and primary
  * 7. Rebalances shards between the old primary and new primary
- * 8. Returns information about the promotion and any shard movements
+ * 8. Returns void on success
  *
  * Arguments:
  * - clone_nodeid: The node ID of the clone to promote
- * - catchUpTimeoutSeconds: Maximum time to wait for clone to catch up (default: 300)
+ * - rebalance_strategy: Optional strategy used to split the shards
+ * - catchUpTimeoutSeconds: Catch-up polling budget in seconds (default: 300).
+ *   Zero disables the catch-up deadline; negative values are rejected before
+ *   acquiring locks. Unlimited waiting can hold shard write locks indefinitely,
+ *   but remains interruptible by cancellation or statement_timeout.
+ *   A positive budget starts after acquiring
+ *   the write locks and includes fetching the source target and clone probes,
+ *   but excludes promotion and rebalancing. No probe starts after the budget
+ *   expires; a successful in-flight probe is accepted even if it finishes later.
+ *   This is not a hard deadline on remote I/O; statement_timeout can cancel it.
  *
- * The function ensures data consistency by blocking writes during the promotion
- * process and verifying replication lag before proceeding.
+ * After the existing shard write fence is acquired, a source insertion LSN is
+ * captured once, including WAL from completed asynchronous commits. Clone replay
+ * must reach or exceed this target before promotion. Unrelated WAL can advance
+ * beyond the target without extending the wait. Consistency depends on the write
+ * fence preventing changes to the shard data being split; this wait does not
+ * extend the scope of that fence.
  */
 Datum
 citus_promote_clone_and_rebalance(PG_FUNCTION_ARGS)
@@ -57,6 +76,12 @@ citus_promote_clone_and_rebalance(PG_FUNCTION_ARGS)
 
 	/* Get catchUpTimeoutSeconds argument with default value of 300 */
 	int32 catchUpTimeoutSeconds = PG_ARGISNULL(2) ? 300 : PG_GETARG_INT32(2);
+
+	if (catchUpTimeoutSeconds < 0)
+	{
+		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+						errmsg("catchup_timeout_seconds must be nonnegative")));
+	}
 
 	/* Lock pg_dist_node to prevent concurrent modifications during this operation */
 	LockRelationOid(DistNodeRelationId(), RowExclusiveLock);
@@ -145,27 +170,97 @@ citus_promote_clone_and_rebalance(PG_FUNCTION_ARGS)
 	BlockAllWritesToWorkerNode(primaryNode);
 
 	/* Step 2: Wait for Clone to Catch Up */
-	ereport(NOTICE, (errmsg(
-						 "Waiting for clone %s:%d to catch up with primary %s:%d (timeout: %d seconds)",
-						 cloneNode->workerName, cloneNode->workerPort,
-						 primaryNode->workerName, primaryNode->workerPort,
-						 catchUpTimeoutSeconds)));
+	if (catchUpTimeoutSeconds == 0)
+	{
+		ereport(NOTICE, (errmsg(
+							 "Waiting for clone %s:%d to catch up with primary %s:%d (timeout disabled)",
+							 cloneNode->workerName, cloneNode->workerPort,
+							 primaryNode->workerName, primaryNode->workerPort)));
+	}
+	else
+	{
+		ereport(NOTICE, (errmsg(
+							 "Waiting for clone %s:%d to catch up with primary %s:%d (timeout: %d seconds)",
+							 cloneNode->workerName, cloneNode->workerPort,
+							 primaryNode->workerName, primaryNode->workerPort,
+							 catchUpTimeoutSeconds)));
+	}
 
 	bool caughtUp = false;
-	const int sleepIntervalSeconds = 5;
-	int elapsedTimeSeconds = 0;
+	instr_time startTime;
+	INSTR_TIME_SET_CURRENT(startTime);
+	XLogRecPtr targetLsn = InvalidXLogRecPtr;
+	XLogRecPtr replayLsn = InvalidXLogRecPtr;
 
-	while (elapsedTimeSeconds < catchUpTimeoutSeconds)
+	/* Both private connections stay tracked until their owning PG_FINALLY closes them. */
+	MultiConnection *sourceConnection = StartNodeConnection(FORCE_NEW_CONNECTION,
+															primaryNode->workerName,
+															primaryNode->workerPort);
+	PG_TRY();
 	{
-		uint64 repLag = GetReplicationLag(primaryNode, cloneNode);
-		if (repLag <= 0)
-		{
-			caughtUp = true;
-			break;
-		}
-		pg_usleep(sleepIntervalSeconds * 1000000L);
-		elapsedTimeSeconds += sleepIntervalSeconds;
+		FinishConnectionEstablishment(sourceConnection);
+		targetLsn = GetNodeWalPosition(sourceConnection, false);
 	}
+	PG_FINALLY();
+	{
+		CloseConnection(sourceConnection);
+	}
+	PG_END_TRY();
+
+	MultiConnection *cloneConnection = StartNodeConnection(FORCE_NEW_CONNECTION,
+														   cloneNode->workerName,
+														   cloneNode
+														   ->workerPort);
+	PG_TRY();
+	{
+		FinishConnectionEstablishment(cloneConnection);
+		long pollIntervalMilliseconds = 100;
+		while (true)
+		{
+			CHECK_FOR_INTERRUPTS();
+			instr_time elapsedTime;
+			INSTR_TIME_SET_CURRENT(elapsedTime);
+			INSTR_TIME_SUBTRACT(elapsedTime, startTime);
+			if (catchUpTimeoutSeconds > 0 &&
+				INSTR_TIME_GET_DOUBLE(elapsedTime) >= catchUpTimeoutSeconds)
+			{
+				break;
+			}
+
+			replayLsn = GetNodeWalPosition(cloneConnection, true);
+			if (!XLogRecPtrIsInvalid(replayLsn) && replayLsn >= targetLsn)
+			{
+				caughtUp = true;
+				break;
+			}
+
+			long waitMilliseconds = pollIntervalMilliseconds;
+			if (catchUpTimeoutSeconds > 0)
+			{
+				INSTR_TIME_SET_CURRENT(elapsedTime);
+				INSTR_TIME_SUBTRACT(elapsedTime, startTime);
+				double remainingSeconds = catchUpTimeoutSeconds -
+										  INSTR_TIME_GET_DOUBLE(elapsedTime);
+				if (remainingSeconds <= 0)
+				{
+					break;
+				}
+				waitMilliseconds = Max(1L, (long) (Min(remainingSeconds * 1000,
+													   waitMilliseconds)));
+			}
+
+			ResetLatch(MyLatch);
+			CHECK_FOR_INTERRUPTS();
+			WaitLatch(MyLatch, WL_LATCH_SET | WL_TIMEOUT | WL_EXIT_ON_PM_DEATH,
+					  waitMilliseconds, PG_WAIT_EXTENSION);
+			pollIntervalMilliseconds = Min(pollIntervalMilliseconds * 2, 1000L);
+		}
+	}
+	PG_FINALLY();
+	{
+		CloseConnection(cloneConnection);
+	}
+	PG_END_TRY();
 
 	if (!caughtUp)
 	{
@@ -174,7 +269,11 @@ citus_promote_clone_and_rebalance(PG_FUNCTION_ARGS)
 							"Clone %s:%d failed to catch up with primary %s:%d within %d seconds.",
 							cloneNode->workerName, cloneNode->workerPort,
 							primaryNode->workerName, primaryNode->workerPort,
-							catchUpTimeoutSeconds)));
+							catchUpTimeoutSeconds),
+						errdetail("Target WAL position is %X/%X; last observed replay "
+								  "position is %X/%X (0/0 means unavailable).",
+								  LSN_FORMAT_ARGS(targetLsn), LSN_FORMAT_ARGS(replayLsn)))
+				);
 	}
 
 	ereport(NOTICE, (errmsg("Clone %s:%d is now caught up with primary %s:%d.",
@@ -295,6 +394,84 @@ PromoteCloneNode(WorkerNode *cloneWorkerNode)
 							 cloneWorkerNode->workerName, cloneWorkerNode->workerPort,
 							 cloneWorkerNode->nodeId)));
 	}
+}
+
+
+/*
+ * GetNodeWalPosition reads the insertion LSN, or the replay LSN when replay is
+ * true. A clone must still be in recovery; NULL replay returns InvalidXLogRecPtr
+ * and is not evidence of catch-up. An invalid source position is an error.
+ * The result is released even if validation or parsing fails. The caller owns
+ * the connection and must close it on success and error; successful probes drain
+ * pending results so that the connection can be reused for the next probe.
+ */
+static XLogRecPtr
+GetNodeWalPosition(MultiConnection *connection, bool replay)
+{
+	if (PQstatus(connection->pgConn) != CONNECTION_OK)
+	{
+		ReportConnectionError(connection, ERROR);
+	}
+
+	const char *query = replay ?
+						"SELECT pg_last_wal_replay_lsn() WHERE pg_is_in_recovery()" :
+						"SELECT pg_current_wal_insert_lsn()";
+	if (SendRemoteCommand(connection, query) == 0)
+	{
+		ReportConnectionError(connection, ERROR);
+	}
+
+	PGresult *result = GetRemoteCommandResult(connection, true);
+	if (result == NULL)
+	{
+		ReportConnectionError(connection, ERROR);
+	}
+	if (!IsResponseOK(result))
+	{
+		ReportResultError(connection, result, ERROR);
+	}
+	XLogRecPtr position = InvalidXLogRecPtr;
+	PG_TRY();
+	{
+		if (replay && PQntuples(result) == 0)
+		{
+			ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+							errmsg("clone node %s:%d is no longer in recovery",
+								   connection->hostname, connection->port)));
+		}
+		if (PQntuples(result) != 1 || PQnfields(result) != 1)
+		{
+			ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
+							errmsg("unexpected WAL position result from node %s:%d",
+								   connection->hostname, connection->port)));
+		}
+
+		if (!PQgetisnull(result, 0, 0))
+		{
+			char *positionString = PQgetvalue(result, 0, 0);
+			position = DatumGetLSN(DirectFunctionCall1(pg_lsn_in,
+													   CStringGetDatum(positionString)));
+		}
+	}
+	PG_FINALLY();
+	{
+		PQclear(result);
+	}
+	PG_END_TRY();
+	if (!ClearResults(connection, true) || PQstatus(connection->pgConn) != CONNECTION_OK)
+	{
+		ReportConnectionError(connection, ERROR);
+	}
+	CHECK_FOR_INTERRUPTS();
+
+	if (!replay && XLogRecPtrIsInvalid(position))
+	{
+		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+						errmsg("invalid source WAL position from node %s:%d",
+							   connection->hostname, connection->port)));
+	}
+
+	return position;
 }
 
 

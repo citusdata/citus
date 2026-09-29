@@ -19,7 +19,7 @@ VACUUM ANALYZE supplier_mx;
 \c - - - :worker_1_port
 -- Function that parses explain output as JSON
 SET citus.enable_metadata_sync TO OFF;
-CREATE FUNCTION explain_json(query text)
+CREATE OR REPLACE FUNCTION explain_json(query text)
 RETURNS jsonb
 AS $BODY$
 DECLARE
@@ -31,7 +31,7 @@ END;
 $BODY$ LANGUAGE plpgsql;
 
 -- Function that parses explain output as XML
-CREATE FUNCTION explain_xml(query text)
+CREATE OR REPLACE FUNCTION explain_xml(query text)
 RETURNS xml
 AS $BODY$
 DECLARE
@@ -45,7 +45,7 @@ $BODY$ LANGUAGE plpgsql;
 \c - - - :worker_2_port
 -- Function that parses explain output as JSON
 SET citus.enable_metadata_sync TO OFF;
-CREATE FUNCTION explain_json(query text)
+CREATE OR REPLACE FUNCTION explain_json(query text)
 RETURNS jsonb
 AS $BODY$
 DECLARE
@@ -57,7 +57,7 @@ END;
 $BODY$ LANGUAGE plpgsql;
 
 -- Function that parses explain output as XML
-CREATE FUNCTION explain_xml(query text)
+CREATE OR REPLACE FUNCTION explain_xml(query text)
 RETURNS xml
 AS $BODY$
 DECLARE
@@ -158,6 +158,11 @@ EXPLAIN (COSTS FALSE)
 -- Test all tasks output
 SET citus.explain_all_tasks TO on;
 
+-- This test checks all-task EXPLAIN formatting, not worker scan costing.
+BEGIN;
+SET LOCAL citus.propagate_set_commands TO 'local';
+SET LOCAL enable_seqscan TO off;
+
 EXPLAIN (COSTS FALSE)
 	SELECT avg(l_linenumber) FROM lineitem_mx WHERE l_orderkey > 9030;
 
@@ -166,6 +171,8 @@ SELECT true AS valid FROM explain_xml($$
 
 SELECT true AS valid FROM explain_json($$
 	SELECT avg(l_linenumber) FROM lineitem_mx WHERE l_orderkey > 9030$$);
+
+ROLLBACK;
 
 -- Test track tracker
 SET citus.explain_all_tasks TO off;

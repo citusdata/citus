@@ -810,6 +810,14 @@ BuildExistingQueryIdHash(void)
 		fmgrPGStatStatements->fn_addr,
 		pgStatStatementsOid,
 		commandTypeDatum);
+
+	/*
+	 * PG19 requires TupleDescFinalize() to have been called before a
+	 * TupleDesc is used with slot deformation.  The descriptor returned by
+	 * the SRF is not guaranteed to be finalised; defensive call here is a
+	 * no-op on older majors.
+	 */
+	TupleDescFinalize(statStatementsReturnSet->setDesc);
 	TupleTableSlot *tupleTableSlot = MakeSingleTupleTableSlot(
 		statStatementsReturnSet->setDesc,
 		&TTSOpsMinimalTuple);

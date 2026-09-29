@@ -1047,16 +1047,16 @@ SELECT create_distributed_table('check_ign_err', 'n');
 
 (1 row)
 
-COPY check_ign_err FROM STDIN WITH (on_error stop, reject_limit 5);
+\copy check_ign_err FROM PROGRAM 'true' WITH (on_error stop, reject_limit 5)
 ERROR:  Citus does not support COPY FROM with ON_ERROR option.
-COPY check_ign_err FROM STDIN WITH (ON_ERROR ignore, REJECT_LIMIT 100);
+\copy check_ign_err FROM PROGRAM 'true' WITH (ON_ERROR ignore, REJECT_LIMIT 100)
 ERROR:  Citus does not support COPY FROM with ON_ERROR option.
-COPY check_ign_err FROM STDIN WITH (on_error ignore, log_verbosity verbose, reject_limit 50);
+\copy check_ign_err FROM PROGRAM 'true' WITH (on_error ignore, log_verbosity verbose, reject_limit 50)
 ERROR:  Citus does not support COPY FROM with ON_ERROR option.
-COPY check_ign_err FROM STDIN WITH (reject_limt 77, log_verbosity verbose, on_error ignore);
+\copy check_ign_err FROM PROGRAM 'true' WITH (reject_limt 77, log_verbosity verbose, on_error ignore)
 ERROR:  Citus does not support COPY FROM with ON_ERROR option.
 -- PG requires on_error when reject_limit is specified
-COPY check_ign_err FROM STDIN WITH (reject_limit 100);
+\copy check_ign_err FROM PROGRAM 'true' WITH (reject_limit 100)
 ERROR:  COPY REJECT_LIMIT requires ON_ERROR to be set to IGNORE
 -- PG18 Feature: COPY TABLE TO on a materialized view
 -- PG18 commit: https://github.com/postgres/postgres/commit/534874fac

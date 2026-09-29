@@ -517,7 +517,7 @@ FullShardPlacementList(Oid relationId, ArrayType *excludedShardArray)
  * ActiveReadableNodeList, but sorted.
  */
 static List *
-SortedActiveWorkers()
+SortedActiveWorkers(void)
 {
 	List *activeWorkerList = ActiveReadableNodeList();
 	return SortList(activeWorkerList, CompareWorkerNodes);
@@ -980,7 +980,7 @@ AcquirePlacementColocationLockLocally(int64 lockId, int lockMode)
  * connection requests.
  */
 static List *
-GetResponsiveWorkerList()
+GetResponsiveWorkerList(void)
 {
 	List *activeWorkerList = ActiveReadableNodeList();
 	ListCell *activeWorkerCell = NULL;
@@ -1201,9 +1201,9 @@ citus_rebalance_start(PG_FUNCTION_ARGS)
 		.rebalanceStrategy = strategy,
 		.improvementThreshold = strategy->improvementThreshold,
 	};
-	int jobId = RebalanceTableShardsBackground(&options, shardTransferModeOid,
-											   ParallelTransferReferenceTables,
-											   ParallelTransferColocatedShards);
+	int64 jobId = RebalanceTableShardsBackground(&options, shardTransferModeOid,
+												 ParallelTransferReferenceTables,
+												 ParallelTransferColocatedShards);
 
 	if (jobId == 0)
 	{

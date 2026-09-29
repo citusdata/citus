@@ -643,11 +643,6 @@ ALTER TABLE dist_partitioned_table DROP CONSTRAINT my_chk;
 -- Check "ADD CONSTRAINT ... EXCLUDE" with explicit name switches to sequential
 -- because PG auto-generates new index names on partitions (same as PK/UNIQUE)
 -- EXCLUDE on partitioned tables is only supported in PG17+
-SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int >= 17 AS server_version_ge_17
-\gset
-
-\if :server_version_ge_17
 SET client_min_messages TO DEBUG1;
 ALTER TABLE dist_partitioned_table ADD CONSTRAINT my_excl EXCLUDE USING btree (partition_col WITH =);
 RESET client_min_messages;
@@ -660,7 +655,6 @@ SELECT con.conname
      AND con.contype = 'x';
 
 ALTER TABLE dist_partitioned_table DROP CONSTRAINT my_excl;
-\endif
 
 -- Check "ADD CONSTRAINT ... FOREIGN KEY" with explicit name does NOT switch to
 -- sequential because PG propagates the user-provided name to partitions as-is

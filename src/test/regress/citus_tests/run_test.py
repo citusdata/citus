@@ -73,6 +73,8 @@ def parse_arguments():
 
 
 class TestDeps:
+    # None means this test requires no prerequisite setup schedule. Other tests
+    # on the same schedule line can still require one.
     schedule: Optional[str]
     direct_extra_tests: list[str]
 
@@ -83,12 +85,14 @@ class TestDeps:
         repeatable=True,
         worker_count=2,
         citus_upgrade_infra=False,
+        follower_cluster=False,
     ):
         self.schedule = schedule
         self.direct_extra_tests = extra_tests or []
         self.repeatable = repeatable
         self.worker_count = worker_count
         self.citus_upgrade_infra = citus_upgrade_infra
+        self.follower_cluster = follower_cluster
 
     def extra_tests(self):
         all_deps = OrderedDict()
@@ -137,6 +141,11 @@ DEPS = {
     "multi_add_node_from_backup_sequences": TestDeps(
         None, ["multi_add_node_from_backup_negative"], worker_count=5, repeatable=False
     ),
+    # Prepares coordinator metadata and registers follower workers as secondaries.
+    "multi_follower_dml": TestDeps(
+        None,
+        ["follower_single_node", "multi_follower_select_statements"],
+    ),
     "single_node": TestDeps(None, ["multi_test_helpers"]),
     "single_node_truncate": TestDeps(None),
     "multi_explain": TestDeps(
@@ -147,6 +156,12 @@ DEPS = {
     "multi_test_catalog_views": TestDeps(None),
     "multi_insert_select": TestDeps("base_schedule"),
     "multi_partitioning": TestDeps("base_schedule"),
+    "multi_join_pruning": TestDeps(
+        "base_schedule", ["multi_partition_pruning"], repeatable=False
+    ),
+    "multi_hash_pruning": TestDeps(
+        "base_schedule", ["multi_agg_distinct"], repeatable=False
+    ),
     "multi_mx_create_table": TestDeps(
         None,
         [
@@ -171,16 +186,28 @@ DEPS = {
         repeatable=False,
         worker_count=6,
     ),
+    "background_rebalance_parallel_reference_fkeys": TestDeps(
+        None,
+        ["multi_test_helpers", "multi_cluster_management"],
+        repeatable=False,
+        worker_count=6,
+    ),
     "function_propagation": TestDeps("minimal_schedule"),
     "citus_shards": TestDeps("minimal_schedule"),
     "grant_on_foreign_server_propagation": TestDeps("minimal_schedule"),
     "multi_modifying_xacts": TestDeps("minimal_schedule"),
     "multi_mx_modifying_xacts": TestDeps(None, ["multi_mx_create_table"]),
     "multi_mx_router_planner": TestDeps(None, ["multi_mx_create_table"]),
+    "ch_bench_having_mx": TestDeps(None, ["multi_mx_copy_data"]),
     "multi_mx_copy_data": TestDeps(None, ["multi_mx_create_table"]),
+    "multi_mx_explain": TestDeps(None, ["multi_mx_copy_data"]),
     "multi_mx_modifications": TestDeps(None, ["multi_mx_create_table"]),
     "multi_mx_schema_support": TestDeps(None, ["multi_mx_copy_data"]),
     "multi_simple_queries": TestDeps("base_schedule"),
+    # These share a schedule line that needs both TPC-H and behavioral data.
+    "multi_array_agg": TestDeps("base_schedule"),
+    "multi_limit_clause": TestDeps("base_schedule"),
+    "multi_orderby_limit_pushdown": TestDeps("base_schedule"),
     "create_single_shard_table": TestDeps("minimal_schedule"),
     "isolation_schema_based_sharding_from_any_node": TestDeps(
         None, ["isolation_setup"]
@@ -244,6 +271,10 @@ DEPS = {
         ["multi_create_table", "multi_create_users", "multi_multiuser_load_data"],
         repeatable=False,
     ),
+    "multi_multiuser_copy": TestDeps(
+        "enterprise_minimal_schedule",
+        ["multi_create_table", "multi_create_users"],
+    ),
     "multi_prepare_plsql": TestDeps("base_schedule"),
     "multi_utility_statements": TestDeps("base_schedule"),
     "pg15": TestDeps("base_schedule"),
@@ -268,6 +299,18 @@ DEPS = {
         repeatable=False,
     ),
     "pg17": TestDeps("minimal_schedule", ["multi_behavioral_analytics_create_table"]),
+    # pg17_json shares a schedule line with pg17, so it needs pg17's deps too.
+    "pg17_json": TestDeps(
+        "minimal_schedule", ["multi_behavioral_analytics_create_table"]
+    ),
+    # ch_bench_having and having_subquery share their schedule lines with tests
+    # that query lineitem and the tpch tables, and ch_bench_having itself needs
+    # public.supplier/nation; base_schedule creates and loads all of them.
+    "ch_bench_having": TestDeps("base_schedule"),
+    "having_subquery": TestDeps("base_schedule"),
+    # multi_subquery shares its schedule line with cross_join, and neither drops
+    # the tables it creates, so the line cannot be run more than once.
+    "multi_subquery": TestDeps("base_schedule", repeatable=False),
     "multi_subquery_misc": TestDeps(
         "minimal_schedule", ["multi_behavioral_analytics_create_table"]
     ),
@@ -398,7 +441,9 @@ def run_schedule_with_multiregress(test_name, schedule, dependencies, args):
     worker_count = needed_worker_count(test_name, dependencies)
 
     # find suitable make recipe
-    if dependencies.schedule == "base_isolation_schedule" or test_name.startswith(
+    if dependencies.follower_cluster:
+        make_recipe = "check-follower-custom-schedule"
+    elif dependencies.schedule == "base_isolation_schedule" or test_name.startswith(
         "isolation"
     ):
         make_recipe = "check-isolation-custom-schedule"
@@ -431,6 +476,9 @@ def run_schedule_with_multiregress(test_name, schedule, dependencies, args):
 
 
 def default_base_schedule(test_schedule, args):
+    if test_schedule == "multi_follower_schedule":
+        return None
+
     if "isolation" in test_schedule:
         if "columnar" in test_schedule:
             # we don't have pre-requisites for columnar isolation tests
@@ -512,6 +560,24 @@ def find_test_schedule_and_line(test_name, args):
 
 
 def test_dependencies(test_name, test_schedule, schedule_line, args):
+    if args["use_whole_schedule_line"]:
+        test_names = schedule_line.split()[1:]
+        dependencies = [
+            single_test_dependencies(name, test_schedule, schedule_line, args)
+            for name in test_names
+        ]
+    else:
+        dependencies = [
+            single_test_dependencies(test_name, test_schedule, schedule_line, args)
+        ]
+
+    if test_schedule == "multi_follower_schedule":
+        dependencies.append(TestDeps(None, follower_cluster=True))
+
+    return merge_test_dependencies(dependencies)
+
+
+def single_test_dependencies(test_name, test_schedule, schedule_line, args):
     if test_name in DEPS:
         return DEPS[test_name]
 
@@ -542,6 +608,50 @@ def test_dependencies(test_name, test_schedule, schedule_line, args):
         repeatable = True
 
     return TestDeps(default_base_schedule(test_schedule, args), repeatable=repeatable)
+
+
+def merge_test_dependencies(dependencies):
+    schedules = list(
+        OrderedDict.fromkeys(
+            dependency.schedule
+            for dependency in dependencies
+            if dependency.schedule is not None
+        )
+    )
+
+    if len(schedules) > 1:
+        compatible_schedule_families = (("minimal_schedule", "base_schedule"),)
+        for schedule_family in compatible_schedule_families:
+            if set(schedules).issubset(schedule_family):
+                schedules = [
+                    schedule
+                    for schedule in reversed(schedule_family)
+                    if schedule in schedules
+                ]
+                break
+        else:
+            raise Exception(
+                f"Tests on the same schedule line require incompatible setup schedules: "
+                f"{', '.join(schedules)}"
+            )
+
+    extra_tests = OrderedDict()
+    for dependency in dependencies:
+        for extra_test in dependency.direct_extra_tests:
+            extra_tests[extra_test] = True
+
+    return TestDeps(
+        schedules[0] if schedules else None,
+        list(extra_tests.keys()),
+        repeatable=all(dependency.repeatable for dependency in dependencies),
+        worker_count=max(dependency.worker_count for dependency in dependencies),
+        citus_upgrade_infra=any(
+            dependency.citus_upgrade_infra for dependency in dependencies
+        ),
+        follower_cluster=any(
+            dependency.follower_cluster for dependency in dependencies
+        ),
+    )
 
 
 # Returns true if given test_schedule_line is of the form:
@@ -582,7 +692,7 @@ def tmp_schedule(test_name, dependencies, schedule_line, args):
 
 
 def needed_worker_count(test_name, dependencies):
-    worker_count = worker_count_for(test_name)
+    worker_count = max(worker_count_for(test_name), dependencies.worker_count)
     for dependency in dependencies.extra_tests():
         worker_count = max(worker_count_for(dependency), worker_count)
     return worker_count

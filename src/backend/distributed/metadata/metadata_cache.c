@@ -325,6 +325,8 @@ static Oid LookupEnumValueId(Oid typeId, char *valueName);
 static void InvalidateCitusTableCacheEntrySlot(CitusTableCacheEntrySlot *cacheSlot);
 static void InvalidateDistTableCache(void);
 static void InvalidateDistObjectCache(void);
+static bool IsCachedMetadataIndex(Oid relationId);
+static void InvalidateMetadataSystemCacheForReindex(void);
 static bool InitializeTableCacheEntry(int64 shardId, bool missingOk);
 static bool IsCitusTableTypeInternal(char partitionMethod, char replicationModel,
 									 uint32 colocationId, CitusTableType tableType);
@@ -2458,7 +2460,7 @@ CheckInstalledVersion(int elevel)
  * returns false, otherwise returns true.
  */
 bool
-InstalledAndAvailableVersionsSame()
+InstalledAndAvailableVersionsSame(void)
 {
 	char *installedVersion = InstalledExtensionVersion();
 	char *availableVersion = AvailableExtensionVersion();
@@ -4855,6 +4857,11 @@ InvalidateDistRelationCacheCallback(Datum argument, Oid relationId)
 	}
 	else
 	{
+		if (IsCachedMetadataIndex(relationId))
+		{
+			InvalidateMetadataSystemCacheForReindex();
+		}
+
 		void *hashKey = (void *) &relationId;
 		bool foundInCache = false;
 
@@ -4888,6 +4895,58 @@ InvalidateDistRelationCacheCallback(Datum argument, Oid relationId)
 		{
 			InvalidateDistObjectCache();
 		}
+	}
+}
+
+
+/*
+ * IsCachedMetadataIndex returns whether relationId is a cached Citus catalog
+ * index. REINDEX CONCURRENTLY replaces indexes one by one, so each replacement
+ * needs to invalidate OIDs cached after an earlier index was replaced.
+ */
+static bool
+IsCachedMetadataIndex(Oid relationId)
+{
+	return relationId == MetadataCache.distBackgroundJobPKeyIndexId ||
+		   relationId == MetadataCache.distBackgroundTaskPKeyIndexId ||
+		   relationId == MetadataCache.distBackgroundTaskJobIdTaskIdIndexId ||
+		   relationId == MetadataCache.distBackgroundTaskStatusTaskIdIndexId ||
+		   relationId == MetadataCache.distBackgroundTaskDependTaskIdIndexId ||
+		   relationId == MetadataCache.distBackgroundTaskDependDependsOnIndexId ||
+		   relationId == MetadataCache.distNodeNodeIdIndexId ||
+		   relationId == MetadataCache.distObjectPrimaryKeyIndexId ||
+		   relationId == MetadataCache.distCleanupPrimaryKeyIndexId ||
+		   relationId == MetadataCache.distColocationConfigurationIndexId ||
+		   relationId == MetadataCache.distPartitionLogicalRelidIndexId ||
+		   relationId == MetadataCache.distPartitionColocationidIndexId ||
+		   relationId == MetadataCache.distShardLogicalRelidIndexId ||
+		   relationId == MetadataCache.distShardShardidIndexId ||
+		   relationId == MetadataCache.distPlacementShardidIndexId ||
+		   relationId == MetadataCache.distPlacementPlacementidIndexId ||
+		   relationId == MetadataCache.distColocationidIndexId ||
+		   relationId == MetadataCache.distPlacementGroupidIndexId ||
+		   relationId == MetadataCache.distTransactionGroupIndexId ||
+		   relationId == MetadataCache.distTenantSchemaPrimaryKeyIndexId ||
+		   relationId == MetadataCache.distTenantSchemaUniqueColocationIdIndexId ||
+		   relationId == MetadataCache.distAuthinfoIndexId ||
+		   relationId == MetadataCache.distPoolinfoIndexId;
+}
+
+
+/*
+ * WAL senders cannot rebuild the worker node cache while decoding, since
+ * PostgreSQL disallows non-catalog table scans in logical decoding callbacks.
+ */
+static void
+InvalidateMetadataSystemCacheForReindex(void)
+{
+	if (MyBackendType == B_WAL_SENDER)
+	{
+		memset(&MetadataCache, 0, sizeof(MetadataCache));
+	}
+	else
+	{
+		InvalidateMetadataSystemCache();
 	}
 }
 
@@ -5184,7 +5243,7 @@ InvalidateConnParamsCacheCallback(Datum argument, Oid relationId)
  * to extend beyond that scope.
  */
 void
-CitusTableCacheFlushInvalidatedEntries()
+CitusTableCacheFlushInvalidatedEntries(void)
 {
 	if (DistTableCacheHash != NULL && DistTableCacheExpired != NIL)
 	{

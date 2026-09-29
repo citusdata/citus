@@ -2664,7 +2664,7 @@ IsForeignTable(Oid relationId)
  *    task is currently not ready to be started.
  */
 bool
-HasRunnableBackgroundTask()
+HasRunnableBackgroundTask(void)
 {
 	Relation pgDistBackgroundTasks =
 		table_open(DistBackgroundTaskRelationId(), AccessShareLock);
