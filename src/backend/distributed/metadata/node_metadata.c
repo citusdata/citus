@@ -2422,8 +2422,26 @@ RemoveNodeFromCluster(char *nodeName, int32 nodePort)
 
 		/* reset local group id for the node to be removed */
 		char *updateLocalGroupIdCommand = LocalGroupIdUpdateCommand(0);
-		SendOptionalMetadataCommandListToWorkerInCoordinatedTransaction(
-			nodeName, nodePort, CurrentUserName(), list_make1(updateLocalGroupIdCommand));
+		bool groupIdReset =
+			SendOptionalMetadataCommandListToWorkerInCoordinatedTransaction(
+				nodeName, nodePort, CurrentUserName(),
+				list_make1(updateLocalGroupIdCommand));
+
+		/*
+		 * A removed node keeps running as a standalone node with group ID 0.
+		 * Also delete its copy of pg_dist_node, in the same remote transaction.
+		 * Otherwise it can still reach the remaining nodes, and its transaction
+		 * recovery would treat the coordinator's citus_0_ prepared transactions
+		 * as its own.
+		 *
+		 * Skip this if the entry points at this node, for example the
+		 * coordinator's own entry. The coordinator still needs its node list.
+		 */
+		if (groupIdReset && !IsWorkerTheCurrentNode(workerNode))
+		{
+			SendOptionalMetadataCommandListToWorkerInCoordinatedTransaction(
+				nodeName, nodePort, CurrentUserName(), NodeMetadataDropCommands());
+		}
 
 		/*
 		 * Secondary nodes are read-only, never 2PC is used.
