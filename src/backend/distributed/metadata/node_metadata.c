@@ -2349,6 +2349,17 @@ FindCoordinatorNodeId(void)
 List *
 ReadDistNode(bool includeNodesFromOtherClusters)
 {
+	return ReadDistNodeWithSnapshot(includeNodesFromOtherClusters, NULL);
+}
+
+
+/*
+ * ReadDistNodeWithSnapshot is like ReadDistNode, but reads pg_dist_node using
+ * the given snapshot, or a fresh one if snapshot is NULL.
+ */
+List *
+ReadDistNodeWithSnapshot(bool includeNodesFromOtherClusters, Snapshot snapshot)
+{
 	ScanKeyData scanKey[1];
 	int scanKeyCount = 0;
 	List *workerNodeList = NIL;
@@ -2357,7 +2368,7 @@ ReadDistNode(bool includeNodesFromOtherClusters)
 
 	SysScanDesc scanDescriptor = systable_beginscan(pgDistNode,
 													InvalidOid, false,
-													NULL, scanKeyCount, scanKey);
+													snapshot, scanKeyCount, scanKey);
 
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistNode);
 
