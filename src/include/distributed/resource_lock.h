@@ -258,6 +258,7 @@ extern void LockShardsInPlacementListMetadata(List *shardPlacementList,
 extern LOCKMODE IntToLockMode(int mode);
 
 extern void LockTransactionRecovery(LOCKMODE lockMode);
+extern bool ConditionalLockTransactionRecovery(LOCKMODE lockMode);
 
 extern void SerializeNonCommutativeWrites(List *shardIntervalList, LOCKMODE lockMode);
 extern void LockRelationShardResources(List *relationShardList, LOCKMODE lockMode);

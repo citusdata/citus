@@ -2458,7 +2458,14 @@ RemoveNodeFromCluster(char *nodeName, int32 nodePort)
 		 * Secondary nodes are read-only, never 2PC is used.
 		 * Hence, no items can be inserted to pg_dist_transaction
 		 * for secondary nodes.
+		 *
+		 * Transaction recovery also deletes rows from pg_dist_transaction, so
+		 * take its lock to avoid both deleting the same row, which fails with
+		 * "tuple concurrently deleted". Take it after the pg_dist_node lock,
+		 * which other node operations hold while they may remove nodes in the
+		 * same transaction. Recovery never waits on that lock.
 		 */
+		LockTransactionRecovery(ShareUpdateExclusiveLock);
 		DeleteWorkerTransactions(workerNode);
 	}
 

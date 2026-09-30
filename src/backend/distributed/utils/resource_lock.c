@@ -688,6 +688,23 @@ LockTransactionRecovery(LOCKMODE lockmode)
 
 
 /*
+ * ConditionalLockTransactionRecovery tries to acquire the transaction recovery
+ * lock without waiting, and returns whether it succeeded.
+ */
+bool
+ConditionalLockTransactionRecovery(LOCKMODE lockmode)
+{
+	LOCKTAG tag;
+	const bool sessionLock = false;
+	const bool dontWait = true;
+
+	SET_LOCKTAG_CITUS_OPERATION(tag, CITUS_TRANSACTION_RECOVERY);
+
+	return LockAcquire(&tag, lockmode, sessionLock, dontWait) != LOCKACQUIRE_NOT_AVAIL;
+}
+
+
+/*
  * LockShardListMetadata takes shared locks on the metadata of all shards in
  * shardIntervalList to prevents concurrent placement changes.
  */
