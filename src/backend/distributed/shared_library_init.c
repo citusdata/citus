@@ -2285,6 +2285,23 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
+		"citus.metadata_sync_cache_flush_interval",
+		gettext_noop("Sets the number of distributed objects processed between "
+					 "backend cache flushes while syncing metadata to a node."),
+		gettext_noop("While activating a node, Citus opens each Citus table to "
+					 "build its shell table and metadata commands, which "
+					 "accumulates PostgreSQL relcache/catcache and Citus metadata "
+					 "cache entries on the coordinator. Citus flushes these caches "
+					 "once every this many objects so that syncing metadata for a "
+					 "very large number of Citus tables does not exhaust coordinator"
+					 "memory. Setting this to 0 disables the periodic flushing."),
+		&MetadataSyncCacheFlushInterval,
+		1000, 0, INT_MAX,
+		PGC_USERSET,
+		GUC_NOT_IN_SAMPLE,
+		NULL, NULL, NULL);
+
+	DefineCustomIntVariable(
 		"citus.metadata_sync_interval",
 		gettext_noop("Sets the time to wait between metadata syncs."),
 		gettext_noop("metadata sync needs to run every so often "
@@ -2321,6 +2338,28 @@ RegisterCitusConfigVariables(void)
 		5 * MS_PER_SECOND, 1, 7 * MS_PER_DAY,
 		PGC_SIGHUP,
 		GUC_UNIT_MS | GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
+		NULL, NULL, NULL);
+
+	DefineCustomIntVariable(
+		"citus.metadata_sync_set_batch_size",
+		gettext_noop("Sets the number of distributed objects whose per-object "
+					 "metadata is folded into a single set-based statement during "
+					 "metadata sync."),
+		gettext_noop("The cheap per-object metadata layers (pg_dist_shard, "
+					 "pg_dist_placement and pg_dist_object) are synced over the "
+					 "serial metadata connection by rendering each object's rows "
+					 "into a multi-row VALUES list fed to one set-based "
+					 "citus_internal_add_*_metadata statement, instead of one "
+					 "statement and one remote commit per object. This setting "
+					 "bounds how many objects' rows are packed into each such "
+					 "statement. Larger values emit fewer, larger statements "
+					 "(peak coordinator memory stays bounded by the batch, which "
+					 "is reset after every flush); 1 restores one statement per "
+					 "object."),
+		&MetadataSyncSetBatchSize,
+		1000, 1, 10000,
+		PGC_SUSET,
+		GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
 	/*
