@@ -162,6 +162,7 @@ static const char *const AggregateNames[] = {
 extern int LimitClauseRowFetchCount;
 extern double CountDistinctErrorRate;
 extern int CoordinatorAggregationStrategy;
+extern bool EnableBinaryWorkerPartialAgg;
 
 
 /* Function declaration for optimizing logical plans */
