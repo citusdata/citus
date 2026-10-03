@@ -308,6 +308,20 @@ SELECT conname, tgfoid::regproc, tgtype, tgdeferrable, tginitdeferred
 
 \c - - :master_host :master_port
 ALTER TABLE AT_AddConstNoName.products DROP CONSTRAINT products_name_product_no_excl;
+-- Check "ADD EXCLUDE" with an expression, a schema-qualified operator and a WHERE clause
+ALTER TABLE AT_AddConstNoName.products ADD EXCLUDE USING btree (product_no WITH OPERATOR(pg_catalog.=), (lower(name)) WITH =) WHERE (price > 0);
+\c - - :public_worker_1_host :worker_1_port
+SELECT conname, pg_get_constraintdef(oid)
+  FROM pg_catalog.pg_constraint
+ WHERE conrelid = 'AT_AddConstNoName.products_5410000'::regclass
+   AND contype = 'x';
+                conname                |                                    pg_get_constraintdef
+---------------------------------------------------------------------
+ products_product_no_expr_excl_5410000 | EXCLUDE USING btree (product_no WITH =, lower(name) WITH =) WHERE ((price > (0)::numeric))
+(1 row)
+
+\c - - :master_host :master_port
+ALTER TABLE AT_AddConstNoName.products DROP CONSTRAINT products_product_no_expr_excl;
 -- Check "ADD CHECK"
 ALTER TABLE AT_AddConstNoName.products ADD CHECK (product_no > 0 AND price > 0);
 SELECT con.conname
