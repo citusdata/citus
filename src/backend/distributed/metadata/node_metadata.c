@@ -830,6 +830,12 @@ citus_activate_node(PG_FUNCTION_ARGS)
 	if (NodeIsSecondary(workerNode))
 	{
 		EnsureTransactionalMetadataSyncMode();
+
+		SetWorkerColumn(workerNode, Anum_pg_dist_node_isactive, BoolGetDatum(true));
+
+		TransactionModifiedNodeMetadata = true;
+
+		PG_RETURN_INT32(workerNode->nodeId);
 	}
 
 	/*
