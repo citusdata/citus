@@ -106,7 +106,9 @@ AppendGrantSharedSuffix(StringInfo buf, GrantStmt *stmt)
 {
 	AppendGrantGrantees(buf, stmt);
 	AppendWithGrantOption(buf, stmt);
-	AppendGrantRestrictAndCascade(buf, stmt);
+
+	/* GRANTED BY must precede CASCADE/RESTRICT, per the GRANT/REVOKE grammar */
 	AppendGrantedByInGrant(buf, stmt);
+	AppendGrantRestrictAndCascade(buf, stmt);
 	appendStringInfo(buf, ";");
 }

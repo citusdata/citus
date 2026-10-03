@@ -387,4 +387,30 @@ SELECT nspname, nspacl FROM pg_namespace WHERE nspname = 'public' ORDER BY nspna
 
 \c - - - :master_port
 DROP TABLE public_schema_table;
+-- GRANTED BY must be emitted before CASCADE/RESTRICT, otherwise the command
+-- sent to the workers is a syntax error
+CREATE SCHEMA granted_by_schema;
+GRANT USAGE ON SCHEMA granted_by_schema TO role_1 WITH GRANT OPTION;
+SET ROLE role_1;
+GRANT USAGE ON SCHEMA granted_by_schema TO role_2 GRANTED BY role_1;
+REVOKE USAGE ON SCHEMA granted_by_schema FROM role_2 GRANTED BY role_1 RESTRICT;
+GRANT USAGE ON SCHEMA granted_by_schema TO role_3 GRANTED BY role_1;
+REVOKE USAGE ON SCHEMA granted_by_schema FROM role_3 GRANTED BY role_1 CASCADE;
+RESET ROLE;
+-- the grants above must be reflected on the workers as well
+SELECT nspname, nspacl FROM pg_namespace WHERE nspname = 'granted_by_schema' ORDER BY nspname;
+      nspname      |                  nspacl
+---------------------------------------------------------------------
+ granted_by_schema | {postgres=UC/postgres,role_1=U*/postgres}
+(1 row)
+
+\c - - - :worker_1_port
+SELECT nspname, nspacl FROM pg_namespace WHERE nspname = 'granted_by_schema' ORDER BY nspname;
+      nspname      |                  nspacl
+---------------------------------------------------------------------
+ granted_by_schema | {postgres=UC/postgres,role_1=U*/postgres}
+(1 row)
+
+\c - - - :master_port
+DROP SCHEMA granted_by_schema;
 DROP ROLE role_1, role_2, role_3;
