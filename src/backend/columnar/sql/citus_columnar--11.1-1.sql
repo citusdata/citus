@@ -391,6 +391,7 @@ CREATE VIEW columnar.storage WITH (security_barrier) AS
          columnar.get_storage_id(c.oid) AS storage_id
     FROM pg_class c, pg_am am
     WHERE c.relam = am.oid AND am.amname = 'columnar'
+      AND (c.relpersistence <> 't' OR c.relnamespace = pg_catalog.pg_my_temp_schema())
       AND pg_has_role(c.relowner, 'USAGE');
 COMMENT ON VIEW columnar.storage IS 'Columnar relation ID to storage ID mapping.';
 GRANT SELECT ON columnar.storage TO PUBLIC;
