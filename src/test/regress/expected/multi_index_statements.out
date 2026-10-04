@@ -136,6 +136,25 @@ CREATE INDEX lineitem_orderkey_index on public.nation(n_nationkey);
 ERROR:  relation "lineitem_orderkey_index" already exists
 CREATE INDEX IF NOT EXISTS lineitem_orderkey_index on public.nation(n_nationkey);
 NOTICE:  relation "lineitem_orderkey_index" already exists, skipping
+-- Verify that CREATE INDEX CONCURRENTLY IF NOT EXISTS doesn't invalidate existing index
+CREATE INDEX CONCURRENTLY lineitem_concurrent_if_not_exists_test ON public.lineitem (l_partkey);
+-- Verify the index is valid
+SELECT indisvalid FROM pg_index WHERE indexrelid = 'public.lineitem_concurrent_if_not_exists_test'::regclass;
+ indisvalid
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- Run the same command again with IF NOT EXISTS
+CREATE INDEX CONCURRENTLY IF NOT EXISTS lineitem_concurrent_if_not_exists_test ON public.lineitem (l_partkey);
+NOTICE:  relation "lineitem_concurrent_if_not_exists_test" already exists, skipping
+-- Verify the index is still valid (not invalidated)
+SELECT indisvalid FROM pg_index WHERE indexrelid = 'public.lineitem_concurrent_if_not_exists_test'::regclass;
+ indisvalid
+---------------------------------------------------------------------
+ t
+(1 row)
+
 -- Verify that we can create indexes concurrently
 CREATE INDEX CONCURRENTLY lineitem_concurrently_index ON public.lineitem (l_orderkey);
 -- Verify that no-name local CREATE INDEX CONCURRENTLY works
