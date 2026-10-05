@@ -2349,6 +2349,17 @@ FindCoordinatorNodeId(void)
 List *
 ReadDistNode(bool includeNodesFromOtherClusters)
 {
+	return ReadDistNodeWithSnapshot(includeNodesFromOtherClusters, NULL);
+}
+
+
+/*
+ * ReadDistNodeWithSnapshot is like ReadDistNode, but reads pg_dist_node using
+ * the given snapshot, or a fresh one if snapshot is NULL.
+ */
+List *
+ReadDistNodeWithSnapshot(bool includeNodesFromOtherClusters, Snapshot snapshot)
+{
 	ScanKeyData scanKey[1];
 	int scanKeyCount = 0;
 	List *workerNodeList = NIL;
@@ -2357,7 +2368,7 @@ ReadDistNode(bool includeNodesFromOtherClusters)
 
 	SysScanDesc scanDescriptor = systable_beginscan(pgDistNode,
 													InvalidOid, false,
-													NULL, scanKeyCount, scanKey);
+													snapshot, scanKeyCount, scanKey);
 
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistNode);
 
@@ -2422,14 +2433,39 @@ RemoveNodeFromCluster(char *nodeName, int32 nodePort)
 
 		/* reset local group id for the node to be removed */
 		char *updateLocalGroupIdCommand = LocalGroupIdUpdateCommand(0);
-		SendOptionalMetadataCommandListToWorkerInCoordinatedTransaction(
-			nodeName, nodePort, CurrentUserName(), list_make1(updateLocalGroupIdCommand));
+		bool groupIdReset =
+			SendOptionalMetadataCommandListToWorkerInCoordinatedTransaction(
+				nodeName, nodePort, CurrentUserName(),
+				list_make1(updateLocalGroupIdCommand));
+
+		/*
+		 * A removed node keeps running as a standalone node with group ID 0.
+		 * Also delete its copy of pg_dist_node, in the same remote transaction.
+		 * Otherwise it can still reach the remaining nodes, and its transaction
+		 * recovery would treat the coordinator's citus_0_ prepared transactions
+		 * as its own.
+		 *
+		 * Skip this if the entry points at this node, for example the
+		 * coordinator's own entry. The coordinator still needs its node list.
+		 */
+		if (groupIdReset && !IsWorkerTheCurrentNode(workerNode))
+		{
+			SendOptionalMetadataCommandListToWorkerInCoordinatedTransaction(
+				nodeName, nodePort, CurrentUserName(), NodeMetadataDropCommands());
+		}
 
 		/*
 		 * Secondary nodes are read-only, never 2PC is used.
 		 * Hence, no items can be inserted to pg_dist_transaction
 		 * for secondary nodes.
+		 *
+		 * Transaction recovery also deletes rows from pg_dist_transaction, so
+		 * take its lock to avoid both deleting the same row, which fails with
+		 * "tuple concurrently deleted". Take it after the pg_dist_node lock,
+		 * which other node operations hold while they may remove nodes in the
+		 * same transaction. Recovery never waits on that lock.
 		 */
+		LockTransactionRecovery(ShareUpdateExclusiveLock);
 		DeleteWorkerTransactions(workerNode);
 	}
 
