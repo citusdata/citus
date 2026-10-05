@@ -2342,15 +2342,16 @@ RegisterCitusConfigVariables(void)
 
 	DefineCustomIntVariable(
 		"citus.metadata_sync_set_batch_size",
-		gettext_noop("Sets the number of distributed objects whose per-object "
-					 "metadata is folded into a single set-based statement during "
-					 "metadata sync."),
-		gettext_noop("The cheap per-object metadata layers (pg_dist_shard, "
-					 "pg_dist_placement and pg_dist_object) are synced over the "
-					 "serial metadata connection by rendering each object's rows "
-					 "into a multi-row VALUES list fed to one set-based "
-					 "citus_internal_add_*_metadata statement, instead of one "
-					 "statement and one remote commit per object. This setting "
+		gettext_noop("Sets the number of objects (colocation groups, Citus tables, "
+					 "distributed objects or tenant schemas) whose metadata is "
+					 "folded into a single set-based statement during metadata "
+					 "sync."),
+		gettext_noop("The per-object metadata layers (pg_dist_colocation, "
+					 "pg_dist_partition, pg_dist_shard, pg_dist_placement, "
+					 "pg_dist_object and pg_dist_schema) are synced by rendering "
+					 "each object's rows into a multi-row VALUES list fed to one "
+					 "set-based citus_internal metadata statement per layer, "
+					 "instead of one statement per object. This setting "
 					 "bounds how many objects' rows are packed into each such "
 					 "statement. Larger values emit fewer, larger statements "
 					 "(peak coordinator memory stays bounded by the batch, which "
