@@ -337,6 +337,19 @@ ShouldMarkRelationDistributed(Oid relationId)
 	bool isObjectSupported = SupportedDependencyByCitus(relationAddress);
 	bool ownedByExtension = IsTableOwnedByExtension(relationId);
 	bool alreadyDistributed = IsObjectDistributed(relationAddress);
+
+	/* skip traversing the dependency graph below if a cheaper check already fails */
+	/*
+	* pgObject: Citus never marks pg objects as distributed
+	* isObjectSupported: Citus does not support propagation of some objects
+	* ownedByExtension: let extensions manage its own objects
+	* alreadyDistributed: most likely via earlier versions
+	*/
+	if (pgObject || !isObjectSupported || ownedByExtension || alreadyDistributed)
+	{
+		return false;
+	}
+
 	bool hasUnsupportedDependency =
 		DeferErrorIfAnyObjectHasUnsupportedDependency(
 			list_make1(relationAddress)) != NULL;
@@ -344,15 +357,10 @@ ShouldMarkRelationDistributed(Oid relationId)
 		DeferErrorIfCircularDependencyExists(relationAddress) != NULL;
 
 	/*
-	 * pgObject: Citus never marks pg objects as distributed
-	 * isObjectSupported: Citus does not support propagation of some objects
-	 * ownedByExtension: let extensions manage its own objects
-	 * alreadyDistributed: most likely via earlier versions
 	 * hasUnsupportedDependency: Citus doesn't know how to distribute its dependencies
 	 * hasCircularDependency: Citus cannot handle circular dependencies
 	 */
-	if (pgObject || !isObjectSupported || ownedByExtension || alreadyDistributed ||
-		hasUnsupportedDependency || hasCircularDependency)
+	if (hasUnsupportedDependency || hasCircularDependency)
 	{
 		return false;
 	}
