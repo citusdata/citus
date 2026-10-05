@@ -6,9 +6,13 @@
 -- and batches per-object metadata into set-based statements
 -- (citus.metadata_sync_set_batch_size).
 --
--- Each section removes worker_2, creates a small fixture, syncs the metadata
--- to worker_2 by adding it back in transactional mode, and then compares
+-- Sections 1 to 4 remove worker_2, create a small fixture, sync the metadata
+-- to worker_2 by adding it back in transactional mode, and then compare
 -- the metadata of the fixture on the coordinator and on worker_2.
+--
+-- Section 5 tests the allowed values of both settings and who can set them.
+--
+-- Section 6 tests the DEBUG1 messages logged at each metadata sync phase.
 --
 CREATE SCHEMA metadata_sync_batching_edge_cases;
 SET search_path TO metadata_sync_batching_edge_cases;
@@ -536,4 +540,76 @@ DROP TABLE msbe_mixed.extension_owned_table;
 -- see https://github.com/citusdata/citus/issues/6392.
 DROP TABLE msbe_mixed.enum_table, msbe_mixed.quoted_enum_table;
 DROP SCHEMA msbe_mixed, "msbe_mixed Quoted!", "msbe_mixed Tenant Quoted!" CASCADE;
+RESET client_min_messages;
+--
+-- Section 5: values outside of the allowed ranges, and who can set them.
+--
+-- citus.metadata_sync_cache_flush_interval must be between 0 and INT_MAX.
+SET citus.metadata_sync_cache_flush_interval TO -1;
+ERROR:  -1 is outside the valid range for parameter "citus.metadata_sync_cache_flush_interval" (0 .. 2147483647)
+SET citus.metadata_sync_cache_flush_interval TO 0;
+RESET citus.metadata_sync_cache_flush_interval;
+-- citus.metadata_sync_set_batch_size must be between 1 and 10000.
+SET citus.metadata_sync_set_batch_size TO 0;
+ERROR:  0 is outside the valid range for parameter "citus.metadata_sync_set_batch_size" (1 .. 10000)
+SET citus.metadata_sync_set_batch_size TO 10001;
+ERROR:  10001 is outside the valid range for parameter "citus.metadata_sync_set_batch_size" (1 .. 10000)
+SET citus.metadata_sync_set_batch_size TO 1;
+SET citus.metadata_sync_set_batch_size TO 10000;
+RESET citus.metadata_sync_set_batch_size;
+-- Any user can set citus.metadata_sync_cache_flush_interval, but only a
+-- superuser can set citus.metadata_sync_set_batch_size.
+CREATE ROLE metadata_sync_non_superuser;
+SET ROLE metadata_sync_non_superuser;
+SET citus.metadata_sync_cache_flush_interval TO 1;
+SET citus.metadata_sync_set_batch_size TO 1;
+ERROR:  permission denied to set parameter "citus.metadata_sync_set_batch_size"
+RESET ROLE;
+RESET citus.metadata_sync_cache_flush_interval;
+DROP ROLE metadata_sync_non_superuser;
+--
+-- Section 6: metadata sync logs a DEBUG1 message when it starts and when it
+-- finishes each of its phases.
+--
+-- We hide the notices that the workers send back (e.g. "schema ... already
+-- exists, skipping"), because they depend on which objects the earlier tests
+-- left behind.
+--
+SELECT citus_remove_node('localhost', :worker_2_port);
+ citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+ALTER SEQUENCE pg_catalog.pg_dist_groupid_seq RESTART :last_group_id;
+ALTER SEQUENCE pg_catalog.pg_dist_node_nodeid_seq RESTART :last_node_id;
+SET citus.worker_min_messages TO WARNING;
+SET client_min_messages TO DEBUG1;
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
+DEBUG:  metadata sync: starting node-wide objects
+DEBUG:  metadata sync: finished node-wide objects
+DEBUG:  metadata sync: starting shell table deletion
+DEBUG:  metadata sync: finished shell table deletion
+DEBUG:  metadata sync: starting metadata deletion
+DEBUG:  metadata sync: finished metadata deletion
+DEBUG:  metadata sync: starting dependency creation
+DEBUG:  metadata sync: finished dependency creation
+DEBUG:  metadata sync: starting colocation metadata
+DEBUG:  metadata sync: finished colocation metadata
+DEBUG:  metadata sync: starting dist table metadata
+DEBUG:  metadata sync: finished dist table metadata
+DEBUG:  metadata sync: starting dist object metadata
+DEBUG:  metadata sync: finished dist object metadata
+DEBUG:  metadata sync: starting tenant schema metadata
+DEBUG:  metadata sync: finished tenant schema metadata
+DEBUG:  metadata sync: starting inter-table relationship
+DEBUG:  metadata sync: finished inter-table relationship
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+RESET client_min_messages;
+RESET citus.worker_min_messages;
+SET client_min_messages TO WARNING;
 DROP SCHEMA metadata_sync_batching_edge_cases CASCADE;
