@@ -333,34 +333,24 @@ ShouldMarkRelationDistributed(Oid relationId)
 	ObjectAddress *relationAddress = palloc0(sizeof(ObjectAddress));
 	ObjectAddressSet(*relationAddress, RelationRelationId, relationId);
 
-	bool pgObject = (relationId < FirstNormalObjectId);
-	bool isObjectSupported = SupportedDependencyByCitus(relationAddress);
-	bool ownedByExtension = IsTableOwnedByExtension(relationId);
-	bool alreadyDistributed = IsObjectDistributed(relationAddress);
-
-	/* skip traversing the dependency graph below if a cheaper check already fails */
 	/*
-	* pgObject: Citus never marks pg objects as distributed
-	* isObjectSupported: Citus does not support propagation of some objects
-	* ownedByExtension: let extensions manage its own objects
-	* alreadyDistributed: most likely via earlier versions
-	*/
-	if (pgObject || !isObjectSupported || ownedByExtension || alreadyDistributed)
-	{
-		return false;
-	}
-
-	bool hasUnsupportedDependency =
-		DeferErrorIfAnyObjectHasUnsupportedDependency(
-			list_make1(relationAddress)) != NULL;
-	bool hasCircularDependency =
-		DeferErrorIfCircularDependencyExists(relationAddress) != NULL;
-
-	/*
-	 * hasUnsupportedDependency: Citus doesn't know how to distribute its dependencies
-	 * hasCircularDependency: Citus cannot handle circular dependencies
+	 * In order:
+	 * - Citus never marks pg objects as distributed
+	 * - Citus does not support propagation of some objects
+	 * - let extensions manage its own objects
+	 * - already distributed, most likely via earlier versions
+	 * - Citus doesn't know how to distribute its dependencies
+	 * - Citus cannot handle circular dependencies
+	 *
+	 * The last two traverse the dependency graph, so they are evaluated last.
 	 */
-	if (hasUnsupportedDependency || hasCircularDependency)
+	if (relationId < FirstNormalObjectId ||
+		!SupportedDependencyByCitus(relationAddress) ||
+		IsTableOwnedByExtension(relationId) ||
+		IsObjectDistributed(relationAddress) ||
+		DeferErrorIfAnyObjectHasUnsupportedDependency(
+			list_make1(relationAddress)) != NULL ||
+		DeferErrorIfCircularDependencyExists(relationAddress) != NULL)
 	{
 		return false;
 	}
