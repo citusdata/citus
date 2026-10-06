@@ -626,15 +626,37 @@ MarkExistingObjectDependenciesDistributedIfSupported()
 	/* resolve dependencies of the objects in pg_dist_object*/
 	List *distributedObjectAddressList = GetDistributedObjectAddressList();
 
+	/*
+	 * Resolving dependencies allocates a lot, so we use a per-object memory
+	 * context and only keep copies of the resulting addresses. Otherwise memory
+	 * usage grows with the number of distributed objects.
+	 */
+	MemoryContext perObjectContext =
+		AllocSetContextCreate(CurrentMemoryContext,
+							  "MarkExistingObjectDependenciesDistributed",
+							  ALLOCSET_DEFAULT_SIZES);
+
 	ObjectAddress *distributedObjectAddress = NULL;
 	foreach_declared_ptr(distributedObjectAddress, distributedObjectAddressList)
 	{
+		MemoryContext oldContext = MemoryContextSwitchTo(perObjectContext);
 		List *distributableDependencyObjectAddresses =
 			GetDistributableDependenciesForObject(distributedObjectAddress);
+		MemoryContextSwitchTo(oldContext);
 
-		resultingObjectAddresses = list_concat(resultingObjectAddresses,
-											   distributableDependencyObjectAddresses);
+		ObjectAddress *dependency = NULL;
+		foreach_declared_ptr(dependency, distributableDependencyObjectAddresses)
+		{
+			ObjectAddress *dependencyCopy = palloc(sizeof(ObjectAddress));
+			*dependencyCopy = *dependency;
+			resultingObjectAddresses = lappend(resultingObjectAddresses,
+											   dependencyCopy);
+		}
+
+		MemoryContextReset(perObjectContext);
 	}
+
+	MemoryContextDelete(perObjectContext);
 
 	/* remove duplicates from object addresses list for efficiency */
 	List *uniqueObjectAddresses = GetUniqueDependenciesList(resultingObjectAddresses);
