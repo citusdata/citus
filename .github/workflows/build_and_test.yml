@@ -473,7 +473,6 @@ jobs:
       matrix: ${{ fromJson(needs.prepare_parallelization_matrix_32.outputs.json) }}
     steps:
     - uses: actions/checkout@v5
-    - uses: actions/download-artifact@v5
     - uses: "./.github/actions/setup_extension"
     - name: Run minimal tests
       run: |-

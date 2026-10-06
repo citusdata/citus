@@ -461,7 +461,7 @@ DROP ROLE metadata_sync_non_superuser;
 -- Section 6: metadata sync logs a DEBUG1 message when it starts and when it
 -- finishes each of its phases.
 --
--- We hide the notices that the workers send back (e.g. "schema ... already
+-- We hide messages that the workers send back (e.g. "schema ... already
 -- exists, skipping"), because they depend on which objects the earlier tests
 -- left behind.
 --
@@ -469,7 +469,7 @@ SELECT citus_remove_node('localhost', :worker_2_port);
 
 ALTER SEQUENCE pg_catalog.pg_dist_groupid_seq RESTART :last_group_id;
 ALTER SEQUENCE pg_catalog.pg_dist_node_nodeid_seq RESTART :last_node_id;
-SET citus.worker_min_messages TO WARNING;
+SET citus.worker_min_messages TO ERROR;
 SET client_min_messages TO DEBUG1;
 SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
 RESET client_min_messages;
