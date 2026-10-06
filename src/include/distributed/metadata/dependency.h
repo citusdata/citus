@@ -30,13 +30,15 @@ extern bool ErrorOrWarnIfAnyObjectHasUnsupportedDependency(List *objectAddresses
 extern DeferredErrorMessage * DeferErrorIfAnyObjectHasUnsupportedDependency(const List *
 																			objectAddresses);
 extern List * GetAllCitusDependedDependenciesForObject(const ObjectAddress *target);
-extern List * OrderObjectAddressListInDependencyOrder(List *objectAddressList);
+extern List * OrderObjectAddressListInDependencyOrder(List *objectAddressList,
+													  bool flushCaches);
 extern bool SupportedDependencyByCitus(const ObjectAddress *address);
 extern List * GetPgDependTuplesForDependingObjects(Oid targetObjectClassId,
 												   Oid targetObjectId);
 extern List * GetDependingViews(Oid relationId);
 extern Oid GetDependingView(Form_pg_depend pg_depend);
 extern List * FilterObjectAddressListByPredicate(List *objectAddressList,
-												 AddressPredicate predicate);
+												 AddressPredicate predicate,
+												 bool flushCaches);
 
 #endif /* CITUS_DEPENDENCY_H */
