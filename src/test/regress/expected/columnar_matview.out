@@ -26,27 +26,27 @@ SELECT * FROM t_view a ORDER BY a;
 -- show columnar options for materialized view
 SELECT * FROM columnar.options
 WHERE relation = 't_view'::regclass;
- relation | chunk_group_row_limit | stripe_row_limit | compression | compression_level
+ relation | chunk_group_row_limit | chunk_group_size_limit | stripe_row_limit | compression | compression_level
 ---------------------------------------------------------------------
- t_view   |                 10000 |           150000 | none        |                 3
+ t_view   |                 10000 |                    256 |           150000 | none        |                 3
 (1 row)
 
 -- show we can set options on a materialized view
 ALTER TABLE t_view SET (columnar.compression = pglz);
 SELECT * FROM columnar.options
 WHERE relation = 't_view'::regclass;
- relation | chunk_group_row_limit | stripe_row_limit | compression | compression_level
+ relation | chunk_group_row_limit | chunk_group_size_limit | stripe_row_limit | compression | compression_level
 ---------------------------------------------------------------------
- t_view   |                 10000 |           150000 | pglz        |                 3
+ t_view   |                 10000 |                    256 |           150000 | pglz        |                 3
 (1 row)
 
 REFRESH MATERIALIZED VIEW t_view;
 -- verify options have not been changed
 SELECT * FROM columnar.options
 WHERE relation = 't_view'::regclass;
- relation | chunk_group_row_limit | stripe_row_limit | compression | compression_level
+ relation | chunk_group_row_limit | chunk_group_size_limit | stripe_row_limit | compression | compression_level
 ---------------------------------------------------------------------
- t_view   |                 10000 |           150000 | pglz        |                 3
+ t_view   |                 10000 |                    256 |           150000 | pglz        |                 3
 (1 row)
 
 SELECT * FROM t_view a ORDER BY a;

@@ -37,6 +37,13 @@ ALTER TABLE table_options SET (columnar.stripe_row_limit = 4000);
 SELECT * FROM columnar.options
 WHERE relation = 'table_options'::regclass;
 
+-- test changing the chunk_group_size_limit
+ALTER TABLE table_options SET (columnar.chunk_group_size_limit = 512);
+
+-- show table_options settings
+SELECT * FROM columnar.options
+WHERE relation = 'table_options'::regclass;
+
 -- VACUUM FULL creates a new table, make sure it copies settings from the table you are vacuuming
 VACUUM FULL table_options;
 
@@ -48,6 +55,7 @@ WHERE relation = 'table_options'::regclass;
 ALTER TABLE table_options SET
   (columnar.stripe_row_limit = 8000,
    columnar.chunk_group_row_limit = 4000,
+   columnar.chunk_group_size_limit = 128,
    columnar.compression = none,
    columnar.compression_level = 7);
 
@@ -81,6 +89,7 @@ WHERE relation = 'table_options'::regclass;
 -- reset settings one by one to the version of the GUC's
 SET columnar.chunk_group_row_limit TO 1000;
 SET columnar.stripe_row_limit TO 10000;
+SET columnar.chunk_group_size_limit TO 640;
 SET columnar.compression TO 'pglz';
 SET columnar.compression_level TO 11;
 
@@ -95,6 +104,12 @@ SELECT * FROM columnar.options
 WHERE relation = 'table_options'::regclass;
 
 ALTER TABLE table_options RESET (columnar.stripe_row_limit);
+
+-- show table_options settings
+SELECT * FROM columnar.options
+WHERE relation = 'table_options'::regclass;
+
+ALTER TABLE table_options RESET (columnar.chunk_group_size_limit);
 
 -- show table_options settings
 SELECT * FROM columnar.options
@@ -115,6 +130,7 @@ WHERE relation = 'table_options'::regclass;
 -- verify resetting all settings at once work
 SET columnar.chunk_group_row_limit TO 10000;
 SET columnar.stripe_row_limit TO 100000;
+SET columnar.chunk_group_size_limit TO 768;
 SET columnar.compression TO 'none';
 SET columnar.compression_level TO 13;
 
@@ -125,6 +141,7 @@ WHERE relation = 'table_options'::regclass;
 ALTER TABLE table_options RESET
   (columnar.chunk_group_row_limit,
    columnar.stripe_row_limit,
+   columnar.chunk_group_size_limit,
    columnar.compression,
    columnar.compression_level);
 
@@ -160,6 +177,8 @@ ALTER TABLE table_options SET (columnar.stripe_row_limit = 10000001);
 ALTER TABLE table_options SET (columnar.chunk_group_row_limit = 999);
 ALTER TABLE table_options SET (columnar.chunk_group_row_limit = 100001);
 ALTER TABLE table_options SET (columnar.chunk_group_row_limit = 0);
+ALTER TABLE table_options SET (columnar.chunk_group_size_limit = 1025);
+ALTER TABLE table_options SET (columnar.chunk_group_size_limit = 0);
 INSERT INTO table_options VALUES (1);
 
 -- multiple SET/RESET clauses
