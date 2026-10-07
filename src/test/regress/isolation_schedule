@@ -34,6 +34,8 @@ test: isolation_drop_shards
 test: isolation_copy_placement_vs_modification
 test: isolation_insert_vs_vacuum
 test: isolation_transaction_recovery
+test: isolation_recovery_group_id_change
+test: isolation_node_removal_recovery
 test: isolation_vacuum_skip_locked
 test: isolation_progress_monitoring
 test: isolation_dump_local_wait_edges
