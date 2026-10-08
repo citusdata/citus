@@ -89,7 +89,19 @@ versions: the `uncrustify` release from `STYLEGUIDE.md`, and `citus_indent` from
 
 ## 3. Run `make reindent`
 
-Return to the checked-out Citus worktree and run:
+Return to the checked-out Citus worktree. Before running anything, make sure it has **no**
+uncommitted changes to tracked files, staged or unstaged:
+
+```bash
+git status --porcelain --untracked-files=no
+```
+
+If that prints anything, stop and report it. Do not stash, reset, or commit those changes
+yourself: they belong to the caller, and mixing them into the reindent commit would hide unrelated
+edits inside a "style-only" commit. Pre-existing untracked files are fine; step 4 never stages
+them.
+
+Then run:
 
 ```bash
 make reindent
@@ -114,12 +126,19 @@ restore only the changes made by this reindent run, and rerun with the correct t
 
 If there is no diff, report that `make reindent` made no changes and do not create an empty commit.
 
-If the diff contains only the intended style corrections:
+If the diff contains only the intended style corrections, stage **only modifications to tracked
+files** and commit:
 
 ```bash
-git add -A
+git add -u
 git commit -m "Apply make reindent"
 ```
+
+Do not use `git add -A` or `git add .`: those also stage untracked files that have nothing to do
+with this run (local notes, build outputs, scratch scripts). Because step 3 started from a tree
+with no tracked changes, everything `git add -u` stages was produced by this reindent run. The
+fixers only rewrite files that are already tracked, so if `git status --short` shows a **new**
+untracked file after the run, do not add it. Report it instead.
 
 Stop after the local commit. **Do not push.** Pushing (and where the branch lives, and what
 happens to CI afterward) is entirely the caller's decision — only push if separately instructed to.

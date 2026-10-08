@@ -29,15 +29,23 @@ both work) so you can print the final report without having to re-look-up anythi
 For each PR, in order:
 
 ### 1. Skip already-merged PRs
-`gh pr view <pr> --json state,isDraft,reviewDecision,mergeStateStatus,baseRefName,headRefOid,title,body`
+`gh pr view <pr> --json state,isDraft,reviewDecision,latestReviews,mergeStateStatus,baseRefName,headRefOid,title,body`
 
 - `state == "MERGED"` → record outcome `skipped (already merged)`, move to the next PR.
 
 ### 2. Give up if draft or not approved
 - `isDraft == true` → record outcome `given up (draft)`, move to the next PR.
-- `reviewDecision != "APPROVED"` → record outcome `given up (not approved)`, move to the next PR.
-  `reviewDecision` is `APPROVED`, `CHANGES_REQUESTED`, `REVIEW_REQUIRED`, or empty (empty means the
-  repo asks for no review at all). Treat every value other than `APPROVED` as not approved.
+- Then decide by `reviewDecision`. It is one of `APPROVED`, `CHANGES_REQUESTED`,
+  `REVIEW_REQUIRED`, or empty. Handle each value as follows:
+  - `APPROVED` → approved, continue to step 3.
+  - `CHANGES_REQUESTED` → record outcome `given up (changes requested)`, move to the next PR.
+  - `REVIEW_REQUIRED` → record outcome `given up (not approved)`, move to the next PR.
+  - Empty → the base branch does not require reviews (this is the case for the `release-*`
+    branches here). GitHub then reports empty no matter what reviewers did, even if someone
+    requested changes. So look at `latestReviews` (the latest review from each reviewer) yourself:
+    - If any entry has `state == "CHANGES_REQUESTED"` → record outcome
+      `given up (changes requested)`, move to the next PR.
+    - Otherwise → acceptable, continue to step 3. This includes a PR that has no reviews at all.
 
   You only need to test this once, here. Pushing to a PR does not dismiss an existing approval in
   this repo, so an approval you saw in this step is still valid later in the loop.
