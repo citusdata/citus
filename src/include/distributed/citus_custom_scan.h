@@ -59,5 +59,6 @@ extern bool IsCitusPlan(Plan *plan);
 extern bool IsCitusCustomScan(Plan *plan);
 
 extern void SetJobColocationId(Job *job);
+extern void EnsureAnchorShardsInJobExist(Job *job);
 
 #endif /* CITUS_CUSTOM_SCAN_H */
