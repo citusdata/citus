@@ -1911,8 +1911,9 @@ ColumnarScanNext(ColumnarScanState *columnarScanState)
 
 	if (scandesc == NULL)
 	{
-		/* the columnar access method does not use the flags, they are specific to heap */
-		uint32 flags = 0;
+		/* same as what table_beginscan() would use for a sequential scan */
+		uint32 flags = SO_TYPE_SEQSCAN | SO_ALLOW_STRAT | SO_ALLOW_SYNC |
+					   SO_ALLOW_PAGEMODE;
 		Bitmapset *attr_needed = ColumnarAttrNeeded(&node->ss);
 
 		/*

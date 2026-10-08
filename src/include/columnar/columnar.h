@@ -17,6 +17,7 @@
 
 #include "lib/stringinfo.h"
 #include "nodes/parsenodes.h"
+#include "storage/bufmgr.h"
 #include "storage/bufpage.h"
 #include "storage/lockdefs.h"
 #include "storage/relfilelocator.h"
@@ -254,7 +255,8 @@ extern ColumnarReadState * ColumnarBeginRead(Relation relation,
 											 List *qualConditions,
 											 MemoryContext scanContext,
 											 Snapshot snaphot,
-											 bool randomAccess);
+											 bool randomAccess,
+											 BufferAccessStrategy strategy);
 extern void ColumnarReadFlushPendingWrites(ColumnarReadState *readState);
 extern void ColumnarEndRead(ColumnarReadState *state);
 extern void ColumnarResetRead(ColumnarReadState *readState);
