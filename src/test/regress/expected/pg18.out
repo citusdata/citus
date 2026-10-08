@@ -1567,8 +1567,8 @@ SELECT * FROM contacts ORDER BY contact_id;
 -- ALTER TABLE .. ALTER CONSTRAINT is not supported in Citus,
 -- so the following command should fail
 ALTER TABLE contacts ALTER CONSTRAINT fk_customer ENFORCED;
-ERROR:  alter table command is currently unsupported
-DETAIL:  Only ADD|DROP COLUMN, SET|DROP NOT NULL, SET|DROP DEFAULT, ADD|DROP|VALIDATE CONSTRAINT, SET (), RESET (), ENABLE|DISABLE|NO FORCE|FORCE ROW LEVEL SECURITY, ATTACH|DETACH PARTITION and TYPE subcommands are supported.
+ERROR:  ALTER TABLE ... ALTER CONSTRAINT commands are currently unsupported
+DETAIL:  Citus does not propagate constraint property changes to shards.
 -- PG18 Feature: ENFORCED / NOT ENFORCED check constraints
 -- PG18 commit: https://github.com/postgres/postgres/commit/ca87c415e
 -- In Citus, CHECK constraints are propagated on promoting a postgres table
