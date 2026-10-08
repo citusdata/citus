@@ -85,6 +85,9 @@ typedef struct ColumnarScanDescData
 	MemoryContext scanContext;
 	Bitmapset *attr_needed;
 	List *scanQual;
+
+	/* buffer access strategy for reading column data, NULL if not used */
+	BufferAccessStrategy strategy;
 } ColumnarScanDescData;
 
 
@@ -111,6 +114,8 @@ static ProcessUtility_hook_type PrevProcessUtilityHook = NULL;
 
 /* forward declaration for static functions */
 static MemoryContext CreateColumnarScanMemoryContext(void);
+static BufferAccessStrategy ColumnarScanAccessStrategy(Relation relation,
+													   uint32 flags);
 static void ColumnarTableDropHook(Oid tgid);
 static void ColumnarTriggerCreateHook(Oid tgid);
 static void ColumnarTableAMObjectAccessHook(ObjectAccessType access, Oid classId,
@@ -241,6 +246,7 @@ columnar_beginscan_extended(Relation relation, Snapshot snapshot,
 	scan->attr_needed = bms_copy(attr_needed);
 	scan->scanQual = copyObject(scanQual);
 	scan->scanContext = scanContext;
+	scan->strategy = ColumnarScanAccessStrategy(relation, flags);
 
 	if (PendingWritesInUpperTransactions(relfilenumber, GetCurrentSubTransactionId()))
 	{
@@ -267,20 +273,48 @@ CreateColumnarScanMemoryContext(void)
 
 
 /*
+ * ColumnarScanAccessStrategy returns a BAS_BULKREAD buffer access strategy if
+ * the scan described by flags should read the relation through a small ring
+ * of buffers instead of the whole shared buffer pool, or NULL otherwise.
+ *
+ * This follows heap's initscan(): only scans that allow a strategy, and only
+ * when the relation is bigger than a quarter of shared_buffers, so that a
+ * single large scan can't evict the rest of the buffer cache while small
+ * tables can still be cached. ANALYZE qualifies as well because, unlike heap,
+ * columnar ANALYZE reads the whole table (columnar_scan_analyze_next_tuple).
+ *
+ * The caller owns the returned strategy and should free it with
+ * FreeAccessStrategy() once the scan is done.
+ */
+static BufferAccessStrategy
+ColumnarScanAccessStrategy(Relation relation, uint32 flags)
+{
+	if ((flags & (SO_ALLOW_STRAT | SO_TYPE_ANALYZE)) == 0 ||
+		RelationUsesLocalBuffers(relation) ||
+		RelationGetNumberOfBlocks(relation) <= (BlockNumber) (NBuffers / 4))
+	{
+		return NULL;
+	}
+
+	return GetAccessStrategy(BAS_BULKREAD);
+}
+
+
+/*
  * init_columnar_read_state initializes a column store table read and returns the
  * state.
  */
 static ColumnarReadState *
 init_columnar_read_state(Relation relation, TupleDesc tupdesc, Bitmapset *attr_needed,
 						 List *scanQual, MemoryContext scanContext, Snapshot snapshot,
-						 bool randomAccess)
+						 bool randomAccess, BufferAccessStrategy strategy)
 {
 	MemoryContext oldContext = MemoryContextSwitchTo(scanContext);
 
 	List *neededColumnList = NeededColumnsList(tupdesc, attr_needed);
 	ColumnarReadState *readState = ColumnarBeginRead(relation, tupdesc, neededColumnList,
 													 scanQual, scanContext, snapshot,
-													 randomAccess);
+													 randomAccess, strategy);
 
 	MemoryContextSwitchTo(oldContext);
 
@@ -296,6 +330,12 @@ columnar_endscan(TableScanDesc sscan)
 	{
 		ColumnarEndRead(scan->cs_readState);
 		scan->cs_readState = NULL;
+	}
+
+	if (scan->strategy != NULL)
+	{
+		FreeAccessStrategy(scan->strategy);
+		scan->strategy = NULL;
 	}
 
 	if (scan->cs_base.rs_flags & SO_TEMP_SNAPSHOT)
@@ -336,7 +376,7 @@ columnar_getnextslot(TableScanDesc sscan, ScanDirection direction, TupleTableSlo
 			init_columnar_read_state(scan->cs_base.rs_rd, slot->tts_tupleDescriptor,
 									 scan->attr_needed, scan->scanQual,
 									 scan->scanContext, scan->cs_base.rs_snapshot,
-									 randomAccess);
+									 randomAccess, scan->strategy);
 	}
 
 	ExecClearTuple(slot);
@@ -532,11 +572,15 @@ columnar_index_fetch_tuple(struct IndexFetchTableData *sscan,
 		List *scanQual = NIL;
 
 		bool randomAccess = true;
+
+		/* like heap, index fetches don't use a buffer access strategy */
+		BufferAccessStrategy strategy = NULL;
 		scan->cs_readState = init_columnar_read_state(columnarRelation,
 													  slot->tts_tupleDescriptor,
 													  attr_needed, scanQual,
 													  scan->scanContext,
-													  snapshot, randomAccess);
+													  snapshot, randomAccess,
+													  strategy);
 	}
 
 	uint64 rowNumber = tid_to_row_number(*tid);
@@ -1021,10 +1065,14 @@ columnar_relation_copy_for_cluster(Relation OldHeap, Relation NewHeap,
 
 	MemoryContext scanContext = CreateColumnarScanMemoryContext();
 	bool randomAccess = false;
+
+	/* heap's copy_for_cluster reads through table_beginscan(), which allows it */
+	BufferAccessStrategy strategy = ColumnarScanAccessStrategy(OldHeap,
+															   SO_ALLOW_STRAT);
 	ColumnarReadState *readState = init_columnar_read_state(OldHeap, sourceDesc,
 															attr_needed, scanQual,
 															scanContext, snapshot,
-															randomAccess);
+															randomAccess, strategy);
 
 	Datum *values = palloc0(sourceDesc->natts * sizeof(Datum));
 	bool *nulls = palloc0(sourceDesc->natts * sizeof(bool));
@@ -1042,6 +1090,11 @@ columnar_relation_copy_for_cluster(Relation OldHeap, Relation NewHeap,
 
 	ColumnarEndWrite(writeState);
 	ColumnarEndRead(readState);
+
+	if (strategy != NULL)
+	{
+		FreeAccessStrategy(strategy);
+	}
 }
 
 
