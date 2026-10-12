@@ -60,7 +60,7 @@ static TransactionNode * GetOrCreateTransactionNode(HTAB *adjacencyList,
 													transactionId);
 static uint32 DistributedTransactionIdHash(const void *key, Size keysize);
 static int DistributedTransactionIdCompare(const void *a, const void *b, Size keysize);
-static void LogCancellingBackend(TransactionNode *transactionNode);
+static void LogCancellingBackend(TransactionNode *transactionNode, bool cancelled);
 static void LogTransactionNode(TransactionNode *transactionNode);
 static void LogDistributedDeadlockDebugMessage(const char *errorMessage);
 
@@ -208,8 +208,9 @@ CheckForDistributedDeadlocks(void)
 			/* we found the deadlock and its associated proc exists */
 			if (youngestAliveTransaction)
 			{
-				CancelTransactionDueToDeadlock(youngestAliveTransaction->initiatorProc);
-				LogCancellingBackend(youngestAliveTransaction);
+				bool cancelled = CancelTransactionDueToDeadlock(
+					youngestAliveTransaction->initiatorProc);
+				LogCancellingBackend(youngestAliveTransaction, cancelled);
 
 				hash_seq_term(&status);
 
@@ -582,11 +583,13 @@ DistributedTransactionIdCompare(const void *a, const void *b, Size keysize)
 
 /*
  * LogCancellingBackend should only be called when a distributed transaction's
- * backend is cancelled due to distributed deadlocks. It sends which transaction
- * is cancelled and its corresponding pid to the log.
+ * backend is chosen to be cancelled due to distributed deadlocks. It sends which
+ * transaction is cancelled and its corresponding pid to the log, or that it was
+ * not signalled because it is no longer in that transaction or is still
+ * unwinding from a previous cancellation.
  */
 static void
-LogCancellingBackend(TransactionNode *transactionNode)
+LogCancellingBackend(TransactionNode *transactionNode, bool cancelled)
 {
 	if (!LogDistributedDeadlockDetection)
 	{
@@ -595,9 +598,11 @@ LogCancellingBackend(TransactionNode *transactionNode)
 
 	StringInfo logMessage = makeStringInfo();
 
-	appendStringInfo(logMessage, "Cancelling the following backend "
+	appendStringInfo(logMessage, "%s the following backend "
 								 "to resolve distributed deadlock "
 								 "(transaction number = " UINT64_FORMAT ", pid = %d)",
+					 cancelled ? "Cancelling" :
+					 "Not cancelling (already signalled or no longer in the transaction)",
 					 transactionNode->transactionId.transactionNumber,
 					 transactionNode->initiatorProc->pid);
 
