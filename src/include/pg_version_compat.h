@@ -693,7 +693,12 @@ getStxstattarget_compat(HeapTuple tup)
 
 #define matched_compat(a) (a->matchKind == MERGE_WHEN_MATCHED)
 
-#define getProcNo_compat(a) (a->vxid.procNumber)
+/*
+ * Returns the PGPROC slot index, like pgprocno did before PG17. We cannot use
+ * vxid.procNumber: it is INVALID_PROC_NUMBER (-1) for auxiliary processes
+ * and holds the preparing backend's number for prepared transaction procs.
+ */
+#define getProcNo_compat(a) (GetNumberFromPGProc(a))
 #define getLxid_compat(a) (a->vxid.lxid)
 
 #define SetListCellPtr(a, b) ((a)->ptr_value = (b))
