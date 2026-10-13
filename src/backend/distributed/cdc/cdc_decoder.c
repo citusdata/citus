@@ -268,8 +268,10 @@ TranslateAndPublishRelationForCDC(LogicalDecodingContext *ctx, ReorderBufferTXN 
 	 * they were allocated from its own tuple context. Restoring the original
 	 * pointers after publishing keeps each allocator freeing only what it owns.
 	 */
+#if PG_VERSION_NUM >= PG_VERSION_17
 	HeapTuple originalNewTuple = change->data.tp.newtuple;
 	HeapTuple originalOldTuple = change->data.tp.oldtuple;
+#endif
 
 	PG_TRY();
 	{
@@ -294,6 +296,7 @@ TranslateAndPublishRelationForCDC(LogicalDecodingContext *ctx, ReorderBufferTXN 
 		 * This also has to happen when the callback throws, because the reorder
 		 * buffer cleans the transaction up before the error propagates further.
 		 */
+#if PG_VERSION_NUM >= PG_VERSION_17
 		if (change->data.tp.newtuple != originalNewTuple &&
 			change->data.tp.newtuple != NULL)
 		{
@@ -307,6 +310,7 @@ TranslateAndPublishRelationForCDC(LogicalDecodingContext *ctx, ReorderBufferTXN 
 			heap_freetuple(change->data.tp.oldtuple);
 			change->data.tp.oldtuple = originalOldTuple;
 		}
+#endif
 
 		RelationClose(targetRelation);
 	}
