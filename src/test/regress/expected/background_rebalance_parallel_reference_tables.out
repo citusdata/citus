@@ -206,23 +206,11 @@ SELECT * FROM get_rebalance_table_shards_plan() ORDER BY shardid;
  table2_colg3 | 85674021 |          0 | localhost  |      57638 | localhost  |      57639
 (12 rows)
 
-SET client_min_messages TO DEBUG1;
+SET client_min_messages TO NOTICE;
 SELECT citus_rebalance_start AS job_id from citus_rebalance_start(
     shard_transfer_mode := 'force_logical',
     parallel_transfer_colocated_shards := true,
     parallel_transfer_reference_tables := true) \gset
-DEBUG:  skipping child tables for relation named: table1_colg1
-DEBUG:  skipping child tables for relation named: table1_colg1
-DEBUG:  skipping child tables for relation named: table1_colg1
-DEBUG:  skipping child tables for relation named: table1_colg1
-DEBUG:  skipping child tables for relation named: table1_colg2
-DEBUG:  skipping child tables for relation named: table1_colg2
-DEBUG:  skipping child tables for relation named: table1_colg2
-DEBUG:  skipping child tables for relation named: table1_colg2
-DEBUG:  skipping child tables for relation named: table1_colg3
-DEBUG:  skipping child tables for relation named: table1_colg3
-DEBUG:  skipping child tables for relation named: table1_colg3
-DEBUG:  skipping child tables for relation named: table1_colg3
 NOTICE:  Scheduled 6 moves as job xxx
 DETAIL:  Rebalance scheduled as background job
 HINT:  To monitor progress, run: SELECT * FROM citus_rebalance_status();
@@ -269,9 +257,12 @@ SELECT * from pg_dist_background_task_depend ORDER BY job_id, task_id, depends_o
   17777 |    1013 |       1007
 (24 rows)
 
+-- Omit unstable move task IDs; reference IDs distinguish copies and relationship tasks.
 -- Temporary hack to eliminate SET application name from command until we get the
 -- background job enhancement done.
-SELECT D.task_id,
+SELECT CASE WHEN (SELECT T.command LIKE '%pg_catalog.citus_move_shard_placement%'
+                  FROM pg_dist_background_task T WHERE T.task_id = D.task_id)
+            THEN NULL ELSE D.task_id END AS task_id,
        (SELECT
         CASE
             WHEN T.command LIKE '%citus_internal.citus_internal_copy_single_shard_placement%' THEN
@@ -293,7 +284,7 @@ SELECT D.task_id,
             T.command
        END
        FROM pg_dist_background_task T WHERE T.task_id = D.depends_on)
-FROM pg_dist_background_task_depend D  WHERE job_id in (:job_id) ORDER BY D.task_id, D.depends_on ASC;
+FROM pg_dist_background_task_depend D  WHERE job_id in (:job_id) ORDER BY 1, 2, 3, 4;
  task_id | command  | depends_on | command
 ---------------------------------------------------------------------
     1001 | 85674025 |       1000 | 85674024
@@ -308,18 +299,18 @@ FROM pg_dist_background_task_depend D  WHERE job_id in (:job_id) ORDER BY D.task
     1007 | 85674026 |       1004 | 85674024
     1007 | 85674026 |       1005 | 85674025
     1007 | 85674026 |       1006 | 85674026
-    1008 | 85674001 |       1003 | 85674026
-    1008 | 85674001 |       1007 | 85674026
-    1009 | 85674000 |       1003 | 85674026
-    1009 | 85674000 |       1007 | 85674026
-    1010 | 85674009 |       1003 | 85674026
-    1010 | 85674009 |       1007 | 85674026
-    1011 | 85674008 |       1003 | 85674026
-    1011 | 85674008 |       1007 | 85674026
-    1012 | 85674017 |       1003 | 85674026
-    1012 | 85674017 |       1007 | 85674026
-    1013 | 85674016 |       1003 | 85674026
-    1013 | 85674016 |       1007 | 85674026
+         | 85674000 |       1003 | 85674026
+         | 85674000 |       1007 | 85674026
+         | 85674001 |       1003 | 85674026
+         | 85674001 |       1007 | 85674026
+         | 85674008 |       1003 | 85674026
+         | 85674008 |       1007 | 85674026
+         | 85674009 |       1003 | 85674026
+         | 85674009 |       1007 | 85674026
+         | 85674016 |       1003 | 85674026
+         | 85674016 |       1007 | 85674026
+         | 85674017 |       1003 | 85674026
+         | 85674017 |       1007 | 85674026
 (24 rows)
 
 TRUNCATE pg_dist_background_job CASCADE;
@@ -395,23 +386,11 @@ SELECT * FROM get_rebalance_table_shards_plan() ORDER BY shardid;
  table2_colg3 | 85674021 |          0 | localhost  |      57639 | localhost  |      57642
 (8 rows)
 
-SET client_min_messages TO DEBUG1;
+SET client_min_messages TO NOTICE;
 SELECT citus_rebalance_start AS job_id from citus_rebalance_start(
     shard_transfer_mode := 'block_writes',
     parallel_transfer_colocated_shards := true,
     parallel_transfer_reference_tables := true) \gset
-DEBUG:  skipping child tables for relation named: table1_colg3
-DEBUG:  skipping child tables for relation named: table1_colg1
-DEBUG:  skipping child tables for relation named: table1_colg1
-DEBUG:  skipping child tables for relation named: table1_colg1
-DEBUG:  skipping child tables for relation named: table1_colg2
-DEBUG:  skipping child tables for relation named: table1_colg3
-DEBUG:  skipping child tables for relation named: table1_colg2
-DEBUG:  skipping child tables for relation named: table1_colg2
-DEBUG:  skipping child tables for relation named: table1_colg3
-DEBUG:  skipping child tables for relation named: table1_colg3
-DEBUG:  skipping child tables for relation named: table1_colg1
-DEBUG:  skipping child tables for relation named: table1_colg2
 NOTICE:  Scheduled 4 moves as job xxx
 DETAIL:  Rebalance scheduled as background job
 HINT:  To monitor progress, run: SELECT * FROM citus_rebalance_status();
@@ -448,9 +427,12 @@ SELECT * from pg_dist_background_task_depend ORDER BY job_id, task_id, depends_o
   17778 |    1025 |       1021
 (20 rows)
 
+-- Omit unstable move task IDs; reference IDs distinguish copies and relationship tasks.
 -- Temporary hack to eliminate SET application name from command until we get the
 -- background job enhancement done.
-SELECT D.task_id,
+SELECT CASE WHEN (SELECT T.command LIKE '%pg_catalog.citus_move_shard_placement%'
+                  FROM pg_dist_background_task T WHERE T.task_id = D.task_id)
+            THEN NULL ELSE D.task_id END AS task_id,
        (SELECT
         CASE
             WHEN T.command LIKE '%citus_internal.citus_internal_copy_single_shard_placement%' THEN
@@ -472,7 +454,7 @@ SELECT D.task_id,
             T.command
        END
        FROM pg_dist_background_task T WHERE T.task_id = D.depends_on)
-FROM pg_dist_background_task_depend D  WHERE job_id in (:job_id) ORDER BY D.task_id, D.depends_on ASC;
+FROM pg_dist_background_task_depend D  WHERE job_id in (:job_id) ORDER BY 1, 2, 3, 4;
  task_id | command  | depends_on | command
 ---------------------------------------------------------------------
     1015 | 85674025 |       1014 | 85674024
@@ -487,14 +469,14 @@ FROM pg_dist_background_task_depend D  WHERE job_id in (:job_id) ORDER BY D.task
     1021 | 85674026 |       1018 | 85674024
     1021 | 85674026 |       1019 | 85674025
     1021 | 85674026 |       1020 | 85674026
-    1022 | 85674016 |       1017 | 85674026
-    1022 | 85674016 |       1021 | 85674026
-    1023 | 85674017 |       1017 | 85674026
-    1023 | 85674017 |       1021 | 85674026
-    1024 | 85674003 |       1017 | 85674026
-    1024 | 85674003 |       1021 | 85674026
-    1025 | 85674001 |       1017 | 85674026
-    1025 | 85674001 |       1021 | 85674026
+         | 85674001 |       1017 | 85674026
+         | 85674001 |       1021 | 85674026
+         | 85674003 |       1017 | 85674026
+         | 85674003 |       1021 | 85674026
+         | 85674016 |       1017 | 85674026
+         | 85674016 |       1021 | 85674026
+         | 85674017 |       1017 | 85674026
+         | 85674017 |       1021 | 85674026
 (20 rows)
 
 SELECT
