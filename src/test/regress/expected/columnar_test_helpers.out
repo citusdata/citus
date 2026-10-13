@@ -158,22 +158,22 @@ AS 'citus', $$test_columnar_metadata_xmin_aborted$$;
 -- determine the status without consulting pg_xact.
 SELECT test_columnar_metadata_xmin_aborted('2147485000'::xid, true, false)
        AS committed_xmin_aborted;
- committed_xmin_aborted 
-------------------------
+ committed_xmin_aborted
+---------------------------------------------------------------------
  f
 (1 row)
 
 SELECT test_columnar_metadata_xmin_aborted('2147485000'::xid, false, true)
        AS invalid_xmin_aborted;
- invalid_xmin_aborted 
-----------------------
+ invalid_xmin_aborted
+---------------------------------------------------------------------
  t
 (1 row)
 
 SELECT test_columnar_metadata_xmin_aborted('2147485000'::xid, true, true)
        AS frozen_xmin_aborted;
- frozen_xmin_aborted 
----------------------
+ frozen_xmin_aborted
+---------------------------------------------------------------------
  f
 (1 row)
 
