@@ -166,3 +166,10 @@ test: multi_orderby_pushdown
 # Move back to multi_schedule at Citus 15.
 # ----------
 test: adaptive_executor_batching
+
+# ----------
+# multi_having_var_remapping covers a planner fix introduced in 14.3, absent from
+# the N-1 (14.2.0) Citus binary. Keep these cases out of the N-1 test matrix;
+# they remain part of multi_having_pushdown on main.
+# ----------
+test: multi_having_var_remapping
