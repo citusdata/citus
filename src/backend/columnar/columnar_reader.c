@@ -97,6 +97,9 @@ struct ColumnarReadState
 
 	Snapshot snapshot;
 	bool snapshotRegisteredByUs;
+
+	/* buffer access strategy for data reads, owned by the caller; may be NULL */
+	BufferAccessStrategy strategy;
 };
 
 /* static function declarations */
@@ -119,7 +122,8 @@ static StripeReadState * BeginStripeRead(StripeMetadata *stripeMetadata, Relatio
 										 TupleDesc tupleDesc, List *projectedColumnList,
 										 List *whereClauseList, List *whereClauseVars,
 										 MemoryContext stripeReadContext,
-										 Snapshot snapshot);
+										 Snapshot snapshot,
+										 BufferAccessStrategy strategy);
 static void AdvanceStripeRead(ColumnarReadState *readState);
 static bool SnapshotMightSeeUnflushedStripes(Snapshot snapshot);
 static bool ReadStripeNextRow(StripeReadState *stripeReadState, Datum *columnValues,
@@ -140,11 +144,13 @@ static StripeBuffers * LoadFilteredStripeBuffers(Relation relation,
 												 List *whereClauseList,
 												 List *whereClauseVars,
 												 int64 *chunkGroupsFiltered,
-												 Snapshot snapshot);
+												 Snapshot snapshot,
+												 BufferAccessStrategy strategy);
 static ColumnBuffers * LoadColumnBuffers(Relation relation,
 										 ColumnChunkSkipNode *chunkSkipNodeArray,
 										 uint32 chunkCount, uint64 stripeOffset,
-										 Form_pg_attribute attributeForm);
+										 Form_pg_attribute attributeForm,
+										 BufferAccessStrategy strategy);
 static bool * SelectedChunkMask(StripeSkipList *stripeSkipList,
 								List *whereClauseList, List *whereClauseVars,
 								int64 *chunkGroupsFiltered);
@@ -175,12 +181,15 @@ static Datum ColumnDefaultValue(TupleConstr *tupleConstraints,
  * read handle that's used during reading rows and finishing the read operation.
  *
  * projectedColumnList is an integer list of attribute numbers (1-indexed).
+ *
+ * strategy is the buffer access strategy to read column data with; it is
+ * owned by the caller and must outlive the read. NULL means default strategy.
  */
 ColumnarReadState *
 ColumnarBeginRead(Relation relation, TupleDesc tupleDescriptor,
 				  List *projectedColumnList, List *whereClauseList,
 				  MemoryContext scanContext, Snapshot snapshot,
-				  bool randomAccess)
+				  bool randomAccess, BufferAccessStrategy strategy)
 {
 	/*
 	 * We allocate all stripe specific data in the stripeReadContext, and reset
@@ -199,6 +208,7 @@ ColumnarBeginRead(Relation relation, TupleDesc tupleDescriptor,
 	readState->stripeReadContext = stripeReadContext;
 	readState->stripeReadState = NULL;
 	readState->scanContext = scanContext;
+	readState->strategy = strategy;
 
 	/*
 	 * Note that ColumnarReadFlushPendingWrites might update those two by
@@ -339,7 +349,8 @@ ColumnarReadNextRow(ColumnarReadState *readState, Datum *columnValues, bool *col
 														 readState->whereClauseList,
 														 readState->whereClauseVars,
 														 readState->stripeReadContext,
-														 readState->snapshot);
+														 readState->snapshot,
+														 readState->strategy);
 		}
 
 		if (!ReadStripeNextRow(readState->stripeReadState, columnValues, columnNulls))
@@ -430,7 +441,8 @@ ColumnarReadRowByRowNumber(ColumnarReadState *readState,
 													 whereClauseList,
 													 whereClauseVars,
 													 stripeReadContext,
-													 snapshot);
+													 snapshot,
+													 readState->strategy);
 
 		readState->currentStripeMetadata = stripeMetadata;
 	}
@@ -648,7 +660,8 @@ ColumnarResetRead(ColumnarReadState *readState)
 static StripeReadState *
 BeginStripeRead(StripeMetadata *stripeMetadata, Relation rel, TupleDesc tupleDesc,
 				List *projectedColumnList, List *whereClauseList, List *whereClauseVars,
-				MemoryContext stripeReadContext, Snapshot snapshot)
+				MemoryContext stripeReadContext, Snapshot snapshot,
+				BufferAccessStrategy strategy)
 {
 	MemoryContext oldContext = MemoryContextSwitchTo(stripeReadContext);
 
@@ -669,7 +682,8 @@ BeginStripeRead(StripeMetadata *stripeMetadata, Relation rel, TupleDesc tupleDes
 															   whereClauseVars,
 															   &stripeReadState->
 															   chunkGroupsFiltered,
-															   snapshot);
+															   snapshot,
+															   strategy);
 
 	stripeReadState->rowCount = stripeReadState->stripeBuffers->rowCount;
 
@@ -1008,7 +1022,8 @@ static StripeBuffers *
 LoadFilteredStripeBuffers(Relation relation, StripeMetadata *stripeMetadata,
 						  TupleDesc tupleDescriptor, List *projectedColumnList,
 						  List *whereClauseList, List *whereClauseVars,
-						  int64 *chunkGroupsFiltered, Snapshot snapshot)
+						  int64 *chunkGroupsFiltered, Snapshot snapshot,
+						  BufferAccessStrategy strategy)
 {
 	uint32 columnIndex = 0;
 	uint32 columnCount = tupleDescriptor->natts;
@@ -1043,7 +1058,8 @@ LoadFilteredStripeBuffers(Relation relation, StripeMetadata *stripeMetadata,
 			ColumnBuffers *columnBuffers = LoadColumnBuffers(relation, chunkSkipNode,
 															 chunkCount,
 															 stripeMetadata->fileOffset,
-															 attributeForm);
+															 attributeForm,
+															 strategy);
 
 			columnBuffersArray[columnIndex] = columnBuffers;
 		}
@@ -1068,7 +1084,7 @@ LoadFilteredStripeBuffers(Relation relation, StripeMetadata *stripeMetadata,
 static ColumnBuffers *
 LoadColumnBuffers(Relation relation, ColumnChunkSkipNode *chunkSkipNodeArray,
 				  uint32 chunkCount, uint64 stripeOffset,
-				  Form_pg_attribute attributeForm)
+				  Form_pg_attribute attributeForm, BufferAccessStrategy strategy)
 {
 	uint32 chunkIndex = 0;
 	ColumnChunkBuffers **chunkBuffersArray =
@@ -1093,7 +1109,7 @@ LoadColumnBuffers(Relation relation, ColumnChunkSkipNode *chunkSkipNodeArray,
 		enlargeStringInfo(rawExistsBuffer, chunkSkipNode->existsLength);
 		rawExistsBuffer->len = chunkSkipNode->existsLength;
 		ColumnarStorageRead(relation, existsOffset, rawExistsBuffer->data,
-							chunkSkipNode->existsLength);
+							chunkSkipNode->existsLength, strategy);
 
 		chunkBuffersArray[chunkIndex]->existsBuffer = rawExistsBuffer;
 	}
@@ -1109,7 +1125,7 @@ LoadColumnBuffers(Relation relation, ColumnChunkSkipNode *chunkSkipNodeArray,
 		enlargeStringInfo(rawValueBuffer, chunkSkipNode->valueLength);
 		rawValueBuffer->len = chunkSkipNode->valueLength;
 		ColumnarStorageRead(relation, valueOffset, rawValueBuffer->data,
-							chunkSkipNode->valueLength);
+							chunkSkipNode->valueLength, strategy);
 
 		chunkBuffersArray[chunkIndex]->valueBuffer = rawValueBuffer;
 		chunkBuffersArray[chunkIndex]->valueCompressionType = compressionType;
