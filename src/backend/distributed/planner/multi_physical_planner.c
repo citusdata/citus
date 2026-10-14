@@ -645,6 +645,7 @@ BuildJobQuery(MultiNode *multiNode, List *dependentJobList)
 		UpdateAllColumnAttributes((Node *) selectClauseList, rangeTableList,
 								  dependentJobList);
 		UpdateAllColumnAttributes(havingQual, rangeTableList, dependentJobList);
+		AdjustColumnOldAttributes(list_make1(havingQual));
 	}
 
 	/*
