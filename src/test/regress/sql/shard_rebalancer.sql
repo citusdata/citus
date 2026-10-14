@@ -1519,9 +1519,12 @@ select create_distributed_table('colocated_t2','a',colocate_with=>'"events.Energ
 create table colocated_t3 (a int);
 select create_distributed_table('colocated_t3','a',colocate_with=>'"events.Energy Added"');
 
+-- Register the coordinator so cache refreshes do not add missing-node DEBUG messages.
+SELECT 1 FROM master_add_node('localhost', :master_port, groupId => 0);
 SET client_min_messages TO DEBUG4;
 SELECT * FROM get_rebalance_table_shards_plan('colocated_t1', rebalance_strategy := 'by_disk_size');
 RESET client_min_messages;
+SELECT 1 FROM master_remove_node('localhost', :master_port);
 
 DROP TABLE "events.Energy Added", colocated_t1, colocated_t2, colocated_t3;
 RESET citus.shard_count;
