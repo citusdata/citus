@@ -66,7 +66,8 @@ extern uint64 ExtractGlobalPID(const char *applicationName);
 extern int ExtractNodeIdFromGlobalPID(uint64 globalPID, bool missingOk);
 extern int ExtractProcessIdFromGlobalPID(uint64 globalPID);
 extern void GetBackendDataForProc(PGPROC *proc, BackendData *result);
-extern void CancelTransactionDueToDeadlock(PGPROC *proc);
+extern void CancelTransactionDueToDeadlock(PGPROC *proc,
+										   DistributedTransactionId *transactionId);
 extern bool MyBackendGotCancelledDueToDeadlock(bool clearState);
 extern List * ActiveDistributedTransactionNumbers(void);
 extern LocalTransactionId GetMyProcLocalTransactionId(void);
