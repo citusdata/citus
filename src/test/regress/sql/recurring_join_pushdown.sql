@@ -139,4 +139,21 @@ ORDER BY sq.a
 LIMIT 1;
 
 SET client_min_messages TO ERROR;
+
+-- Query-local range table indexes must not make the reference side of the
+-- nested outer join look distributed, causing every shard task to be skipped.
+SELECT count(*), count(s.a)
+FROM (SELECT d1.a FROM d1 RIGHT JOIN r1 USING (a) ORDER BY d1.a) s
+LEFT JOIN d1 USING (a);
+
+-- A different distributed table at the outer query level has the same issue.
+SELECT count(*), count(s.a)
+FROM (SELECT d1.a FROM d1 RIGHT JOIN r1 USING (a) ORDER BY d1.a) s
+LEFT JOIN d2 USING (a);
+
+-- The equivalent LEFT JOIN spelling must return the same duplicate and NULL rows.
+SELECT count(*), count(s.a)
+FROM (SELECT d1.a FROM r1 LEFT JOIN d1 USING (a) ORDER BY d1.a) s
+LEFT JOIN d2 USING (a);
+
 DROP SCHEMA recurring_join_pushdown CASCADE;
