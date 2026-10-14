@@ -2016,6 +2016,13 @@ NonColocatedDistRelationIdList(void)
 	List *allCitusTablesList = CitusTableTypeIdList(ANY_CITUS_TABLE_TYPE);
 	Oid tableId = InvalidOid;
 
+	/*
+	 * CitusTableTypeIdList scans pg_dist_partition unordered, so the first-wins
+	 * de-duplication below would pick an arbitrary representative per colocation
+	 * group. Sort by oid to keep the rebalance plan reproducible.
+	 */
+	list_sort(allCitusTablesList, list_oid_cmp);
+
 	/* allocate sufficient capacity for O(1) expected look-up time */
 	int capacity = (int) (list_length(allCitusTablesList) / 0.75) + 1;
 	int flags = HASH_ELEM | HASH_CONTEXT | HASH_BLOBS;
