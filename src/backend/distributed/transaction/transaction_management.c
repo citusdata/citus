@@ -488,6 +488,27 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			 */
 			RemoveIntermediateResultsDirectories();
 
+			/*
+			 * A Citus-internal backend may still be in a coordinated
+			 * transaction here, e.g. if nested distributed execution only ran
+			 * local tasks. EnsurePrepareTransactionIsAllowed() already made
+			 * sure that there are no remote transactions left to commit. From
+			 * this backend's point of view, PREPARE TRANSACTION ends the
+			 * transaction just like COMMIT does, so clean up the same way.
+			 * Otherwise the next transaction in this session, e.g. COMMIT
+			 * PREPARED, would find stale state and crash.
+			 */
+			if (InCoordinatedTransaction())
+			{
+				ResetPlacementConnectionManagement();
+				AfterXactConnectionHandling(true);
+
+				ResetGlobalVariables();
+				ResetRelationAccessHash();
+				ResetPropagatedObjects();
+				DeallocateReservedConnections();
+			}
+
 			UnSetDistributedTransactionId();
 			break;
 		}
@@ -936,14 +957,22 @@ EnsurePrepareTransactionIsAllowed(void)
 		return;
 	}
 
-	if (IsCitusInternalBackend())
+	if (IsCitusInternalBackend() && dlist_is_empty(&InProgressTransactions))
 	{
 		/*
-		 * If this is a Citus-initiated backend.
+		 * If this is a Citus-initiated backend that has no remote transactions
+		 * open, e.g. because nested distributed execution only ran local tasks.
 		 */
 		return;
 	}
 
+	/*
+	 * Either a regular client backend started a coordinated transaction, or a
+	 * Citus-initiated backend opened remote transactions via nested distributed
+	 * execution, e.g. in a trigger with citus.allow_nested_distributed_execution
+	 * enabled. In the latter case, those remote transactions cannot be committed
+	 * atomically with the outer 2PC that this backend is a participant of.
+	 */
 	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 					errmsg("cannot use 2PC in transactions involving "
 						   "multiple servers")));
