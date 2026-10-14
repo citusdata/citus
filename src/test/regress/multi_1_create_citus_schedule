@@ -152,6 +152,7 @@ test: non_var_group_by
 test: multi_or_arm_pruning
 
 # ----------
+# ----------
 # multi_orderby_pushdown covers sorted-merge planner and executor behavior
 # introduced in 14.3; not present in the N-1 (14.2-1) coordinator library.
 # Run it only under check-multi-1-create-citus, which is not part of the N-1
@@ -173,3 +174,10 @@ test: adaptive_executor_batching
 # they remain part of multi_having_pushdown on main.
 # ----------
 test: multi_having_var_remapping
+
+# ----------
+# node_removal_transaction_recovery covers node removal behavior introduced in
+# 14.3; not present in the N-1 (14.2-1) coordinator library. Run it only under
+# check-multi-1-create-citus, which is not part of the N-1 test matrix.
+# ----------
+test: node_removal_transaction_recovery
