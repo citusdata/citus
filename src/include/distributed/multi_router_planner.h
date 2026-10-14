@@ -56,6 +56,7 @@ extern List * CreateTaskPlacementListForShardIntervals(List *shardIntervalList,
 													   bool hasLocalRelation);
 extern List * RouterInsertTaskList(Query *query, bool parametersInQueryResolved,
 								   DeferredErrorMessage **planningError);
+extern List * RelationRowLockListForQuery(Query *query);
 extern Const * ExtractInsertPartitionKeyValue(Query *query);
 extern List * TargetShardIntervalsForRestrictInfo(RelationRestrictionContext *
 												  restrictionContext,

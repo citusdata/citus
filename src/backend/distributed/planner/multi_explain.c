@@ -1938,6 +1938,9 @@ ExplainAnalyzeTaskList(List *originalTaskList,
 
 		SetTaskQueryStringList(explainAnalyzeTask, list_make2(wrappedQuery, fetchQuery));
 
+		/* the wrapper replaces the query, so the saved template no longer applies */
+		explainAnalyzeTask->jobQueryForPrepare = NULL;
+
 		TupleDestination *originalTaskDest = originalTask->tupleDest ?
 											 originalTask->tupleDest :
 											 defaultTupleDest;
