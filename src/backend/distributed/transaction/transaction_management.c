@@ -161,6 +161,7 @@ static void ResetGlobalVariables(void);
 static bool SwallowErrors(void (*func)(void));
 static void ForceAllInProgressConnectionsToClose(void);
 static void EnsurePrepareTransactionIsAllowed(void);
+static void CommitNestedRemoteTransactions(void);
 static HTAB * CurrentTransactionPropagatedObjects(bool readonly);
 static HTAB * ParentTransactionPropagatedObjects(bool readonly);
 static void MovePropagatedObjectsToParentTransaction(void);
@@ -488,6 +489,25 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			 */
 			RemoveIntermediateResultsDirectories();
 
+			/*
+			 * A Citus-internal backend that used nested distributed execution
+			 * committed its remote transactions at XACT_EVENT_PRE_PREPARE. From
+			 * this backend's point of view, PREPARE TRANSACTION ends the
+			 * transaction just like COMMIT does, so clean up the same way.
+			 * Otherwise the next transaction in this session, e.g. COMMIT
+			 * PREPARED, would find stale state and crash.
+			 */
+			if (InCoordinatedTransaction())
+			{
+				ResetPlacementConnectionManagement();
+				AfterXactConnectionHandling(true);
+
+				ResetGlobalVariables();
+				ResetRelationAccessHash();
+				ResetPropagatedObjects();
+				DeallocateReservedConnections();
+			}
+
 			UnSetDistributedTransactionId();
 			break;
 		}
@@ -550,9 +570,19 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 		}
 
 		case XACT_EVENT_PARALLEL_PRE_COMMIT:
+		{
+			EnsurePrepareTransactionIsAllowed();
+			break;
+		}
+
 		case XACT_EVENT_PRE_PREPARE:
 		{
 			EnsurePrepareTransactionIsAllowed();
+
+			if (InCoordinatedTransaction())
+			{
+				CommitNestedRemoteTransactions();
+			}
 			break;
 		}
 	}
@@ -947,6 +977,34 @@ EnsurePrepareTransactionIsAllowed(void)
 	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 					errmsg("cannot use 2PC in transactions involving "
 						   "multiple servers")));
+}
+
+
+/*
+ * CommitNestedRemoteTransactions commits the remote transactions that a
+ * Citus-internal backend opened for nested distributed execution, e.g. in a
+ * trigger with citus.allow_nested_distributed_execution enabled, right before
+ * the backend itself prepares as a participant of an outer 2PC.
+ *
+ * This works like the 1PC branch of XACT_EVENT_PRE_COMMIT.
+ *
+ * Note that the nested transactions are committed independently of the outer
+ * transaction. If the outer transaction aborts later, the nested writes stay
+ * committed. Users accept that by enabling citus.allow_nested_distributed_execution,
+ * which already gives up the correctness guarantees of distributed execution.
+ *
+ * If committing any of them fails, we throw an error and so the outer
+ * transaction fails to prepare.
+ */
+static void
+CommitNestedRemoteTransactions(void)
+{
+	CheckRemoteTransactionsHealth();
+
+	CoordinatedRemoteTransactionsCommit();
+	CurrentCoordinatedTransactionState = COORD_TRANS_COMMITTED;
+
+	ErrorIfPostCommitFailedShardPlacements();
 }
 
 
