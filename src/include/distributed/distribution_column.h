@@ -21,7 +21,8 @@
 /* Remaining metadata utility functions  */
 extern Var * BuildDistributionKeyFromColumnName(Oid relationId,
 												char *columnName,
-												LOCKMODE lockMode);
+												LOCKMODE lockMode,
+												bool unlockRelation);
 extern char * ColumnToColumnName(Oid relationId, Node *columnNode);
 extern Oid ColumnTypeIdForRelationColumnName(Oid relationId, char *columnName);
 extern void EnsureValidDistributionColumn(Oid relationId, char *columnName);
