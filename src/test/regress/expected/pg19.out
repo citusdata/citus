@@ -817,8 +817,8 @@ DROP TABLE json_copy_dist, json_copy_empty, json_copy_single_shard,
 CREATE TABLE on_conflict_nn_expr (a int NOT NULL, b text NOT NULL, payload int);
 SELECT create_distributed_table('on_conflict_nn_expr', 'a');
  create_distributed_table
---------------------------
- 
+---------------------------------------------------------------------
+
 (1 row)
 
 CREATE UNIQUE INDEX on_conflict_nn_expr_idx
@@ -828,8 +828,8 @@ INSERT INTO on_conflict_nn_expr VALUES (1, 'ALICE', 20)
     ON CONFLICT (a int4_ops, lower(b))
     DO UPDATE SET payload = EXCLUDED.payload;
 SELECT a, b, payload FROM on_conflict_nn_expr;
- a |   b   | payload 
----+-------+---------
+ a |   b   | payload
+---------------------------------------------------------------------
  1 | Alice |      20
 (1 row)
 
