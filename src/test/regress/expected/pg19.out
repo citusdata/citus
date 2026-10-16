@@ -810,6 +810,30 @@ COPY json_copy_dist TO STDOUT (FORMAT json, HEADER true);
 ERROR:  cannot specify HEADER in JSON mode
 DROP TABLE json_copy_dist, json_copy_empty, json_copy_single_shard,
            json_copy_reference, json_copy_local, json_copy_citus_local;
+-- PG19 RC1 fixed ON CONFLICT inference when an index expression on a NOT NULL
+-- column simplifies to that column. Keep the distribution key as a plain index
+-- key too, so the unique index is enforceable across shards.
+-- PG19 commit: https://github.com/postgres/postgres/commit/f9ccc5e4f92bc39f7c31905ff611785ff29ab9bb
+CREATE TABLE on_conflict_nn_expr (a int NOT NULL, b text NOT NULL, payload int);
+SELECT create_distributed_table('on_conflict_nn_expr', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE UNIQUE INDEX on_conflict_nn_expr_idx
+    ON on_conflict_nn_expr (COALESCE(a, 0), lower(b), a);
+INSERT INTO on_conflict_nn_expr VALUES (1, 'Alice', 10);
+INSERT INTO on_conflict_nn_expr VALUES (1, 'ALICE', 20)
+    ON CONFLICT (a int4_ops, lower(b))
+    DO UPDATE SET payload = EXCLUDED.payload;
+SELECT a, b, payload FROM on_conflict_nn_expr;
+ a |   b   | payload
+---------------------------------------------------------------------
+ 1 | Alice |      20
+(1 row)
+
+DROP TABLE on_conflict_nn_expr;
 SELECT citus_remove_node('localhost', :master_port);
  citus_remove_node
 ---------------------------------------------------------------------
