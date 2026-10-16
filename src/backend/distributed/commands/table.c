@@ -3918,6 +3918,16 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 				break;
 			}
 
+			case AT_AlterConstraint:
+			{
+				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+								errmsg("ALTER TABLE ... ALTER CONSTRAINT commands "
+									   "are currently unsupported"),
+								errdetail("Citus does not propagate constraint "
+										  "property changes to shards.")));
+				break;
+			}
+
 			case AT_SetRelOptions:  /* SET (...) */
 			case AT_ResetRelOptions:    /* RESET (...) */
 			case AT_ReplaceRelOptions:  /* replace entire option list */
