@@ -1485,7 +1485,7 @@ FROM pg_constraint
 WHERE conrelid = 'alter_constraint_local'::regclass
   AND conname = 'alter_constraint_local_fk';
  conenforced
--------------
+---------------------------------------------------------------------
  t
 (1 row)
 
@@ -1592,7 +1592,7 @@ SELECT conenforced
 FROM pg_constraint
 WHERE conrelid = 'contacts'::regclass AND conname = 'fk_customer';
  conenforced
--------------
+---------------------------------------------------------------------
  f
 (1 row)
 
@@ -1604,7 +1604,7 @@ CREATE TABLE alter_constraint_reference (
 );
 SELECT create_reference_table('alter_constraint_reference');
  create_reference_table
-------------------------
+---------------------------------------------------------------------
 
 (1 row)
 
@@ -1617,7 +1617,7 @@ FROM pg_constraint
 WHERE conrelid = 'alter_constraint_reference'::regclass
   AND conname = 'alter_constraint_reference_fk';
  conenforced
--------------
+---------------------------------------------------------------------
  f
 (1 row)
 
@@ -1633,7 +1633,7 @@ SELECT citus_add_local_table_to_metadata(
 	cascade_via_foreign_keys => true
 );
  citus_add_local_table_to_metadata
------------------------------------
+---------------------------------------------------------------------
 
 (1 row)
 
@@ -1646,7 +1646,7 @@ FROM pg_constraint
 WHERE conrelid = 'alter_constraint_citus_local'::regclass
   AND conname = 'alter_constraint_citus_local_fk';
  conenforced
--------------
+---------------------------------------------------------------------
  f
 (1 row)
 

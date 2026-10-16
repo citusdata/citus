@@ -3918,7 +3918,7 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 				break;
 			}
 
-			case AT_AlterConstraint:
+			case AT_AlterConstraint: /* LCOV_EXCL_LINE */
 			{
 				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 								errmsg("ALTER TABLE ... ALTER CONSTRAINT commands "
