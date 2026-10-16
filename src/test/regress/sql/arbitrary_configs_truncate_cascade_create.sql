@@ -1,5 +1,6 @@
 CREATE SCHEMA truncate_cascade_tests_schema;
 SET search_path TO truncate_cascade_tests_schema;
+GRANT ALL ON SCHEMA truncate_cascade_tests_schema TO regularuser;
 
 -- tables connected with foreign keys
 CREATE TABLE table_with_pk(a bigint PRIMARY KEY);
