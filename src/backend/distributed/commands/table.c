@@ -3508,6 +3508,15 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 	{
 		AlterTableType alterTableType = command->subtype;
 
+		if (alterTableType == AT_AlterConstraint)
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("ALTER TABLE ... ALTER CONSTRAINT commands "
+								   "are currently unsupported"),
+							errdetail("Citus does not propagate constraint "
+									  "property changes to shards.")));
+		}
+
 		switch (alterTableType)
 		{
 			case AT_AddColumn:
@@ -3915,16 +3924,6 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 				 * ALTER TABLE .. VALIDATE CONSTRAINT ..
 				 * ALTER TABLE .. ALTER COLUMN .. SET COMPRESSION ..
 				 */
-				break;
-			}
-
-			case AT_AlterConstraint: /* LCOV_EXCL_LINE */
-			{
-				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-								errmsg("ALTER TABLE ... ALTER CONSTRAINT commands "
-									   "are currently unsupported"),
-								errdetail("Citus does not propagate constraint "
-										  "property changes to shards.")));
 				break;
 			}
 
