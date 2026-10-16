@@ -1459,4 +1459,33 @@ SELECT (SELECT count(*) FROM u1) AS n1, (SELECT count(*) FROM u2) AS n2;
 SET client_min_messages TO WARNING;
 SELECT dist_key, val FROM zero_shard_cte ORDER BY dist_key;
 
+-- Whole-row RETURNING of the INSERT target (#8762): the worker must cast
+-- "alias.*" to the shard's row type, as UPDATE/DELETE already do, rather
+-- than to the distributed table's row type.
+CREATE TABLE whole_row_target (tid int PRIMARY KEY, balance int);
+SELECT create_distributed_table('whole_row_target', 'tid');
+
+-- router
+INSERT INTO whole_row_target AS t VALUES (1, 100) RETURNING t;
+-- multi-shard; the coordinator still sees the distributed table's row type
+WITH ins AS (
+    INSERT INTO whole_row_target AS t VALUES (2, 200), (3, 300) RETURNING t
+)
+SELECT t, pg_typeof(t), (t).balance FROM ins ORDER BY (t).tid;
+-- column-expanded form is unaffected
+INSERT INTO whole_row_target AS t VALUES (4, 400) RETURNING t.*;
+-- ON CONFLICT, with and without a user alias
+INSERT INTO whole_row_target AS t VALUES (1, 150)
+    ON CONFLICT (tid) DO UPDATE SET balance = excluded.balance RETURNING t;
+INSERT INTO whole_row_target VALUES (1, 160)
+    ON CONFLICT (tid) DO UPDATE SET balance = excluded.balance RETURNING whole_row_target;
+-- INSERT .. SELECT, pushed down and via the coordinator
+INSERT INTO whole_row_target AS t SELECT tid, balance + 1 FROM whole_row_target WHERE tid = 1
+    ON CONFLICT (tid) DO UPDATE SET balance = excluded.balance RETURNING t;
+INSERT INTO whole_row_target AS t SELECT tid + 10, balance FROM whole_row_target WHERE tid = 1
+    RETURNING t;
+-- UPDATE/DELETE already worked; keep them as guards
+UPDATE whole_row_target t SET balance = balance + 1 WHERE tid = 1 RETURNING t;
+DELETE FROM whole_row_target t WHERE tid = 1 RETURNING t;
+
 DROP SCHEMA multi_modifications CASCADE;
