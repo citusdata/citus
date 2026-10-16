@@ -39,6 +39,16 @@ typedef struct BackendData
 	Oid databaseId;
 	slock_t mutex;
 	bool cancelledDueToDeadlock;
+
+	/*
+	 * The distributed transaction that the deadlock detector last sent a SIGINT
+	 * to, and when. Unlike cancelledDueToDeadlock, these are not cleared when the
+	 * cancellation error is reported, so the detector can tell that the backend
+	 * is still unwinding from its previous SIGINT.
+	 */
+	DistributedTransactionId deadlockSignalledTransactionId;
+	TimestampTz deadlockSignalTime;
+
 	uint64 globalPID;
 	bool distributedCommandOriginator;
 	DistributedTransactionId transactionId;
@@ -66,7 +76,7 @@ extern uint64 ExtractGlobalPID(const char *applicationName);
 extern int ExtractNodeIdFromGlobalPID(uint64 globalPID, bool missingOk);
 extern int ExtractProcessIdFromGlobalPID(uint64 globalPID);
 extern void GetBackendDataForProc(PGPROC *proc, BackendData *result);
-extern void CancelTransactionDueToDeadlock(PGPROC *proc);
+extern bool CancelTransactionDueToDeadlock(PGPROC *proc);
 extern bool MyBackendGotCancelledDueToDeadlock(bool clearState);
 extern List * ActiveDistributedTransactionNumbers(void);
 extern LocalTransactionId GetMyProcLocalTransactionId(void);
