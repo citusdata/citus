@@ -52,9 +52,13 @@ test: multi_drop_extension
 # ---
 # multi_metadata_sync tests the propagation of mx-related metadata changes to metadata workers.
 # multi_metadata_sync_domain tests that metadata sync works correctly with DOMAIN types in non-public schemas
+# metadata_sync_batching and metadata_sync_batching_edge_cases test that metadata sync works correctly while
+# periodically flushing the caches and batching the metadata into set-based statements
 # ---
 test: multi_metadata_sync
 test: multi_metadata_sync_domain
+test: metadata_sync_batching
+test: metadata_sync_batching_edge_cases
 
 test: grant_on_function_propagation
 test: grant_on_foreign_server_propagation
@@ -118,3 +122,10 @@ test: non_var_group_by
 # back to multi_1_schedule at Citus 15.
 # ----------
 test: multi_or_arm_pruning
+
+# ----------
+# node_removal_transaction_recovery covers node removal behavior introduced in
+# 14.3; not present in the N-1 (14.2-1) coordinator library. Run it only under
+# check-multi-1-create-citus, which is not part of the N-1 test matrix.
+# ----------
+test: node_removal_transaction_recovery

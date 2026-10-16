@@ -4515,10 +4515,6 @@ RegisterCitusTableCacheEntryReleaseCallbacks(void)
 int32
 GetLocalGroupId(void)
 {
-	ScanKeyData scanKey[1];
-	int scanKeyCount = 0;
-	int32 groupId = 0;
-
 	InitializeCaches();
 
 	/*
@@ -4535,11 +4531,38 @@ GetLocalGroupId(void)
 		return 0;
 	}
 
-	Relation pgDistLocalGroupId = table_open(localGroupTableOid, AccessShareLock);
+	int32 groupId = ReadLocalGroupId(NULL);
+
+	/* the table is only empty temporarily, during upgrades, so don't cache that */
+	if (groupId != GROUP_ID_UPGRADING)
+	{
+		LocalGroupId = groupId;
+	}
+
+	return groupId;
+}
+
+
+/*
+ * ReadLocalGroupId reads the group identifier of the local node from
+ * pg_dist_local_group, using the given snapshot or a fresh one if snapshot is
+ * NULL. Unlike GetLocalGroupId, it neither uses nor updates the cache. It
+ * returns GROUP_ID_UPGRADING if the table is empty, which happens while
+ * upgrading PostgreSQL.
+ */
+int32
+ReadLocalGroupId(Snapshot snapshot)
+{
+	ScanKeyData scanKey[1];
+	int scanKeyCount = 0;
+	int32 groupId = 0;
+
+	Relation pgDistLocalGroupId = table_open(DistLocalGroupIdRelationId(),
+											 AccessShareLock);
 
 	SysScanDesc scanDescriptor = systable_beginscan(pgDistLocalGroupId,
 													InvalidOid, false,
-													NULL, scanKeyCount, scanKey);
+													snapshot, scanKeyCount, scanKey);
 
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistLocalGroupId);
 
@@ -4553,9 +4576,6 @@ GetLocalGroupId(void)
 										  tupleDescriptor, &isNull);
 
 		groupId = DatumGetInt32(groupIdDatum);
-
-		/* set the local cache variable */
-		LocalGroupId = groupId;
 	}
 	else
 	{
@@ -5033,13 +5053,37 @@ FlushDistTableCache(void)
 
 	while ((cacheSlot = (CitusTableCacheEntrySlot *) hash_seq_search(&status)) != NULL)
 	{
-		ResetCitusTableCacheEntry(cacheSlot->citusTableMetadata);
+		/*
+		 * Negative cache entries (non-Citus relations) have no metadata, so
+		 * skip them.
+		 */
+		if (cacheSlot->citusTableMetadata != NULL)
+		{
+			ResetCitusTableCacheEntry(cacheSlot->citusTableMetadata);
+		}
 	}
 
 	hash_destroy(DistTableCacheHash);
 	hash_destroy(ShardIdCacheHash);
 	CreateDistTableCache();
 	CreateShardIdCache();
+}
+
+
+/*
+ * FlushDistObjectCache flushes the entire distributed object cache, frees all
+ * entries, and recreates the cache.
+ */
+void
+FlushDistObjectCache(void)
+{
+	if (DistObjectCacheHash == NULL)
+	{
+		return;
+	}
+
+	hash_destroy(DistObjectCacheHash);
+	CreateDistObjectCache();
 }
 
 

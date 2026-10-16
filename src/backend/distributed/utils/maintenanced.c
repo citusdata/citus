@@ -609,7 +609,21 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 				 */
 				lastRecoveryTime = GetCurrentTimestamp();
 
-				recoveredTransactionCount = RecoverTwoPhaseCommits();
+				/*
+				 * Another session holding the recovery lock is either running
+				 * recovery or, like citus_remove_node(), deleting recovery
+				 * records until it commits. Retry at the next interval instead
+				 * of blocking deadlock detection and the other daemon tasks.
+				 */
+				if (ConditionalLockTransactionRecovery(ShareUpdateExclusiveLock))
+				{
+					recoveredTransactionCount = RecoverTwoPhaseCommits();
+				}
+				else
+				{
+					ereport(DEBUG1, (errmsg("could not lock transaction recovery, "
+											"skipping 2PC recovery")));
+				}
 			}
 
 			CommitTransactionCommand();

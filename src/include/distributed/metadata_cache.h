@@ -182,6 +182,7 @@ extern CitusTableCacheEntry * LookupCitusTableCacheEntry(Oid relationId);
 extern DistObjectCacheEntry * LookupDistObjectCacheEntry(Oid classid, Oid objid, int32
 														 objsubid);
 extern int32 GetLocalGroupId(void);
+extern int32 ReadLocalGroupId(Snapshot snapshot);
 extern int32 GetLocalNodeId(void);
 extern void CitusTableCacheFlushInvalidatedEntries(void);
 extern Oid LookupShardRelationFromCatalog(int64 shardId, bool missing_ok);
@@ -190,6 +191,7 @@ extern void CitusInvalidateRelcacheByRelid(Oid relationId);
 extern void CitusInvalidateRelcacheByShardId(int64 shardId);
 extern void InvalidateForeignKeyGraph(void);
 extern void FlushDistTableCache(void);
+extern void FlushDistObjectCache(void);
 extern void InvalidateMetadataSystemCache(void);
 extern List * CitusTableTypeIdList(CitusTableType citusTableType);
 extern Datum DistNodeMetadata(void);
