@@ -92,11 +92,20 @@ citus_check_cluster_node_health(PG_FUNCTION_ARGS)
  * nodes, and report success status.
  *
  * Algorithm is:
+ * connections = connectConcurrently(activeReadableNodeList)
+ * for targetNode in activeReadableNodeList:
+ *   for c in connections:
+ *     c.send("SELECT citus_check_connection_to_node(targetNode.name, targetNode.port")
+ *   wait for all connections
+ *   collect the result of each source node for targetNode
  * for sourceNode in activeReadableNodeList:
- *   c = connectToNode(sourceNode)
  *   for targetNode in activeReadableNodeList:
- *     result = c.execute("SELECT citus_check_connection_to_node(targetNode.name, targetNode.port")
  *     emit sourceNode.name, sourceNode.port, targetNode.name, targetNode.port, result
+ *
+ * Each source node still checks the target nodes one at a time and in the sorted
+ * order, but all source nodes check the same target node concurrently. Hence, at most
+ * one probe is in flight per source node, and a target node may receive one probe
+ * connection from each of the source nodes at the same time.
  *
  * -- result -> true  -> connection attempt from source to target succeeded
  * -- result -> false -> connection attempt from source to target failed
@@ -117,71 +126,141 @@ StoreAllConnectivityChecks(Tuplestorestate *tupleStore, TupleDesc tupleDescripto
 	/* we want to check for connectivity in a deterministic order */
 	workerNodeList = SortList(workerNodeList, CompareWorkerNodes);
 
-	/*
-	 * We iterate over the workerNodeList twice, for source and target worker nodes. This
-	 * operation is safe for foreach_ptr macro, as long as we use different variables for
-	 * each iteration.
-	 */
+	int nodeCount = list_length(workerNodeList);
+
+	/* open the connections to all source nodes concurrently */
+	MultiConnection **sourceConnections = palloc0(nodeCount * sizeof(MultiConnection *));
+	List *sourceConnectionList = NIL;
+	int sourceIndex = 0;
+
 	WorkerNode *sourceWorkerNode = NULL;
 	foreach_ptr(sourceWorkerNode, workerNodeList)
 	{
-		const char *sourceNodeName = sourceWorkerNode->workerName;
-		const int sourceNodePort = sourceWorkerNode->workerPort;
 		int32 connectionFlags = 0;
+		MultiConnection *connection =
+			StartNodeConnection(connectionFlags, sourceWorkerNode->workerName,
+								sourceWorkerNode->workerPort);
 
-		/* open a connection to the source node using the synchronous api */
-		MultiConnection *connectionToSourceNode =
-			GetNodeConnection(connectionFlags, sourceNodeName, sourceNodePort);
+		sourceConnections[sourceIndex++] = connection;
+		sourceConnectionList = lappend(sourceConnectionList, connection);
+	}
 
-		/* the second iteration over workerNodeList for the target worker nodes. */
-		WorkerNode *targetWorkerNode = NULL;
-		foreach_ptr(targetWorkerNode, workerNodeList)
+	FinishConnectionListEstablishment(sourceConnectionList);
+
+	/* results are indexed by [sourceIndex * nodeCount + targetIndex] */
+	bool *checkSucceeded = palloc0(nodeCount * nodeCount * sizeof(bool));
+	bool *checkResultIsNull = palloc0(nodeCount * nodeCount * sizeof(bool));
+	bool *commandSent = palloc0(nodeCount * sizeof(bool));
+
+	int targetIndex = 0;
+	WorkerNode *targetWorkerNode = NULL;
+	foreach_ptr(targetWorkerNode, workerNodeList)
+	{
+		char *connectivityCheckCommandToTargetNode =
+			GetConnectivityCheckCommand(targetWorkerNode->workerName,
+										targetWorkerNode->workerPort);
+		List *pendingConnectionList = NIL;
+
+		for (sourceIndex = 0; sourceIndex < nodeCount; sourceIndex++)
 		{
-			const char *targetNodeName = targetWorkerNode->workerName;
-			const int targetNodePort = targetWorkerNode->workerPort;
+			MultiConnection *connection = sourceConnections[sourceIndex];
+			int resultIndex = sourceIndex * nodeCount + targetIndex;
 
-			char *connectivityCheckCommandToTargetNode =
-				GetConnectivityCheckCommand(targetNodeName, targetNodePort);
-
-			PGresult *result = NULL;
-			int executionResult =
-				ExecuteOptionalRemoteCommand(connectionToSourceNode,
-											 connectivityCheckCommandToTargetNode,
-											 &result);
-
-			/* get ready for the next tuple */
-			memset(values, 0, sizeof(values));
-			memset(isNulls, false, sizeof(isNulls));
-
-			values[0] = PointerGetDatum(cstring_to_text(sourceNodeName));
-			values[1] = Int32GetDatum(sourceNodePort);
-			values[2] = PointerGetDatum(cstring_to_text(targetNodeName));
-			values[3] = Int32GetDatum(targetNodePort);
+			commandSent[sourceIndex] =
+				SendRemoteCommand(connection, connectivityCheckCommandToTargetNode) != 0;
 
 			/*
-			 * If we could not send the query or the result was not ok, set success field
-			 * to NULL. This may indicate connection errors to a worker node, however that
-			 * node can potentially connect to other nodes.
+			 * If we could not send the query, set success field to NULL. This may
+			 * indicate connection errors to a worker node, however that node can
+			 * potentially connect to other nodes.
 			 *
-			 * Therefore, we mark the success as NULL to indicate that the connectivity
-			 * status is unknown.
+			 * Therefore, we mark the success as NULL to indicate that the
+			 * connectivity status is unknown.
 			 */
-			if (executionResult != RESPONSE_OKAY)
+			if (!commandSent[sourceIndex])
 			{
-				isNulls[4] = true;
+				ReportConnectionError(connection, WARNING);
+				checkResultIsNull[resultIndex] = true;
+				continue;
+			}
+
+			pendingConnectionList = lappend(pendingConnectionList, connection);
+		}
+
+		bool raiseInterrupts = true;
+		WaitForAllConnections(pendingConnectionList, raiseInterrupts);
+
+		for (sourceIndex = 0; sourceIndex < nodeCount; sourceIndex++)
+		{
+			if (!commandSent[sourceIndex])
+			{
+				continue;
+			}
+
+			MultiConnection *connection = sourceConnections[sourceIndex];
+			int resultIndex = sourceIndex * nodeCount + targetIndex;
+
+			PGresult *result = GetRemoteCommandResult(connection, raiseInterrupts);
+
+			/* similarly, the connectivity status is unknown if the result is not ok */
+			if (!IsResponseOK(result))
+			{
+				ReportResultError(connection, result, WARNING);
+				checkResultIsNull[resultIndex] = true;
 			}
 			else
 			{
 				int rowIndex = 0;
 				int columnIndex = 0;
-				values[4] = BoolGetDatum(ParseBoolField(result, rowIndex, columnIndex));
+				checkSucceeded[resultIndex] =
+					ParseBoolField(result, rowIndex, columnIndex);
+			}
+
+			PQclear(result);
+			ForgetResults(connection);
+		}
+
+		list_free(pendingConnectionList);
+		pfree(connectivityCheckCommandToTargetNode);
+		targetIndex++;
+	}
+
+	/*
+	 * We iterate over the workerNodeList twice, for source and target worker nodes. This
+	 * operation is safe for foreach_ptr macro, as long as we use different
+	 * variables for each iteration.
+	 */
+	sourceIndex = 0;
+	foreach_ptr(sourceWorkerNode, workerNodeList)
+	{
+		targetIndex = 0;
+		foreach_ptr(targetWorkerNode, workerNodeList)
+		{
+			int resultIndex = sourceIndex * nodeCount + targetIndex;
+
+			/* get ready for the next tuple */
+			memset(values, 0, sizeof(values));
+			memset(isNulls, false, sizeof(isNulls));
+
+			values[0] = PointerGetDatum(cstring_to_text(sourceWorkerNode->workerName));
+			values[1] = Int32GetDatum(sourceWorkerNode->workerPort);
+			values[2] = PointerGetDatum(cstring_to_text(targetWorkerNode->workerName));
+			values[3] = Int32GetDatum(targetWorkerNode->workerPort);
+
+			if (checkResultIsNull[resultIndex])
+			{
+				isNulls[4] = true;
+			}
+			else
+			{
+				values[4] = BoolGetDatum(checkSucceeded[resultIndex]);
 			}
 
 			tuplestore_putvalues(tupleStore, tupleDescriptor, values, isNulls);
-
-			PQclear(result);
-			ForgetResults(connectionToSourceNode);
+			targetIndex++;
 		}
+
+		sourceIndex++;
 	}
 }
 
