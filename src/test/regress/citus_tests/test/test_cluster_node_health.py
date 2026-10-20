@@ -51,6 +51,7 @@ class BlackholeServer:
             while connection.recv(1024):
                 pass
         except OSError:
+            # A client disconnect or server shutdown can interrupt recv().
             pass
 
         with self.lock:
@@ -195,7 +196,8 @@ def test_cluster_node_health_cancellation_stops_remote_checks(cluster):
                             time.sleep(0.1)
 
                         cluster.coordinator.sql(
-                            "SELECT pg_cancel_backend(%s)", (conn.info.backend_pid,)
+                            "SELECT pg_catalog.pg_cancel_backend(%s::integer)",
+                            (conn.info.backend_pid,),
                         )
                         canceller_result.append(None)
                     except Exception as e:
@@ -204,11 +206,15 @@ def test_cluster_node_health_cancellation_stops_remote_checks(cluster):
                 canceller = threading.Thread(target=cancel_when_checks_are_in_flight)
                 canceller.start()
 
-                with pytest.raises(psycopg.errors.QueryCanceled):
-                    cur.execute("SELECT * FROM citus_check_cluster_node_health()")
-                cancelled_at = time.monotonic()
+                try:
+                    with pytest.raises(psycopg.errors.QueryCanceled):
+                        cur.execute("SELECT * FROM citus_check_cluster_node_health()")
+                    cancelled_at = time.monotonic()
+                finally:
+                    canceller.join()
+                    if canceller_result and canceller_result[0] is not None:
+                        raise canceller_result[0]
 
-                canceller.join()
                 assert canceller_result == [None]
 
                 # every real source node had a check towards the fake node in flight
