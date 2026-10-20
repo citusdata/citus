@@ -4294,6 +4294,17 @@ get_variable(Var *var, int levelsup, bool istoplevel, deparse_context *context)
 				appendStringInfo(buf, "::%s",
 								 generate_rte_shard_name(rte));
 			}
+			else if (rte->rtekind == RTE_RELATION &&
+					 rte->relid == context->distrelid &&
+					 context->shardid > 0)
+			{
+				/* same for the target of a shard query, e.g. INSERT ... RETURNING alias */
+				appendStringInfo(buf, "::%s",
+								 generate_relation_or_shard_name(rte->relid,
+																 context->distrelid,
+																 context->shardid,
+																 NIL));
+			}
 			else
 			{
 				appendStringInfo(buf, "::%s",
