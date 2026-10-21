@@ -199,6 +199,18 @@ PostprocessCreateExtensionStmt(Node *node, const char *queryString)
 	/*  the code-path only supports a single object */
 	Assert(list_length(extensionAddresses) == 1);
 
+	/*
+	 * If the extension is already distributed, don't do anything to avoid
+	 * ownership checks on workers. This is important when a non-owner user runs
+	 * CREATE EXTENSION IF NOT EXISTS for an existing extension - PostgreSQL's
+	 * standard_ProcessUtility succeeds (extension exists, no-op), but metadata
+	 * propagation would fail the ownership check.
+	 */
+	if (IsAnyObjectDistributed(extensionAddresses))
+	{
+		return NIL;
+	}
+
 	EnsureAllObjectDependenciesExistOnAllNodes(extensionAddresses);
 
 	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
