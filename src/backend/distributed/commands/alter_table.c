@@ -1353,6 +1353,7 @@ CreateTableConversion(TableConversionParameters *params)
 	}
 
 
+	Oid relam = relation->rd_rel->relam;
 	relation_close(relation, NoLock);
 	con->distributionKey =
 		BuildDistributionKeyFromColumnName(con->relationId, con->distributionColumn,
@@ -1362,14 +1363,14 @@ CreateTableConversion(TableConversionParameters *params)
 	if (!PartitionedTable(con->relationId) && !IsForeignTable(con->relationId))
 	{
 		HeapTuple amTuple = SearchSysCache1(AMOID, ObjectIdGetDatum(
-												relation->rd_rel->relam));
+												relam));
 		if (!HeapTupleIsValid(amTuple))
 		{
 			ereport(ERROR, (errmsg("cache lookup failed for access method %d",
-								   relation->rd_rel->relam)));
+								   relam)));
 		}
 		Form_pg_am amForm = (Form_pg_am) GETSTRUCT(amTuple);
-		con->originalAccessMethod = NameStr(amForm->amname);
+		con->originalAccessMethod = pstrdup(NameStr(amForm->amname));
 		ReleaseSysCache(amTuple);
 	}
 
