@@ -107,6 +107,7 @@ static StripeMetadata * UpdateStripeMetadataRow(uint64 storageId, uint64 stripeI
 static List * ReadDataFileStripeList(uint64 storageId, Snapshot snapshot);
 static StripeMetadata * BuildStripeMetadata(Relation columnarStripes,
 											HeapTuple heapTuple);
+static bool StripeMetadataXminAborted(HeapTupleHeader tupleHeader);
 static uint32 * ReadChunkGroupRowCounts(uint64 storageId, uint64 stripe, uint32
 										chunkGroupCount, Snapshot snapshot);
 static Oid ColumnarStorageIdSequenceRelationId(void);
@@ -141,6 +142,7 @@ static StripeMetadata * StripeMetadataLookupRowNumber(Relation relation, uint64 
 static void CheckStripeMetadataConsistency(StripeMetadata *stripeMetadata);
 
 PG_FUNCTION_INFO_V1(columnar_relation_storageid);
+PG_FUNCTION_INFO_V1(test_columnar_metadata_xmin_aborted);
 
 /* constants for columnar.options */
 #define Natts_columnar_options 5
@@ -1589,14 +1591,68 @@ BuildStripeMetadata(Relation columnarStripes, HeapTuple heapTuple)
 	 * subtransaction id here.
 	 */
 	TransactionId entryXmin = HeapTupleHeaderGetXmin(heapTuple->t_data);
-	stripeMetadata->aborted = !TransactionIdIsInProgress(entryXmin) &&
-							  TransactionIdDidAbort(entryXmin);
+	stripeMetadata->aborted = StripeMetadataXminAborted(heapTuple->t_data);
 	stripeMetadata->insertedByCurrentXact =
 		TransactionIdIsCurrentTransactionId(entryXmin);
 
 	CheckStripeMetadataConsistency(stripeMetadata);
 
 	return stripeMetadata;
+}
+
+
+/*
+ * StripeMetadataXminAborted returns whether the transaction that inserted the
+ * given tuple aborted.
+ */
+static bool
+StripeMetadataXminAborted(HeapTupleHeader tupleHeader)
+{
+	/*
+	 * The tuple header status bits are authoritative. Check them before
+	 * consulting pg_xact, since the segment for an old XID may have already
+	 * been truncated.
+	 */
+	if (HeapTupleHeaderXminInvalid(tupleHeader))
+	{
+		return true;
+	}
+
+	if (HeapTupleHeaderXminCommitted(tupleHeader))
+	{
+		return false;
+	}
+
+	TransactionId entryXmin = HeapTupleHeaderGetXmin(tupleHeader);
+
+	return !TransactionIdIsInProgress(entryXmin) &&
+		   TransactionIdDidAbort(entryXmin);
+}
+
+
+/*
+ * test_columnar_metadata_xmin_aborted is a UDF only used for testing whether
+ * stripe metadata honors the xmin status bits stored in a heap tuple header.
+ */
+Datum
+test_columnar_metadata_xmin_aborted(PG_FUNCTION_ARGS)
+{
+	TransactionId entryXmin = PG_GETARG_UINT32(0);
+	bool xminCommitted = PG_GETARG_BOOL(1);
+	bool xminInvalid = PG_GETARG_BOOL(2);
+	HeapTupleHeaderData tupleHeader = { 0 };
+
+	HeapTupleHeaderSetXmin(&tupleHeader, entryXmin);
+	if (xminCommitted)
+	{
+		tupleHeader.t_infomask |= HEAP_XMIN_COMMITTED;
+	}
+	if (xminInvalid)
+	{
+		tupleHeader.t_infomask |= HEAP_XMIN_INVALID;
+	}
+
+	PG_RETURN_BOOL(StripeMetadataXminAborted(&tupleHeader));
 }
 
 
