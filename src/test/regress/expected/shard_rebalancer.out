@@ -2718,6 +2718,13 @@ select create_distributed_table('colocated_t3','a',colocate_with=>'"events.Energ
 
 (1 row)
 
+-- Register the coordinator so cache refreshes do not add missing-node DEBUG messages.
+SELECT 1 FROM master_add_node('localhost', :master_port, groupId => 0);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
 SET client_min_messages TO DEBUG4;
 SELECT * FROM get_rebalance_table_shards_plan('colocated_t1', rebalance_strategy := 'by_disk_size');
 DEBUG:  skipping child tables for relation named: colocated_t1
@@ -2733,6 +2740,12 @@ DEBUG:  Size Query: SELECT (SELECT SUM(worker_partitioned_relation_total_size(re
 (0 rows)
 
 RESET client_min_messages;
+SELECT 1 FROM master_remove_node('localhost', :master_port);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
 DROP TABLE "events.Energy Added", colocated_t1, colocated_t2, colocated_t3;
 RESET citus.shard_count;
 DROP VIEW table_placements_per_node;

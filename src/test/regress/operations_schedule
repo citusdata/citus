@@ -14,3 +14,4 @@ test: cpu_priority
 test: check_mx
 test: citus_drain_node
 test: background_rebalance_parallel_reference_tables
+test: background_rebalance_parallel_reference_fkeys
