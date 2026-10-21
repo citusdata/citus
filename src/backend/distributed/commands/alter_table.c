@@ -1358,7 +1358,7 @@ CreateTableConversion(TableConversionParameters *params)
 	relation_close(relation, NoLock);
 	con->distributionKey =
 		BuildDistributionKeyFromColumnName(con->relationId, con->distributionColumn,
-										   NoLock);
+										   NoLock, false);
 
 	con->originalAccessMethod = NULL;
 	if (!PartitionedTable(con->relationId) && !IsForeignTable(con->relationId))

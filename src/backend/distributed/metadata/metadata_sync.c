@@ -3591,7 +3591,7 @@ citus_internal_add_partition_metadata(PG_FUNCTION_ARGS)
 
 		distributionColumnVar =
 			BuildDistributionKeyFromColumnName(relationId, distributionColumnString,
-											   AccessShareLock);
+											   AccessShareLock, false);
 		Assert(distributionColumnVar != NULL);
 	}
 
