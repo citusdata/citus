@@ -927,7 +927,7 @@ SET client_min_messages TO DEBUG1;
 ALTER TABLE loc_tb_2 ADD CONSTRAINT fkey_2 FOREIGN KEY (a) references ref_tb(a);
 DEBUG:  executing "CREATE OR REPLACE VIEW citus_local_tables_mx.v104 (a) AS  SELECT a
    FROM citus_local_tables_mx.loc_tb_2 table_name_for_view; ALTER VIEW citus_local_tables_mx.v104 OWNER TO postgres"
-DEBUG:  "view v104" has dependency to "table loc_tb_2" that is not in Citus' metadata
+DEBUG:  "view citus_local_tables_mx.v104" has dependency to "table citus_local_tables_mx.loc_tb_2" that is not in Citus' metadata
 DEBUG:  validating foreign key constraint "fkey_2_1534052"
 SET client_min_messages TO WARNING;
 -- works fine
