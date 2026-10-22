@@ -2280,11 +2280,16 @@ ExecuteQueryViaSPI(char *query, int SPIOK)
 		ereport(ERROR, (errmsg("could not connect to SPI manager")));
 	}
 
+	/* don't trust the user provided search path, instead default to empty one to avoid operator overrides */
+	int searchPathNestLevel = PushEmptySearchPath();
+
 	spiResult = SPI_execute(query, false, 0);
 	if (spiResult != SPIOK)
 	{
 		ereport(ERROR, (errmsg("could not run SPI query")));
 	}
+
+	PopEmptySearchPath(searchPathNestLevel);
 
 	spiResult = SPI_finish();
 	if (spiResult != SPI_OK_FINISH)
