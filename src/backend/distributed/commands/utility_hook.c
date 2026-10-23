@@ -72,6 +72,7 @@
 #include "distributed/local_executor.h"
 #include "distributed/maintenanced.h"
 #include "distributed/metadata/distobject.h"
+#include "distributed/metadata_replay_security.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_explain.h"
@@ -115,6 +116,13 @@ static void PostStandardProcessUtility(Node *parsetree);
 static void DecrementUtilityHookCountersIfNecessary(Node *parsetree);
 static bool IsDropSchemaOrDB(Node *parsetree);
 static bool ShouldCheckUndistributeCitusLocalTables(void);
+static void RunUtilityAsMetadataReplayOwner(PlannedStmt *pstmt,
+											const char *queryString,
+											ProcessUtilityContext context,
+											ParamListInfo params,
+											struct QueryEnvironment *queryEnv,
+											DestReceiver *dest,
+											QueryCompletion *completionTag);
 
 
 /*
@@ -133,6 +141,60 @@ ProcessUtilityParseTree(Node *node, const char *queryString, ProcessUtilityConte
 
 	ProcessUtility(plannedStmt, queryString, false, context, params, NULL, dest,
 				   completionTag);
+}
+
+
+static void
+RunUtilityAsMetadataReplayOwner(PlannedStmt *pstmt,
+								const char *queryString,
+								ProcessUtilityContext context,
+								ParamListInfo params,
+								struct QueryEnvironment *queryEnv,
+								DestReceiver *dest,
+								QueryCompletion *completionTag)
+{
+	MetadataReplayOwnerContext ownerContext;
+	MemoryContext callerContext = CurrentMemoryContext;
+
+	EnterMetadataReplayOwnerContext(&ownerContext);
+
+	PG_TRY();
+	{
+		citus_ProcessUtility(pstmt, queryString, false, context, params,
+							 queryEnv, dest, completionTag);
+	}
+	PG_CATCH();
+	{
+		MemoryContextSwitchTo(callerContext);
+		ErrorData *errorData = CopyErrorData();
+		int sqlErrorCode = errorData->sqlerrcode;
+		char *errorMessage = pstrdup(errorData->message);
+		FreeErrorData(errorData);
+
+		ExitMetadataReplayOwnerContext(&ownerContext);
+
+		if (sqlErrorCode != ERRCODE_INSUFFICIENT_PRIVILEGE)
+		{
+			PG_RE_THROW();
+		}
+
+		FlushErrorState();
+
+		char *ownerName = GetUserNameFromId(ownerContext.ownerId, false);
+
+		ereport(ERROR, (errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+						errmsg("%s", errorMessage),
+						errdetail("Citus replayed this command as \"%s\", the owner of "
+								  "the object, so that expressions it carries are not "
+								  "evaluated with the rights of the replaying superuser.",
+								  ownerName),
+						errhint("Grant \"%s\" the missing privilege, or set "
+								"citus.metadata_replay_protection to off to replay "
+								"without it.", ownerName)));
+	}
+	PG_END_TRY();
+
+	ExitMetadataReplayOwnerContext(&ownerContext);
 }
 
 
@@ -161,6 +223,16 @@ citus_ProcessUtility(PlannedStmt *pstmt,
 	}
 
 	Node *parsetree = pstmt->utilityStmt;
+
+	if (MetadataReplayStatementIsMarked() &&
+		!IsA(parsetree, DoStmt) &&
+		!IsA(parsetree, TransactionStmt))
+	{
+		RunUtilityAsMetadataReplayOwner(pstmt, queryString, context, params,
+										queryEnv, dest, completionTag);
+
+		return;
+	}
 
 	if (IsA(parsetree, TransactionStmt))
 	{

@@ -33,6 +33,7 @@
 #include "distributed/deparser.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata/distobject.h"
+#include "distributed/metadata_replay_security.h"
 #include "distributed/worker_create_or_replace.h"
 #include "distributed/worker_protocol.h"
 
@@ -186,6 +187,8 @@ worker_create_or_replace_object_array(PG_FUNCTION_ARGS)
 static bool
 WorkerCreateOrReplaceObject(List *sqlStatements)
 {
+	char *replayOwner = SaveAndClearMetadataReplayMarker();
+
 	/*
 	 * To check which object we are changing we find the object address from the first
 	 * statement passed into the UDF. Later we will check if all object addresses are the
@@ -254,6 +257,7 @@ WorkerCreateOrReplaceObject(List *sqlStatements)
 	foreach_declared_ptr(sqlStatement, sqlStatements)
 	{
 		parseTree = ParseTreeNode(sqlStatement);
+		RestoreMetadataReplayMarker(replayOwner);
 		ProcessUtilityParseTree(parseTree, sqlStatement, PROCESS_UTILITY_QUERY, NULL,
 								None_Receiver, NULL);
 

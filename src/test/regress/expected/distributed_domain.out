@@ -681,6 +681,9 @@ SELECT * FROM use_age_invalid ORDER BY 1;
 ALTER DOMAIN age_invalid VALIDATE CONSTRAINT check_age_positive;
 -- test changing the owner of a domain
 CREATE ROLE domain_owner;
+-- the owner has to be able to recreate the domain, since a dependency is created
+-- on the workers with the rights of the role that owns it
+GRANT USAGE, CREATE ON SCHEMA distributed_domain TO domain_owner;
 CREATE DOMAIN alter_domain_owner AS int;
 ALTER DOMAIN alter_domain_owner OWNER TO domain_owner;
 SELECT u.rolname

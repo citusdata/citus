@@ -44,13 +44,19 @@ SELECT run_command_on_workers($$SELECT count(*) from pg_catalog.pg_dist_object w
  (localhost,57638,t,1)
 (1 row)
 
+-- a non-default owner that holds the rights needed to recreate the table, so
+-- that adding a node exercises owner preserving replay rather than a role that
+-- could never create the table in the first place
+CREATE ROLE foreign_table_owner;
+GRANT USAGE, CREATE ON SCHEMA propagate_foreign_server TO foreign_table_owner;
+GRANT USAGE ON FOREIGN SERVER foreign_server_dependent_schema TO foreign_table_owner;
 SELECT citus_add_local_table_to_metadata('foreign_table');
  citus_add_local_table_to_metadata
 ---------------------------------------------------------------------
 
 (1 row)
 
-ALTER TABLE foreign_table OWNER TO pg_monitor;
+ALTER TABLE foreign_table OWNER TO foreign_table_owner;
 SELECT 1 FROM citus_add_node('localhost', :worker_1_port);
  ?column?
 ---------------------------------------------------------------------
@@ -76,10 +82,10 @@ SELECT run_command_on_workers(
 
 -- verify the owner is altered on workers
 SELECT run_command_on_workers($$select r.rolname from pg_roles r join pg_class c on r.oid=c.relowner where relname = 'foreign_table';$$);
-     run_command_on_workers
+         run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,pg_monitor)
- (localhost,57638,t,pg_monitor)
+ (localhost,57637,t,foreign_table_owner)
+ (localhost,57638,t,foreign_table_owner)
 (2 rows)
 
 CREATE SERVER foreign_server_to_drop
@@ -87,6 +93,8 @@ CREATE SERVER foreign_server_to_drop
         OPTIONS (host 'test');
 DROP FOREIGN TABLE foreign_table;
 DROP SERVER foreign_server_dependent_schema, foreign_server_to_drop;
+REVOKE ALL ON SCHEMA propagate_foreign_server FROM foreign_table_owner;
+DROP ROLE foreign_table_owner;
 SELECT citus_remove_node('localhost', :master_port);
  citus_remove_node
 ---------------------------------------------------------------------
