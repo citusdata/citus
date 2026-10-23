@@ -789,3 +789,56 @@ SET client_min_messages TO WARNING;
 DROP SCHEMA pg19_repack CASCADE;
 RESET client_min_messages;
 RESET search_path;
+
+--
+-- EXPLAIN (ANALYZE, IO) has to reach the worker nodes (#8770).  PG19 added the
+-- IO option; Citus forwards a fixed set of options to the workers, so without
+-- explicit support the distributed plan silently comes back with no IO info.
+--
+CREATE SCHEMA pg19_explain_io;
+SET search_path TO pg19_explain_io;
+
+-- only assert on the presence of the IO section: the prefetch numbers depend on
+-- effective_io_concurrency and on the host
+CREATE FUNCTION explain_has_prefetch(explain_command text)
+RETURNS BOOLEAN AS $$
+DECLARE
+	query_plan text;
+BEGIN
+	FOR query_plan IN EXECUTE explain_command LOOP
+		IF query_plan ILIKE '%Prefetch:%' THEN
+			RETURN true;
+		END IF;
+	END LOOP;
+	RETURN false;
+END; $$ LANGUAGE plpgsql;
+
+CREATE TABLE explain_io(a int, b int);
+SELECT create_distributed_table('explain_io', 'a');
+INSERT INTO explain_io SELECT g, g FROM generate_series(1, 10) g;
+
+SELECT explain_has_prefetch($$
+	EXPLAIN (ANALYZE, IO, COSTS OFF, TIMING OFF, SUMMARY OFF)
+	SELECT count(*) FROM explain_io $$);
+
+-- without IO the worker plans must not contain the section
+SELECT explain_has_prefetch($$
+	EXPLAIN (ANALYZE, COSTS OFF, TIMING OFF, SUMMARY OFF)
+	SELECT count(*) FROM explain_io $$);
+
+-- IO also has to be preserved in the saved plans for distributed subplans.
+SET citus.explain_all_tasks TO on;
+SELECT explain_has_prefetch($$
+	EXPLAIN (ANALYZE, IO, COSTS OFF, TIMING OFF, SUMMARY OFF)
+	WITH cte_1 AS MATERIALIZED (SELECT * FROM explain_io)
+	SELECT count(*) FROM cte_1 $$);
+SELECT explain_has_prefetch($$
+	EXPLAIN (ANALYZE, COSTS OFF, TIMING OFF, SUMMARY OFF)
+	WITH cte_1 AS MATERIALIZED (SELECT * FROM explain_io)
+	SELECT count(*) FROM cte_1 $$);
+RESET citus.explain_all_tasks;
+
+SET client_min_messages TO WARNING;
+DROP SCHEMA pg19_explain_io CASCADE;
+RESET client_min_messages;
+RESET search_path;
