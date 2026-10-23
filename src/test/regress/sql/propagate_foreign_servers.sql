@@ -35,8 +35,15 @@ SELECT run_command_on_workers($$select aggfnoid from pg_aggregate where aggfnoid
 -- verify that the aggregate is added top pg_dist_object on the new node
 SELECT run_command_on_workers($$SELECT count(*) from pg_catalog.pg_dist_object where objid = 'propagate_foreign_server.array_agg'::regproc;$$);
 
+-- a non-default owner that holds the rights needed to recreate the table, so
+-- that adding a node exercises owner preserving replay rather than a role that
+-- could never create the table in the first place
+CREATE ROLE foreign_table_owner;
+GRANT USAGE, CREATE ON SCHEMA propagate_foreign_server TO foreign_table_owner;
+GRANT USAGE ON FOREIGN SERVER foreign_server_dependent_schema TO foreign_table_owner;
+
 SELECT citus_add_local_table_to_metadata('foreign_table');
-ALTER TABLE foreign_table OWNER TO pg_monitor;
+ALTER TABLE foreign_table OWNER TO foreign_table_owner;
 
 SELECT 1 FROM citus_add_node('localhost', :worker_1_port);
 
@@ -55,6 +62,8 @@ CREATE SERVER foreign_server_to_drop
 
 DROP FOREIGN TABLE foreign_table;
 DROP SERVER foreign_server_dependent_schema, foreign_server_to_drop;
+REVOKE ALL ON SCHEMA propagate_foreign_server FROM foreign_table_owner;
+DROP ROLE foreign_table_owner;
 SELECT citus_remove_node('localhost', :master_port);
 
 SET client_min_messages TO ERROR;

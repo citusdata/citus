@@ -331,6 +331,9 @@ SET client_min_messages TO ERROR;
 CREATE USER alter_view_user;
 SELECT 1 FROM run_command_on_workers($$CREATE USER alter_view_user;$$);
 RESET client_min_messages;
+-- the new owner needs to be able to recreate the view, since metadata sync
+-- replays it with the rights of the role that owns it
+GRANT USAGE, CREATE ON SCHEMA view_prop_schema TO alter_view_user;
 ALTER VIEW alter_view_1 OWNER TO alter_view_user;
 ALTER TABLE alter_view_1 OWNER TO alter_view_user;
 
