@@ -72,6 +72,7 @@
 #include "distributed/metadata/distobject.h"
 #include "distributed/metadata/pg_dist_object.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/metadata_replay_security.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/metadata_utility.h"
 #include "distributed/multi_executor.h"
@@ -3078,6 +3079,31 @@ InterTableRelationshipOfRelationCommandList(Oid relationId)
 
 
 /*
+ * InterTableRelationshipOfRelationCommandListForMetadataReplay protects partition
+ * bounds when replay uses a privileged connection.
+ */
+static List *
+InterTableRelationshipOfRelationCommandListForMetadataReplay(Oid relationId)
+{
+	List *commandList = GetReferencingForeignConstaintCommands(relationId);
+
+	if (PartitionTable(relationId))
+	{
+		ObjectAddress relationAddress = { 0 };
+		ObjectAddressSet(relationAddress, RelationRelationId, relationId);
+		List *attachCommandList =
+			list_make1(GenerateAlterTableAttachPartitionCommand(relationId));
+		commandList =
+			list_concat(commandList,
+						ProtectMetadataReplayCommandList(attachCommandList,
+														 &relationAddress));
+	}
+
+	return commandList;
+}
+
+
+/*
  * CreateShellTableOnRemoteNodes creates the shell table on each remote node with metadata
  * including sequence dependency and truncate triggers.
  */
@@ -5550,7 +5576,8 @@ SendDependencyCreationCommands(MetadataSyncContext *context)
 		}
 
 		/* dependency creation commands */
-		List *ddlCommands = GetAllDependencyCreateDDLCommands(list_make1(dependency));
+		List *ddlCommands =
+			GetAllDependencyCreateDDLCommandsForMetadataReplay(list_make1(dependency));
 		SendOrCollectCommandListToActivatedNodes(context, ddlCommands);
 	}
 	MemoryContextSwitchTo(oldContext);
@@ -5755,7 +5782,8 @@ SendInterTableRelationshipCommands(MetadataSyncContext *context)
 			continue;
 		}
 
-		List *commandList = InterTableRelationshipOfRelationCommandList(relationId);
+		List *commandList =
+			InterTableRelationshipOfRelationCommandListForMetadataReplay(relationId);
 		SendOrCollectCommandListToActivatedNodes(context, commandList);
 	}
 	MemoryContextSwitchTo(oldContext);
