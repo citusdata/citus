@@ -33,6 +33,7 @@
 #include "distributed/deparser.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata/distobject.h"
+#include "distributed/metadata_replay_security.h"
 #include "distributed/worker_create_or_replace.h"
 #include "distributed/worker_protocol.h"
 
@@ -187,6 +188,13 @@ static bool
 WorkerCreateOrReplaceObject(List *sqlStatements)
 {
 	/*
+	 * The marker belongs to the statements this function was asked to apply, not
+	 * to the collision handling that may precede them, which would consume it and
+	 * leave the create running with the rights of the replaying superuser.
+	 */
+	char *replayOwner = SaveAndClearMetadataReplayMarker();
+
+	/*
 	 * To check which object we are changing we find the object address from the first
 	 * statement passed into the UDF. Later we will check if all object addresses are the
 	 * same.
@@ -254,6 +262,7 @@ WorkerCreateOrReplaceObject(List *sqlStatements)
 	foreach_declared_ptr(sqlStatement, sqlStatements)
 	{
 		parseTree = ParseTreeNode(sqlStatement);
+		RestoreMetadataReplayMarker(replayOwner);
 		ProcessUtilityParseTree(parseTree, sqlStatement, PROCESS_UTILITY_QUERY, NULL,
 								None_Receiver, NULL);
 
