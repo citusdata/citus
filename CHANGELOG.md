@@ -1,4 +1,4 @@
-### citus v13.5.0 (TBD) ###
+### citus v13.5.0 (October 23, 2026) ###
 
 * Speeds up `ALTER EXTENSION citus UPDATE` when many distributed objects
   exist (#8890)
