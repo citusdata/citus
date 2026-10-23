@@ -2174,18 +2174,6 @@ RegisterCitusConfigVariables(void)
 		GUC_STANDARD,
 		NULL, NULL, NULL);
 
-	DefineCustomIntVariable(
-		"citus.metadata_sync_interval",
-		gettext_noop("Sets the time to wait between metadata syncs."),
-		gettext_noop("metadata sync needs to run every so often "
-					 "to synchronize metadata to metadata nodes "
-					 "that are out of sync."),
-		&MetadataSyncInterval,
-		60 * MS_PER_SECOND, 1, 7 * MS_PER_DAY,
-		PGC_SIGHUP,
-		GUC_UNIT_MS | GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
-		NULL, NULL, NULL);
-
 	DefineCustomStringVariable(
 		"citus.metadata_replay_owner",
 		gettext_noop("Role that expressions run as while metadata is replayed."),
@@ -2212,6 +2200,18 @@ RegisterCitusConfigVariables(void)
 		metadata_replay_protection_options,
 		PGC_SUSET,
 		GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomIntVariable(
+		"citus.metadata_sync_interval",
+		gettext_noop("Sets the time to wait between metadata syncs."),
+		gettext_noop("metadata sync needs to run every so often "
+					 "to synchronize metadata to metadata nodes "
+					 "that are out of sync."),
+		&MetadataSyncInterval,
+		60 * MS_PER_SECOND, 1, 7 * MS_PER_DAY,
+		PGC_SIGHUP,
+		GUC_UNIT_MS | GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
 	DefineCustomEnumVariable(
