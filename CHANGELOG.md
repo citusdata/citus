@@ -1,3 +1,58 @@
+### citus v13.5.0 (October 23, 2026) ###
+
+* Speeds up `ALTER EXTENSION citus UPDATE` when many distributed objects
+  exist (#8890)
+
+* Speeds up `citus_check_cluster_node_health()` by checking source nodes
+  concurrently (#8935)
+
+* Fixes `GRANTED BY` clause ordering in propagated `REVOKE` statements
+  (#8766)
+
+* Fixes incorrect column references in `HAVING` clauses pushed down to
+  shards (#8864)
+
+* Quotes `EXTRACT` field names in rewritten queries to prevent SQL
+  injection (#8810)
+
+* Parses `output_plugin_libraries` using PostgreSQL-compatible quoting and
+  whitespace rules during shard splits (#8797)
+
+* Fixes a crash in the CDC decoder when translated tuples outlive the
+  publish call (#8845)
+
+* Fixes use-after-free errors related to `RELCACHE_FORCE_RELEASE`,
+  including table conversion (#8477)
+
+* Fixes quoting of tablespace names in `REINDEX` commands sent to shards
+  (#8872)
+
+* Qualifies and quotes support function names in `ALTER FUNCTION` commands
+  (#8873)
+
+* Fixes a columnar metadata visibility issue by honoring xmin hint bits in
+  stripe metadata (#8856)
+
+* Fixes clone promotion catch-up by using a fixed WAL target (#8829)
+
+* Prevents memory growth in the local plan cache for prepared statements
+  (#8824)
+
+* Allows `CREATE EXTENSION IF NOT EXISTS` for an already-distributed
+  extension when run by a non-owner (#8465)
+
+* Fixes integer overflow in rebalance job IDs (#8819)
+
+* Fixes row-count overflow for intermediate results (#8818)
+
+* Restricts the internal metadata cleanup entry point to superusers
+  (#8941)
+
+* Runs internal SPI queries with an empty search path (#8943)
+
+* Evaluates replayed object definitions as their owners under restricted
+  security contexts (#8945)
+
 ### citus v13.4.0 (August 6, 2026) ###
 
 * Adds `citus_internal.distribute_object()`, a superuser-only repair UDF
