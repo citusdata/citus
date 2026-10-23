@@ -350,6 +350,7 @@ ALTER DOMAIN age_invalid VALIDATE CONSTRAINT check_age_positive;
 
 -- test changing the owner of a domain
 CREATE ROLE domain_owner;
+GRANT USAGE, CREATE ON SCHEMA distributed_domain TO domain_owner;
 
 CREATE DOMAIN alter_domain_owner AS int;
 ALTER DOMAIN alter_domain_owner OWNER TO domain_owner;

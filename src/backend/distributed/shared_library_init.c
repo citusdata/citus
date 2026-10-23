@@ -79,6 +79,7 @@
 #include "distributed/log_utils.h"
 #include "distributed/maintenanced.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/metadata_replay_security.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/metadata_utility.h"
 #include "distributed/multi_executor.h"
@@ -206,6 +207,8 @@ static void DecrementExternalClientBackendCounterAtExit(int code, Datum arg);
 static void CreateRequiredDirectories(void);
 static void RegisterCitusConfigVariables(void);
 static void OverridePostgresConfigProperties(void);
+static bool MetadataReplayOwnerCheckHook(char **newval, void **extra,
+										 GucSource source);
 static bool ErrorIfNotASuitableDeadlockFactor(double *newval, void **extra,
 											  GucSource source);
 static bool WarnIfDeprecatedExecutorUsed(int *newval, void **extra, GucSource source);
@@ -384,6 +387,13 @@ static const struct config_enum_entry cpu_priority_options[] = {
 	{ "18", 18, false},
 	{ "19", 19, false},
 	{ NULL, 0, false}
+};
+
+static const struct config_enum_entry metadata_replay_protection_options[] = {
+	{ "off", METADATA_REPLAY_PROTECTION_OFF, false },
+	{ "warn", METADATA_REPLAY_PROTECTION_WARN, false },
+	{ "require", METADATA_REPLAY_PROTECTION_REQUIRE, false },
+	{ NULL, 0, false }
 };
 
 static const struct config_enum_entry metadata_sync_mode_options[] = {
@@ -2284,6 +2294,34 @@ RegisterCitusConfigVariables(void)
 		GUC_STANDARD,
 		NULL, NULL, NULL);
 
+	DefineCustomStringVariable(
+		"citus.metadata_replay_owner",
+		gettext_noop("Role that expressions run as while metadata is replayed."),
+		gettext_noop("Citus recreates distributed objects through a superuser "
+					 "connection. While this is set, the replayed statement runs as "
+					 "the given role instead."),
+		&MetadataReplayOwner,
+		"",
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
+		MetadataReplayOwnerCheckHook, NULL, NULL);
+
+	DefineCustomEnumVariable(
+		"citus.metadata_replay_protection",
+		gettext_noop("Sets how replay reacts to a node that cannot apply the "
+					 "owner marker."),
+		gettext_noop("Replayed commands that carry tenant-authored expressions run "
+					 "as the object owner. A node that predates this protection ignores "
+					 "the marker and evaluates them with the rights of the replaying "
+					 "superuser. Use warn to report such a node, require to refuse it, "
+					 "or off to disable the marker entirely."),
+		&MetadataReplayProtection,
+		METADATA_REPLAY_PROTECTION_WARN,
+		metadata_replay_protection_options,
+		PGC_SUSET,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
 	DefineCustomIntVariable(
 		"citus.metadata_sync_cache_flush_interval",
 		gettext_noop("Sets the number of distributed objects processed between "
@@ -3084,6 +3122,42 @@ ErrorIfNotASuitableDeadlockFactor(double *newval, void **extra, GucSource source
 							  "citus.distributed_deadlock_detection_factor cannot be less than 1. "
 							  "To disable distributed deadlock detection set the value to -1.")));
 
+		return false;
+	}
+
+	return true;
+}
+
+
+/*
+ * MetadataReplayOwnerCheckHook only lets Citus reduce the rights of a privileged
+ * replay session. A tenant must never be able to lift the marker, and neither may
+ * a function that we already de-escalated.
+ */
+static bool
+MetadataReplayOwnerCheckHook(char **newval, void **extra, GucSource source)
+{
+	if (source == PGC_S_DEFAULT)
+	{
+		return true;
+	}
+
+	/*
+	 * The current user is what decides privileges, and it is not the session user
+	 * inside a SECURITY DEFINER function owned by a tenant. Checking only the
+	 * session user would let such a function raise itself to the caller's rights.
+	 */
+	if (!superuser_arg(GetUserId()) || !superuser_arg(GetSessionUserId()) ||
+		InSecurityRestrictedOperation())
+	{
+		GUC_check_errmsg("permission denied to set metadata replay security context");
+		return false;
+	}
+
+	if ((*newval)[0] != '\0' &&
+		!OidIsValid(get_role_oid(*newval, true)))
+	{
+		GUC_check_errmsg("metadata replay owner does not exist");
 		return false;
 	}
 

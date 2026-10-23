@@ -30,6 +30,7 @@
 #include "distributed/metadata/dependency.h"
 #include "distributed/metadata/distobject.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/metadata_replay_security.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/metadata_utility.h"
 #include "distributed/multi_executor.h"
@@ -199,6 +200,7 @@ EnsureObjectExistsOnAllNodes(const ObjectAddress *target, bool forceRecreate)
 	bool bundlePartitionMetadata = false;
 	List *ddlCommands = GetDependencyCreateDDLCommands(target,
 													   bundlePartitionMetadata);
+	ddlCommands = ProtectMetadataReplayCommandList(ddlCommands, target);
 
 	if (list_length(ddlCommands) == 0)
 	{
@@ -412,6 +414,7 @@ EnsureRequiredObjectSetExistOnAllNodes(const ObjectAddress *target,
 
 	List *objectsWithCommands = NIL;
 	List *ddlCommands = NULL;
+	List *protectedDDLCommands = NIL;
 
 	/*
 	 * If there is any unsupported dependency or circular dependency exists, Citus can
@@ -447,6 +450,9 @@ EnsureRequiredObjectSetExistOnAllNodes(const ObjectAddress *target,
 																  bundlePartitionMetadata)
 		;
 		ddlCommands = list_concat(ddlCommands, dependencyCommands);
+		protectedDDLCommands =
+			list_concat(protectedDDLCommands,
+						ProtectMetadataReplayCommandList(dependencyCommands, object));
 
 		/* create a new list with objects that actually created commands */
 		if (list_length(dependencyCommands) > 0)
@@ -462,6 +468,8 @@ EnsureRequiredObjectSetExistOnAllNodes(const ObjectAddress *target,
 
 	/* since we are executing ddl commands lets disable propagation, primarily for mx */
 	ddlCommands = list_concat(list_make1(DISABLE_DDL_PROPAGATION), ddlCommands);
+	protectedDDLCommands = list_concat(list_make1(DISABLE_DDL_PROPAGATION),
+									   protectedDDLCommands);
 
 	/*
 	 * Make sure that no new nodes are added after this point until the end of the
@@ -535,9 +543,10 @@ EnsureRequiredObjectSetExistOnAllNodes(const ObjectAddress *target,
 			const char *nodeName = workerNode->workerName;
 			uint32 nodePort = workerNode->workerPort;
 
+			/* this connection is the extension owner, hence the marked commands */
 			SendCommandListToWorkerOutsideTransaction(nodeName, nodePort,
 													  CitusExtensionOwnerName(),
-													  ddlCommands);
+													  protectedDDLCommands);
 		}
 	}
 
@@ -1001,6 +1010,35 @@ GetAllDependencyCreateDDLCommands(const List *dependencies, bool bundlePartition
 		commands = list_concat(commands,
 							   GetDependencyCreateDDLCommands(dependency,
 															  bundlePartitionMetadata));
+	}
+
+	return commands;
+}
+
+
+/*
+ * GetAllDependencyCreateDDLCommandsForMetadataReplay returns the commands that
+ * recreate the given dependencies, each marked with the owner of the object it
+ * recreates.
+ *
+ * Use this instead of GetAllDependencyCreateDDLCommands whenever the commands are
+ * sent through a superuser connection.
+ */
+List *
+GetAllDependencyCreateDDLCommandsForMetadataReplay(const List *dependencies,
+												   bool bundlePartitionMetadata)
+{
+	List *commands = NIL;
+
+	ObjectAddress *dependency = NULL;
+	foreach_declared_ptr(dependency, dependencies)
+	{
+		List *dependencyCommands =
+			GetDependencyCreateDDLCommands(dependency, bundlePartitionMetadata);
+
+		commands =
+			list_concat(commands,
+						ProtectMetadataReplayCommandList(dependencyCommands, dependency));
 	}
 
 	return commands;
