@@ -1,3 +1,75 @@
+### citus v14.3.0 (October 23, 2026) ###
+
+* Adds sorted-merge execution for multi-shard `ORDER BY` queries, avoiding
+  an extra Sort node on the coordinator (#8529, #8584)
+
+* Fetches rows in small batches in the adaptive executor where possible
+  (#5195)
+
+* Adds `citus.enable_or_clause_arm_pruning` to enable per-shard pruning of
+  OR-clause arms (#8642)
+
+* Speeds up `ALTER EXTENSION citus UPDATE` when many distributed objects
+  exist (#8890)
+
+* Speeds up `citus_check_cluster_node_health()` by checking source nodes
+  concurrently (#8935)
+
+* Restricts internal metadata cleanup to superusers (#8942)
+
+* Uses an empty `search_path` for internal SPI queries, independent of caller
+  settings (#8944)
+
+* Evaluates replayed object definitions as their owner under restricted
+  execution (#8946)
+
+* Fixes `GRANTED BY` clause ordering in propagated `REVOKE` statements
+  (#8766)
+
+* Fixes incorrect column references in `HAVING` clauses pushed down to
+  shards (#8864)
+
+* Fixes use-after-free errors related to `RELCACHE_FORCE_RELEASE`,
+  including table conversion (#8477)
+
+* Fixes quoting of tablespace names in `REINDEX` commands sent to shards
+  (#8872)
+
+* Qualifies and quotes support function names in `ALTER FUNCTION` commands
+  (#8873)
+
+* Fixes a relation-lock assertion during concurrent distribution (#8679)
+
+* Fixes a columnar metadata visibility issue by honoring xmin hint bits in
+  stripe metadata (#8856)
+
+* Fixes incorrect decomposition of non-column expressions in distributed
+  `GROUP BY` queries (#8527)
+
+* Prevents memory growth in the local plan cache for prepared statements
+  (#8824)
+
+* Fixes a crash in the CDC decoder when translated tuples outlive the
+  publish call (#8845)
+
+* Fixes foreign-key cache corruption during parallel reference-table
+  rebalancing (#8869)
+
+* Fixes clone promotion catch-up by using a fixed WAL target (#8829)
+
+* Fixes transaction recovery when a node is removed (#8885)
+
+* Fixes errors in `time_partitions` queries caused by join reordering
+  (#8843)
+
+* Fixes integer overflow in rebalance job IDs (#8819)
+
+* Fixes row-count overflow for intermediate results (#8818)
+
+* Fixes an orphan-cleanup snapshot issue on PostgreSQL 18 (#8676)
+
+* Quotes `EXTRACT` fields in rewritten queries for PostgreSQL 16–18 (#8809)
+
 ### citus v14.2.0 (August 6, 2026) ###
 
 * Adds `citus_internal.distribute_object()`, a superuser-only repair UDF
