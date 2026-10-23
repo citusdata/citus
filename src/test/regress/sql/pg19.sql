@@ -826,24 +826,17 @@ SELECT explain_has_prefetch($$
 	EXPLAIN (ANALYZE, COSTS OFF, TIMING OFF, SUMMARY OFF)
 	SELECT count(*) FROM explain_io $$);
 
--- EXPLAIN ANALYZE of a distributed subplan makes Citus build the remote EXPLAIN
--- statement itself instead of reusing a plan saved by the worker, so IO has to
--- be forwarded on that path as well.  The plan of the INSERT tasks reads nothing
--- and therefore has no IO section, the assertion here is the logged command.
-SET citus.shard_count TO 2;
-SET citus.next_shard_id TO 8770000;
-CREATE TABLE explain_io_mod(a int, b int);
-INSERT INTO explain_io_mod VALUES (1, 11);
-SELECT create_distributed_table('explain_io_mod', 'a');
+-- IO also has to be preserved in the saved plans for distributed subplans.
 SET citus.explain_all_tasks TO on;
-SET citus.log_remote_commands TO on;
-SET citus.grep_remote_commands TO '%IO TRUE%';
 SELECT explain_has_prefetch($$
 	EXPLAIN (ANALYZE, IO, COSTS OFF, TIMING OFF, SUMMARY OFF)
-	WITH cte_1 AS (INSERT INTO explain_io_mod VALUES (6,66),(7,77),(8,88) RETURNING *)
-	SELECT * FROM cte_1 $$);
-RESET citus.log_remote_commands;
-RESET citus.grep_remote_commands;
+	WITH cte_1 AS MATERIALIZED (SELECT * FROM explain_io)
+	SELECT count(*) FROM cte_1 $$);
+SELECT explain_has_prefetch($$
+	EXPLAIN (ANALYZE, COSTS OFF, TIMING OFF, SUMMARY OFF)
+	WITH cte_1 AS MATERIALIZED (SELECT * FROM explain_io)
+	SELECT count(*) FROM cte_1 $$);
+RESET citus.explain_all_tasks;
 
 SET client_min_messages TO WARNING;
 DROP SCHEMA pg19_explain_io CASCADE;

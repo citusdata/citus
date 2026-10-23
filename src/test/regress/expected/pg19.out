@@ -1088,41 +1088,27 @@ SELECT explain_has_prefetch($$
  f
 (1 row)
 
--- EXPLAIN ANALYZE of a distributed subplan makes Citus build the remote EXPLAIN
--- statement itself instead of reusing a plan saved by the worker, so IO has to
--- be forwarded on that path as well.  The plan of the INSERT tasks reads nothing
--- and therefore has no IO section, the assertion here is the logged command.
-SET citus.shard_count TO 2;
-SET citus.next_shard_id TO 8770000;
-CREATE TABLE explain_io_mod(a int, b int);
-INSERT INTO explain_io_mod VALUES (1, 11);
-SELECT create_distributed_table('explain_io_mod', 'a');
-NOTICE:  Copying data from local table...
-NOTICE:  copying the data has completed
-DETAIL:  The local data in the table is no longer visible, but is still on disk.
-HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$pg19_explain_io.explain_io_mod$$)
- create_distributed_table
----------------------------------------------------------------------
-
-(1 row)
-
+-- IO also has to be preserved in the saved plans for distributed subplans.
 SET citus.explain_all_tasks TO on;
-SET citus.log_remote_commands TO on;
-SET citus.grep_remote_commands TO '%IO TRUE%';
 SELECT explain_has_prefetch($$
 	EXPLAIN (ANALYZE, IO, COSTS OFF, TIMING OFF, SUMMARY OFF)
-	WITH cte_1 AS (INSERT INTO explain_io_mod VALUES (6,66),(7,77),(8,88) RETURNING *)
-	SELECT * FROM cte_1 $$);
-NOTICE:  issuing EXPLAIN (ANALYZE TRUE, VERBOSE FALSE, COSTS FALSE, BUFFERS TRUE, WAL FALSE, TIMING FALSE, SUMMARY FALSE, MEMORY FALSE, SERIALIZE none, IO TRUE, FORMAT TEXT) INSERT INTO pg19_explain_io.explain_io_mod_8770001 AS citus_table_alias (a, b) VALUES (6,66) RETURNING citus_table_alias.a, citus_table_alias.b
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-CONTEXT:  PL/pgSQL function explain_has_prefetch(text) line XX at FOR over EXECUTE statement
+	WITH cte_1 AS MATERIALIZED (SELECT * FROM explain_io)
+	SELECT count(*) FROM cte_1 $$);
+ explain_has_prefetch
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT explain_has_prefetch($$
+	EXPLAIN (ANALYZE, COSTS OFF, TIMING OFF, SUMMARY OFF)
+	WITH cte_1 AS MATERIALIZED (SELECT * FROM explain_io)
+	SELECT count(*) FROM cte_1 $$);
  explain_has_prefetch
 ---------------------------------------------------------------------
  f
 (1 row)
 
-RESET citus.log_remote_commands;
-RESET citus.grep_remote_commands;
+RESET citus.explain_all_tasks;
 SET client_min_messages TO WARNING;
 DROP SCHEMA pg19_explain_io CASCADE;
 RESET client_min_messages;

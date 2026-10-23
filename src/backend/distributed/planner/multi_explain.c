@@ -915,10 +915,9 @@ RemoteExplain(Task *task, ExplainState *es, ParamListInfo params)
 {
 	/*
 	 * For EXPLAIN EXECUTE we still use the old method, so task->fetchedExplainAnalyzePlan
-	 * can be NULL for some cases of es->analyze == true.  The same is true for a
-	 * distributed subplan: its saved output is keyed by task id and consumed once when
-	 * replayed into a freshly planned task list, so a task without a matching entry
-	 * falls through to a live remote EXPLAIN here.
+	 * can be NULL for some cases of es->analyze == true.  A distributed subplan can
+	 * also end up here when its re-planned task ids do not match the ids its saved
+	 * output was stored under; that is a known bug, see #8952.
 	 */
 	if (es->analyze && task->fetchedExplainAnalyzePlan)
 	{
