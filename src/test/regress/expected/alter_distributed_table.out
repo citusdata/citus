@@ -1060,7 +1060,7 @@ SELECT alter_distributed_table('mat_view_test', shard_count := 5, cascade_to_col
 NOTICE:  creating a new table for alter_distributed_table.mat_view_test
 NOTICE:  moving the data of alter_distributed_table.mat_view_test
 NOTICE:  dropping the old alter_distributed_table.mat_view_test
-NOTICE:  drop cascades to materialized view mat_view
+NOTICE:  drop cascades to materialized view alter_distributed_table.mat_view
 CONTEXT:  SQL statement "DROP TABLE alter_distributed_table.mat_view_test CASCADE"
 NOTICE:  renaming the new table to alter_distributed_table.mat_view_test
  alter_distributed_table
@@ -1168,7 +1168,7 @@ SELECT alter_distributed_table('test_am_matview', shard_count:= 52);
 NOTICE:  creating a new table for alter_distributed_table.test_am_matview
 NOTICE:  moving the data of alter_distributed_table.test_am_matview
 NOTICE:  dropping the old alter_distributed_table.test_am_matview
-NOTICE:  drop cascades to materialized view test_mat_view_am
+NOTICE:  drop cascades to materialized view alter_distributed_table.test_mat_view_am
 CONTEXT:  SQL statement "DROP TABLE alter_distributed_table.test_am_matview CASCADE"
 NOTICE:  renaming the new table to alter_distributed_table.test_am_matview
  alter_distributed_table
