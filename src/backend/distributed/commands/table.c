@@ -3944,8 +3944,14 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 			{
 				ereport(ERROR,
 						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						 errmsg("alter table command is currently unsupported"),
-						 errdetail("Only ADD|DROP COLUMN, SET|DROP NOT NULL, "
+						 errmsg("%s", alterTableType == AT_AlterConstraint ?
+								"ALTER TABLE ... ALTER CONSTRAINT commands are currently "
+								"unsupported" :
+								"alter table command is currently unsupported"),
+						 errdetail("%s", alterTableType == AT_AlterConstraint ?
+								   "Citus does not propagate constraint property changes "
+								   "to shards." :
+								   "Only ADD|DROP COLUMN, SET|DROP NOT NULL, "
 								   "SET|DROP DEFAULT, ADD|DROP|VALIDATE CONSTRAINT, "
 								   "SET (), RESET (), "
 								   "ENABLE|DISABLE|NO FORCE|FORCE ROW LEVEL SECURITY, "
