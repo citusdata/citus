@@ -1,4 +1,4 @@
-### citus v14.3.0 (TBD) ###
+### citus v14.3.0 (October 23, 2026) ###
 
 * Adds sorted-merge execution for multi-shard `ORDER BY` queries, avoiding
   an extra Sort node on the coordinator (#8529, #8584)
