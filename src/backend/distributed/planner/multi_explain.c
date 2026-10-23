@@ -1026,7 +1026,11 @@ FetchRemoteExplainFromWorkers(Task *task, ExplainState *es, ParamListInfo params
 
 		if (params)
 		{
-			ExtractParametersFromParamList(params, &paramTypes, &paramValues, false);
+			/* force evaluation of bound params */
+			params = copyParamList(params);
+
+			ExtractParametersForRemoteExecution(params, &paramTypes,
+												&paramValues);
 		}
 
 		int sendStatus = SendRemoteCommandParams(connection, explainQuery->data,
@@ -2072,6 +2076,7 @@ FetchPlanQueryForExplainAnalyze(const char *queryString, ParamListInfo params)
 						 ParameterResolutionSubquery(params));
 	}
 
+
 	appendStringInfoString(fetchQuery,
 						   "SELECT explain_analyze_output, execution_duration, "
 						   "execution_ntuples, execution_nloops "
@@ -2096,6 +2101,12 @@ ParameterResolutionSubquery(ParamListInfo params)
 	for (int paramIndex = 0; paramIndex < params->numParams; paramIndex++)
 	{
 		ParamExternData *param = &params->params[paramIndex];
+
+		if (param->ptype == 0)
+		{
+			continue;
+		}
+
 		char *typeName = format_type_extended(param->ptype, -1,
 											  FORMAT_TYPE_FORCE_QUALIFY);
 
