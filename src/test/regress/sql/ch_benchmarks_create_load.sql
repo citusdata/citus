@@ -1,5 +1,6 @@
 CREATE SCHEMA "ch benchmarks";
 SET search_path to "ch benchmarks";
+GRANT ALL ON SCHEMA "ch benchmarks" TO regularuser;
 
 
 CREATE TABLE order_line (
