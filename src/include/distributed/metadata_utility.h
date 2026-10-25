@@ -363,7 +363,8 @@ extern uint64 InsertShardPlacementRow(uint64 shardId, uint64 placementId,
 									  uint64 shardLength, int32 groupId);
 extern void InsertIntoPgDistPartition(Oid relationId, char distributionMethod,
 									  Var *distributionColumn, uint32 colocationId,
-									  char replicationModel, bool autoConverted);
+									  char replicationModel, bool autoConverted,
+									  bool coordinatorUsesFullSequenceRange);
 extern void UpdatePgDistPartitionAutoConverted(Oid citusTableId, bool autoConverted);
 extern void UpdateDistributionColumnGlobally(Oid relationId, char distributionMethod,
 											 Var *distributionColumn, int colocationId);
@@ -472,6 +473,7 @@ extern bool IsBackgroundTaskStatusTerminal(BackgroundTaskStatus status);
 extern Oid BackgroundJobStatusOid(BackgroundJobStatus status);
 extern Oid BackgroundTaskStatusOid(BackgroundTaskStatus status);
 extern int GetAutoConvertedAttrIndexInPgDistPartition(TupleDesc tupleDEsc);
+extern int GetCoordUsesFullSeqRangeAttrIndexInPgDistPartition(TupleDesc tupleDesc);
 
 /* from node_metadata.c */
 extern void LockShardsInWorkerPlacementList(WorkerNode *workerNode, LOCKMODE lockMode);
