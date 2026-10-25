@@ -1669,6 +1669,24 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
+		"citus.assign_full_sequence_to_coordinator",
+		gettext_noop("Controls whether the coordinator keeps the full sequence "
+					 "range for sequences backing Citus tables."),
+		gettext_noop("When true, Citus tables are created with "
+					 "coordinator_uses_full_sequence_range set to true, so the "
+					 "coordinator may use the entire sequence range while workers "
+					 "use (groupId << 48) sub-ranges. When false (the default), the "
+					 "coordinator is also carved into its own sub-range using the "
+					 "coordinator's group id, matching how workers are handled. The "
+					 "value is captured per table at creation time and stored in "
+					 "pg_dist_partition.coordinator_uses_full_sequence_range."),
+		&AssignFullSequenceToCoordinator,
+		false,
+		PGC_USERSET,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
 		"citus.enable_schema_based_sharding",
 		gettext_noop("Enables schema based sharding."),
 		gettext_noop("The schemas created while this is ON will be automatically "
