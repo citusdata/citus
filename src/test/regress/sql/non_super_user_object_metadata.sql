@@ -220,6 +220,12 @@ DROP TABLE extension_schema.table_to_check_object;
 SELECT * FROM (SELECT pg_identify_object_as_address(classid, objid, objsubid) as obj_identifier from pg_catalog.pg_dist_object) as obj_identifiers where obj_identifier::text like '%table_to_check_object%';
 SELECT * FROM run_command_on_workers($$SELECT * FROM (SELECT pg_identify_object_as_address(classid, objid, objsubid) as obj_identifier from pg_catalog.pg_dist_object) as obj_identifiers where obj_identifier::text like '%table_to_check_object%';$$) ORDER BY 1,2;
 
--- Revert the settings for following tests
+-- Clean up for repeat runs and restore settings
+SET client_min_messages TO ERROR;
+DROP SCHEMA test_sequence_schema, schema_to_prop_with_function,
+    schema_to_prop_with_type, extension_schema CASCADE;
+DROP USER non_super_user_test_user;
+RESET client_min_messages;
+RESET search_path;
 RESET citus.enable_ddl_propagation;
 RESET citus.shard_replication_factor;
