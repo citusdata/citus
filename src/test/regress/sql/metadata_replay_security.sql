@@ -290,7 +290,7 @@ FROM run_command_on_workers($$
 	SET citus.enable_ddl_propagation TO off;
 	DROP DOMAIN replay_dependency.repair_guarded;
 $$);
-SET citus.enable_ddl_propagation TO off;
+SET citus.enable_ddl_propagation TO on;
 SET client_min_messages TO WARNING;
 DROP SCHEMA metadata_replay_security CASCADE;
 DROP ROLE metadata_replay_owner;
