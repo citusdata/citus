@@ -777,6 +777,26 @@ citus_ProcessUtilityInternal(PlannedStmt *pstmt,
 		IncrementUtilityHookCountersIfNecessary(parsetree);
 
 		/*
+		 * Some nontransactional DDL must reach a retryable state on workers before
+		 * changing the coordinator.  Keep all ordinary DDL in its traditional
+		 * post-local-command execution order.
+		 */
+		List *remainingDDLJobs = NIL;
+		DDLJob *ddlJob = NULL;
+		foreach_declared_ptr(ddlJob, ddlJobs)
+		{
+			if (ddlJob->executeBeforeLocalCommand)
+			{
+				ExecuteDistributedDDLJob(ddlJob);
+			}
+			else
+			{
+				remainingDDLJobs = lappend(remainingDDLJobs, ddlJob);
+			}
+		}
+		ddlJobs = remainingDDLJobs;
+
+		/*
 		 * Check if we are running ALTER EXTENSION citus UPDATE (TO "<version>") command and
 		 * the available version is different than the current version of Citus. In this case,
 		 * ALTER EXTENSION citus UPDATE command can actually update Citus to a new version.
