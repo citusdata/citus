@@ -1,5 +1,6 @@
 CREATE SCHEMA propagate_foreign_server;
 SET search_path TO propagate_foreign_server;
+SELECT citus_set_coordinator_host('localhost');
 
 -- remove node to add later
 SELECT citus_remove_node('localhost', :worker_1_port);
