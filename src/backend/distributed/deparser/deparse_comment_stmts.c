@@ -35,6 +35,8 @@ const char *ObjectTypeNames[] =
 	[OBJECT_ROLE] = "ROLE",
 	[OBJECT_TSCONFIGURATION] = "TEXT SEARCH CONFIGURATION",
 	[OBJECT_TSDICTIONARY] = "TEXT SEARCH DICTIONARY",
+	[OBJECT_TABLE] = "TABLE",
+	[OBJECT_COLUMN] = "COLUMN",
 
 	/* When support for propagating comments to new objects is introduced, an entry for each
 	 * statement type should be added to this list. The first element in each entry is the 'object_type' keyword
