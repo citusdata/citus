@@ -120,8 +120,8 @@ static void CopyShardTablesViaBlockWrites(List *shardIntervalList, char *sourceN
 										  char *targetNodeName, int32 targetNodePort,
 										  uint32 optionFlags);
 static void EnsureShardCanBeCopied(int64 shardId, const char *sourceNodeName,
-								   int32 sourceNodePort, const char *targetNodeName,
-								   int32 targetNodePort);
+								   int32 sourceNodePort, int32 sourceGroupId,
+								   int32 targetGroupId);
 static List * RecreateTableDDLCommandList(Oid relationId);
 static void EnsureTableListOwner(List *tableIdList);
 static void ErrorIfReplicatingDistributedTableWithFKeys(List *tableIdList);
@@ -136,6 +136,10 @@ static void UpdateColocatedShardPlacementMetadataOnWorkers(int64 shardId,
 														   int32 targetNodePort);
 static bool IsShardListOnNode(List *colocatedShardList, char *targetNodeName,
 							  uint32 targetPort);
+static GroupShardPlacement * SearchGroupShardPlacementInList(List *placementList,
+															 int32 groupId);
+static void ErrorIfGroupShardPlacementNotFound(GroupShardPlacement *placement,
+											   const char *nodeName, int32 nodePort);
 static void SetupRebalanceMonitorForShardTransfer(uint64 shardId, Oid distributedTableId,
 												  char *sourceNodeName,
 												  uint32 sourceNodePort,
@@ -1075,22 +1079,75 @@ IsShardListOnNode(List *colocatedShardList, char *targetNodeName, uint32 targetN
 						errmsg("Moving shards to a non-existing node is not supported")));
 	}
 
-	/*
-	 * We exhaustively search all co-located shards
-	 */
+	if (!workerNode->isActive)
+	{
+		return false;
+	}
+
+	MemoryContext callerContext = CurrentMemoryContext;
+	MemoryContext localContext = AllocSetContextCreate(callerContext,
+													   "IsShardListOnNode",
+													   ALLOCSET_DEFAULT_SIZES);
+	bool shardListIsOnNode = true;
+
+	/* We exhaustively search all co-located shards. */
 	ShardInterval *shardInterval = NULL;
 	foreach_declared_ptr(shardInterval, colocatedShardList)
 	{
+		MemoryContextSwitchTo(localContext);
 		uint64 shardId = shardInterval->shardId;
-		List *placementList = ActiveShardPlacementListOnGroup(shardId,
-															  workerNode->groupId);
-		if (placementList == NIL)
+		List *placementList = BuildShardPlacementList(shardId);
+		if (SearchGroupShardPlacementInList(placementList, workerNode->groupId) == NULL)
 		{
-			return false;
+			shardListIsOnNode = false;
+			break;
+		}
+
+		MemoryContextReset(localContext);
+	}
+
+	MemoryContextSwitchTo(callerContext);
+	MemoryContextDelete(localContext);
+
+	return shardListIsOnNode;
+}
+
+
+/*
+ * SearchGroupShardPlacementInList returns the placement on the given node group,
+ * or NULL if there is no such placement.
+ */
+static GroupShardPlacement *
+SearchGroupShardPlacementInList(List *placementList, int32 groupId)
+{
+	GroupShardPlacement *placement = NULL;
+	foreach_declared_ptr(placement, placementList)
+	{
+		if (placement->groupId == groupId)
+		{
+			return placement;
 		}
 	}
 
-	return true;
+	return NULL;
+}
+
+
+/*
+ * ErrorIfGroupShardPlacementNotFound throws an error when a shard placement
+ * cannot be found on the given node.
+ */
+static void
+ErrorIfGroupShardPlacementNotFound(GroupShardPlacement *placement,
+								   const char *nodeName, int32 nodePort)
+{
+	if (placement == NULL)
+	{
+		ereport(ERROR, (errcode(ERRCODE_DATA_EXCEPTION),
+						errmsg("could not find placement matching \"%s:%d\"",
+							   nodeName, nodePort),
+						errhint("Confirm the placement still exists and try again.")));
+	}
 }
 
 
@@ -1143,9 +1200,17 @@ EnsureAllShardsCanBeCopied(List *colocatedShardList,
 						   char *sourceNodeName, uint32 sourceNodePort,
 						   char *targetNodeName, uint32 targetNodePort)
 {
+	int32 sourceGroupId = GroupForNode(sourceNodeName, sourceNodePort);
+	int32 targetGroupId = GroupForNode(targetNodeName, targetNodePort);
+	MemoryContext callerContext = CurrentMemoryContext;
+	MemoryContext localContext = AllocSetContextCreate(callerContext,
+													   "EnsureAllShardsCanBeCopied",
+													   ALLOCSET_DEFAULT_SIZES);
+
 	ShardInterval *colocatedShard = NULL;
 	foreach_declared_ptr(colocatedShard, colocatedShardList)
 	{
+		MemoryContextSwitchTo(localContext);
 		uint64 colocatedShardId = colocatedShard->shardId;
 
 		/*
@@ -1153,8 +1218,13 @@ EnsureAllShardsCanBeCopied(List *colocatedShardList,
 		 * placement in the target node.
 		 */
 		EnsureShardCanBeCopied(colocatedShardId, sourceNodeName, sourceNodePort,
-							   targetNodeName, targetNodePort);
+							   sourceGroupId, targetGroupId);
+
+		MemoryContextReset(localContext);
 	}
+
+	MemoryContextSwitchTo(callerContext);
+	MemoryContextDelete(localContext);
 }
 
 
@@ -2129,18 +2199,16 @@ CreateShardCopyCommand(ShardInterval *shard,
  */
 static void
 EnsureShardCanBeCopied(int64 shardId, const char *sourceNodeName, int32 sourceNodePort,
-					   const char *targetNodeName, int32 targetNodePort)
+					   int32 sourceGroupId, int32 targetGroupId)
 {
-	List *shardPlacementList = ShardPlacementList(shardId);
+	List *shardPlacementList = BuildShardPlacementList(shardId);
 
 	/* error if the source shard placement does not exist */
-	SearchShardPlacementInListOrError(shardPlacementList, sourceNodeName, sourceNodePort);
+	GroupShardPlacement *sourcePlacement =
+		SearchGroupShardPlacementInList(shardPlacementList, sourceGroupId);
+	ErrorIfGroupShardPlacementNotFound(sourcePlacement, sourceNodeName, sourceNodePort);
 
-	ShardPlacement *targetPlacement = SearchShardPlacementInList(shardPlacementList,
-																 targetNodeName,
-																 targetNodePort);
-
-	if (targetPlacement != NULL)
+	if (SearchGroupShardPlacementInList(shardPlacementList, targetGroupId) != NULL)
 	{
 		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 						errmsg(
@@ -2153,8 +2221,7 @@ EnsureShardCanBeCopied(int64 shardId, const char *sourceNodeName, int32 sourceNo
 	 * the metadata remains, such as dropping table while citus.enable_ddl_propagation
 	 * is set to off.
 	 */
-	ShardInterval *shardInterval = LoadShardInterval(shardId);
-	Oid distributedTableId = shardInterval->relationId;
+	Oid distributedTableId = LookupShardRelationFromCatalog(shardId, false);
 	EnsureRelationExists(distributedTableId);
 }
 
@@ -2200,7 +2267,8 @@ SearchShardPlacementInListOrError(List *shardPlacementList, const char *nodeName
 		ereport(ERROR, (errcode(ERRCODE_DATA_EXCEPTION),
 						errmsg("could not find placement matching \"%s:%d\"",
 							   nodeName, nodePort),
-						errhint("Confirm the placement still exists and try again.")));
+						errhint("Confirm the placement still exists "
+								"and try again.")));
 	}
 	return placement;
 }
@@ -2454,16 +2522,29 @@ static void
 DropShardPlacementsFromMetadata(List *shardList,
 								char *nodeName, int32 nodePort)
 {
+	int32 groupId = GroupForNode(nodeName, nodePort);
+	MemoryContext callerContext = CurrentMemoryContext;
+	MemoryContext localContext = AllocSetContextCreate(callerContext,
+													   "DropShardPlacementsFromMetadata",
+													   ALLOCSET_DEFAULT_SIZES);
+
 	ShardInterval *shardInverval = NULL;
 	foreach_declared_ptr(shardInverval, shardList)
 	{
+		MemoryContextSwitchTo(localContext);
 		uint64 shardId = shardInverval->shardId;
-		List *shardPlacementList = ShardPlacementList(shardId);
-		ShardPlacement *placement =
-			SearchShardPlacementInListOrError(shardPlacementList, nodeName, nodePort);
+		List *shardPlacementList = BuildShardPlacementList(shardId);
+		GroupShardPlacement *placement =
+			SearchGroupShardPlacementInList(shardPlacementList, groupId);
+
+		ErrorIfGroupShardPlacementNotFound(placement, nodeName, nodePort);
 
 		DeleteShardPlacementRow(placement->placementId);
+		MemoryContextReset(localContext);
 	}
+
+	MemoryContextSwitchTo(callerContext);
+	MemoryContextDelete(localContext);
 }
 
 
