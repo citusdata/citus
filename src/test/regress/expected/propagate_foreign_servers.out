@@ -1,9 +1,9 @@
 CREATE SCHEMA propagate_foreign_server;
 SET search_path TO propagate_foreign_server;
 SELECT citus_set_coordinator_host('localhost');
- citus_set_coordinator_host 
-----------------------------
- 
+ citus_set_coordinator_host
+---------------------------------------------------------------------
+
 (1 row)
 
 -- remove node to add later
