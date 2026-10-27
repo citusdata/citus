@@ -1886,7 +1886,8 @@ Such a column can show up on a Citus table in three scenarios:
 
 When the table is created or altered on the coordinator, Citus enforces the following:
 
-* The coordinator is always allowed to use the full sequence range.
+* By default, the coordinator is allowed to use the full sequence range. This is captured per-table in `pg_dist_partition.coordinator_uses_full_sequence_range`. The GUC `citus.assign_full_sequence_to_coordinator` (default `false`) controls the value for newly-created Citus tables; existing tables created before this column was introduced are backfilled with `true` so their behavior is preserved.
+* When `coordinator_uses_full_sequence_range` is `false` for a given table and the sequence is bigint-based, the coordinator is carved into its own sub-range using its group id (0) at `[1, 2^48)`, matching how each worker is carved. For non-bigint sequences the coordinator always keeps the full range, because the carved windows for serial / smallserial would be too small to be useful and capping at `maxvalue` on the coordinator would silently stop it from producing any values.
 * If the sequence is bigint-based, the allowed sequence range is split across workers based on node group ids. Otherwise, workers are effectively prevented from using the sequence by setting the current value to the maximum value. See `AlterSequenceMinMax()`.
 * For columns that have an explicit `nextval()` default, the worker-side default is rewritten to `worker_nextval()` so that invoking it on a worker produces a clear error. For serial and identity columns the default expression cannot be rewritten, but the same range restrictions still apply.
 * Since the sequence already lived on the coordinator before distribution, its `last_value` and `is_called` state are implicitly preserved on the coordinator afterwards, so the coordinator continues generating values from where it left off.

@@ -1294,7 +1294,8 @@ CreateCitusTable(Oid relationId, CitusTableType tableType,
 	InsertIntoPgDistPartition(relationId, citusTableParams.distributionMethod,
 							  distributionColumn,
 							  colocationId, citusTableParams.replicationModel,
-							  autoConverted);
+							  autoConverted,
+							  AssignFullSequenceToCoordinator);
 
 	/*
 	 * PG16+ supports truncate triggers on foreign tables
@@ -1329,29 +1330,23 @@ CreateCitusTable(Oid relationId, CitusTableType tableType,
 	}
 
 	/*
-	 * We need to adjust sequence ranges and the function calls
-	 * used it column default expressions using nextval() on
-	 * all workers, and we don't need to do that on the
-	 * coordinator because it can always use the full range for
-	 * the sequences and can use the user-provided column default
-	 * expressions -that typically use nextval()-. And at this
-	 * point all such work is already done for remote workers.
+	 * We need to adjust sequence ranges and the function calls used in column
+	 * default expressions using nextval() on all workers. Historically we did
+	 * not touch the coordinator because it was always allowed to use the full
+	 * range for sequences and continued to use user-provided column default
+	 * expressions (typically nextval()).
 	 *
-	 * Specifically, SyncCitusTableMetadata() handles
-	 * the sequence ranges for identity column sequences and
-	 * PropagatePrerequisiteObjectsForDistributedTable() handles
-	 * the same for dependent sequences, i.e., sequences backing
-	 * the serial based columns or the ones backing the columns
-	 * that look like ".. DEFAULT nextval('..') ...".
-	 * SyncCitusTableMetadata() also adjusts the function calls
-	 * for the columns using dependent sequences - note that we
-	 * don't adjust the function calls for identity columns.
-	 *
-	 * For this reason, here we do the same on the local node
-	 * only if it's not the coordinator, as we're only interested
-	 * in doing this on workers.
+	 * When a table opts into coordinator_uses_full_sequence_range = false, we
+	 * also carve the coordinator's own (groupId == 0) sub-range for dependent
+	 * and identity sequences so values stay globally unique even if the
+	 * coordinator and workers both write to the table. The nextval -> worker_nextval
+	 * rewrite stays worker-only: the coordinator keeps using nextval() against
+	 * its newly-carved local range.
 	 */
-	if (!IsCoordinator())
+	bool adjustRangesOnCoordinator = IsCoordinator() &&
+									 !AssignFullSequenceToCoordinator;
+
+	if (!IsCoordinator() || adjustRangesOnCoordinator)
 	{
 		AdjustDependentSeqRangesOnLocalWorker(relationId);
 
@@ -1361,7 +1356,10 @@ CreateCitusTable(Oid relationId, CitusTableType tableType,
 		 * separately here.
 		 */
 		AdjustIdentityColumnSeqRangesOnLocalWorker(relationId);
+	}
 
+	if (!IsCoordinator())
+	{
 		AdjustNextValColumnDefaultsOnLocalWorker(relationId);
 	}
 

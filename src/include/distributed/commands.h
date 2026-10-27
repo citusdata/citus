@@ -28,6 +28,7 @@
 
 extern bool AddAllLocalTablesToMetadata;
 extern bool EnableSchemaBasedSharding;
+extern bool AssignFullSequenceToCoordinator;
 
 /* controlled via GUC, should be accessed via EnableLocalReferenceForeignKeys() */
 extern bool EnableLocalReferenceForeignKeys;

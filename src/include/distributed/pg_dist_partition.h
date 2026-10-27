@@ -29,6 +29,7 @@ typedef struct FormData_pg_dist_partition
 	char repmodel;       /* replication model; see codes below */
 #endif
 	bool autoconverted;
+	bool coordinator_uses_full_sequence_range;
 } FormData_pg_dist_partition;
 
 /* ----------------
@@ -42,13 +43,14 @@ typedef FormData_pg_dist_partition *Form_pg_dist_partition;
  *      compiler constants for pg_dist_partitions
  * ----------------
  */
-#define Natts_pg_dist_partition 6
+#define Natts_pg_dist_partition 7
 #define Anum_pg_dist_partition_logicalrelid 1
 #define Anum_pg_dist_partition_partmethod 2
 #define Anum_pg_dist_partition_partkey 3
 #define Anum_pg_dist_partition_colocationid 4
 #define Anum_pg_dist_partition_repmodel 5
 #define Anum_pg_dist_partition_autoconverted 6
+#define Anum_pg_dist_partition_coordinator_uses_full_sequence_range 7
 
 /* valid values for partmethod include append, hash, and range */
 #define DISTRIBUTE_BY_APPEND 'a'

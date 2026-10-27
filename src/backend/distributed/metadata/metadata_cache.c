@@ -1859,6 +1859,19 @@ BuildCitusTableCacheEntry(Oid relationId)
 			datumArray[GetAutoConvertedAttrIndexInPgDistPartition(tupleDescriptor)]);
 	}
 
+	int coordUsesFullSeqRangeIdx =
+		GetCoordUsesFullSeqRangeAttrIndexInPgDistPartition(tupleDescriptor);
+	if (isNullArray[coordUsesFullSeqRangeIdx])
+	{
+		/* historical rows (pre-15.1-1) implicitly used the full range on coord */
+		cacheEntry->coordinatorUsesFullSequenceRange = true;
+	}
+	else
+	{
+		cacheEntry->coordinatorUsesFullSequenceRange = DatumGetBool(
+			datumArray[coordUsesFullSeqRangeIdx]);
+	}
+
 	heap_freetuple(distPartitionTuple);
 
 	BuildCachedShardList(cacheEntry);
@@ -4779,6 +4792,7 @@ ResetCitusTableCacheEntry(CitusTableCacheEntry *cacheEntry)
 	cacheEntry->hasUniformHashDistribution = false;
 	cacheEntry->hasOverlappingShardInterval = false;
 	cacheEntry->autoConverted = false;
+	cacheEntry->coordinatorUsesFullSequenceRange = true;
 
 	pfree(cacheEntry);
 }
