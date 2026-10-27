@@ -38,6 +38,7 @@
 #include "distributed/connection_management.h"
 #include "distributed/listutils.h"
 #include "distributed/lock_graph.h"
+#include "distributed/maintenanced.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/remote_commands.h"
 #include "distributed/shared_connection_stats.h"
@@ -700,6 +701,9 @@ UnSetDistributedTransactionId(void)
 		SpinLockAcquire(&MyBackendData->mutex);
 
 		MyBackendData->cancelledDueToDeadlock = false;
+		memset(&MyBackendData->deadlockSignalledTransactionId, 0,
+			   sizeof(DistributedTransactionId));
+		MyBackendData->deadlockSignalTime = 0;
 		MyBackendData->transactionId.initiatorNodeIdentifier = 0;
 		MyBackendData->transactionId.transactionOriginator = false;
 		MyBackendData->transactionId.transactionNumber = 0;
@@ -1184,9 +1188,9 @@ GetBackendDataForProc(PGPROC *proc, BackendData *result)
 
 /*
  * CancelTransactionDueToDeadlock cancels the input proc and also marks the backend
- * data with this information.
+ * data with this information. Returns true if a SIGINT was sent.
  */
-void
+bool
 CancelTransactionDueToDeadlock(PGPROC *proc)
 {
 	BackendData *backendData = &backendManagementShmemData->backends[getProcNo_compat(
@@ -1195,29 +1199,64 @@ CancelTransactionDueToDeadlock(PGPROC *proc)
 	/* backend might not have used citus yet and thus not initialized backend data */
 	if (!backendData)
 	{
-		return;
+		return false;
 	}
+
+	TimestampTz now = GetCurrentTimestamp();
+	int detectionIntervalMs =
+		(int) (DistributedDeadlockDetectionTimeoutFactor * (double) DeadlockTimeout);
 
 	SpinLockAcquire(&backendData->mutex);
 
-	/* send a SIGINT only if the process is still in a distributed transaction */
-	if (backendData->transactionId.transactionNumber != 0)
-	{
-		backendData->cancelledDueToDeadlock = true;
-		SpinLockRelease(&backendData->mutex);
+	DistributedTransactionId *currentXact = &backendData->transactionId;
+	DistributedTransactionId *signalledXact =
+		&backendData->deadlockSignalledTransactionId;
 
-		if (kill(proc->pid, SIGINT) != 0)
-		{
-			ereport(WARNING,
-					(errmsg("attempted to cancel this backend (pid: %d) to resolve a "
-							"distributed deadlock but the backend could not "
-							"be cancelled", proc->pid)));
-		}
-	}
-	else
+	/* send a SIGINT only if the process is still in a distributed transaction */
+	if (currentXact->transactionNumber == 0)
 	{
 		SpinLockRelease(&backendData->mutex);
+		return false;
 	}
+
+	/*
+	 * The victim keeps its distributed transaction, and the remote transactions
+	 * keep their locks, until it has rolled back on all nodes. So the detector,
+	 * which re-runs quickly after finding a deadlock, keeps finding the same
+	 * cycle while the victim unwinds. Do not signal it again in that window: a
+	 * SIGINT received during abort makes Citus stop waiting for the remote
+	 * ROLLBACKs and close those connections instead.
+	 *
+	 * The victim might also have absorbed the cancellation without ending the
+	 * transaction, for instance in a PL/pgSQL EXCEPTION block. So signal it
+	 * again once a full detection interval has passed.
+	 */
+	bool sameTransaction =
+		signalledXact->transactionNumber == currentXact->transactionNumber &&
+		signalledXact->initiatorNodeIdentifier == currentXact->initiatorNodeIdentifier;
+	bool signalledRecently =
+		!TimestampDifferenceExceeds(backendData->deadlockSignalTime, now,
+									detectionIntervalMs);
+	if (sameTransaction && signalledRecently)
+	{
+		SpinLockRelease(&backendData->mutex);
+		return false;
+	}
+
+	backendData->cancelledDueToDeadlock = true;
+	*signalledXact = *currentXact;
+	backendData->deadlockSignalTime = now;
+	SpinLockRelease(&backendData->mutex);
+
+	if (kill(proc->pid, SIGINT) != 0)
+	{
+		ereport(WARNING,
+				(errmsg("attempted to cancel this backend (pid: %d) to resolve a "
+						"distributed deadlock but the backend could not "
+						"be cancelled", proc->pid)));
+	}
+
+	return true;
 }
 
 
