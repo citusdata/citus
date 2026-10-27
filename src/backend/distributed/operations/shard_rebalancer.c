@@ -2515,6 +2515,9 @@ RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationMo
  * table list. We therefore visit each colocation group only once: for the first
  * shard we see from a colocation group we append that group's colocated table list
  * to the result, and we skip any later shard from the same group.
+ *
+ * The exception is INVALID_COLOCATION_ID: append- and range-distributed tables all
+ * share it although they are unrelated, so each such table is added on its own.
  */
 static List *
 CollectCitusTableIdsForPlacementUpdates(List *placementUpdateList)
@@ -2528,6 +2531,12 @@ CollectCitusTableIdsForPlacementUpdates(List *placementUpdateList)
 		uint32 colocationId = INVALID_COLOCATION_ID;
 		Oid relationId = RelationIdAndColocationIdForShard(placementUpdate->shardId,
 														   &colocationId);
+
+		if (colocationId == INVALID_COLOCATION_ID)
+		{
+			relationIdList = list_append_unique_oid(relationIdList, relationId);
+			continue;
+		}
 
 		bool foundInSet = false;
 		hash_search(seenColocationIdSet, &colocationId, HASH_ENTER, &foundInSet);
