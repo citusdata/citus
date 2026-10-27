@@ -39,5 +39,6 @@ test: multi_rls_join_distribution_key
 test: stat_statements
 test: shard_move_constraints
 test: shard_move_constraints_blocking
+test: shard_move_without_replica_identity
 test: logical_rep_consistency
 test: check_mx
