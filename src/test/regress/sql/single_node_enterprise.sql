@@ -134,9 +134,17 @@ INSERT INTO pg_dist_poolinfo VALUES (:coordinator_node_id,  'host=127.0.0.1 port
 SET search_path TO single_node_ent;
 SET citus.log_remote_commands TO ON;
 SET client_min_messages TO DEBUG1;
+SELECT CASE
+	WHEN current_setting('citus.enable_or_clause_arm_pruning', true) IS NOT NULL
+	THEN set_config('citus.enable_or_clause_arm_pruning', 'off', false)
+	END AS enable_or_clause_arm_pruning \gset
 -- force multi-shard query to be able to
 -- have remote connections
 SELECT COUNT(*) FROM test WHERE x = 1 OR x = 2;
+SELECT CASE
+	WHEN current_setting('citus.enable_or_clause_arm_pruning', true) IS NOT NULL
+	THEN set_config('citus.enable_or_clause_arm_pruning', 'on', false)
+	END AS enable_or_clause_arm_pruning \gset
 RESET citus.log_remote_commands;
 RESET client_min_messages;
 TRUNCATE pg_dist_poolinfo;

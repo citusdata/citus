@@ -156,6 +156,12 @@ DEPS = {
     "multi_test_catalog_views": TestDeps(None),
     "multi_insert_select": TestDeps("base_schedule"),
     "multi_partitioning": TestDeps("base_schedule"),
+    "multi_join_pruning": TestDeps(
+        "base_schedule", ["multi_partition_pruning"], repeatable=False
+    ),
+    "multi_hash_pruning": TestDeps(
+        "base_schedule", ["multi_agg_distinct"], repeatable=False
+    ),
     "multi_mx_create_table": TestDeps(
         None,
         [
@@ -175,6 +181,12 @@ DEPS = {
         None, ["multi_test_helpers", "multi_cluster_management"], worker_count=6
     ),
     "background_rebalance_parallel_reference_tables": TestDeps(
+        None,
+        ["multi_test_helpers", "multi_cluster_management"],
+        repeatable=False,
+        worker_count=6,
+    ),
+    "background_rebalance_parallel_reference_fkeys": TestDeps(
         None,
         ["multi_test_helpers", "multi_cluster_management"],
         repeatable=False,

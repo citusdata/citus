@@ -1257,7 +1257,8 @@ ERROR:  only the 'shouldhaveshards' property can be set using this function
 SELECT nextval('pg_catalog.pg_dist_groupid_seq') AS last_group_id_cls \gset
 SELECT nextval('pg_catalog.pg_dist_node_nodeid_seq') AS last_node_id_cls \gset
 BEGIN;
-	-- show that we do not send any metadata to any nodes if not enabled
+	-- Metadata sync is disabled, but removed nodes must still discard their
+	-- old cluster identity and routes.
 	SET LOCAL citus.log_remote_commands TO ON;
 	SET LOCAL citus.grep_remote_commands TO '%pg_dist%';
 	SET citus.enable_metadata_sync TO OFF;
@@ -1271,6 +1272,10 @@ BEGIN;
 	SELECT 1 FROM citus_remove_node('localhost', :worker_1_port);
 NOTICE:  issuing UPDATE pg_dist_local_group SET groupid = 0
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT metadata ->> 'server_id' AS server_id FROM pg_dist_node_metadata
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing DELETE FROM pg_dist_node
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
  ?column?
 ---------------------------------------------------------------------
         1
@@ -1278,6 +1283,10 @@ DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 
 	SELECT 1 FROM citus_remove_node('localhost', :worker_2_port);
 NOTICE:  issuing UPDATE pg_dist_local_group SET groupid = 0
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT metadata ->> 'server_id' AS server_id FROM pg_dist_node_metadata
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing DELETE FROM pg_dist_node
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
  ?column?
 ---------------------------------------------------------------------

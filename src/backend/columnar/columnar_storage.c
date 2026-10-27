@@ -140,7 +140,8 @@ static void ColumnarOverwriteMetapage(Relation relation,
 									  ColumnarMetapage columnarMetapage);
 static ColumnarMetapage ColumnarMetapageRead(Relation rel, bool force);
 static void ReadFromBlock(Relation rel, BlockNumber blockno, uint32 offset,
-						  char *buf, uint32 len, bool force);
+						  char *buf, uint32 len, bool force,
+						  BufferAccessStrategy strategy);
 static void WriteToBlock(Relation rel, BlockNumber blockno, uint32 offset,
 						 char *buf, uint32 len, bool clear);
 static uint64 AlignReservation(uint64 prevReservation);
@@ -459,9 +460,12 @@ ColumnarStorageReserveData(Relation rel, uint64 amount)
 /*
  * ColumnarStorageRead - map the logical offset to a block and offset, then
  * read the buffer from multiple blocks if necessary.
+ *
+ * 'strategy' is passed to the buffer manager, NULL means default strategy.
  */
 void
-ColumnarStorageRead(Relation rel, uint64 logicalOffset, char *data, uint32 amount)
+ColumnarStorageRead(Relation rel, uint64 logicalOffset, char *data, uint32 amount,
+					BufferAccessStrategy strategy)
 {
 	/* if there's no work to do, succeed even with invalid offset */
 	if (amount == 0)
@@ -485,7 +489,7 @@ ColumnarStorageRead(Relation rel, uint64 logicalOffset, char *data, uint32 amoun
 
 		uint32 to_read = Min(amount - read, BLCKSZ - addr.offset);
 		ReadFromBlock(rel, addr.blockno, addr.offset, data + read, to_read,
-					  false);
+					  false, strategy);
 
 		read += to_read;
 	}
@@ -650,7 +654,8 @@ ColumnarMetapageRead(Relation rel, bool force)
 	bool forceReadBlock = true;
 	ColumnarMetapage metapage;
 	ReadFromBlock(rel, COLUMNAR_METAPAGE_BLOCKNO, SizeOfPageHeaderData,
-				  (char *) &metapage, sizeof(ColumnarMetapage), forceReadBlock);
+				  (char *) &metapage, sizeof(ColumnarMetapage), forceReadBlock,
+				  NULL);
 
 	if (!force)
 	{
@@ -664,13 +669,15 @@ ColumnarMetapageRead(Relation rel, bool force)
 /*
  * ReadFromBlock - read bytes from a page at the given offset. If 'force' is
  * true, don't check pd_lower; useful when reading a metapage of unknown
- * version.
+ * version. 'strategy' is passed to the buffer manager, NULL means default
+ * strategy.
  */
 static void
 ReadFromBlock(Relation rel, BlockNumber blockno, uint32 offset, char *buf,
-			  uint32 len, bool force)
+			  uint32 len, bool force, BufferAccessStrategy strategy)
 {
-	Buffer buffer = ReadBuffer(rel, blockno);
+	Buffer buffer = ReadBufferExtended(rel, MAIN_FORKNUM, blockno, RBM_NORMAL,
+									   strategy);
 	LockBuffer(buffer, BUFFER_LOCK_SHARE);
 	Page page = BufferGetPage(buffer);
 	PageHeader phdr = (PageHeader) page;

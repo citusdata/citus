@@ -149,10 +149,11 @@ WHERE distributioncolumntype IN (
     'test_schema.email_address'::regtype
 )
 ORDER BY distributioncolumntype::regtype::text;
- shardcount | replicationfactor | distributioncolumntype
+ shardcount | replicationfactor |     distributioncolumntype
 ---------------------------------------------------------------------
+          4 |                 1 | "prepared statements".test_key
           4 |                 1 | positive_int
-(1 row)
+(2 rows)
 
 -- Verify the domains exist on the worker
 SELECT typname, typnamespace::regnamespace

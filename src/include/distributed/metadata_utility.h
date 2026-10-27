@@ -396,7 +396,8 @@ extern DeferredErrorMessage * DeferErrorIfCircularDependencyExists(const
 																   ObjectAddress *
 																   objectAddress);
 extern List * GetDistributableDependenciesForObject(const ObjectAddress *target);
-extern List * GetAllDependencyCreateDDLCommands(const List *dependencies);
+extern List * GetAllDependencyCreateDDLCommands(const List *dependencies,
+												bool bundlePartitionMetadata);
 extern bool ShouldPropagate(void);
 extern bool ShouldPropagateCreateInCoordinatedTransction(void);
 extern bool ShouldPropagateAnyObject(List *addresses);
