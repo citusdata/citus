@@ -10,6 +10,13 @@
  *   table that tracks which statements have already been prepared on
  *   each connection.
  *
+ *   Eviction and worker DEALLOCATE are intentionally omitted to keep statement
+ *   lifetimes tied to the connection without extra remote commands. Client
+ *   DEALLOCATE and replanning leave old entries and worker plan-cache memory
+ *   behind until the connection is closed (including recycling through
+ *   citus.max_cached_connection_lifetime). At the per-connection cap, existing
+ *   entries remain reusable; cache misses fall back to parameterized SQL.
+ *
  *   It also owns the two integration points that make the cache usable:
  *   the planner-side fast path that builds a Task straight from
  *   ParamListInfo (skipping replanning), and the executor-side dispatch
@@ -251,6 +258,10 @@ PreparedStatementCacheSendQuery(MultiConnection *connection, Task *task,
 
 		if (hash_get_num_entries(cache) >= MAX_CACHED_STMTS_PER_CONNECTION)
 		{
+			elog(DEBUG1, "prepared statement cache full (%d entries), "
+						 "falling back to parameterized SQL",
+				 MAX_CACHED_STMTS_PER_CONNECTION);
+
 			/*
 			 * Cache full. The fast-path task has no query string of its own, so
 			 * hand the caller freshly deparsed SQL. Clearing the resolved flag
@@ -356,9 +367,6 @@ PreparedStatementCacheSaveTemplate(DistributedPlan *originalPlan)
 			MemoryContextSwitchTo(GetMemoryChunkContext(originalPlan));
 		originalJob->savedJobQueryForCaching = copyObject(jobQuery);
 		MemoryContextSwitchTo(oldContext);
-
-		/* the fast path has not run yet, so this is still the planner's value */
-		originalJob->plannerPartitionKeyValue = originalJob->partitionKeyValue;
 	}
 
 	return originalJob->savedJobQueryForCaching;
@@ -484,7 +492,7 @@ FastPathShardInterval(DistributedPlan *plan, Job *workerJob, EState *estate,
 
 /*
  * BuildFastPathTask builds the minimal Task for a single-shard execution,
- * bypassing plan copying, coordinator evaluation and task regeneration.
+ * bypassing query-tree copying, coordinator evaluation and task regeneration.
  *
  * Returns NULL when the shard has no placement to run on, so the caller can
  * fall back to normal planning and raise its "found no worker with all shard
@@ -590,15 +598,11 @@ PreparedStatementCacheTryFastPath(struct CitusScanState *scanStateArg, EState *e
 		return false;
 	}
 
-	workerJob->taskList = list_make1(task);
-	workerJob->parametersInJobQueryResolved = true;
-
-	/* local execution and query stats read the key from the job, not the task */
-	workerJob->partitionKeyValue = partitionKeyValue;
+	List *taskList = list_make1(task);
 
 	if (isModify)
 	{
-		AcquireMetadataLocks(workerJob->taskList);
+		AcquireMetadataLocks(taskList);
 
 		/*
 		 * A concurrent split may have dropped the shard between pruning and
@@ -608,29 +612,41 @@ PreparedStatementCacheTryFastPath(struct CitusScanState *scanStateArg, EState *e
 		 */
 		if (!ShardExists(shardInterval->shardId))
 		{
-			workerJob->taskList = NIL;
-			workerJob->parametersInJobQueryResolved = false;
-			workerJob->partitionKeyValue = workerJob->plannerPartitionKeyValue;
 			return false;
 		}
 
-		workerJob->taskList = FirstReplicaAssignTaskList(workerJob->taskList);
+		taskList = FirstReplicaAssignTaskList(taskList);
 	}
+
+	/*
+	 * Portals sharing a generic plan can reach BeginScan before either starts
+	 * fetching. Keep their mutable state separate, sharing only the immutable
+	 * query/template and other plan data rather than deep-copying them.
+	 */
+	DistributedPlan *currentPlan = palloc(sizeof(DistributedPlan));
+	*currentPlan = *originalPlan;
+	Job *currentJob = palloc(sizeof(Job));
+	*currentJob = *workerJob;
+	currentPlan->workerJob = currentJob;
+	currentJob->taskList = taskList;
+	currentJob->parametersInJobQueryResolved = true;
+	currentJob->partitionKeyValue = partitionKeyValue;
 
 	elog(DEBUG2, "prepared statement cache-hit fast path%s: plan " UINT64_FORMAT
 		 " shard " UINT64_FORMAT,
 		 isModify ? " (DML)" : "", originalPlan->planId, shardInterval->shardId);
 
 	/* the executor reads the plan back from the scan state */
-	scanState->distributedPlan = originalPlan;
+	scanState->distributedPlan = currentPlan;
 
 	/*
 	 * A fast-path task has no query string, so local execution needs a cached
 	 * local plan rather than deparsed SQL.
 	 */
 	bool planAddedToCache = false;
-	CacheLocalPlanForShardQuery(workerJob, originalPlan,
+	CacheLocalPlanForShardQuery(currentJob, originalPlan,
 								estate->es_param_list_info, &planAddedToCache);
+	currentJob->localPlannedStatements = workerJob->localPlannedStatements;
 
 	return true;
 }

@@ -105,7 +105,6 @@ copyJobInfo(Job *newnode, Job *from)
 	COPY_SCALAR_FIELD(parametersInJobQueryResolved);
 	COPY_SCALAR_FIELD(colocationId);
 	COPY_NODE_FIELD(savedJobQueryForCaching);
-	COPY_NODE_FIELD(plannerPartitionKeyValue);
 }
 
 
