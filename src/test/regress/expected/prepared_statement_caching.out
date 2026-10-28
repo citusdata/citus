@@ -1323,7 +1323,7 @@ SELECT plpgsql_lookup(7);
 DEBUG:  prepared statement cache-hit fast path: plan xxx shard xxxxx
 CONTEXT:  SQL statement "SELECT value        FROM plpgsql_param WHERE key = k"
 PL/pgSQL function plpgsql_lookup(integer) line XX at SQL statement
-DEBUG:  prepared statement cache hit: plan 183 shard xxxxx stmt __citus_stmt_6
+DEBUG:  prepared statement cache hit: plan 183 shard xxxxx stmt __citus_stmt_xxx
 CONTEXT:  SQL statement "SELECT value        FROM plpgsql_param WHERE key = k"
 PL/pgSQL function plpgsql_lookup(integer) line XX at SQL statement
  plpgsql_lookup
@@ -1332,6 +1332,140 @@ PL/pgSQL function plpgsql_lookup(integer) line XX at SQL statement
 (1 row)
 
 RESET client_min_messages;
+-- ============================================================
+-- Test 17: overlapping portals on one generic plan must keep
+--          their own tasks until the first FETCH, even if another
+--          portal is opened or closed in the meantime.
+-- ============================================================
+CREATE FUNCTION open_cached_cursor(k int) RETURNS refcursor LANGUAGE plpgsql AS $$
+DECLARE
+    c refcursor := 'cached_cursor_' || k;
+BEGIN
+    OPEN c FOR SELECT key, value FROM observe_cache WHERE key = k;
+    RETURN c;
+END;
+$$;
+SET plan_cache_mode TO force_generic_plan;
+BEGIN;
+SELECT open_cached_cursor(i) FROM generate_series(1, 4) i;
+ open_cached_cursor
+---------------------------------------------------------------------
+ cached_cursor_1
+ cached_cursor_2
+ cached_cursor_3
+ cached_cursor_4
+(4 rows)
+
+FETCH ALL FROM cached_cursor_1;
+ key | value
+---------------------------------------------------------------------
+   1 |     1
+(1 row)
+
+CLOSE cached_cursor_1;
+FETCH ALL FROM cached_cursor_2;
+ key | value
+---------------------------------------------------------------------
+   2 |     2
+(1 row)
+
+FETCH ALL FROM cached_cursor_3;
+ key | value
+---------------------------------------------------------------------
+   3 |     3
+(1 row)
+
+FETCH ALL FROM cached_cursor_4;
+ key | value
+---------------------------------------------------------------------
+   4 |     4
+(1 row)
+
+COMMIT;
+-- A normal execution with caching disabled must not disturb pending portals.
+BEGIN;
+SELECT open_cached_cursor(i) FROM generate_series(1, 4) i;
+ open_cached_cursor
+---------------------------------------------------------------------
+ cached_cursor_1
+ cached_cursor_2
+ cached_cursor_3
+ cached_cursor_4
+(4 rows)
+
+SET LOCAL citus.enable_prepared_statement_caching TO off;
+SELECT open_cached_cursor(5);
+ open_cached_cursor
+---------------------------------------------------------------------
+ cached_cursor_5
+(1 row)
+
+FETCH ALL FROM cached_cursor_5;
+ key | value
+---------------------------------------------------------------------
+   5 |     5
+(1 row)
+
+CLOSE cached_cursor_5;
+FETCH ALL FROM cached_cursor_2;
+ key | value
+---------------------------------------------------------------------
+   2 |     2
+(1 row)
+
+FETCH ALL FROM cached_cursor_1;
+ key | value
+---------------------------------------------------------------------
+   1 |     1
+(1 row)
+
+FETCH ALL FROM cached_cursor_4;
+ key | value
+---------------------------------------------------------------------
+   4 |     4
+(1 row)
+
+FETCH ALL FROM cached_cursor_3;
+ key | value
+---------------------------------------------------------------------
+   3 |     3
+(1 row)
+
+COMMIT;
+DROP FUNCTION open_cached_cursor(int);
+-- ============================================================
+-- Test 18: DEALLOCATE does not evict worker statements. Fill the
+--          per-connection cache and verify that a new statement
+--          reports the cap and still executes with bound params.
+-- ============================================================
+DO $$
+BEGIN
+    FOR i IN 1..1000 LOOP
+        EXECUTE 'PREPARE fill_cache(int) AS SELECT value FROM observe_cache WHERE key = $1';
+        EXECUTE 'EXECUTE fill_cache(1)';
+        EXECUTE 'EXECUTE fill_cache(1)';
+        EXECUTE 'DEALLOCATE fill_cache';
+    END LOOP;
+END;
+$$;
+PREPARE full_cache(int, int) AS SELECT value + $2 FROM observe_cache WHERE key = $1;
+EXECUTE full_cache(1, 10);
+ ?column?
+---------------------------------------------------------------------
+       11
+(1 row)
+
+SET client_min_messages TO DEBUG1;
+EXECUTE full_cache(1, 20);
+DEBUG:  prepared statement cache full (1000 entries), falling back to parameterized SQL
+ ?column?
+---------------------------------------------------------------------
+       21
+(1 row)
+
+RESET client_min_messages;
+DEALLOCATE full_cache;
+RESET plan_cache_mode;
 -- ============================================================
 -- Cleanup
 -- ============================================================

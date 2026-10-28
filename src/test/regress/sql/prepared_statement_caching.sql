@@ -734,6 +734,73 @@ SELECT plpgsql_lookup(7);
 RESET client_min_messages;
 
 -- ============================================================
+-- Test 17: overlapping portals on one generic plan must keep
+--          their own tasks until the first FETCH, even if another
+--          portal is opened or closed in the meantime.
+-- ============================================================
+
+CREATE FUNCTION open_cached_cursor(k int) RETURNS refcursor LANGUAGE plpgsql AS $$
+DECLARE
+    c refcursor := 'cached_cursor_' || k;
+BEGIN
+    OPEN c FOR SELECT key, value FROM observe_cache WHERE key = k;
+    RETURN c;
+END;
+$$;
+
+SET plan_cache_mode TO force_generic_plan;
+
+BEGIN;
+SELECT open_cached_cursor(i) FROM generate_series(1, 4) i;
+FETCH ALL FROM cached_cursor_1;
+CLOSE cached_cursor_1;
+FETCH ALL FROM cached_cursor_2;
+FETCH ALL FROM cached_cursor_3;
+FETCH ALL FROM cached_cursor_4;
+COMMIT;
+
+-- A normal execution with caching disabled must not disturb pending portals.
+BEGIN;
+SELECT open_cached_cursor(i) FROM generate_series(1, 4) i;
+SET LOCAL citus.enable_prepared_statement_caching TO off;
+SELECT open_cached_cursor(5);
+FETCH ALL FROM cached_cursor_5;
+CLOSE cached_cursor_5;
+FETCH ALL FROM cached_cursor_2;
+FETCH ALL FROM cached_cursor_1;
+FETCH ALL FROM cached_cursor_4;
+FETCH ALL FROM cached_cursor_3;
+COMMIT;
+
+DROP FUNCTION open_cached_cursor(int);
+
+-- ============================================================
+-- Test 18: DEALLOCATE does not evict worker statements. Fill the
+--          per-connection cache and verify that a new statement
+--          reports the cap and still executes with bound params.
+-- ============================================================
+
+DO $$
+BEGIN
+    FOR i IN 1..1000 LOOP
+        EXECUTE 'PREPARE fill_cache(int) AS SELECT value FROM observe_cache WHERE key = $1';
+        EXECUTE 'EXECUTE fill_cache(1)';
+        EXECUTE 'EXECUTE fill_cache(1)';
+        EXECUTE 'DEALLOCATE fill_cache';
+    END LOOP;
+END;
+$$;
+
+PREPARE full_cache(int, int) AS SELECT value + $2 FROM observe_cache WHERE key = $1;
+EXECUTE full_cache(1, 10);
+SET client_min_messages TO DEBUG1;
+EXECUTE full_cache(1, 20);
+RESET client_min_messages;
+DEALLOCATE full_cache;
+
+RESET plan_cache_mode;
+
+-- ============================================================
 -- Cleanup
 -- ============================================================
 

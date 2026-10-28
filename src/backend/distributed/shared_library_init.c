@@ -1610,7 +1610,11 @@ RegisterCitusConfigVariables(void)
 		gettext_noop("Enables caching prepared statement plans on worker connections."),
 		gettext_noop("When enabled, Citus uses PQprepare/PQsendQueryPrepared on "
 					 "worker connections for fast-path prepared statement executions, "
-					 "eliminating redundant parse/plan cycles on workers."),
+					 "eliminating redundant parse/plan cycles on workers. "
+					 "Up to 1000 statements per connection retain worker plan-cache "
+					 "memory until the connection closes; entries are not evicted "
+					 "on client DEALLOCATE or replanning. Once full, cache misses "
+					 "use parameterized SQL until the connection is recycled."),
 		&EnablePreparedStatementCaching,
 		false,
 		PGC_USERSET,

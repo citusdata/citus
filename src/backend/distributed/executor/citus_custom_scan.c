@@ -358,19 +358,6 @@ CitusBeginReadOnlyScan(CustomScanState *node, EState *estate, int eflags)
 		return;
 	}
 
-	Job *workerJob = originalDistributedPlan->workerJob;
-
-	/*
-	 * Always clear stale task pointers from the previous fast-path execution.
-	 * For deferred-pruning plans, workerJob->taskList is NIL until populated
-	 * per-execution by RegenerateTaskForFasthPathQuery (or the fast path below).
-	 * Without this reset, if a previous execution took the fast path and then the
-	 * GUC is disabled, CopyDistributedPlanWithoutCache would deep-copy a stale
-	 * taskList pointing into freed memory.
-	 */
-	workerJob->taskList = NIL;
-	workerJob->parametersInJobQueryResolved = false;
-
 	/*
 	 * A cached plan can build its task straight from the bound parameters,
 	 * skipping the plan copy, coordinator evaluation and task regeneration.
@@ -450,19 +437,6 @@ CitusBeginModifyScan(CustomScanState *node, EState *estate, int eflags)
 	CitusScanState *scanState = (CitusScanState *) node;
 	PlanState *planState = &(scanState->customScanState.ss.ps);
 	DistributedPlan *originalDistributedPlan = scanState->distributedPlan;
-	Job *origWorkerJob = originalDistributedPlan->workerJob;
-
-	/*
-	 * Safety: clear stale task pointers from a previous fast-path execution.
-	 * For deferred-pruning plans, workerJob->taskList is NIL until populated
-	 * per-execution.  Without this reset, CopyDistributedPlanWithoutCache
-	 * would deep-copy a stale taskList pointing into freed memory.
-	 */
-	if (origWorkerJob->deferredPruning)
-	{
-		origWorkerJob->taskList = NIL;
-		origWorkerJob->parametersInJobQueryResolved = false;
-	}
 
 	/*
 	 * A cached plan can build its task straight from the bound parameters,
@@ -954,27 +928,6 @@ CitusEndScanCommon(CitusScanState *scanState)
 
 		/* queries without partition key are also recorded */
 		CitusQueryStatsExecutorsEntry(queryId, executorType, partitionKeyString);
-	}
-
-	/*
-	 * Clear mutable per-execution state so the cached plan is clean for
-	 * the next execution.  The cache-hit fast paths in CitusBeginReadOnlyScan()
-	 * and CitusBeginModifyScan() store a Task list and a partition key Const
-	 * directly on the original plan's workerJob; both live in the per-execution
-	 * memory context and become dangling after EndScan.  In assert-checking
-	 * builds the next execution's GetDistributedPlan() → copyObject() would
-	 * traverse freed memory without this reset.
-	 *
-	 * partitionKeyValue goes back to what the planner set rather than to NULL:
-	 * ModifyJobNeedsEvaluation() reads it to decide whether the distribution
-	 * column value is already known, and nulling it forces every later
-	 * execution through needless coordinator evaluation.
-	 */
-	if (workerJob != NULL && workerJob->savedJobQueryForCaching != NULL)
-	{
-		workerJob->taskList = NIL;
-		workerJob->parametersInJobQueryResolved = false;
-		workerJob->partitionKeyValue = workerJob->plannerPartitionKeyValue;
 	}
 }
 
