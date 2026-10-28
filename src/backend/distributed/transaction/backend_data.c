@@ -1211,18 +1211,22 @@ GetBackendDataForProc(PGPROC *proc, BackendData *result)
 
 /*
  * CancelTransactionDueToDeadlock cancels the input proc and also marks the backend
- * data with this information.
+ * data with this information, provided that the proc is still running the given
+ * distributed transaction. Returns false if the proc is no longer running it, in
+ * which case no cancellation is attempted.
  */
-void
-CancelTransactionDueToDeadlock(PGPROC *proc, DistributedTransactionId *transactionId)
+bool
+CancelTransactionDueToDeadlock(PGPROC *proc,
+							   const DistributedTransactionId *transactionId)
 {
+	bool cancelled = false;
 	BackendData *backendData = &backendManagementShmemData->backends[getProcNo_compat(
 																		 proc)];
 
 	/* backend might not have used citus yet and thus not initialized backend data */
 	if (!backendData)
 	{
-		return;
+		return false;
 	}
 
 	SpinLockAcquire(&backendData->mutex);
@@ -1236,10 +1240,8 @@ CancelTransactionDueToDeadlock(PGPROC *proc, DistributedTransactionId *transacti
 	 * backend may have finished that transaction and started an unrelated one in
 	 * between, and cancelling that one would be wrong.
 	 *
-	 * The initiator node has to be compared as well, because transaction numbers are
-	 * only unique per node. A transaction initiated on another node can therefore
-	 * share a number with a local one, and
-	 * AssociateDistributedTransactionWithBackendProc() matches on the number alone.
+	 * Transaction numbers are only unique per initiator node, so the initiator
+	 * has to match as well.
 	 *
 	 * The timestamp is not compared, even though DistributedTransactionIdCompare()
 	 * does consider it. That comparison sorts ids gathered from all nodes, whereas
@@ -1261,11 +1263,15 @@ CancelTransactionDueToDeadlock(PGPROC *proc, DistributedTransactionId *transacti
 							"distributed deadlock but the backend could not "
 							"be cancelled", proc->pid)));
 		}
+
+		cancelled = true;
 	}
 	else
 	{
 		SpinLockRelease(&backendData->mutex);
 	}
+
+	return cancelled;
 }
 
 
