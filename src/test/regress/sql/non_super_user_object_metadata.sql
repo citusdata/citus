@@ -79,6 +79,19 @@ SELECT pg_identify_object_as_address(classid, objid, objsubid) from pg_catalog.p
 SELECT pg_identify_object_as_address(classid, objid, objsubid) from pg_catalog.pg_dist_object where objid = 'local_schema.test_function'::regproc::oid;
 SELECT pg_identify_object_as_address(classid, objid, objsubid) from pg_catalog.pg_dist_object where objid = 'local_schema.plpgsql_dist_function'::regproc::oid;
 
+-- non-superusers cannot invoke the internal unmark function
+SET ROLE non_super_user_test_user;
+SELECT pg_catalog.citus_unmark_object_distributed('pg_proc'::regclass::oid, 'local_schema.test_function'::regproc::oid, 0, false);
+
+-- spoofing an internal connection does not bypass the code-level check
+SET application_name TO 'citus_internal gpid=1';
+SELECT pg_catalog.citus_unmark_object_distributed('pg_proc'::regclass::oid, 'local_schema.test_function'::regproc::oid, 0, false);
+RESET application_name;
+RESET ROLE;
+
+-- the failed calls leave the distributed object metadata intact
+SELECT count(*) = 1 FROM pg_catalog.pg_dist_object WHERE objid = 'local_schema.test_function'::regproc::oid;
+
 -- show those objects marked as distributed on metadata worker node as well
 SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(classid, objid, objsubid) from pg_catalog.pg_dist_object where objid = 'local_schema'::regnamespace::oid;$$) ORDER BY 1,2;
 SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(classid, objid, objsubid) from pg_catalog.pg_dist_object where objid = 'test_sequence_schema'::regnamespace::oid;$$) ORDER BY 1,2;
@@ -207,6 +220,12 @@ DROP TABLE extension_schema.table_to_check_object;
 SELECT * FROM (SELECT pg_identify_object_as_address(classid, objid, objsubid) as obj_identifier from pg_catalog.pg_dist_object) as obj_identifiers where obj_identifier::text like '%table_to_check_object%';
 SELECT * FROM run_command_on_workers($$SELECT * FROM (SELECT pg_identify_object_as_address(classid, objid, objsubid) as obj_identifier from pg_catalog.pg_dist_object) as obj_identifiers where obj_identifier::text like '%table_to_check_object%';$$) ORDER BY 1,2;
 
--- Revert the settings for following tests
+-- Clean up for repeat runs and restore settings
+SET client_min_messages TO ERROR;
+DROP SCHEMA test_sequence_schema, schema_to_prop_with_function,
+    schema_to_prop_with_type, extension_schema CASCADE;
+DROP USER non_super_user_test_user;
+RESET client_min_messages;
+RESET search_path;
 RESET citus.enable_ddl_propagation;
 RESET citus.shard_replication_factor;
