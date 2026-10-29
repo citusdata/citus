@@ -1,5 +1,6 @@
 CREATE SCHEMA "intermediate result pruning";
 SET search_path TO "intermediate result pruning";
+GRANT ALL ON SCHEMA "intermediate result pruning" TO regularuser;
 CREATE TABLE table_1 (key int, value text);
 SELECT create_distributed_table('table_1', 'key');
  create_distributed_table
