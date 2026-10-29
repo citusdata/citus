@@ -5,6 +5,25 @@
 CREATE SCHEMA columnar_insert;
 SET search_path TO columnar_insert;
 
+-- A tuple formed during stripe completion must not supply the stripe's xmin.
+CREATE FUNCTION test_complete_stripe_reservation(regclass)
+RETURNS boolean
+LANGUAGE C STRICT
+AS 'citus_columnar', $$test_columnar_complete_stripe_reservation$$;
+
+CREATE TABLE test_stripe_xmin (a bigint, b bigint, c text, d numeric) USING columnar;
+INSERT INTO test_stripe_xmin VALUES (1, 10, 'x', 1);
+SELECT * FROM test_stripe_xmin;
+
+-- Check the returned MVCC state directly, without depending on pg_xact cleanup.
+-- Roll back because the helper reserves a stripe without writing its data.
+BEGIN;
+SELECT test_complete_stripe_reservation('test_stripe_xmin') AS valid_stripe_metadata;
+ROLLBACK;
+SELECT * FROM test_stripe_xmin;
+DROP TABLE test_stripe_xmin;
+DROP FUNCTION test_complete_stripe_reservation(regclass);
+
 CREATE TABLE test_insert_command (a int) USING columnar;
 
 -- test single row inserts fail
