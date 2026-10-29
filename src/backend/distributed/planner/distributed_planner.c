@@ -1461,9 +1461,7 @@ GetDistributedPlan(CustomScan *customScan)
 
 	CheckNodeCopyAndSerialization(node);
 
-	DistributedPlan *distributedPlan = (DistributedPlan *) node;
-
-	return distributedPlan;
+	return (DistributedPlan *) node;
 }
 
 
@@ -2688,6 +2686,8 @@ CreateAndPushPlannerRestrictionContext(DistributedPlanningContext *planContext,
 			fastPathRestrictionContext->distributionKeyValue;
 		plannersFastPathCtx->distributionKeyHasParam =
 			fastPathRestrictionContext->distributionKeyHasParam;
+		plannersFastPathCtx->distributionKeyParamId =
+			fastPathRestrictionContext->distributionKeyParamId;
 		plannersFastPathCtx->delayFastPathPlanning =
 			fastPathRestrictionContext->delayFastPathPlanning;
 	}
