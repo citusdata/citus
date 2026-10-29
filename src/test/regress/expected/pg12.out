@@ -86,17 +86,14 @@ select create_distributed_table('cptest', 'id');
 
 (1 row)
 
-copy cptest from STDIN with csv where val < 4;
+\copy cptest from PROGRAM 'true' with csv where val < 4
 ERROR:  Citus does not support COPY FROM with WHERE
-1,6
-2,3
-3,2
-4,9
-5,4
-\.
-invalid command \.
 select sum(id), sum(val) from cptest;
-ERROR:  syntax error at or near "1"
+ sum | sum
+---------------------------------------------------------------------
+     |
+(1 row)
+
 -- CTE materialized/not materialized
 CREATE TABLE single_hash_repartition_first (id int, sum int, avg float);
 CREATE TABLE single_hash_repartition_second (id int primary key, sum int, avg float);

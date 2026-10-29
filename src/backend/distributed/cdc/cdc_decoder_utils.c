@@ -131,7 +131,7 @@ CdcIsCoordinator(void)
  * CdcCitusHasBeenLoaded function returns true if the citus extension has been loaded.
  */
 bool
-CdcCitusHasBeenLoaded()
+CdcCitusHasBeenLoaded(void)
 {
 	if (!IsCitusExtensionLoaded)
 	{

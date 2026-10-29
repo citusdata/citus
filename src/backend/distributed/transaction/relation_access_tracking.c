@@ -140,7 +140,7 @@ InitRelationAccessHash(void)
  * Empty RelationAccessHash, without destroying the hash table itself.
  */
 void
-ResetRelationAccessHash()
+ResetRelationAccessHash(void)
 {
 	hash_delete_all(RelationAccessHash);
 }
@@ -703,7 +703,7 @@ GetRelationAccessMode(Oid relationId, ShardPlacementAccessType accessType)
  * is also required.
  */
 bool
-ShouldRecordRelationAccess()
+ShouldRecordRelationAccess(void)
 {
 	if (EnforceForeignKeyRestrictions &&
 		(IsMultiStatementTransaction() || InCoordinatedTransaction()))

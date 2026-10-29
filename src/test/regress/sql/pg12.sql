@@ -49,13 +49,7 @@ vacuum (index_cleanup 1) gen1;
 -- COPY FROM
 create table cptest (id int, val int);
 select create_distributed_table('cptest', 'id');
-copy cptest from STDIN with csv where val < 4;
-1,6
-2,3
-3,2
-4,9
-5,4
-\.
+\copy cptest from PROGRAM 'true' with csv where val < 4
 select sum(id), sum(val) from cptest;
 
 -- CTE materialized/not materialized

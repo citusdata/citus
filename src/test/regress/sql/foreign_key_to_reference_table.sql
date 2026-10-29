@@ -888,14 +888,14 @@ ALTER TABLE referencing_table_0 ADD CONSTRAINT pkey PRIMARY KEY (id);
 ALTER TABLE referencing_table_4 ADD CONSTRAINT fkey FOREIGN KEY (id) REFERENCES referencing_table_0;
 -- add foreign constraint from a partition to reference table
 ALTER TABLE referencing_table_4 ADD CONSTRAINT fkey_to_ref FOREIGN KEY (value_1) REFERENCES referenced_table;
+INSERT INTO referenced_table VALUES(5,5);
 -- should fail since the data will flow to partitioning_test_4 and it has a foreign constraint to partitioning_test_0 on id column
 INSERT INTO referencing_table VALUES (0, 5);
 -- should succeed on partitioning_test_0
 INSERT INTO referencing_table VALUES (0, 1);
 SELECT * FROM referencing_table;
 -- should fail since partitioning_test_4 has foreign constraint to referenced_table on value_1 column
-INSERT INTO referencing_table VALUES (0, 5);
-INSERT INTO referenced_table VALUES(5,5);
+INSERT INTO referencing_table VALUES (0, 4);
 -- should succeed since both of the foreign constraints are positive
 INSERT INTO referencing_table VALUES (0, 5);
 

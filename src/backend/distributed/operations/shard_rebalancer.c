@@ -290,6 +290,7 @@ static bool ShardAllowedOnNode(uint64 shardId, WorkerNode *workerNode, void *con
 static float4 NodeCapacity(WorkerNode *workerNode, void *context);
 static ShardCost GetShardCost(uint64 shardId, void *context);
 static List * NonColocatedDistRelationIdList(void);
+static List * CollectCitusTableIdsForPlacementUpdates(List *placementUpdateList);
 static void RebalanceTableShards(RebalanceOptions *options, Oid shardReplicationModeOid);
 static int64 RebalanceTableShardsBackground(RebalanceOptions *options, Oid
 											shardReplicationModeOid,
@@ -517,7 +518,7 @@ FullShardPlacementList(Oid relationId, ArrayType *excludedShardArray)
  * ActiveReadableNodeList, but sorted.
  */
 static List *
-SortedActiveWorkers()
+SortedActiveWorkers(void)
 {
 	List *activeWorkerList = ActiveReadableNodeList();
 	return SortList(activeWorkerList, CompareWorkerNodes);
@@ -980,7 +981,7 @@ AcquirePlacementColocationLockLocally(int64 lockId, int lockMode)
  * connection requests.
  */
 static List *
-GetResponsiveWorkerList()
+GetResponsiveWorkerList(void)
 {
 	List *activeWorkerList = ActiveReadableNodeList();
 	ListCell *activeWorkerCell = NULL;
@@ -1201,9 +1202,9 @@ citus_rebalance_start(PG_FUNCTION_ARGS)
 		.rebalanceStrategy = strategy,
 		.improvementThreshold = strategy->improvementThreshold,
 	};
-	int jobId = RebalanceTableShardsBackground(&options, shardTransferModeOid,
-											   ParallelTransferReferenceTables,
-											   ParallelTransferColocatedShards);
+	int64 jobId = RebalanceTableShardsBackground(&options, shardTransferModeOid,
+												 ParallelTransferReferenceTables,
+												 ParallelTransferColocatedShards);
 
 	if (jobId == 0)
 	{
@@ -2091,14 +2092,24 @@ RebalanceTableShards(RebalanceOptions *options, Oid shardReplicationModeOid)
 		 * if we are able to use logical replication to transfer shards or not.
 		 * We throw an error if any of the tables do not have a replica identity, which
 		 * is required for logical replication to replicate UPDATE and DELETE commands.
+		 * This check only needs to run once per colocation group.
 		 */
-		PlacementUpdateEvent *placementUpdate = NULL;
-		foreach_declared_ptr(placementUpdate, placementUpdateList)
-		{
-			Oid relationId = RelationIdForShard(placementUpdate->shardId);
-			List *colocatedTableList = ColocatedTableList(relationId);
-			VerifyTablesHaveReplicaIdentity(colocatedTableList);
-		}
+		List *relationIdList =
+			CollectCitusTableIdsForPlacementUpdates(placementUpdateList);
+		VerifyTablesHaveReplicaIdentity(relationIdList);
+	}
+	else if (transferMode == TRANSFER_MODE_FORCE_LOGICAL_AUTO_IDENTITY)
+	{
+		/*
+		 * force_logical_auto_identity temporarily sets REPLICA IDENTITY FULL on the
+		 * tables that have no usable replica identity. Reject up front any such table
+		 * that cannot then have UPDATE and DELETE replicated (e.g. a column with no
+		 * equality operator), so we fail here instead of failing mid-transfer.
+		 * This check only needs to run once per colocation group.
+		 */
+		List *relationIdList =
+			CollectCitusTableIdsForPlacementUpdates(placementUpdateList);
+		ErrorIfTablesCannotUseReplicaIdentityFull(relationIdList);
 	}
 
 	EnsureReferenceTablesExistOnAllNodesExtended(transferMode);
@@ -2360,14 +2371,25 @@ RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationMo
 		 * if we are able to use logical replication to transfer shards or not.
 		 * We throw an error if any of the tables do not have a replica identity, which
 		 * is required for logical replication to replicate UPDATE and DELETE commands.
+		 * This check only needs to run once per colocation group.
 		 */
-		PlacementUpdateEvent *placementUpdate = NULL;
-		foreach_declared_ptr(placementUpdate, placementUpdateList)
-		{
-			relationId = RelationIdForShard(placementUpdate->shardId);
-			List *colocatedTables = ColocatedTableList(relationId);
-			VerifyTablesHaveReplicaIdentity(colocatedTables);
-		}
+		List *relationIdList =
+			CollectCitusTableIdsForPlacementUpdates(placementUpdateList);
+		VerifyTablesHaveReplicaIdentity(relationIdList);
+	}
+	else if (shardTransferMode == TRANSFER_MODE_FORCE_LOGICAL_AUTO_IDENTITY)
+	{
+		/*
+		 * force_logical_auto_identity temporarily sets REPLICA IDENTITY FULL on the
+		 * tables that have no usable replica identity. Reject up front any such table
+		 * that cannot then have UPDATE and DELETE replicated (e.g. a column with no
+		 * equality operator). Otherwise the background job would be scheduled only to
+		 * fail (and retry) when it later executes the move.
+		 * This check only needs to run once per colocation group.
+		 */
+		List *relationIdList =
+			CollectCitusTableIdsForPlacementUpdates(placementUpdateList);
+		ErrorIfTablesCannotUseReplicaIdentityFull(relationIdList);
 	}
 
 	DropOrphanedResourcesInSeparateTransaction();
@@ -2393,6 +2415,10 @@ RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationMo
 		if (shardTransferMode == TRANSFER_MODE_AUTOMATIC)
 		{
 			VerifyTablesHaveReplicaIdentity(referenceTableIdList);
+		}
+		else if (shardTransferMode == TRANSFER_MODE_FORCE_LOGICAL_AUTO_IDENTITY)
+		{
+			ErrorIfTablesCannotUseReplicaIdentityFull(referenceTableIdList);
 		}
 
 		/*
@@ -2477,6 +2503,54 @@ RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationMo
 					 "citus_rebalance_status();")));
 
 	return jobId;
+}
+
+
+/*
+ * CollectCitusTableIdsForPlacementUpdates returns the list of Citus table ids
+ * whose replica identity must be verified before executing placementUpdateList.
+ *
+ * placementUpdateList holds one entry per shard(-group) move, so several entries
+ * can belong to the same colocation group and would produce the same colocated
+ * table list. We therefore visit each colocation group only once: for the first
+ * shard we see from a colocation group we append that group's colocated table list
+ * to the result, and we skip any later shard from the same group.
+ *
+ * The exception is INVALID_COLOCATION_ID: append- and range-distributed tables all
+ * share it although they are unrelated, so each such table is added on its own.
+ */
+static List *
+CollectCitusTableIdsForPlacementUpdates(List *placementUpdateList)
+{
+	List *relationIdList = NIL;
+	HTAB *seenColocationIdSet = CreateSimpleHashSet(uint32);
+
+	PlacementUpdateEvent *placementUpdate = NULL;
+	foreach_declared_ptr(placementUpdate, placementUpdateList)
+	{
+		uint32 colocationId = INVALID_COLOCATION_ID;
+		Oid relationId = RelationIdAndColocationIdForShard(placementUpdate->shardId,
+														   &colocationId);
+
+		if (colocationId == INVALID_COLOCATION_ID)
+		{
+			relationIdList = list_append_unique_oid(relationIdList, relationId);
+			continue;
+		}
+
+		bool foundInSet = false;
+		hash_search(seenColocationIdSet, &colocationId, HASH_ENTER, &foundInSet);
+		if (foundInSet)
+		{
+			continue;
+		}
+
+		relationIdList = list_concat(relationIdList, ColocatedTableList(relationId));
+	}
+
+	hash_destroy(seenColocationIdSet);
+
+	return relationIdList;
 }
 
 

@@ -244,22 +244,20 @@ HideCitusDependentObjectsOnQueriesOfPgMetaTables(Node *node, void *context)
 
 				if (OidIsValid(metaTableOid))
 				{
-					bool mergeJoinCondition = false;
-#if PG_VERSION_NUM >= PG_VERSION_17
-
 					/*
 					 * In Postgres 17, the query tree has a specific field for the merge condition.
 					 * So we shouldn't modify the jointree, but rather the mergeJoinCondition here
 					 * Relevant PG17 commit: 0294df2f1
 					 */
-					mergeJoinCondition = query->mergeJoinCondition;
+#if PG_VERSION_NUM < PG_VERSION_19
+					bool mergeJoinCondition = query->mergeJoinCondition;
 #endif
 
 					/*
 					 * We found a valid pg meta class in query,
 					 * so we assert below conditions.
 					 */
-					Assert(mergeJoinCondition ||
+					Assert(query->mergeJoinCondition ||
 						   (query->jointree != NULL &&
 							query->jointree->fromlist != NULL));
 
@@ -267,9 +265,14 @@ HideCitusDependentObjectsOnQueriesOfPgMetaTables(Node *node, void *context)
 						CreateCitusDependentObjectExpr(varno, metaTableOid);
 
 					/*
-					 * We do not use security quals because a postgres vanilla test fails
-					 * with a change of order for its result.
+					 * PG19 join removal rewrites removed relation Vars to INVALID_VAR.
+					 * Keep the filter attached to its base relation so join removal
+					 * accounts for it instead of leaving an invalid Var in jointree quals.
 					 */
+#if PG_VERSION_NUM >= PG_VERSION_19
+					rangeTableEntry->securityQuals =
+						lappend(rangeTableEntry->securityQuals, citusDependentObjExpr);
+#else
 					if (!mergeJoinCondition)
 					{
 						query->jointree->quals = make_and_qual(
@@ -277,11 +280,10 @@ HideCitusDependentObjectsOnQueriesOfPgMetaTables(Node *node, void *context)
 					}
 					else
 					{
-#if PG_VERSION_NUM >= PG_VERSION_17
 						query->mergeJoinCondition = make_and_qual(
 							query->mergeJoinCondition, citusDependentObjExpr);
-#endif
 					}
+#endif
 				}
 
 				MemoryContextSwitchTo(originalContext);

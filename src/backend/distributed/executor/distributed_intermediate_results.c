@@ -255,6 +255,7 @@ CreatePartitioningTupleDest(CitusTableCacheEntry *targetRelation)
 					   TEXTOID, -1, 0);
 	TupleDescInitEntry(tupleDescriptor, (AttrNumber) 3, "rows_written",
 					   INT8OID, -1, 0);
+	TupleDescFinalize(tupleDescriptor);
 
 
 	PartitioningTupleDest *tupleDest = palloc0(sizeof(PartitioningTupleDest));
@@ -671,6 +672,7 @@ ExecuteFetchTaskList(List *taskList)
 	TupleDesc resultDescriptor = CreateTemplateTupleDesc(resultColumnCount);
 
 	TupleDescInitEntry(resultDescriptor, (AttrNumber) 1, "byte_count", INT8OID, -1, 0);
+	TupleDescFinalize(resultDescriptor);
 
 	TupleDestination *tupleDestination = CreateTupleDestNone();
 

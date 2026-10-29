@@ -1,0 +1,196 @@
+-- A removed worker must not recover transactions belonging to its old coordinator.
+SELECT current_database() AS original_database \gset
+ALTER SYSTEM SET citus.recover_2pc_interval TO -1;
+SELECT pg_reload_conf();
+ pg_reload_conf
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SET citus.enable_create_database_propagation TO off;
+CREATE DATABASE node_removal_recovery;
+NOTICE:  Citus partially supports CREATE DATABASE for distributed databases
+DETAIL:  Citus does not propagate CREATE DATABASE command to other nodes
+HINT:  You can manually create a database and its extensions on other nodes.
+\c - - - :worker_1_port
+SET citus.enable_create_database_propagation TO off;
+CREATE DATABASE node_removal_recovery;
+NOTICE:  Citus partially supports CREATE DATABASE for distributed databases
+DETAIL:  Citus does not propagate CREATE DATABASE command to other nodes
+HINT:  You can manually create a database and its extensions on other nodes.
+\c - - - :worker_2_port
+SET citus.enable_create_database_propagation TO off;
+CREATE DATABASE node_removal_recovery;
+NOTICE:  Citus partially supports CREATE DATABASE for distributed databases
+DETAIL:  Citus does not propagate CREATE DATABASE command to other nodes
+HINT:  You can manually create a database and its extensions on other nodes.
+\c node_removal_recovery - - :worker_1_port
+CREATE EXTENSION citus;
+\c node_removal_recovery - - :worker_2_port
+CREATE EXTENSION citus;
+\c node_removal_recovery - - :master_port
+CREATE EXTENSION citus;
+SELECT citus_set_coordinator_host('localhost', :master_port);
+ citus_set_coordinator_host
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT 1 FROM citus_add_node('localhost', :worker_1_port);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+SELECT groupid AS worker_1_group_id FROM pg_dist_node WHERE nodeport = :worker_1_port \gset
+SELECT groupid AS worker_2_group_id FROM pg_dist_node WHERE nodeport = :worker_2_port \gset
+\c - - - :worker_1_port
+BEGIN;
+CREATE TABLE should_commit_after_node_removal(value int);
+INSERT INTO should_commit_after_node_removal VALUES (42);
+PREPARE TRANSACTION 'citus_0_node_removal';
+\c - - - :worker_2_port
+CREATE TABLE retained_local_data(value int);
+INSERT INTO retained_local_data VALUES (42);
+\c - - - :master_port
+INSERT INTO pg_dist_transaction(groupid, gid)
+VALUES (:worker_1_group_id, 'citus_0_node_removal');
+SELECT citus_remove_node('localhost', :worker_2_port);
+ citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+\c - - - :worker_2_port
+SELECT groupid FROM pg_dist_local_group;
+ groupid
+---------------------------------------------------------------------
+       0
+(1 row)
+
+SELECT count(*) FROM pg_dist_node;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+SELECT recover_prepared_transactions();
+ recover_prepared_transactions
+---------------------------------------------------------------------
+                             0
+(1 row)
+
+SELECT * FROM retained_local_data;
+ value
+---------------------------------------------------------------------
+    42
+(1 row)
+
+\c - - - :worker_1_port
+SELECT count(*) FROM pg_prepared_xacts WHERE gid = 'citus_0_node_removal';
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+\c - - - :master_port
+SELECT count(*) FROM pg_dist_transaction WHERE gid = 'citus_0_node_removal';
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+SELECT recover_prepared_transactions();
+ recover_prepared_transactions
+---------------------------------------------------------------------
+                             1
+(1 row)
+
+\c - - - :worker_1_port
+SELECT * FROM should_commit_after_node_removal;
+ value
+---------------------------------------------------------------------
+    42
+(1 row)
+
+\c - - - :master_port
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port, groupid => :worker_2_group_id);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+\c - - - :worker_2_port
+SELECT groupid = :worker_2_group_id AS identity_restored FROM pg_dist_local_group;
+ identity_restored
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT count(*) = 3 AS routes_restored FROM pg_dist_node;
+ routes_restored
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT * FROM retained_local_data;
+ value
+---------------------------------------------------------------------
+    42
+(1 row)
+
+-- Removing the coordinator's placement entry must preserve its worker routes.
+\c - - - :master_port
+SELECT citus_remove_node('localhost', :master_port);
+ citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT count(*) = 2 AS worker_routes_preserved FROM pg_dist_node;
+ worker_routes_preserved
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- An entry pointing at the coordinator with a non-zero group must also keep its worker list.
+SELECT 1 FROM citus_add_inactive_node('localhost', :master_port);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+SELECT citus_remove_node('localhost', :master_port);
+ citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT count(*) = 2 AS worker_routes_preserved FROM pg_dist_node;
+ worker_routes_preserved
+---------------------------------------------------------------------
+ t
+(1 row)
+
+\c :original_database - - :worker_1_port
+SET citus.enable_create_database_propagation TO off;
+DROP DATABASE node_removal_recovery WITH (FORCE);
+\c :original_database - - :worker_2_port
+SET citus.enable_create_database_propagation TO off;
+DROP DATABASE node_removal_recovery WITH (FORCE);
+\c :original_database - - :master_port
+SET citus.enable_create_database_propagation TO off;
+DROP DATABASE node_removal_recovery WITH (FORCE);
+ALTER SYSTEM RESET citus.recover_2pc_interval;
+SELECT pg_reload_conf();
+ pg_reload_conf
+---------------------------------------------------------------------
+ t
+(1 row)
+

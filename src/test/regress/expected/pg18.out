@@ -1047,16 +1047,16 @@ SELECT create_distributed_table('check_ign_err', 'n');
 
 (1 row)
 
-COPY check_ign_err FROM STDIN WITH (on_error stop, reject_limit 5);
+\copy check_ign_err FROM PROGRAM 'true' WITH (on_error stop, reject_limit 5)
 ERROR:  Citus does not support COPY FROM with ON_ERROR option.
-COPY check_ign_err FROM STDIN WITH (ON_ERROR ignore, REJECT_LIMIT 100);
+\copy check_ign_err FROM PROGRAM 'true' WITH (ON_ERROR ignore, REJECT_LIMIT 100)
 ERROR:  Citus does not support COPY FROM with ON_ERROR option.
-COPY check_ign_err FROM STDIN WITH (on_error ignore, log_verbosity verbose, reject_limit 50);
+\copy check_ign_err FROM PROGRAM 'true' WITH (on_error ignore, log_verbosity verbose, reject_limit 50)
 ERROR:  Citus does not support COPY FROM with ON_ERROR option.
-COPY check_ign_err FROM STDIN WITH (reject_limt 77, log_verbosity verbose, on_error ignore);
+\copy check_ign_err FROM PROGRAM 'true' WITH (reject_limt 77, log_verbosity verbose, on_error ignore)
 ERROR:  Citus does not support COPY FROM with ON_ERROR option.
 -- PG requires on_error when reject_limit is specified
-COPY check_ign_err FROM STDIN WITH (reject_limit 100);
+\copy check_ign_err FROM PROGRAM 'true' WITH (reject_limit 100)
 ERROR:  COPY REJECT_LIMIT requires ON_ERROR to be set to IGNORE
 -- PG18 Feature: COPY TABLE TO on a materialized view
 -- PG18 commit: https://github.com/postgres/postgres/commit/534874fac
@@ -1471,6 +1471,25 @@ SET search_path TO pg18_nn;
 -- END: PG18: verify publish_generated_columns is preserved for distributed tables
 -- PG18 Feature: FOREIGN KEY constraints can be specified as NOT ENFORCED
 -- PG18 commit: https://github.com/postgres/postgres/commit/eec0040c4
+CREATE TABLE alter_constraint_local (
+	id int PRIMARY KEY,
+	parent_id int,
+	CONSTRAINT alter_constraint_local_fk
+		FOREIGN KEY (parent_id) REFERENCES alter_constraint_local (id) NOT ENFORCED
+);
+-- PostgreSQL tables retain native ALTER CONSTRAINT behavior.
+ALTER TABLE alter_constraint_local
+	ALTER CONSTRAINT alter_constraint_local_fk ENFORCED;
+SELECT conenforced
+FROM pg_constraint
+WHERE conrelid = 'alter_constraint_local'::regclass
+  AND conname = 'alter_constraint_local_fk';
+ conenforced
+---------------------------------------------------------------------
+ t
+(1 row)
+
+DROP TABLE alter_constraint_local;
 CREATE TABLE customers(
    customer_id INT GENERATED ALWAYS AS IDENTITY,
    customer_name VARCHAR(255) NOT NULL,
@@ -1567,8 +1586,71 @@ SELECT * FROM contacts ORDER BY contact_id;
 -- ALTER TABLE .. ALTER CONSTRAINT is not supported in Citus,
 -- so the following command should fail
 ALTER TABLE contacts ALTER CONSTRAINT fk_customer ENFORCED;
-ERROR:  alter table command is currently unsupported
-DETAIL:  Only ADD|DROP COLUMN, SET|DROP NOT NULL, SET|DROP DEFAULT, ADD|DROP|VALIDATE CONSTRAINT, SET (), RESET (), ENABLE|DISABLE|NO FORCE|FORCE ROW LEVEL SECURITY, ATTACH|DETACH PARTITION and TYPE subcommands are supported.
+ERROR:  ALTER TABLE ... ALTER CONSTRAINT commands are currently unsupported
+DETAIL:  Citus does not propagate constraint property changes to shards.
+SELECT conenforced
+FROM pg_constraint
+WHERE conrelid = 'contacts'::regclass AND conname = 'fk_customer';
+ conenforced
+---------------------------------------------------------------------
+ f
+(1 row)
+
+CREATE TABLE alter_constraint_reference (
+	id int PRIMARY KEY,
+	parent_id int,
+	CONSTRAINT alter_constraint_reference_fk
+		FOREIGN KEY (parent_id) REFERENCES alter_constraint_reference (id) NOT ENFORCED
+);
+SELECT create_reference_table('alter_constraint_reference');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+ALTER TABLE alter_constraint_reference
+	ALTER CONSTRAINT alter_constraint_reference_fk ENFORCED;
+ERROR:  ALTER TABLE ... ALTER CONSTRAINT commands are currently unsupported
+DETAIL:  Citus does not propagate constraint property changes to shards.
+SELECT conenforced
+FROM pg_constraint
+WHERE conrelid = 'alter_constraint_reference'::regclass
+  AND conname = 'alter_constraint_reference_fk';
+ conenforced
+---------------------------------------------------------------------
+ f
+(1 row)
+
+DROP TABLE alter_constraint_reference;
+CREATE TABLE alter_constraint_citus_local (
+	id int PRIMARY KEY,
+	parent_id int,
+	CONSTRAINT alter_constraint_citus_local_fk
+		FOREIGN KEY (parent_id) REFERENCES alter_constraint_citus_local (id) NOT ENFORCED
+);
+SELECT citus_add_local_table_to_metadata(
+	'alter_constraint_citus_local',
+	cascade_via_foreign_keys => true
+);
+ citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+ALTER TABLE alter_constraint_citus_local
+	ALTER CONSTRAINT alter_constraint_citus_local_fk ENFORCED;
+ERROR:  ALTER TABLE ... ALTER CONSTRAINT commands are currently unsupported
+DETAIL:  Citus does not propagate constraint property changes to shards.
+SELECT conenforced
+FROM pg_constraint
+WHERE conrelid = 'alter_constraint_citus_local'::regclass
+  AND conname = 'alter_constraint_citus_local_fk';
+ conenforced
+---------------------------------------------------------------------
+ f
+(1 row)
+
+DROP TABLE alter_constraint_citus_local;
 -- PG18 Feature: ENFORCED / NOT ENFORCED check constraints
 -- PG18 commit: https://github.com/postgres/postgres/commit/ca87c415e
 -- In Citus, CHECK constraints are propagated on promoting a postgres table

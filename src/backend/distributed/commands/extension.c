@@ -25,12 +25,6 @@
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
 
-#include "pg_version_constants.h"
-
-#if PG_VERSION_NUM < PG_VERSION_17
-#include "catalog/pg_am_d.h"
-#endif
-
 #include "citus_version.h"
 
 #include "columnar/columnar.h"
@@ -540,7 +534,7 @@ PostprocessAlterExtensionCitusUpdateStmt(Node *node)
  * pg_dist_object if we had created them in new version of Citus to pg_dist_object.
  */
 static void
-MarkExistingObjectDependenciesDistributedIfSupported()
+MarkExistingObjectDependenciesDistributedIfSupported(void)
 {
 	/* resulting object addresses to be marked as distributed */
 	List *resultingObjectAddresses = NIL;
@@ -626,15 +620,37 @@ MarkExistingObjectDependenciesDistributedIfSupported()
 	/* resolve dependencies of the objects in pg_dist_object*/
 	List *distributedObjectAddressList = GetDistributedObjectAddressList();
 
+	/*
+	 * Resolving dependencies allocates a lot, so we use a per-object memory
+	 * context and only keep copies of the resulting addresses. Otherwise memory
+	 * usage grows with the number of distributed objects.
+	 */
+	MemoryContext perObjectContext =
+		AllocSetContextCreate(CurrentMemoryContext,
+							  "MarkExistingObjectDependenciesDistributed",
+							  ALLOCSET_DEFAULT_SIZES);
+
 	ObjectAddress *distributedObjectAddress = NULL;
 	foreach_declared_ptr(distributedObjectAddress, distributedObjectAddressList)
 	{
+		MemoryContext oldContext = MemoryContextSwitchTo(perObjectContext);
 		List *distributableDependencyObjectAddresses =
 			GetDistributableDependenciesForObject(distributedObjectAddress);
+		MemoryContextSwitchTo(oldContext);
 
-		resultingObjectAddresses = list_concat(resultingObjectAddresses,
-											   distributableDependencyObjectAddresses);
+		ObjectAddress *dependency = NULL;
+		foreach_declared_ptr(dependency, distributableDependencyObjectAddresses)
+		{
+			ObjectAddress *dependencyCopy = palloc(sizeof(ObjectAddress));
+			*dependencyCopy = *dependency;
+			resultingObjectAddresses = lappend(resultingObjectAddresses,
+											   dependencyCopy);
+		}
+
+		MemoryContextReset(perObjectContext);
 	}
+
+	MemoryContextDelete(perObjectContext);
 
 	/* remove duplicates from object addresses list for efficiency */
 	List *uniqueObjectAddresses = GetUniqueDependenciesList(resultingObjectAddresses);

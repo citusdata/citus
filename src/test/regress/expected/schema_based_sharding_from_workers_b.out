@@ -1038,9 +1038,9 @@ CREATE VIEW regular_schema_worker_5.table_10_view_1 AS
 SELECT a FROM regular_schema_worker_5.local_table_5
 UNION
 SELECT a FROM regular_schema_worker_5.local_table_6;
-WARNING:  "view regular_schema_worker_5.table_10_view_1" has dependency to "table regular_schema_worker_5.local_table_6" that is not in Citus' metadata
+WARNING:  "view regular_schema_worker_5.table_10_view_1" has dependency to "table regular_schema_worker_5.local_table_x" that is not in Citus' metadata
 DETAIL:  "view regular_schema_worker_5.table_10_view_1" will be created only locally
-HINT:  Distribute "table regular_schema_worker_5.local_table_6" first to distribute "view regular_schema_worker_5.table_10_view_1"
+HINT:  Distribute "table regular_schema_worker_5.local_table_x" first to distribute "view regular_schema_worker_5.table_10_view_1"
 ALTER TABLE regular_schema_worker_5.local_table_5 SET SCHEMA tenant_9;
 NOTICE:  Moving local_table_5 into distributed schema tenant_9
 ALTER TABLE regular_schema_worker_5.local_table_6 SET SCHEMA tenant_9;

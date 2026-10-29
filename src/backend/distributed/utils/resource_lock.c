@@ -97,7 +97,7 @@ static bool AnyTableReplicated(List *shardIntervalList,
 static void LockShardListResources(List *shardIntervalList, LOCKMODE lockMode);
 static void LockShardListResourcesOnFirstWorker(LOCKMODE lockmode,
 												List *shardIntervalList);
-static bool IsFirstWorkerNode();
+static bool IsFirstWorkerNode(void);
 static void CitusRangeVarCallbackForLockTable(const RangeVar *rangeVar, Oid relationId,
 											  Oid oldRelationId, void *arg);
 static AclResult CitusLockTableAclCheck(Oid relationId, LOCKMODE lockmode, Oid userId);
@@ -369,7 +369,7 @@ LockShardListResourcesOnFirstWorker(LOCKMODE lockmode, List *shardIntervalList)
  * according to the host name and port number.
  */
 static bool
-IsFirstWorkerNode()
+IsFirstWorkerNode(void)
 {
 	List *workerNodeList = ActivePrimaryNonCoordinatorNodeList(NoLock);
 
@@ -684,6 +684,23 @@ LockTransactionRecovery(LOCKMODE lockmode)
 	SET_LOCKTAG_CITUS_OPERATION(tag, CITUS_TRANSACTION_RECOVERY);
 
 	(void) LockAcquire(&tag, lockmode, sessionLock, dontWait);
+}
+
+
+/*
+ * ConditionalLockTransactionRecovery tries to acquire the transaction recovery
+ * lock without waiting, and returns whether it succeeded.
+ */
+bool
+ConditionalLockTransactionRecovery(LOCKMODE lockmode)
+{
+	LOCKTAG tag;
+	const bool sessionLock = false;
+	const bool dontWait = true;
+
+	SET_LOCKTAG_CITUS_OPERATION(tag, CITUS_TRANSACTION_RECOVERY);
+
+	return LockAcquire(&tag, lockmode, sessionLock, dontWait) != LOCKACQUIRE_NOT_AVAIL;
 }
 
 

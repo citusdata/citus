@@ -20,6 +20,8 @@
 #include "nodes/nodes.h"
 #include "nodes/parsenodes.h"
 
+#include "pg_version_compat.h"
+
 /* forward declarations for format_collate.c */
 /* Control flags for FormatCollateExtended, compatible with format_type_extended */
 #define FORMAT_COLLATE_ALLOW_INVALID 0x02       /* allow invalid types */

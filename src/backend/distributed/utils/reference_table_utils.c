@@ -557,6 +557,8 @@ ScheduleTasksToParallelCopyReferenceTablesOnAllMissingNodes(int64 jobId, char tr
 	List *depTasksList = NIL;
 	const char *transferModeString =
 		transferMode == TRANSFER_MODE_BLOCK_WRITES ? "block_writes" :
+		transferMode == TRANSFER_MODE_FORCE_LOGICAL_AUTO_IDENTITY ?
+		"force_logical_auto_identity" :
 		transferMode == TRANSFER_MODE_FORCE_LOGICAL ? "force_logical" :
 		"auto";
 
@@ -621,11 +623,15 @@ ScheduleTasksToParallelCopyReferenceTablesOnAllMissingNodes(int64 jobId, char tr
 							referenceTableName, newWorkerNode->workerName,
 							newWorkerNode->workerPort, buf.data)));
 
+			/*
+			 * Copy the cached list since list_concat_unique_oid modifies its first
+			 * argument. Use the unique variant because, with foreign key cycles, a
+			 * relation can be both referenced and referencing.
+			 */
 			CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
-			List *relatedRelations = list_concat(cacheEntry->
-												 referencedRelationsViaForeignKey,
-												 cacheEntry->
-												 referencingRelationsViaForeignKey);
+			List *relatedRelations = list_concat_unique_oid(
+				list_copy(cacheEntry->referencedRelationsViaForeignKey),
+				cacheEntry->referencingRelationsViaForeignKey);
 			List *dependencyTaskList = NIL;
 
 			Oid relatedRelationId = InvalidOid;
@@ -921,6 +927,8 @@ CopyShardPlacementToWorkerNodeQuery(ShardPlacement *sourceShardPlacement,
 
 	const char *transferModeString =
 		transferMode == TRANSFER_MODE_BLOCK_WRITES ? "block_writes" :
+		transferMode == TRANSFER_MODE_FORCE_LOGICAL_AUTO_IDENTITY ?
+		"force_logical_auto_identity" :
 		transferMode == TRANSFER_MODE_FORCE_LOGICAL ? "force_logical" :
 		"auto";
 
@@ -957,7 +965,7 @@ upgrade_to_reference_table(PG_FUNCTION_ARGS)
  * anything.
  */
 uint32
-CreateReferenceTableColocationId()
+CreateReferenceTableColocationId(void)
 {
 	int shardCount = 1;
 	Oid distributionColumnType = InvalidOid;
@@ -986,7 +994,7 @@ CreateReferenceTableColocationId()
 
 
 uint32
-GetReferenceTableColocationId()
+GetReferenceTableColocationId(void)
 {
 	int shardCount = 1;
 	Oid distributionColumnType = InvalidOid;

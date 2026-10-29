@@ -12,6 +12,8 @@
 
 #include "miscadmin.h"
 
+#include "utils/tuplestore.h"
+
 #include "distributed/tuplestore.h"
 
 /*

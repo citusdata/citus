@@ -499,7 +499,7 @@ AppendAlterTableCmd(StringInfo buf, AlterTableCmd *alterTableCmd, AlterTableStmt
 			}
 		}
 
-		/* fallthrough */
+			pg_fallthrough;
 
 		default:
 		{

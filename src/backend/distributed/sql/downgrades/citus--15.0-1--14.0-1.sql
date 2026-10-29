@@ -1,6 +1,12 @@
 -- citus--15.0-1--14.0-1
 -- downgrade version to 14.0-1
 
+-- The user_catalog_table reloptions set by 15.0-1 are intentionally retained
+-- for PostgreSQL 19 logical decoding; this downgrade requires no SQL for them.
+
+-- Retain the planner-safe time_partitions definition: its columns and the
+-- time_partition_range function contract are unchanged in 14.0-1.
+
 DROP FUNCTION IF EXISTS citus_internal.get_next_colocation_id();
 
 -- re-create the legacy version that we kept for backward compatibility at Citus 13 and 14
@@ -31,3 +37,9 @@ DROP FUNCTION IF EXISTS pg_catalog.citus_cluster_changes_block_status();
 #include "../udfs/citus_finish_citus_upgrade/14.0-1.sql"
 
 DROP FUNCTION IF EXISTS citus_internal.distribute_object(oid, oid, int, boolean);
+
+-- The 'force_logical_auto_identity' value added to citus.shard_transfer_mode cannot be
+-- removed on downgrade, because PostgreSQL does not support removing a value from an
+-- existing enum type. Leaving the value in place is harmless: the downgraded Citus
+-- code never produces it, and LookupShardTransferMode rejects it as an invalid label
+-- if a user passes it explicitly. This is a documented no-op.

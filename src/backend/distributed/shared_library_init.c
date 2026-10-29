@@ -34,6 +34,9 @@
 #include "optimizer/paths.h"
 #include "optimizer/plancat.h"
 #include "optimizer/planner.h"
+#if PG_VERSION_NUM >= PG_VERSION_19
+#include "optimizer/pathnode.h"
+#endif
 #include "port/atomics.h"
 #include "postmaster/postmaster.h"
 #include "replication/walsender.h"
@@ -158,6 +161,7 @@ DEFINE_COLUMNAR_PASSTHROUGH_FUNC(columnar_relation_storageid)
 DEFINE_COLUMNAR_PASSTHROUGH_FUNC(columnar_storage_info)
 DEFINE_COLUMNAR_PASSTHROUGH_FUNC(columnar_store_memory_stats)
 DEFINE_COLUMNAR_PASSTHROUGH_FUNC(test_columnar_storage_write_new_page)
+DEFINE_COLUMNAR_PASSTHROUGH_FUNC(test_columnar_metadata_xmin_aborted)
 
 #define DUMMY_REAL_TIME_EXECUTOR_ENUM_VALUE 9999999
 static char *CitusVersion = CITUS_VERSION;
@@ -207,6 +211,8 @@ static bool ErrorIfNotASuitableDeadlockFactor(double *newval, void **extra,
 static bool WarnIfDeprecatedExecutorUsed(int *newval, void **extra, GucSource source);
 static bool WarnIfReplicationModelIsSet(int *newval, void **extra, GucSource source);
 static bool NoticeIfSubqueryPushdownEnabled(bool *newval, void **extra, GucSource source);
+static bool WarnIfDeprecatedPseudoconstantQualsGucIsSet(bool *newval, void **extra,
+														GucSource source);
 static bool ShowShardsForAppNamePrefixesCheckHook(char **newval, void **extra,
 												  GucSource source);
 static void ShowShardsForAppNamePrefixesAssignHook(const char *newval, void *extra);
@@ -487,7 +493,11 @@ _PG_init(void)
 
 	/* register for planner hook */
 	set_rel_pathlist_hook = multi_relation_restriction_hook;
+#if PG_VERSION_NUM < PG_VERSION_19
 	get_relation_info_hook = multi_get_relation_info_hook;
+#else
+	build_simple_rel_hook = multi_build_simple_rel_hook;
+#endif
 	set_join_pathlist_hook = multi_join_restriction_hook;
 	ExecutorStart_hook = CitusExecutorStart;
 	ExecutorRun_hook = citus_executor_run_adapter;
@@ -610,6 +620,7 @@ _PG_init(void)
 	INIT_COLUMNAR_SYMBOL(PGFunction, columnar_storage_info);
 	INIT_COLUMNAR_SYMBOL(PGFunction, columnar_store_memory_stats);
 	INIT_COLUMNAR_SYMBOL(PGFunction, test_columnar_storage_write_new_page);
+	INIT_COLUMNAR_SYMBOL(PGFunction, test_columnar_metadata_xmin_aborted);
 
 	/*
 	 * This part is only for SECURITY LABEL tests
@@ -650,15 +661,35 @@ citus_shmem_request(void)
 		prev_shmem_request_hook();
 	}
 
-	RequestAddinShmemSpace(BackendManagementShmemSize());
-	RequestAddinShmemSpace(SharedConnectionStatsShmemSize());
-	RequestAddinShmemSpace(MaintenanceDaemonShmemSize());
-	RequestAddinShmemSpace(CitusQueryStatsSharedMemSize());
-	RequestAddinShmemSpace(LogicalClockShmemSize());
-	RequestAddinShmemSpace(ClusterChangesBlockShmemSize());
+	Size sz_bm = BackendManagementShmemSize();
+	Size sz_scs = SharedConnectionStatsShmemSize();
+	Size sz_md = MaintenanceDaemonShmemSize();
+	Size sz_qs = CitusQueryStatsSharedMemSize();
+	Size sz_lc = LogicalClockShmemSize();
+	Size sz_ccb = ClusterChangesBlockShmemSize();
+	Size sz_sc = StatCountersShmemSize();
+	RequestAddinShmemSpace(sz_bm);
+	RequestAddinShmemSpace(sz_scs);
+	RequestAddinShmemSpace(sz_md);
+	RequestAddinShmemSpace(sz_qs);
+	RequestAddinShmemSpace(sz_lc);
+	RequestAddinShmemSpace(sz_ccb);
 	RequestNamedLWLockTranche(STATS_SHARED_MEM_NAME, 1);
-	RequestAddinShmemSpace(StatCountersShmemSize());
+	RequestAddinShmemSpace(sz_sc);
 	RequestNamedLWLockTranche(SAVED_BACKEND_STATS_HASH_LOCK_TRANCHE_NAME, 1);
+#if PG_VERSION_NUM >= PG_VERSION_19
+
+	/*
+	 * PG19's ShmemInitHash now allocates all hash elements upfront in shared
+	 * memory.  Each ShmemInitStruct/ShmemInitHash allocation is aligned to a
+	 * cache line, which can waste up to PG_CACHE_LINE_SIZE-1 bytes per call.
+	 * Citus makes well under 1024 such allocations across all of its shared
+	 * memory components, so reserve that many cache lines of slack to absorb
+	 * the alignment overhead and keep the final allocation from failing when
+	 * the addin space is exhausted.
+	 */
+	RequestAddinShmemSpace(1024 * PG_CACHE_LINE_SIZE);
+#endif
 }
 
 
@@ -844,10 +875,17 @@ StartupCitusBackend(void)
 const char *
 GetClientMinMessageLevelNameForValue(int minMessageLevel)
 {
+#if PG_VERSION_NUM >= PG_VERSION_19
+	struct config_generic record = { 0 };
+	record._enum.options = log_level_options;
+	const char *clientMinMessageLevelName =
+		config_enum_lookup_by_value(&record, minMessageLevel);
+#else
 	struct config_enum record = { 0 };
 	record.options = log_level_options;
-	const char *clientMinMessageLevelName = config_enum_lookup_by_value(&record,
-																		minMessageLevel);
+	const char *clientMinMessageLevelName =
+		config_enum_lookup_by_value(&record, minMessageLevel);
+#endif
 	return clientMinMessageLevelName;
 }
 
@@ -1556,20 +1594,15 @@ RegisterCitusConfigVariables(void)
 
 	DefineCustomBoolVariable(
 		"citus.enable_outer_joins_with_pseudoconstant_quals_pre_pg17",
-		gettext_noop("Enables running distributed queries with outer joins "
-					 "and pseudoconstant quals pre PG17."),
-		gettext_noop("Set to false by default. If set to true, enables "
-					 "running distributed queries with outer joins and  "
-					 "pseudoconstant quals, at user's own risk, because "
-					 "pre PG17, Citus doesn't have access to "
-					 "set_join_pathlist_hook, which doesn't guarantee correct"
-					 "query results. Note that in PG17+, this GUC has no effect"
-					 "and the user can run such queries"),
+		gettext_noop("This setting has no effect and is deprecated."),
+		gettext_noop("It only applied to PostgreSQL 16, which Citus no longer "
+					 "supports. The setting is retained so existing configurations "
+					 "keep loading, and will be removed in a future Citus release."),
 		&EnableOuterJoinsWithPseudoconstantQualsPrePG17,
 		false,
 		PGC_USERSET,
 		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
-		NULL, NULL, NULL);
+		WarnIfDeprecatedPseudoconstantQualsGucIsSet, NULL, NULL);
 
 	DefineCustomBoolVariable(
 		"citus.enable_procedure_transaction_skip",
@@ -2252,6 +2285,23 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
+		"citus.metadata_sync_cache_flush_interval",
+		gettext_noop("Sets the number of distributed objects processed between "
+					 "backend cache flushes while syncing metadata to a node."),
+		gettext_noop("While activating a node, Citus opens each Citus table to "
+					 "build its shell table and metadata commands, which "
+					 "accumulates PostgreSQL relcache/catcache and Citus metadata "
+					 "cache entries on the coordinator. Citus flushes these caches "
+					 "once every this many objects so that syncing metadata for a "
+					 "very large number of Citus tables does not exhaust coordinator"
+					 "memory. Setting this to 0 disables the periodic flushing."),
+		&MetadataSyncCacheFlushInterval,
+		1000, 0, INT_MAX,
+		PGC_USERSET,
+		GUC_NOT_IN_SAMPLE,
+		NULL, NULL, NULL);
+
+	DefineCustomIntVariable(
 		"citus.metadata_sync_interval",
 		gettext_noop("Sets the time to wait between metadata syncs."),
 		gettext_noop("metadata sync needs to run every so often "
@@ -2288,6 +2338,29 @@ RegisterCitusConfigVariables(void)
 		5 * MS_PER_SECOND, 1, 7 * MS_PER_DAY,
 		PGC_SIGHUP,
 		GUC_UNIT_MS | GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
+		NULL, NULL, NULL);
+
+	DefineCustomIntVariable(
+		"citus.metadata_sync_set_batch_size",
+		gettext_noop("Sets the number of objects (colocation groups, Citus tables, "
+					 "distributed objects or tenant schemas) whose metadata is "
+					 "folded into a single set-based statement during metadata "
+					 "sync."),
+		gettext_noop("The per-object metadata layers (pg_dist_colocation, "
+					 "pg_dist_partition, pg_dist_shard, pg_dist_placement, "
+					 "pg_dist_object and pg_dist_schema) are synced by rendering "
+					 "each object's rows into a multi-row VALUES list fed to one "
+					 "set-based citus_internal metadata statement per layer, "
+					 "instead of one statement per object. This setting "
+					 "bounds how many objects' rows are packed into each such "
+					 "statement. Larger values emit fewer, larger statements "
+					 "(peak coordinator memory stays bounded by the batch, which "
+					 "is reset after every flush); 1 restores one statement per "
+					 "object."),
+		&MetadataSyncSetBatchSize,
+		1000, 1, 10000,
+		PGC_SUSET,
+		GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
 	/*
@@ -2966,7 +3039,18 @@ OverridePostgresConfigProperties(void)
 
 		if (strcmp(var->name, "application_name") == 0)
 		{
+#if PG_VERSION_NUM >= PG_VERSION_19
+
+			/*
+			 * In PG19, struct config_generic embeds a union of the
+			 * type-specific fields (e.g. _string) rather than being a
+			 * prefix of struct config_string.  Access the embedded
+			 * config_string via the union member.
+			 */
+			struct config_string *stringVar = &var->_string;
+#else
 			struct config_string *stringVar = (struct config_string *) var;
+#endif
 
 			OldApplicationNameAssignHook = stringVar->assign_hook;
 			stringVar->assign_hook = ApplicationNameAssignHook;
@@ -3073,6 +3157,31 @@ NoticeIfSubqueryPushdownEnabled(bool *newval, void **extra, GucSource source)
 							 "compatibility, no new users are supposed to use it. The planner "
 							 "is capable of pushing down as much computation as possible to the "
 							 "shards depending on the query.")));
+	}
+
+	return true;
+}
+
+
+/*
+ * WarnIfDeprecatedPseudoconstantQualsGucIsSet emits a deprecation warning when
+ * citus.enable_outer_joins_with_pseudoconstant_quals_pre_pg17 is set explicitly.
+ * The GUC only ever applied to PG16, which Citus no longer supports.
+ */
+static bool
+WarnIfDeprecatedPseudoconstantQualsGucIsSet(bool *newval, void **extra,
+											GucSource source)
+{
+	/* warn whenever the value comes from anywhere other than the built-in default */
+	if (source != PGC_S_DEFAULT)
+	{
+		ereport(WARNING, (errcode(ERRCODE_WARNING_DEPRECATED_FEATURE),
+						  errmsg("citus.enable_outer_joins_with_pseudoconstant_"
+								 "quals_pre_pg17 has no effect and is deprecated"),
+						  errdetail("This setting only applied to PostgreSQL 16, "
+									"which Citus no longer supports."),
+						  errhint("Remove it from your configuration. It will be "
+								  "removed in a future Citus release.")));
 	}
 
 	return true;
@@ -3242,9 +3351,7 @@ NodeConninfoGucCheckHook(char **newval, void **extra, GucSource source)
 		"sslkeylogfile",
 #endif
 		"sslmode",
-#if PG_VERSION_NUM >= PG_VERSION_17
 		"sslnegotiation",
-#endif
 		"sslrootcert",
 		"tcp_user_timeout",
 	};

@@ -9,6 +9,8 @@
 
 #include "postgres.h"
 
+#include "miscadmin.h"
+
 #include "common/cryptohash.h"
 #include "common/sha2.h"
 #include "utils/builtins.h"
@@ -34,5 +36,15 @@ bool EnableUnsupportedFeatureMessages = true;
 bool
 IsLoggableLevel(int logLevel)
 {
+#if PG_VERSION_NUM >= PG_VERSION_19
+
+	/*
+	 * PG19 turned log_min_messages into a per-process-type array, indexed
+	 * by BackendType.  Use the entry for the current backend.
+	 */
+	return log_min_messages[MyBackendType] <= logLevel ||
+		   client_min_messages <= logLevel;
+#else
 	return log_min_messages <= logLevel || client_min_messages <= logLevel;
+#endif
 }

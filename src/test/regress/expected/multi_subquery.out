@@ -973,10 +973,8 @@ SELECT create_reference_table('keyvalref');
 
 (1 row)
 
-SELECT public.explain_with_pg17_initplan_format($Q$
 EXPLAIN (COSTS OFF)
 SELECT count(*) FROM keyval1 GROUP BY key HAVING sum(value) > (SELECT sum(value) FROM keyvalref GROUP BY key);
-$Q$) as "QUERY PLAN";
                                     QUERY PLAN
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
@@ -1002,10 +1000,8 @@ $Q$) as "QUERY PLAN";
 (20 rows)
 
 -- For some reason 'ORDER BY 1 DESC LIMIT 1' triggers recursive planning
-SELECT public.explain_with_pg17_initplan_format($Q$
 EXPLAIN (COSTS OFF)
 SELECT count(*) FROM keyval1 GROUP BY key HAVING sum(value) > (SELECT sum(value) FROM keyvalref GROUP BY key ORDER BY 1 DESC LIMIT 1);
-$Q$) as "QUERY PLAN";
                                     QUERY PLAN
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
@@ -1033,10 +1029,8 @@ $Q$) as "QUERY PLAN";
                ->  Seq Scan on keyval1_xxxxxxx keyval1
 (23 rows)
 
-SELECT public.explain_with_pg17_initplan_format($Q$
 EXPLAIN (COSTS OFF)
 SELECT count(*) FROM keyval1 GROUP BY key HAVING sum(value) > (SELECT sum(value) FROM keyval2 GROUP BY key ORDER BY 1 DESC LIMIT 1);
-$Q$) as "QUERY PLAN";
                                         QUERY PLAN
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
@@ -1067,10 +1061,8 @@ $Q$) as "QUERY PLAN";
                ->  Seq Scan on keyval1_xxxxxxx keyval1
 (26 rows)
 
-SELECT public.explain_with_pg17_initplan_format($Q$
 EXPLAIN (COSTS OFF)
 SELECT count(*) FROM keyval1 k1 WHERE k1.key = 2 HAVING sum(value) > (SELECT sum(value) FROM keyval2 k2 WHERE k2.key = 2 ORDER BY 1 DESC LIMIT 1);
-$Q$) as "QUERY PLAN";
                              QUERY PLAN
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)

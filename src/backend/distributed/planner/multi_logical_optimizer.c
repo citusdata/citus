@@ -3885,7 +3885,7 @@ CitusFunctionOidWithSignature(char *functionName, int numargs, Oid *argtypes)
  * WorkerPartialAggOid looks up oid of pg_catalog.worker_partial_agg
  */
 static Oid
-WorkerPartialAggOid()
+WorkerPartialAggOid(void)
 {
 	Oid argtypes[] = {
 		OIDOID,
@@ -3900,7 +3900,7 @@ WorkerPartialAggOid()
  * CoordCombineAggOid looks up oid of pg_catalog.coord_combine_agg
  */
 static Oid
-CoordCombineAggOid()
+CoordCombineAggOid(void)
 {
 	Oid argtypes[] = {
 		OIDOID,
@@ -3916,7 +3916,7 @@ CoordCombineAggOid()
  * WorkerBinaryPartialAggOid looks up oid of pg_catalog.worker_binary_partial_agg
  */
 static Oid
-WorkerBinaryPartialAggOid()
+WorkerBinaryPartialAggOid(void)
 {
 	Oid argtypes[] = {
 		OIDOID,
@@ -3932,7 +3932,7 @@ WorkerBinaryPartialAggOid()
  * CoordBinaryCombineAggOid looks up oid of pg_catalog.coord_binary_combine_agg
  */
 static Oid
-CoordBinaryCombineAggOid()
+CoordBinaryCombineAggOid(void)
 {
 	Oid argtypes[] = {
 		OIDOID,

@@ -96,7 +96,7 @@ citus_internal_is_replication_origin_tracking_active(PG_FUNCTION_ARGS)
  * memory context.
  */
 static void
-SetupMemoryContextResetReplicationOriginHandler()
+SetupMemoryContextResetReplicationOriginHandler(void)
 {
 	MemoryContextCallback *replicationOriginResetCallback = palloc0(
 		sizeof(MemoryContextCallback));
@@ -135,7 +135,7 @@ SetupReplicationOriginSessionHelper(bool isContexResetSetupNeeded)
  * local session.
  */
 void
-SetupReplicationOriginLocalSession()
+SetupReplicationOriginLocalSession(void)
 {
 	SetupReplicationOriginSessionHelper(true);
 }

@@ -28,7 +28,7 @@ static Oid LookupTDigestFunction(const char *functionName, int argcount, Oid *ar
  * function will return InvalidOid if the extension is not installed.
  */
 Oid
-TDigestExtensionSchema()
+TDigestExtensionSchema(void)
 {
 	ScanKeyData entry[1];
 	Form_pg_extension extensionForm = NULL;
@@ -71,7 +71,7 @@ TDigestExtensionSchema()
  * found.
  */
 Oid
-TDigestExtensionTypeOid()
+TDigestExtensionTypeOid(void)
 {
 	Oid tdigestSchemaOid = TDigestExtensionSchema();
 	if (!OidIsValid(tdigestSchemaOid))
@@ -111,7 +111,7 @@ LookupTDigestFunction(const char *functionName, int argcount, Oid *argtypes)
  * If the aggregate is not found InvalidOid is returned.
  */
 Oid
-TDigestExtensionAggTDigest1()
+TDigestExtensionAggTDigest1(void)
 {
 	return LookupTDigestFunction("tdigest", 1, (Oid[]) { TDigestExtensionTypeOid() });
 }
@@ -124,7 +124,7 @@ TDigestExtensionAggTDigest1()
  * If the aggregate is not found InvalidOid is returned.
  */
 Oid
-TDigestExtensionAggTDigest2()
+TDigestExtensionAggTDigest2(void)
 {
 	return LookupTDigestFunction("tdigest", 2, (Oid[]) { FLOAT8OID, INT4OID });
 }
@@ -138,7 +138,7 @@ TDigestExtensionAggTDigest2()
  * If the aggregate is not found InvalidOid is returned.
  */
 Oid
-TDigestExtensionAggTDigestPercentile2()
+TDigestExtensionAggTDigestPercentile2(void)
 {
 	return LookupTDigestFunction("tdigest_percentile", 2,
 								 (Oid[]) { TDigestExtensionTypeOid(), FLOAT8OID });
@@ -168,7 +168,7 @@ TDigestExtensionAggTDigestPercentile2a(void)
  * If the aggregate is not found InvalidOid is returned.
  */
 Oid
-TDigestExtensionAggTDigestPercentile3()
+TDigestExtensionAggTDigestPercentile3(void)
 {
 	return LookupTDigestFunction("tdigest_percentile", 3,
 								 (Oid[]) { FLOAT8OID, INT4OID, FLOAT8OID });
@@ -198,7 +198,7 @@ TDigestExtensionAggTDigestPercentile3a(void)
  * If the aggregate is not found InvalidOid is returned.
  */
 Oid
-TDigestExtensionAggTDigestPercentileOf2()
+TDigestExtensionAggTDigestPercentileOf2(void)
 {
 	return LookupTDigestFunction("tdigest_percentile_of", 2,
 								 (Oid[]) { TDigestExtensionTypeOid(), FLOAT8OID });
@@ -228,7 +228,7 @@ TDigestExtensionAggTDigestPercentileOf2a(void)
  * If the aggregate is not found InvalidOid is returned.
  */
 Oid
-TDigestExtensionAggTDigestPercentileOf3()
+TDigestExtensionAggTDigestPercentileOf3(void)
 {
 	return LookupTDigestFunction("tdigest_percentile_of", 3,
 								 (Oid[]) { FLOAT8OID, INT4OID, FLOAT8OID });

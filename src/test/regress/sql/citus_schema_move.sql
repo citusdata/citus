@@ -70,7 +70,7 @@ WHERE noderole = 'primary' AND table_name = 's1.t1'::regclass;
 CREATE OR REPLACE FUNCTION get_non_coord_candidate_node_for_schema_move(
     schema_id regnamespace)
 RETURNS TABLE (nodeid integer, nodename text, nodeport integer)
-SET search_path TO 'pg_catalog, public'
+SET search_path TO pg_catalog, public
 AS $func$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_dist_schema WHERE schemaid = schema_id)

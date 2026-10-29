@@ -65,10 +65,10 @@ CREATE INDEX cc_idx on cluster_clock_type(cc);
 INSERT INTO cluster_clock_type SELECT a.cc FROM cluster_clock_type a, cluster_clock_type b;
 INSERT INTO cluster_clock_type SELECT a.cc FROM cluster_clock_type a, cluster_clock_type b;
 
-EXPLAIN SELECT cc FROM cluster_clock_type ORDER BY 1 ASC LIMIT 1;
+EXPLAIN (COSTS OFF) SELECT cc FROM cluster_clock_type ORDER BY 1 ASC LIMIT 1;
 SELECT cc FROM cluster_clock_type ORDER BY 1 ASC LIMIT 1;
 
-EXPLAIN SELECT cc FROM cluster_clock_type where cc = '(200, 20)' LIMIT 5;
+EXPLAIN (COSTS OFF) SELECT cc FROM cluster_clock_type where cc = '(200, 20)' LIMIT 5;
 SELECT cc FROM cluster_clock_type where cc = '(200, 20)' LIMIT 5;
 
 -- Max limits

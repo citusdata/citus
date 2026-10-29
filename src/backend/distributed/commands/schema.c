@@ -414,7 +414,7 @@ SchemaHasDistributedTableWithFKey(char *schemaName)
  * switched to sequential mode, we don't propagate.
  */
 static bool
-ShouldPropagateCreateSchemaStmt()
+ShouldPropagateCreateSchemaStmt(void)
 {
 	if (!ShouldPropagate())
 	{

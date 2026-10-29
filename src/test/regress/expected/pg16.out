@@ -481,21 +481,21 @@ SELECT * FROM copy_default ORDER BY id;
 
 TRUNCATE copy_default;
 -- DEFAULT cannot be used in binary mode
-COPY copy_default FROM stdin WITH (format binary, default '\D');
+\copy copy_default FROM PROGRAM 'true' WITH (format binary, default '\D')
 ERROR:  cannot specify DEFAULT in BINARY mode
 -- DEFAULT cannot be new line nor carriage return
-COPY copy_default FROM stdin WITH (default E'\n');
+\copy copy_default FROM PROGRAM 'true' WITH (default E'\n')
 ERROR:  COPY default representation cannot use newline or carriage return
-COPY copy_default FROM stdin WITH (default E'\r');
+\copy copy_default FROM PROGRAM 'true' WITH (default E'\r')
 ERROR:  COPY default representation cannot use newline or carriage return
 -- DELIMITER cannot appear in DEFAULT spec
-COPY copy_default FROM stdin WITH (delimiter ';', default 'test;test');
+\copy copy_default FROM PROGRAM 'true' WITH (delimiter ';', default 'test;test')
 ERROR:  COPY delimiter character must not appear in the DEFAULT specification
 -- CSV quote cannot appear in DEFAULT spec
-COPY copy_default FROM stdin WITH (format csv, quote '"', default 'test"test');
+\copy copy_default FROM PROGRAM 'true' WITH (format csv, quote '"', default 'test"test')
 ERROR:  CSV quote character must not appear in the DEFAULT specification
 -- NULL and DEFAULT spec must be different
-COPY copy_default FROM stdin WITH (default '\N');
+\copy copy_default FROM PROGRAM 'true' WITH (default '\N')
 ERROR:  NULL specification and DEFAULT specification cannot be the same
 -- cannot use DEFAULT marker in column that has no DEFAULT value
 COPY copy_default FROM stdin WITH (default '\D');

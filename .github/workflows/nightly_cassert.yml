@@ -1,14 +1,13 @@
 name: Nightly cassert
 run-name: Nightly cassert (${{ github.ref_name }})
 
-# Full-suite Citus run against an --enable-cassert PostgreSQL build (PG 16/17/18).
+# Full-suite Citus run against an --enable-cassert PostgreSQL build (PG 17/18/19).
 # Purpose: surface PG-core asserts and Citus's own Assert() that the normal PGDG-image PR
 # pipeline cannot catch. First runs are EXPECTED to be RED across all majors as pre-existing
 # asserts surface -- that is the intended signal, not a regression gate.
 #
 # The version matrix lives in the `params` job below (single source of truth, mirroring
-# build_and_test.yml). The `pg19-support` branch adapts this by adding the 19beta1 row + the
-# 18->19 upgrade pair, the same way 19 support is layered onto the other test suites.
+# build_and_test.yml's params job, which pins 17.11 / 18.6 / 19rc1 and no longer builds PG16).
 
 on:
   schedule:
@@ -35,9 +34,9 @@ jobs:
     name: Initialize parameters
     runs-on: ubuntu-latest
     outputs:
-      pg_versions: '[{ "major": "16", "full": "16.13" }, { "major": "17", "full": "17.9" }, { "major": "18", "full": "18.3" }]'
-      pg_upgrade_pairs: '[{ "old": "16", "old_full": "16.13", "new": "17", "new_full": "17.9" }, { "old": "17", "old_full": "17.9", "new": "18", "new_full": "18.3" }]'
-      citus_upgrade_pg: '[{ "major": "16", "full": "16.13" }, { "major": "17", "full": "17.9" }]'
+      pg_versions: '[{ "major": "17", "full": "17.11" }, { "major": "18", "full": "18.6" }, { "major": "19", "full": "19rc1" }]'
+      pg_upgrade_pairs: '[{ "old": "17", "old_full": "17.11", "new": "18", "new_full": "18.6" }, { "old": "18", "old_full": "18.6", "new": "19", "new_full": "19rc1" }, { "old": "17", "old_full": "17.11", "new": "19", "new_full": "19rc1" }]'
+      citus_upgrade_pg: '[{ "major": "17", "full": "17.11" }, { "major": "18", "full": "18.6" }]'
       citus_old_version: "v14.0.1"  # 14.0-1 chains to MASTER (15.0); 14.1 has no path to 15.0 yet
     steps:
       - name: Set up parameters
@@ -233,7 +232,6 @@ jobs:
             const label = 'nightly-cassert';
             const url = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
 
-            // Failure signature = sorted set of failed job names in this run.
             const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, {
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -241,64 +239,46 @@ jobs:
               per_page: 100,
             });
             const failed = jobs.filter(j => j.conclusion === 'failure').map(j => j.name).sort();
-            const signature = JSON.stringify(failed);
-            const marker = `<!-- cassert-failures: ${signature} -->`;
 
-            // Existing open issues and the failure sets they already track.
-            const open = await github.paginate(github.rest.issues.listForRepo, {
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              state: 'open',
-              labels: label,
-            });
-            const sigOf = (i) => {
-              const m = (i.body || '').match(/<!-- cassert-failures: (.*?) -->/);
-              if (!m) return null;
-              try { return JSON.stringify(JSON.parse(m[1]).sort()); } catch { return null; }
-            };
-
-            const intro = [
-              'Nightly full-cassert run failed.',
-              '',
+            const report = [
               `Run: ${url}`,
               '',
               'Failing jobs:',
               ...failed.map(n => `- ${n}`),
             ].join('\n');
 
-            // Same failing set as an open issue -> append; otherwise open a new issue.
-            const match = open.find(i => sigOf(i) === signature);
-            if (match) {
+            // One rolling issue per label. Deduping on the exact set of failing job names split a
+            // single recurring flake across many issues, because the jobs that happen to fail
+            // alongside it differ every night. Appending instead keeps one triage timeline; close
+            // the issue once the nightly is green and the next failure opens a fresh one.
+            const open = (await github.paginate(github.rest.issues.listForRepo, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: label,
+            })).filter(i => !i.pull_request);
+
+            if (open.length) {
+              const target = open.reduce((a, b) => (b.number > a.number ? b : a));
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                issue_number: match.number,
-                body: `Same failing set recurred (${day}).\n\nRun: ${url}`,
+                issue_number: target.number,
+                body: `Nightly cassert failed again (${day}).\n\n${report}`,
               });
               return;
             }
 
-            // New/different set: highlight failures not already tracked by any open issue.
-            const tracked = new Set();
-            for (const i of open) {
-              const s = sigOf(i);
-              if (s) for (const n of JSON.parse(s)) tracked.add(n);
-            }
-            const newOnes = failed.filter(n => !tracked.has(n));
-            const newSection = (tracked.size && newOnes.length)
-              ? ['', 'New failures not previously tracked:', ...newOnes.map(n => `- ${n}`)].join('\n')
-              : '';
-
             await github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              title: `Nightly cassert failures (${day})`,
+              title: `Nightly cassert failures (since ${day})`,
               body: [
-                intro,
-                newSection,
+                'Nightly full-cassert run failed.',
+                '',
+                report,
                 '',
                 'First runs are EXPECTED red as pre-existing PG-core and Citus asserts surface.',
-                marker,
               ].join('\n'),
               labels: [label],
             });

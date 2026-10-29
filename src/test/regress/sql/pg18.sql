@@ -612,12 +612,12 @@ INSERT INTO temporal_fk_rng2rng VALUES
 CREATE TABLE check_ign_err (n int, m int[], k int);
 SELECT create_distributed_table('check_ign_err', 'n');
 
-COPY check_ign_err FROM STDIN WITH (on_error stop, reject_limit 5);
-COPY check_ign_err FROM STDIN WITH (ON_ERROR ignore, REJECT_LIMIT 100);
-COPY check_ign_err FROM STDIN WITH (on_error ignore, log_verbosity verbose, reject_limit 50);
-COPY check_ign_err FROM STDIN WITH (reject_limt 77, log_verbosity verbose, on_error ignore);
+\copy check_ign_err FROM PROGRAM 'true' WITH (on_error stop, reject_limit 5)
+\copy check_ign_err FROM PROGRAM 'true' WITH (ON_ERROR ignore, REJECT_LIMIT 100)
+\copy check_ign_err FROM PROGRAM 'true' WITH (on_error ignore, log_verbosity verbose, reject_limit 50)
+\copy check_ign_err FROM PROGRAM 'true' WITH (reject_limt 77, log_verbosity verbose, on_error ignore)
 -- PG requires on_error when reject_limit is specified
-COPY check_ign_err FROM STDIN WITH (reject_limit 100);
+\copy check_ign_err FROM PROGRAM 'true' WITH (reject_limit 100)
 
 -- PG18 Feature: COPY TABLE TO on a materialized view
 -- PG18 commit: https://github.com/postgres/postgres/commit/534874fac
@@ -973,6 +973,22 @@ SET search_path TO pg18_nn;
 
 -- PG18 Feature: FOREIGN KEY constraints can be specified as NOT ENFORCED
 -- PG18 commit: https://github.com/postgres/postgres/commit/eec0040c4
+CREATE TABLE alter_constraint_local (
+	id int PRIMARY KEY,
+	parent_id int,
+	CONSTRAINT alter_constraint_local_fk
+		FOREIGN KEY (parent_id) REFERENCES alter_constraint_local (id) NOT ENFORCED
+);
+
+-- PostgreSQL tables retain native ALTER CONSTRAINT behavior.
+ALTER TABLE alter_constraint_local
+	ALTER CONSTRAINT alter_constraint_local_fk ENFORCED;
+SELECT conenforced
+FROM pg_constraint
+WHERE conrelid = 'alter_constraint_local'::regclass
+  AND conname = 'alter_constraint_local_fk';
+DROP TABLE alter_constraint_local;
+
 CREATE TABLE customers(
    customer_id INT GENERATED ALWAYS AS IDENTITY,
    customer_name VARCHAR(255) NOT NULL,
@@ -1043,6 +1059,42 @@ SELECT * FROM contacts ORDER BY contact_id;
 -- ALTER TABLE .. ALTER CONSTRAINT is not supported in Citus,
 -- so the following command should fail
 ALTER TABLE contacts ALTER CONSTRAINT fk_customer ENFORCED;
+SELECT conenforced
+FROM pg_constraint
+WHERE conrelid = 'contacts'::regclass AND conname = 'fk_customer';
+
+CREATE TABLE alter_constraint_reference (
+	id int PRIMARY KEY,
+	parent_id int,
+	CONSTRAINT alter_constraint_reference_fk
+		FOREIGN KEY (parent_id) REFERENCES alter_constraint_reference (id) NOT ENFORCED
+);
+SELECT create_reference_table('alter_constraint_reference');
+ALTER TABLE alter_constraint_reference
+	ALTER CONSTRAINT alter_constraint_reference_fk ENFORCED;
+SELECT conenforced
+FROM pg_constraint
+WHERE conrelid = 'alter_constraint_reference'::regclass
+  AND conname = 'alter_constraint_reference_fk';
+DROP TABLE alter_constraint_reference;
+
+CREATE TABLE alter_constraint_citus_local (
+	id int PRIMARY KEY,
+	parent_id int,
+	CONSTRAINT alter_constraint_citus_local_fk
+		FOREIGN KEY (parent_id) REFERENCES alter_constraint_citus_local (id) NOT ENFORCED
+);
+SELECT citus_add_local_table_to_metadata(
+	'alter_constraint_citus_local',
+	cascade_via_foreign_keys => true
+);
+ALTER TABLE alter_constraint_citus_local
+	ALTER CONSTRAINT alter_constraint_citus_local_fk ENFORCED;
+SELECT conenforced
+FROM pg_constraint
+WHERE conrelid = 'alter_constraint_citus_local'::regclass
+  AND conname = 'alter_constraint_citus_local_fk';
+DROP TABLE alter_constraint_citus_local;
 
 -- PG18 Feature: ENFORCED / NOT ENFORCED check constraints
 -- PG18 commit: https://github.com/postgres/postgres/commit/ca87c415e

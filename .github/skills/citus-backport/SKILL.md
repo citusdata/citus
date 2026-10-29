@@ -3,17 +3,15 @@ name: citus-backport
 description: >-
   Backport one or more merged citusdata/citus `main` commits/PRs onto the active release
   branches. Covers the release model, cherry-picking, remapping SQL schema changes to each
-  branch's real default_version, propagating the SQL upgrade/downgrade ladder for
-  Major-Version-Upgrade safety, building + running the relevant regression tests, producing one
-  clean commit per PR per branch, and triaging release-branch CI (separating pre-existing
-  baseline-red jobs from failures the backport introduced). USE WHEN asked to backport / port /
-  cherry-pick a Citus change to release-13.2 / release-14.0 (or the newest two majors), when a
+  branch's default_version, the SQL upgrade/downgrade ladder for Major-Version-Upgrade safety,
+  running regression tests, one clean commit per PR per branch, and triaging release-branch CI
+  (pre-existing baseline reds vs reds the backport introduced). USE WHEN asked to backport / port
+  / cherry-pick a change to release-13.2 / release-14.0 (or the newest two majors), when a
   backport hits a SQL migration / udf / multi_extension conflict, when a "trivial C-only" backport
   fails to compile on an older PG the release branch still supports (e.g. PG15 `rteperminfos`),
-  when a backport branch's CI is red and you must prove which reds are pre-existing vs introduced,
-  or when you must prove a SQL-schema backport is Major-Version-Upgrade-safe by walking a real
-  multi-node cluster across the backport branches with `ALTER EXTENSION citus UPDATE`. DO NOT USE
-  FOR non-Citus repos, for authoring brand-new features, or for reviewing a PR.
+  when release-branch CI is red and you must prove which reds are pre-existing, or when you must
+  prove a SQL-schema backport is Major-Version-Upgrade-safe via `ALTER EXTENSION citus UPDATE`
+  across a real multi-node cluster. DO NOT USE for non-Citus repos, new features, or PR review.
 license: See the repository LICENSE file.
 ---
 

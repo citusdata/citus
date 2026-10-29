@@ -132,7 +132,8 @@ typedef enum LogicalRepType
 extern void LogicallyReplicateShards(List *shardList, char *sourceNodeName,
 									 int sourceNodePort, char *targetNodeName,
 									 int targetNodePort,
-									 bool skipInterShardRelationshipCreation);
+									 bool skipInterShardRelationshipCreation,
+									 bool useAutoIdentityLogicalReplication);
 
 extern void ConflictWithIsolationTestingBeforeCopy(void);
 extern void ConflictWithIsolationTestingAfterCopy(void);
@@ -179,7 +180,8 @@ extern void CompleteNonBlockingShardTransfer(List *shardList,
 											 List *logicalRepTargetList,
 											 HTAB *groupedLogicalRepTargetsHash,
 											 LogicalRepType type,
-											 bool skipInterShardRelationshipCreation);
+											 bool skipInterShardRelationshipCreation,
+											 bool useAutoIdentityLogicalReplication);
 extern void CreateUncheckedForeignKeyConstraints(List *logicalRepTargetList);
 extern void CreatePartitioningHierarchy(List *logicalRepTargetList);
 

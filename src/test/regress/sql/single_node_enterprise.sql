@@ -134,9 +134,17 @@ INSERT INTO pg_dist_poolinfo VALUES (:coordinator_node_id,  'host=127.0.0.1 port
 SET search_path TO single_node_ent;
 SET citus.log_remote_commands TO ON;
 SET client_min_messages TO DEBUG1;
+SELECT CASE
+	WHEN current_setting('citus.enable_or_clause_arm_pruning', true) IS NOT NULL
+	THEN set_config('citus.enable_or_clause_arm_pruning', 'off', false)
+	END AS enable_or_clause_arm_pruning \gset
 -- force multi-shard query to be able to
 -- have remote connections
 SELECT COUNT(*) FROM test WHERE x = 1 OR x = 2;
+SELECT CASE
+	WHEN current_setting('citus.enable_or_clause_arm_pruning', true) IS NOT NULL
+	THEN set_config('citus.enable_or_clause_arm_pruning', 'on', false)
+	END AS enable_or_clause_arm_pruning \gset
 RESET citus.log_remote_commands;
 RESET client_min_messages;
 TRUNCATE pg_dist_poolinfo;
@@ -253,6 +261,7 @@ INSERT INTO ref SELECT i, i*2 FROM generate_series(100,150)i;
 -- the first insert goes to a shard on the worker
 -- the second insert goes to a shard on the coordinator
 BEGIN;
+	SET LOCAL citus.grep_remote_commands TO '%single_node_ent.test_%';
 	SET LOCAL citus.log_remote_commands TO ON;
 	INSERT INTO test(x,y) VALUES (101,100);
 	INSERT INTO test(x,y) VALUES (102,100);
@@ -264,6 +273,7 @@ ROLLBACK;
 -- the first insert goes to a shard on the coordinator
 -- the second insert goes to a shard on the worker
 BEGIN;
+	SET LOCAL citus.grep_remote_commands TO '%single_node_ent.test_%';
 	SET LOCAL citus.log_remote_commands TO ON;
 	INSERT INTO test(x,y) VALUES (102,100);
 	INSERT INTO test(x,y) VALUES (101,100);
@@ -292,6 +302,8 @@ SELECT * FROM view_created_before_shard_moves;
 
 -- and make sure that all the shards are remote
 BEGIN;
+	SET LOCAL citus.max_adaptive_executor_pool_size TO 1;
+	SET LOCAL citus.grep_remote_commands TO '%single_node_ent.test_%';
 	SET LOCAL citus.log_remote_commands TO ON;
 	INSERT INTO test(x,y) VALUES (101,100);
 	INSERT INTO test(x,y) VALUES (102,100);
