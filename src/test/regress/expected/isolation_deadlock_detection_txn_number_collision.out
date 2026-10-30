@@ -1,0 +1,70 @@
+Parsed test spec with 5 sessions
+
+starting permutation: s4-begin s4-update-3 s1-begin s1-update-3 s3-begin s3-update-1 s2-begin-with-s1-txn-number s2-update-2 s2-update-1 s3-update-2 deadlock-checker-call s3-commit s2-commit s4-commit s1-commit
+create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+step s4-begin:
+  BEGIN;
+
+step s4-update-3:
+  UPDATE txn_number_collision SET some_val = 4 WHERE user_id = 3;
+
+step s1-begin:
+  BEGIN;
+
+step s1-update-3:
+  UPDATE txn_number_collision SET some_val = 1001 WHERE user_id = 3;
+ <waiting ...>
+step s3-begin: 
+  BEGIN;
+
+step s3-update-1:
+  UPDATE txn_number_collision SET some_val = 3 WHERE user_id = 1;
+
+step s2-begin-with-s1-txn-number:
+  BEGIN;
+  SELECT assign_distributed_transaction_id(9999, transaction_number, now())
+  FROM get_all_active_transactions() t JOIN pg_stat_activity a ON (t.process_id = a.pid)
+  WHERE a.pid <> pg_backend_pid() AND a.query LIKE '%some_val = 1001%';
+
+assign_distributed_transaction_id
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-update-2:
+  UPDATE txn_number_collision SET some_val = 2 WHERE user_id = 2;
+
+step s2-update-1:
+  UPDATE txn_number_collision SET some_val = 2 WHERE user_id = 1;
+ <waiting ...>
+step s3-update-2: 
+  UPDATE txn_number_collision SET some_val = 3 WHERE user_id = 2;
+ <waiting ...>
+step deadlock-checker-call: 
+  SELECT check_distributed_deadlocks();
+
+check_distributed_deadlocks
+---------------------------------------------------------------------
+t
+(1 row)
+
+step s2-update-1: <... completed>
+step s3-update-2: <... completed>
+ERROR:  canceling the transaction since it was involved in a distributed deadlock
+step s3-commit:
+  COMMIT;
+
+step s2-commit:
+  COMMIT;
+
+step s4-commit:
+  COMMIT;
+
+step s1-update-3: <... completed>
+step s1-commit:
+  COMMIT;
+

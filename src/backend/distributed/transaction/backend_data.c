@@ -1184,24 +1184,47 @@ GetBackendDataForProc(PGPROC *proc, BackendData *result)
 
 /*
  * CancelTransactionDueToDeadlock cancels the input proc and also marks the backend
- * data with this information.
+ * data with this information, provided that the proc is still running the given
+ * distributed transaction. Returns false if the proc is no longer running it, in
+ * which case no cancellation is attempted.
  */
-void
-CancelTransactionDueToDeadlock(PGPROC *proc)
+bool
+CancelTransactionDueToDeadlock(PGPROC *proc,
+							   const DistributedTransactionId *transactionId)
 {
+	bool cancelled = false;
 	BackendData *backendData = &backendManagementShmemData->backends[getProcNo_compat(
 																		 proc)];
 
 	/* backend might not have used citus yet and thus not initialized backend data */
 	if (!backendData)
 	{
-		return;
+		return false;
 	}
 
 	SpinLockAcquire(&backendData->mutex);
 
-	/* send a SIGINT only if the process is still in a distributed transaction */
-	if (backendData->transactionId.transactionNumber != 0)
+	DistributedTransactionId *backendXactId = &backendData->transactionId;
+
+	/*
+	 * Send a SIGINT only if the backend is still running the very distributed
+	 * transaction that we found to be part of the deadlock. The caller walks the
+	 * whole deadlock cycle to pick a victim after it looks the backend up, so the
+	 * backend may have finished that transaction and started an unrelated one in
+	 * between, and cancelling that one would be wrong.
+	 *
+	 * Transaction numbers are only unique per initiator node, so the initiator
+	 * has to match as well.
+	 *
+	 * The timestamp is not compared, even though DistributedTransactionIdCompare()
+	 * does consider it. That comparison sorts ids gathered from all nodes, whereas
+	 * we only compare against a single live backend: its transaction numbers come
+	 * from a monotonic counter, so a new transaction on it necessarily has a
+	 * different number, and reusing one requires a restart, which invalidates
+	 * this proc.
+	 */
+	if (backendXactId->transactionNumber == transactionId->transactionNumber &&
+		backendXactId->initiatorNodeIdentifier == transactionId->initiatorNodeIdentifier)
 	{
 		backendData->cancelledDueToDeadlock = true;
 		SpinLockRelease(&backendData->mutex);
@@ -1213,11 +1236,15 @@ CancelTransactionDueToDeadlock(PGPROC *proc)
 							"distributed deadlock but the backend could not "
 							"be cancelled", proc->pid)));
 		}
+
+		cancelled = true;
 	}
 	else
 	{
 		SpinLockRelease(&backendData->mutex);
 	}
+
+	return cancelled;
 }
 
 
