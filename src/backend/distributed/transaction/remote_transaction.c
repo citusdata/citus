@@ -15,6 +15,8 @@
 
 #include "postgres.h"
 
+#include "common/string.h"
+
 #include "libpq-fe.h"
 #include "miscadmin.h"
 
@@ -1675,7 +1677,7 @@ ParsePreparedTransactionName(char *preparedTransactionName,
 	/* step ahead of the current '_' character */
 	++currentCharPointer;
 
-	*groupId = strtol(currentCharPointer, NULL, 10);
+	*groupId = strtoint(currentCharPointer, NULL, 10);
 
 	if ((*groupId == COORDINATOR_GROUP_ID && errno == EINVAL) ||
 		(*groupId == INT_MAX && errno == ERANGE))
@@ -1692,7 +1694,7 @@ ParsePreparedTransactionName(char *preparedTransactionName,
 	/* step ahead of the current '_' character */
 	++currentCharPointer;
 
-	*procId = strtol(currentCharPointer, NULL, 10);
+	*procId = strtoint(currentCharPointer, NULL, 10);
 	if ((*procId == 0 && errno == EINVAL) ||
 		(*procId == INT_MAX && errno == ERANGE))
 	{
