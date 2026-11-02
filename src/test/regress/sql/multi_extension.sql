@@ -97,6 +97,21 @@ BEGIN
 END
 $func$ LANGUAGE plpgsql;
 
+-- helper function that returns true if output of given explain calls citus_shard_sizes()
+CREATE FUNCTION multi_extension.explain_has_citus_shard_sizes(explain_command text)
+RETURNS BOOLEAN AS $$
+DECLARE
+  query_plan text;
+BEGIN
+  FOR query_plan IN EXECUTE explain_command LOOP
+    IF query_plan ILIKE '%citus_shard_sizes%'
+    THEN
+        RETURN true;
+    END IF;
+  END LOOP;
+  RETURN false;
+END; $$ language plpgsql;
+
 CREATE SCHEMA test;
 :create_function_test_maintenance_worker
 
@@ -772,35 +787,18 @@ ALTER EXTENSION citus UPDATE TO '14.0-1';
 -- Should be empty result since upgrade+downgrade should be a no-op
 SELECT * FROM multi_extension.print_extension_changes();
 
--- Snapshot of state at 15.0-1
-ALTER EXTENSION citus UPDATE TO '15.0-1';
-SELECT * FROM multi_extension.print_extension_changes();
-
--- helper function that returns true if output of given explain calls citus_shard_sizes()
-CREATE FUNCTION multi_extension.explain_has_citus_shard_sizes(explain_command text)
-RETURNS BOOLEAN AS $$
-DECLARE
-  query_plan text;
-BEGIN
-  FOR query_plan IN EXECUTE explain_command LOOP
-    IF query_plan ILIKE '%citus_shard_sizes%'
-    THEN
-        RETURN true;
-    END IF;
-  END LOOP;
-  RETURN false;
-END; $$ language plpgsql;
-
 -- In 14.0-1, citus_tables view inner joins with table_sizes, so citus_shard_sizes()
 -- is called even when the query doesn't use table_size.
-ALTER EXTENSION citus UPDATE TO '14.0-1';
 SELECT multi_extension.explain_has_citus_shard_sizes($$
   EXPLAIN (COSTS OFF) SELECT table_name, citus_table_type FROM citus_tables
 $$);
 
+-- Snapshot of state at 15.0-1
+ALTER EXTENSION citus UPDATE TO '15.0-1';
+SELECT * FROM multi_extension.print_extension_changes();
+
 -- In 15.0-1, citus_tables view left joins with table_sizes, so Postgres removes
 -- the join and doesn't call citus_shard_sizes() when the query doesn't use table_size.
-ALTER EXTENSION citus UPDATE TO '15.0-1';
 SELECT multi_extension.explain_has_citus_shard_sizes($$
   EXPLAIN (COSTS OFF) SELECT table_name, citus_table_type FROM citus_tables
 $$);
