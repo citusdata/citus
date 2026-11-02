@@ -25,4 +25,15 @@
 #define ExplainPropertyLong(qlabel, value, es) \
 		ExplainPropertyInteger(qlabel, NULL, value, es)
 
+#if PG_VERSION_NUM >= PG_VERSION_19
+
+/*
+ * PageSetChecksumInplace was renamed to PageSetChecksum in PG19
+ * (upstream commit replacing PageSetChecksumInplace). The signature is
+ * unchanged: (Page page, BlockNumber blkno).
+ */
+#define PageSetChecksumInplace(page, blkno) PageSetChecksum(page, blkno)
+
+#endif /* PG_VERSION_NUM >= PG_VERSION_19 */
+
 #endif /* COLUMNAR_COMPAT_H */

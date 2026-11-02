@@ -21,7 +21,7 @@
  * we do not want to wait even if HOLD_INTERRUPTS was called.
  */
 bool
-IsHoldOffCancellationReceived()
+IsHoldOffCancellationReceived(void)
 {
 	return InterruptHoldoffCount > 0 && (QueryCancelPending || ProcDiePending);
 }

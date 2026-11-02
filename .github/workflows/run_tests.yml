@@ -1,4 +1,6 @@
 name: Run Tests
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 on:
   workflow_call:
     inputs:
@@ -55,7 +57,7 @@ jobs:
         --cap-add=SYS_NICE
         --security-opt seccomp=unconfined
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: "./.github/actions/setup_extension"
       - name: Fix PostgreSQL library permissions for symlink setup
         if: ${{ inputs.citus_libdir != '' }}

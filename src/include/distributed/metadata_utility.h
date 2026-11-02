@@ -338,6 +338,8 @@ extern ShardPlacement * ActiveShardPlacement(uint64 shardId, bool missingOk);
 extern WorkerNode * ActiveShardPlacementWorkerNode(uint64 shardId);
 extern List * BuildShardPlacementList(int64 shardId);
 extern List * AllShardPlacementsOnNodeGroup(int32 groupId);
+extern GroupShardPlacement * LookupGroupPlacementByPlacementId(int64 placementId,
+															   bool missingOk);
 extern List * GroupShardPlacementsForTableOnGroup(Oid relationId, int32 groupId);
 extern void LookupTaskPlacementHostAndPort(ShardPlacement *taskPlacement, char **nodeName,
 										   int *nodePort);
@@ -394,7 +396,8 @@ extern DeferredErrorMessage * DeferErrorIfCircularDependencyExists(const
 																   ObjectAddress *
 																   objectAddress);
 extern List * GetDistributableDependenciesForObject(const ObjectAddress *target);
-extern List * GetAllDependencyCreateDDLCommands(const List *dependencies);
+extern List * GetAllDependencyCreateDDLCommands(const List *dependencies,
+												bool bundlePartitionMetadata);
 extern bool ShouldPropagate(void);
 extern bool ShouldPropagateCreateInCoordinatedTransction(void);
 extern bool ShouldPropagateAnyObject(List *addresses);

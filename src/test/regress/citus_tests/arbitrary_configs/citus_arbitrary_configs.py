@@ -12,6 +12,7 @@ Options:
     --seed=<seed>                   random number seed
     --base                          whether to use the base sql schedule or not
 """
+
 import concurrent.futures
 import multiprocessing
 import os

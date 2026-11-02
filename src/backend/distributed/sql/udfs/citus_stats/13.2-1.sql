@@ -1,10 +1,9 @@
-SET search_path = 'pg_catalog';
 DROP VIEW IF EXISTS pg_catalog.citus_stats;
 
 CREATE OR REPLACE VIEW citus.citus_stats AS
 
 WITH most_common_vals_double_json AS (
-    SELECT ( SELECT json_agg(row_to_json(f)) FROM ( SELECT * FROM run_command_on_shards(logicalrelid,
+    SELECT ( SELECT json_agg(row_to_json(f)) FROM ( SELECT * FROM pg_catalog.run_command_on_shards(logicalrelid,
             $$ SELECT json_agg(row_to_json(shard_stats)) FROM (
             SELECT '$$ || logicalrelid || $$' AS citus_table, attname, s.null_frac,
                    most_common_vals, most_common_freqs, c.reltuples AS reltuples
@@ -13,7 +12,7 @@ WITH most_common_vals_double_json AS (
             -- could never be the same
             FROM pg_stats s RIGHT JOIN pg_class c ON (s.tablename = c.relname)
             WHERE c.oid = '%s'::regclass) shard_stats $$ ))f)
-        FROM pg_dist_partition),
+        FROM pg_catalog.pg_dist_partition),
 
 most_common_vals_json AS (
     SELECT (json_array_elements(json_agg)->>'result') AS result,
@@ -78,5 +77,3 @@ GROUP BY nsp.nspname, c.citus_table, p.relname, c.attname;
 
 ALTER VIEW citus.citus_stats SET SCHEMA pg_catalog;
 GRANT SELECT ON pg_catalog.citus_stats TO PUBLIC;
-
-RESET search_path;

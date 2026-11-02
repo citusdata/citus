@@ -1,0 +1,114 @@
+--
+-- BACKGROUND_REBALANCE_PARALLEL_REFERENCE_FKEYS
+--
+-- Parallel reference table copies to multiple new nodes must not modify the
+-- cached foreign key lists nor schedule the same dependency twice, regardless
+-- of the order in which reference tables are processed (issue #8857).
+--
+CREATE SCHEMA background_rebalance_parallel_fkeys;
+SET search_path TO background_rebalance_parallel_fkeys;
+SET citus.next_shard_id TO 85675000;
+SET citus.shard_replication_factor TO 1;
+SET client_min_messages TO ERROR;
+
+CREATE FUNCTION get_referenced_relation_id_list(Oid)
+    RETURNS SETOF Oid
+    LANGUAGE C STABLE STRICT
+    AS 'citus', $$get_referenced_relation_id_list$$;
+
+CREATE FUNCTION get_referencing_relation_id_list(Oid)
+    RETURNS SETOF Oid
+    LANGUAGE C STABLE STRICT
+    AS 'citus', $$get_referencing_relation_id_list$$;
+
+CREATE TABLE dist (a int PRIMARY KEY);
+SELECT create_distributed_table('dist', 'a', shard_count => 12, colocate_with => 'none');
+
+CREATE TABLE customers (id int PRIMARY KEY);
+CREATE TABLE orders (id int PRIMARY KEY, customer_id int);
+CREATE TABLE order_items (id int PRIMARY KEY, order_id int);
+SELECT create_reference_table('customers');
+SELECT create_reference_table('orders');
+SELECT create_reference_table('order_items');
+ALTER TABLE order_items ADD FOREIGN KEY (order_id) REFERENCES orders (id);
+ALTER TABLE orders ADD FOREIGN KEY (customer_id) REFERENCES customers (id);
+
+-- A foreign key cycle makes each table both referenced and referencing.
+CREATE TABLE cycle_a (id int PRIMARY KEY, b_id int);
+CREATE TABLE cycle_b (id int PRIMARY KEY, a_id int);
+SELECT create_reference_table('cycle_a');
+SELECT create_reference_table('cycle_b');
+ALTER TABLE cycle_a ADD FOREIGN KEY (b_id) REFERENCES cycle_b (id);
+ALTER TABLE cycle_b ADD FOREIGN KEY (a_id) REFERENCES cycle_a (id);
+
+INSERT INTO customers SELECT i FROM generate_series(1, 10) i;
+INSERT INTO orders SELECT i, i % 10 + 1 FROM generate_series(1, 30) i;
+INSERT INTO order_items SELECT i, i % 30 + 1 FROM generate_series(1, 90) i;
+INSERT INTO cycle_a SELECT i, NULL FROM generate_series(1, 5) i;
+INSERT INTO cycle_b SELECT i, i FROM generate_series(1, 5) i;
+
+CREATE VIEW fkey_cache AS
+SELECT r::regclass AS relation,
+       ARRAY(SELECT x::regclass::text FROM get_referenced_relation_id_list(r) x ORDER BY 1) AS referenced,
+       ARRAY(SELECT x::regclass::text FROM get_referencing_relation_id_list(r) x ORDER BY 1) AS referencing
+FROM unnest(ARRAY['customers', 'orders', 'order_items', 'cycle_a', 'cycle_b']::regclass[]) r;
+
+CREATE VIEW ref_placements AS
+SELECT logicalrelid::regclass AS relation,
+       count(*) = (SELECT count(*) FROM pg_dist_node
+                   WHERE isactive AND noderole = 'primary') AS on_all_nodes
+FROM pg_dist_shard JOIN pg_dist_placement USING (shardid)
+WHERE logicalrelid IN ('customers'::regclass, 'orders'::regclass, 'order_items'::regclass,
+                       'cycle_a'::regclass, 'cycle_b'::regclass)
+GROUP BY 1 ORDER BY logicalrelid::regclass::text;
+
+SELECT * FROM fkey_cache;
+
+-- Two new nodes miss all reference tables. Check the cache in the same
+-- transaction, before background tasks can invalidate it.
+SELECT 1 FROM citus_add_node('localhost', :worker_3_port);
+SELECT 1 FROM citus_add_node('localhost', :worker_4_port);
+
+-- Rewrite pg_dist_partition in descending relation id order, so that the
+-- rebalancer processes referencing tables before the tables they reference.
+CREATE INDEX reverse_relid ON pg_dist_partition (logicalrelid DESC);
+CLUSTER pg_dist_partition USING reverse_relid;
+DROP INDEX reverse_relid;
+BEGIN;
+SELECT 1 FROM citus_rebalance_start(shard_transfer_mode := 'force_logical',
+                                    parallel_transfer_reference_tables := true);
+SELECT * FROM fkey_cache;
+COMMIT;
+SELECT citus_rebalance_wait();
+SELECT state FROM pg_dist_background_job ORDER BY job_id DESC LIMIT 1;
+SELECT * FROM ref_placements;
+
+-- Repeat in the same session with the other transfer mode.
+SELECT 1 FROM citus_add_node('localhost', :worker_5_port);
+SELECT 1 FROM citus_add_node('localhost', :worker_6_port);
+
+CREATE INDEX reverse_relid ON pg_dist_partition (logicalrelid DESC);
+CLUSTER pg_dist_partition USING reverse_relid;
+DROP INDEX reverse_relid;
+
+BEGIN;
+SELECT 1 FROM citus_rebalance_start(shard_transfer_mode := 'block_writes',
+                                    parallel_transfer_reference_tables := true);
+SELECT * FROM fkey_cache;
+COMMIT;
+SELECT citus_rebalance_wait();
+SELECT state FROM pg_dist_background_job ORDER BY job_id DESC LIMIT 1;
+SELECT * FROM ref_placements;
+
+SELECT count(*) FROM order_items JOIN orders ON orders.id = order_id
+                                 JOIN customers ON customers.id = customer_id;
+
+DROP SCHEMA background_rebalance_parallel_fkeys CASCADE;
+TRUNCATE pg_dist_background_job CASCADE;
+TRUNCATE pg_dist_background_task CASCADE;
+TRUNCATE pg_dist_background_task_depend;
+SELECT public.wait_for_resource_cleanup();
+SELECT 1 FROM citus_remove_node('localhost', :worker_3_port);
+SELECT 1 FROM citus_remove_node('localhost', :worker_4_port);
+SELECT 1 FROM citus_remove_node('localhost', :worker_5_port);
+SELECT 1 FROM citus_remove_node('localhost', :worker_6_port);

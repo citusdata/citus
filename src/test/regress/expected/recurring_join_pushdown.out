@@ -64,6 +64,7 @@ DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  sorted merge: per-task work_mem 1024 kB × 4 tasks (aggregate floor 4096 kB), session work_mem 4096 kB
  a  | b
 ---------------------------------------------------------------------
   1 | 10
@@ -155,6 +156,7 @@ DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  sorted merge: per-task work_mem 1024 kB × 4 tasks (aggregate floor 4096 kB), session work_mem 4096 kB
  a  | b  | a | b
 ---------------------------------------------------------------------
   1 | 10 | 1 | 10
@@ -180,25 +182,23 @@ DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
-                                                                                QUERY PLAN
+                                                                             QUERY PLAN
 ---------------------------------------------------------------------
- Sort
-   Sort Key: remote_scan.a, remote_scan.b
-   ->  Custom Scan (Citus Adaptive)
-         Task Count: 4
-         Tasks Shown: One of 4
-         ->  Task
-               Node: host=localhost port=xxxxx dbname=regression
-               ->  Merge Left Join
-                     Merge Cond: ((r1.a = d1.a) AND (r1.b = d1.b))
-                     ->  Sort
-                           Sort Key: r1.a, r1.b
-                           ->  Seq Scan on r1_1520000 r1
-                                 Filter: ((a IS NULL) OR ((btint4cmp('-2147483648'::integer, hashint4(a)) < 0) AND (btint4cmp(hashint4(a), '-1073741825'::integer) <= 0)))
-                     ->  Sort
-                           Sort Key: d1.a, d1.b
-                           ->  Seq Scan on d1_1520001 d1
-(16 rows)
+ Custom Scan (Citus Sorted Merge Adaptive)
+   Task Count: 4
+   Tasks Shown: One of 4
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Merge Left Join
+               Merge Cond: ((r1.a = d1.a) AND (r1.b = d1.b))
+               ->  Sort
+                     Sort Key: r1.a, r1.b
+                     ->  Seq Scan on r1_1520000 r1
+                           Filter: ((a IS NULL) OR ((btint4cmp('-2147483648'::integer, hashint4(a)) < 0) AND (btint4cmp(hashint4(a), '-1073741825'::integer) <= 0)))
+               ->  Sort
+                     Sort Key: d1.a, d1.b
+                     ->  Seq Scan on d1_1520001 d1
+(14 rows)
 
 SELECT count(*) FROM r1 LEFT JOIN d1 ON r1.b = d1.a;
 DEBUG:  no shard pruning constraints on d1 found

@@ -1595,6 +1595,7 @@ DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  sorted merge: per-task work_mem 1024 kB × 4 tasks (aggregate floor 4096 kB), session work_mem 4096 kB
  a
 ---------------------------------------------------------------------
  5

@@ -810,6 +810,14 @@ BuildExistingQueryIdHash(void)
 		fmgrPGStatStatements->fn_addr,
 		pgStatStatementsOid,
 		commandTypeDatum);
+
+	/*
+	 * PG19 requires TupleDescFinalize() to have been called before a
+	 * TupleDesc is used with slot deformation.  The descriptor returned by
+	 * the SRF is not guaranteed to be finalised; defensive call here is a
+	 * no-op on older majors.
+	 */
+	TupleDescFinalize(statStatementsReturnSet->setDesc);
 	TupleTableSlot *tupleTableSlot = MakeSingleTupleTableSlot(
 		statStatementsReturnSet->setDesc,
 		&TTSOpsMinimalTuple);
@@ -985,6 +993,11 @@ CitusExecutorName(MultiExecutorType executorType)
 		case MULTI_EXECUTOR_ADAPTIVE:
 		{
 			return "adaptive";
+		}
+
+		case MULTI_EXECUTOR_SORTED_MERGE:
+		{
+			return "sorted-merge";
 		}
 
 		case MULTI_EXECUTOR_NON_PUSHABLE_INSERT_SELECT:

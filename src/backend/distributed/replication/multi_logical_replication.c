@@ -21,9 +21,11 @@
 #include "access/sysattr.h"
 #include "access/xact.h"
 #include "catalog/namespace.h"
+#include "catalog/pg_am.h"
 #include "catalog/pg_constraint.h"
 #include "catalog/pg_subscription_rel.h"
 #include "commands/dbcommands.h"
+#include "commands/defrem.h"
 #include "common/hashfn.h"
 #include "nodes/bitmapset.h"
 #include "parser/scansup.h"
@@ -65,6 +67,7 @@
 #include "distributed/shard_rebalancer.h"
 #include "distributed/shard_transfer.h"
 #include "distributed/version_compat.h"
+#include "distributed/worker_log_messages.h"
 
 #define CURRENT_LOG_POSITION_COMMAND "SELECT pg_current_wal_lsn()"
 
@@ -119,8 +122,12 @@ static List * GetIndexCommandListForShardBackingReplicaIdentity(Oid relationId,
 																uint64 shardId);
 static void CreatePostLogicalReplicationDataLoadObjects(List *logicalRepTargetList,
 														LogicalRepType type,
-														bool skipInterShardRelationships);
-static void ExecuteCreateIndexCommands(List *logicalRepTargetList);
+														bool skipInterShardRelationships,
+														bool
+														useAutoIdentityLogicalReplication
+														);
+static void ExecuteCreateIndexCommands(List *logicalRepTargetList, LogicalRepType type,
+									   bool useAutoIdentityLogicalReplication);
 static void ExecuteCreateConstraintsBackedByIndexCommands(List *logicalRepTargetList);
 static List * ConvertNonExistingPlacementDDLCommandsToTasks(List *shardCommandList,
 															char *targetNodeName,
@@ -128,6 +135,8 @@ static List * ConvertNonExistingPlacementDDLCommandsToTasks(List *shardCommandLi
 static void ExecuteClusterOnCommands(List *logicalRepTargetList);
 static void ExecuteCreateIndexStatisticsCommands(List *logicalRepTargetList);
 static void ExecuteRemainingPostLoadTableCommands(List *logicalRepTargetList);
+static void PrepareReplicaIdentitiesForPublication(MultiConnection *connection,
+												   HTAB *publicationInfoHash);
 static char * escape_param_str(const char *str);
 static XLogRecPtr GetRemoteLSN(MultiConnection *connection, char *command);
 static void WaitForMiliseconds(long timeout);
@@ -141,6 +150,11 @@ static List * CreateShardMoveLogicalRepTargetList(HTAB *publicationInfoHash,
 static void WaitForGroupedLogicalRepTargetsToCatchUp(XLogRecPtr sourcePosition,
 													 GroupedLogicalRepTargets *
 													 groupedLogicalRepTargets);
+static void CreateCatchupIndexesForLogicalReplication(List *shardList,
+													  MultiConnection *sourceConnection,
+													  WorkerNode *targetNode);
+static char * ChooseHelperIndexColumn(MultiConnection *sourceConnection,
+									  ShardInterval *shardInterval);
 
 /*
  * LogicallyReplicateShards replicates a list of shards from one node to another
@@ -148,14 +162,15 @@ static void WaitForGroupedLogicalRepTargetsToCatchUp(XLogRecPtr sourcePosition,
  * are blocked and then the publication and subscription are dropped.
  *
  * The caller of the function should ensure that logical replication is applicable
- * for the given shards, source and target nodes. Also, the caller is responsible
- * for ensuring that the input shard list consists of co-located distributed tables
- * or a single shard.
+ * for the given shards (or can be forced via useAutoIdentityLogicalReplication),
+ * source and target nodes. Also, the caller is responsible for ensuring that the
+ * input shard list consists of co-located distributed tables or a single shard.
  */
 void
 LogicallyReplicateShards(List *shardList, char *sourceNodeName, int sourceNodePort,
 						 char *targetNodeName, int targetNodePort,
-						 bool skipInterShardRelationshipCreation)
+						 bool skipInterShardRelationshipCreation,
+						 bool useAutoIdentityLogicalReplication)
 {
 	char *superUser = CitusExtensionOwnerName();
 	char *databaseName = get_database_name(MyDatabaseId);
@@ -197,6 +212,11 @@ LogicallyReplicateShards(List *shardList, char *sourceNodeName, int sourceNodePo
 
 	MultiConnection *sourceReplicationConnection =
 		GetReplicationConnection(sourceConnection->hostname, sourceConnection->port);
+
+	if (useAutoIdentityLogicalReplication)
+	{
+		PrepareReplicaIdentitiesForPublication(sourceConnection, publicationInfoHash);
+	}
 
 	/* set up the publication on the source and subscription on the target */
 	CreatePublications(sourceConnection, publicationInfoHash);
@@ -251,6 +271,20 @@ LogicallyReplicateShards(List *shardList, char *sourceNodeName, int sourceNodePo
 	CloseConnection(sourceReplicationConnection);
 
 	/*
+	 * Optionally build an index on each destination shard before the catch-up below
+	 * so that the logical-replication subscriber can use an index scan (instead of a
+	 * sequential scan) while it applies the changes that accumulate during catch-up.
+	 * This only does something for tables that lack a replica identity / primary key
+	 * index. It must run before the subscriptions are enabled (which happens in
+	 * CompleteNonBlockingShardTransfer).
+	 */
+	if (useAutoIdentityLogicalReplication)
+	{
+		CreateCatchupIndexesForLogicalReplication(shardList, sourceConnection,
+												  targetNode);
+	}
+
+	/*
 	 * Start the replication and copy all data
 	 */
 	CompleteNonBlockingShardTransfer(shardList,
@@ -259,7 +293,8 @@ LogicallyReplicateShards(List *shardList, char *sourceNodeName, int sourceNodePo
 									 logicalRepTargetList,
 									 groupedLogicalRepTargetsHash,
 									 SHARD_MOVE,
-									 skipInterShardRelationshipCreation);
+									 skipInterShardRelationshipCreation,
+									 useAutoIdentityLogicalReplication);
 
 	/*
 	 * We use these connections exclusively for subscription management,
@@ -269,6 +304,352 @@ LogicallyReplicateShards(List *shardList, char *sourceNodeName, int sourceNodePo
 	 */
 	CloseGroupedLogicalRepTargetsConnections(groupedLogicalRepTargetsHash);
 	CloseConnection(sourceConnection);
+}
+
+
+/*
+ * CreateCatchupIndexesForLogicalReplication builds, for each shard in the given
+ * list, at most one index on the destination shard before the catch-up phase of the
+ * logical-replication based move, so that the subscriber can use an index scan
+ * (instead of a sequential scan) while it applies the changes that accumulate during
+ * catch-up.
+ *
+ * The caller only invokes this in the force_logical_auto_identity shard
+ * transfer mode. Per shard, it then does the first of the following that
+ * applies, and nothing when none does (i.e. the subscriber sequential-scans
+ * the destination during catch-up):
+ *
+ *  - Nothing for a partitioned table (it holds no data of its own) or for a table
+ *    that already has a replica identity / primary key index, which Citus builds on
+ *    the destination shard before the catch-up anyway (see CreateReplicaIdentities).
+ *
+ *  - When the table has a usable existing index eligible to be built early (chosen by
+ *    ChooseReplicationHelperIndexToBuildEarly), build that index and keep it permanently:
+ *    it is excluded from the late CREATE INDEX phase (see ExecuteCreateIndexCommands),
+ *    so it is created exactly once.
+ *
+ *  - Otherwise, build a temporary single-column helper index (on the column chosen by
+ *    ChooseHelperIndexColumn). Unlike the existing index above, this is a throwaway: it
+ *    is registered with the resource cleanup framework (CLEANUP_OBJECT_INDEX,
+ *    CLEANUP_ALWAYS) before it is created, so it is dropped once the transfer completes.
+ *
+ * Every index here is built on the destination shard, which is not yet visible to
+ * users, so a plain (blocking) CREATE INDEX is safe and cheaper than CONCURRENTLY.
+ *
+ * The per-shard loop only decides what to build; the CREATE INDEX commands for all
+ * shards are then run in parallel through the adaptive executor, exactly like the
+ * late CREATE INDEX phase (see ExecuteCreateIndexCommands) does.
+ */
+static void
+CreateCatchupIndexesForLogicalReplication(List *shardList,
+										  MultiConnection *sourceConnection,
+										  WorkerNode *targetNode)
+{
+	List *catchupIndexCommandList = NIL;
+
+	ShardInterval *shardInterval = NULL;
+	foreach_declared_ptr(shardInterval, shardList)
+	{
+		Oid relationId = shardInterval->relationId;
+
+		/* partitioned tables hold no data of their own */
+		if (PartitionedTable(relationId))
+		{
+			continue;
+		}
+
+		/*
+		 * A replica identity / primary key index is built on the destination shard
+		 * before the catch-up (see CreateReplicaIdentities), so the subscriber can
+		 * already locate rows efficiently and we build nothing more here.
+		 */
+		Relation relation = table_open(relationId, AccessShareLock);
+		Oid replicaIdentityOrPKIndex = GetRelationIdentityOrPK(relation);
+		table_close(relation, NoLock);
+
+		if (OidIsValid(replicaIdentityOrPKIndex))
+		{
+			continue;
+		}
+
+		/*
+		 * Prefer reusing one of the table's own existing indexes -- built early here
+		 * and kept permanently -- over the throwaway helper below. This does nothing
+		 * for a table whose only usable btree backs a UNIQUE or EXCLUDE constraint
+		 * (ChooseReplicationHelperIndexToBuildEarly refuses those), so such a table
+		 * falls through.
+		 */
+		List *tableCreateIndexCommandList =
+			GetReplicationHelperIndexCommandList(relationId);
+		if (tableCreateIndexCommandList != NIL)
+		{
+			List *shardCreateIndexCommandList =
+				WorkerApplyShardDDLCommandList(tableCreateIndexCommandList,
+											   shardInterval->shardId);
+
+			ereport(DEBUG1, (errmsg("building existing index early on shard "
+									UINT64_FORMAT " on node %s:%d",
+									shardInterval->shardId,
+									targetNode->workerName, targetNode->workerPort)));
+
+			/*
+			 * This index is excluded from the late CREATE INDEX phase, so a
+			 * failure to build it here must abort the move rather than silently
+			 * leave the destination shard without it.
+			 */
+			catchupIndexCommandList = list_concat(catchupIndexCommandList,
+												  shardCreateIndexCommandList);
+
+			continue;
+		}
+
+		/*
+		 * Otherwise fall back to a temporary single-column helper index, which is
+		 * dropped once the transfer completes.
+		 */
+		char *columnName = ChooseHelperIndexColumn(sourceConnection, shardInterval);
+		if (columnName == NULL)
+		{
+			/*
+			 * No column is eligible for a btree index (e.g. no column type has a
+			 * default btree operator class). Fall back to today's behavior, i.e. a
+			 * sequential scan on the subscriber.
+			 */
+			ereport(WARNING, (errmsg("no suitable column found to build a temporary "
+									 "replica identity helper index for shard "
+									 UINT64_FORMAT "; falling back to a sequential "
+									 "scan during catch-up", shardInterval->shardId)));
+			continue;
+		}
+
+		char *qualifiedShardName = ConstructQualifiedShardName(shardInterval);
+
+		/*
+		 * Include the operation id to avoid colliding with an unrelated index that
+		 * happens to use the helper prefix and shard id. The maximum generated name
+		 * is shorter than NAMEDATALEN.
+		 */
+		char *indexName = psprintf("citus_ri_helper_" UINT64_FORMAT "_" UINT64_FORMAT,
+								   shardInterval->shardId, CurrentOperationId);
+		char *schemaName = get_namespace_name(get_rel_namespace(relationId));
+		char *qualifiedIndexName = quote_qualified_identifier(schemaName, indexName);
+
+		/*
+		 * Register the cleanup record before creating the index so that it is dropped
+		 * even if we crash right after the CREATE INDEX below.
+		 */
+		InsertCleanupRecordOutsideTransaction(CLEANUP_OBJECT_INDEX,
+											  qualifiedIndexName,
+											  targetNode->groupId,
+											  CLEANUP_ALWAYS);
+
+		ereport(DEBUG1, (errmsg("building temporary replica identity helper index "
+								"on column \"%s\" of shard " UINT64_FORMAT
+								" on node %s:%d",
+								columnName, shardInterval->shardId,
+								targetNode->workerName, targetNode->workerPort)));
+
+		char *createHelperIndexCommand =
+			psprintf("CREATE INDEX %s ON %s USING btree (%s)",
+					 quote_identifier(indexName), qualifiedShardName,
+					 quote_identifier(columnName));
+
+		/*
+		 * The helper index only speeds up the catch-up phase, so a failure to
+		 * build it must not abort the whole move. So we wrap the CREATE INDEX in
+		 * a PL/pgSQL block that turns an error into a WARNING on the destination
+		 * node, and the subscriber then falls back to a sequential scan. WHEN
+		 * OTHERS does not catch a query cancel, so cancelling the move still
+		 * works. The CLEANUP_ALWAYS record registered above drops the (possibly
+		 * absent) index with DROP INDEX IF EXISTS at the end of the operation.
+		 */
+		char *optionalHelperIndexBlock =
+			psprintf("BEGIN %s; "
+					 "EXCEPTION WHEN OTHERS THEN "
+					 "RAISE WARNING 'could not build temporary replica identity "
+					 "helper index on shard " UINT64_FORMAT "; falling back to a "
+					 "sequential scan during catch-up: %%', SQLERRM; "
+					 "END",
+					 createHelperIndexCommand, shardInterval->shardId);
+
+		catchupIndexCommandList =
+			lappend(catchupIndexCommandList,
+					psprintf("DO %s", quote_literal_cstr(optionalHelperIndexBlock)));
+	}
+
+	if (catchupIndexCommandList == NIL)
+	{
+		return;
+	}
+
+	/*
+	 * Build all the indexes in parallel outside of the coordinated transaction, as
+	 * the current user, which owns all the moved tables (an index always belongs to
+	 * the owner of its table anyway). CREATE INDEX takes a ShareLock, so the
+	 * commands can run concurrently on different shards.
+	 */
+	List *catchupIndexTaskList =
+		ConvertNonExistingPlacementDDLCommandsToTasks(catchupIndexCommandList,
+													  targetNode->workerName,
+													  targetNode->workerPort);
+
+	/*
+	 * By default, messages from the workers are only reported at DEBUG1. Report
+	 * them with their original level here, so that a user still sees the WARNING
+	 * raised on the destination node when a helper index cannot be built. The
+	 * transaction end callbacks turn this off again if the execution errors out.
+	 */
+	EnableWorkerMessagePropagation();
+
+	ExecuteTaskListOutsideTransaction(ROW_MODIFY_NONE, catchupIndexTaskList,
+									  MaxAdaptiveExecutorPoolSize, NIL);
+
+	DisableWorkerMessagePropagation();
+}
+
+
+/*
+ * ChooseHelperIndexColumn picks the column of the given shard's table that is most
+ * useful to build a temporary replica-identity helper index on. It returns the column
+ * name or NULL if the table has no column that can back a btree index.
+ */
+static char *
+ChooseHelperIndexColumn(MultiConnection *sourceConnection, ShardInterval *shardInterval)
+{
+	Oid relationId = shardInterval->relationId;
+	Relation relation = table_open(relationId, AccessShareLock);
+	TupleDesc tupleDescriptor = RelationGetDescr(relation);
+
+	StringInfo eligibleColumnNames = makeStringInfo();
+	char *firstEligibleColumn = NULL;
+	bool foundEligible = false;
+
+	for (int attributeIndex = 0; attributeIndex < tupleDescriptor->natts; attributeIndex++
+		 )
+	{
+		Form_pg_attribute attributeForm = TupleDescAttr(tupleDescriptor, attributeIndex);
+
+		/*
+		 * Note that we should not build the index on a generated column too.
+		 * See IsIndexUsableForReplicaIdentityFull in the postgres source.
+		 */
+		if (attributeForm->attisdropped || attributeForm->attnum <= 0 ||
+			attributeForm->attgenerated != '\0')
+		{
+			continue;
+		}
+
+		/*
+		 * A variable-width column can later receive a value that exceeds the btree
+		 * entry size limit. That would make the destination-only helper index reject
+		 * logical replication changes forever. Only fixed-width columns are safe.
+		 */
+		if (attributeForm->attlen <= 0)
+		{
+			continue;
+		}
+
+		/* the column type must have a default btree operator class to be indexable */
+		Oid opclass = GetDefaultOpClass(attributeForm->atttypid, BTREE_AM_OID);
+		if (!OidIsValid(opclass))
+		{
+			continue;
+		}
+
+		if (foundEligible)
+		{
+			appendStringInfoChar(eligibleColumnNames, ',');
+		}
+		else
+		{
+			firstEligibleColumn = pstrdup(NameStr(attributeForm->attname));
+		}
+
+		appendStringInfoString(eligibleColumnNames,
+							   quote_literal_cstr(NameStr(attributeForm->attname)));
+		foundEligible = true;
+	}
+
+	table_close(relation, NoLock);
+
+	if (!foundEligible)
+	{
+		return NULL;
+	}
+
+	/*
+	 * Ask the source shard which eligible column is the most selective according to
+	 * its statistics. We normalize stadistinct (negative values are a fraction of the
+	 * row count, positive values are an absolute count) and give unanalyzed columns a
+	 * score of 0 so that, in the absence of statistics, we fall back to the first
+	 * eligible column (lowest attnum). The query runs on the source connection because
+	 * the source shard holds both the data and the user's ANALYZE statistics.
+	 *
+	 * If the query cannot be sent, or does not come back as a single non-null column
+	 * name, we log a warning and keep the first-eligible-column fallback.
+	 */
+	char *qualifiedShardName = ConstructQualifiedShardName(shardInterval);
+	char *statsQuery = psprintf(
+		"SELECT a.attname FROM pg_catalog.pg_attribute a "
+		"JOIN pg_catalog.pg_class c ON c.oid = a.attrelid "
+		"LEFT JOIN pg_catalog.pg_statistic s "
+		"ON s.starelid = a.attrelid AND s.staattnum = a.attnum "
+		"WHERE a.attrelid = %s::regclass "
+		"AND a.attname = ANY(ARRAY[%s]::name[]) AND NOT a.attisdropped "
+		"ORDER BY (CASE WHEN s.stadistinct IS NULL THEN 0 "
+		"WHEN s.stadistinct < 0 THEN -s.stadistinct "
+		"WHEN c.reltuples > 0 THEN s.stadistinct / c.reltuples "
+		"ELSE 0 END) DESC, a.attnum LIMIT 1",
+		quote_literal_cstr(qualifiedShardName), eligibleColumnNames->data);
+
+	char *chosenColumn = firstEligibleColumn;
+
+	int querySent = SendRemoteCommand(sourceConnection, statsQuery);
+	if (querySent == 0)
+	{
+		ereport(WARNING, (errmsg("could not send column statistics query to source "
+								 "shard %s; using first eligible column \"%s\" for the "
+								 "replica identity helper index",
+								 qualifiedShardName, firstEligibleColumn)));
+	}
+	else
+	{
+		bool raiseInterrupts = false;
+		PGresult *result = GetRemoteCommandResult(sourceConnection, raiseInterrupts);
+		if (!IsResponseOK(result))
+		{
+			ereport(WARNING, (errmsg("column statistics query on source shard %s did "
+									 "not return a successful response; using first "
+									 "eligible column \"%s\" for the replica identity "
+									 "helper index",
+									 qualifiedShardName, firstEligibleColumn)));
+		}
+		else if (PQntuples(result) != 1 || PQnfields(result) != 1)
+		{
+			ereport(WARNING, (errmsg("column statistics query on source shard %s "
+									 "returned %d row(s) and %d column(s) instead of a "
+									 "single value; using first eligible column \"%s\" "
+									 "for the replica identity helper index",
+									 qualifiedShardName, PQntuples(result),
+									 PQnfields(result), firstEligibleColumn)));
+		}
+		else if (PQgetisnull(result, 0, 0))
+		{
+			ereport(WARNING, (errmsg("column statistics query on source shard %s "
+									 "returned a null value; using first eligible column "
+									 "\"%s\" for the replica identity helper index",
+									 qualifiedShardName, firstEligibleColumn)));
+		}
+		else
+		{
+			chosenColumn = pstrdup(PQgetvalue(result, 0, 0));
+		}
+
+		PQclear(result);
+		ForgetResults(sourceConnection);
+	}
+
+	return chosenColumn;
 }
 
 
@@ -319,7 +700,8 @@ CompleteNonBlockingShardTransfer(List *shardList,
 								 List *logicalRepTargetList,
 								 HTAB *groupedLogicalRepTargetsHash,
 								 LogicalRepType type,
-								 bool skipInterShardRelationshipCreation)
+								 bool skipInterShardRelationshipCreation,
+								 bool useAutoIdentityLogicalReplication)
 {
 	/* Start applying the changes from the replication slots to catch up. */
 	EnableSubscriptions(logicalRepTargetList);
@@ -348,7 +730,8 @@ CompleteNonBlockingShardTransfer(List *shardList,
 	 * catches up again. So we don't block writes too long.
 	 */
 	CreatePostLogicalReplicationDataLoadObjects(logicalRepTargetList, type,
-												skipInterShardRelationshipCreation);
+												skipInterShardRelationshipCreation,
+												useAutoIdentityLogicalReplication);
 
 	UpdatePlacementUpdateStatusForShardIntervalList(
 		shardList,
@@ -660,7 +1043,8 @@ GetReplicaIdentityCommandListForShard(Oid relationId, uint64 shardId)
 static void
 CreatePostLogicalReplicationDataLoadObjects(List *logicalRepTargetList,
 											LogicalRepType type,
-											bool skipInterShardRelationships)
+											bool skipInterShardRelationships,
+											bool useAutoIdentityLogicalReplication)
 {
 	/*
 	 * We create indexes in 4 steps.
@@ -676,7 +1060,8 @@ CreatePostLogicalReplicationDataLoadObjects(List *logicalRepTargetList,
 	 *  table and setting the statistics of indexes, depends on the indexes being
 	 *  created. That's why the execution is divided into four distinct stages.
 	 */
-	ExecuteCreateIndexCommands(logicalRepTargetList);
+	ExecuteCreateIndexCommands(logicalRepTargetList, type,
+							   useAutoIdentityLogicalReplication);
 	ExecuteCreateConstraintsBackedByIndexCommands(logicalRepTargetList);
 	ExecuteClusterOnCommands(logicalRepTargetList);
 	ExecuteCreateIndexStatisticsCommands(logicalRepTargetList);
@@ -706,7 +1091,8 @@ CreatePostLogicalReplicationDataLoadObjects(List *logicalRepTargetList,
  * commands fail.
  */
 static void
-ExecuteCreateIndexCommands(List *logicalRepTargetList)
+ExecuteCreateIndexCommands(List *logicalRepTargetList, LogicalRepType type,
+						   bool useAutoIdentityLogicalReplication)
 {
 	List *taskList = NIL;
 	LogicalRepTarget *target = NULL;
@@ -717,9 +1103,27 @@ ExecuteCreateIndexCommands(List *logicalRepTargetList)
 		{
 			Oid relationId = shardInterval->relationId;
 
-			List *tableCreateIndexCommandList =
-				GetTableIndexAndConstraintCommandsExcludingReplicaIdentity(relationId,
-																		   INCLUDE_CREATE_INDEX_STATEMENTS);
+			/*
+			 * For a shard move in the force_logical_auto_identity mode
+			 * (useAutoIdentityLogicalReplication = true), we may have built one of
+			 * the table's existing indexes early on the destination shard (see
+			 * CreateCatchupIndexesForLogicalReplication); if so, that index
+			 * must be excluded here so it is not created a second time.
+			 */
+			List *tableCreateIndexCommandList = NIL;
+			if (type == SHARD_MOVE && useAutoIdentityLogicalReplication)
+			{
+				tableCreateIndexCommandList =
+					GetTableIndexAndConstraintCommandsExcludingReplicaIdentityAndReplicationHelperIndex
+					(
+						relationId, INCLUDE_CREATE_INDEX_STATEMENTS);
+			}
+			else
+			{
+				tableCreateIndexCommandList =
+					GetTableIndexAndConstraintCommandsExcludingReplicaIdentity(
+						relationId, INCLUDE_CREATE_INDEX_STATEMENTS);
+			}
 
 			List *shardCreateIndexCommandList =
 				WorkerApplyShardDDLCommandList(tableCreateIndexCommandList,
@@ -1279,6 +1683,114 @@ GetQueryResultStringList(MultiConnection *connection, char *query)
 	PQclear(result);
 	ForgetResults(connection);
 	return resultList;
+}
+
+
+/*
+ * PrepareReplicaIdentitiesForPublication makes sure that every source shard in
+ * publicationInfoHash can publish all of its modifications (INSERT/UPDATE/DELETE)
+ * over logical replication.
+ *
+ * A table that has neither a REPLICA IDENTITY nor a PRIMARY KEY cannot publish
+ * UPDATE/DELETE: the publisher errors out with "cannot update table ... because
+ * it does not have a replica identity and publishes updates", which would break
+ * the user's concurrent writes for the duration of the transfer.
+ *
+ * To avoid this, we temporarily set REPLICA IDENTITY FULL on such source
+ * shards right before we create the publications, and the original replica
+ * identity is restored via the resource cleanup framework later. The caller
+ * only invokes this in the force_logical_auto_identity shard transfer mode.
+ *
+ * Also note that setting REPLICA IDENTITY FULL requires a brief AccessExclusiveLock
+ * on the source shard. We retry the ALTER a few times with an increasing
+ * lock_timeout (see below), so that a transiently-locked shard does not fail the
+ * transfer; only a shard that stays locked fails it, in bounded time.
+ */
+static void
+PrepareReplicaIdentitiesForPublication(MultiConnection *connection,
+									   HTAB *publicationInfoHash)
+{
+	WorkerNode *worker = FindWorkerNodeOrError(connection->hostname, connection->port);
+
+	HASH_SEQ_STATUS status;
+	hash_seq_init(&status, publicationInfoHash);
+
+	PublicationInfo *entry = NULL;
+	while ((entry = (PublicationInfo *) hash_seq_search(&status)) != NULL)
+	{
+		ShardInterval *shard = NULL;
+		foreach_declared_ptr(shard, entry->shardIntervals)
+		{
+			/*
+			 * If the table already has a replica identity (or is a partitioned
+			 * parent, which holds no data), it can publish all modifications and
+			 * we don't need to touch it.
+			 */
+			if (RelationCanPublishAllModifications(shard->relationId))
+			{
+				continue;
+			}
+
+			char *shardName = ConstructQualifiedShardName(shard);
+
+			/*
+			 * Register the cleanup record before making the change so that the
+			 * shard's replica identity is restored even if we crash right after the
+			 * ALTER TABLE below. The object name is just the shard id, see
+			 * TryResetReplicaIdentityOutsideTransaction.
+			 */
+			char *cleanupObjectName = psprintf(UINT64_FORMAT, shard->shardId);
+			InsertCleanupRecordOutsideTransaction(CLEANUP_OBJECT_REPLICA_IDENTITY,
+												  cleanupObjectName,
+												  worker->groupId,
+												  CLEANUP_ALWAYS);
+
+			/*
+			 * Setting REPLICA IDENTITY FULL requires an AccessExclusiveLock on the
+			 * shard, which conflicts with any concurrent access to it. To avoid a
+			 * briefly-held conflicting lock failing the whole transfer, try a few times
+			 * with an increasing lock_timeout. This keeps a persistently-locked shard
+			 * failing in bounded time; the resource cleanup framework restores the
+			 * original replica identity via the record we registered above.
+			 *
+			 * DDL propagation is disabled because the ALTER targets a shard, which is
+			 * not a distributed object. Both settings use SET LOCAL and are therefore
+			 * scoped to the transaction opened by
+			 * SendOptionalCommandListToWorkerOutsideTransactionWithConnection, so they
+			 * are reset automatically once it commits or aborts.
+			 */
+			bool replicaIdentitySet = false;
+			int maxAttempts = 3;
+			for (int attempt = 1; attempt <= maxAttempts; attempt++)
+			{
+				int lockTimeoutSeconds = 1 << (attempt - 1);
+
+				replicaIdentitySet =
+					SendOptionalCommandListToWorkerOutsideTransactionWithConnection(
+						connection,
+						list_make3(
+							psprintf("SET LOCAL lock_timeout TO '%ds'",
+									 lockTimeoutSeconds),
+							"SET LOCAL citus.enable_ddl_propagation TO OFF",
+							psprintf("ALTER TABLE %s REPLICA IDENTITY FULL", shardName)));
+				if (replicaIdentitySet)
+				{
+					break;
+				}
+			}
+
+			if (!replicaIdentitySet)
+			{
+				ereport(ERROR, (errmsg("could not set REPLICA IDENTITY FULL on shard "
+									   "%s after %d attempts",
+									   shardName, maxAttempts),
+								errhint("A concurrent session may be holding a "
+										"conflicting lock on the shard. Retry "
+										"the shard move after that activity "
+										"completes.")));
+			}
+		}
+	}
 }
 
 

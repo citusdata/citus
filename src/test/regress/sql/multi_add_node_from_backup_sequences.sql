@@ -1,0 +1,273 @@
+--
+-- Test that promoting a clone re-ranges sequence-backed columns for the SAME
+-- table surface classical add/activate-node syncs to metadata workers, i.e.
+-- every table where ShouldSyncTableMetadata() is true: distributed tables,
+-- reference tables and Citus local tables.
+--
+-- Citus keeps bigint sequences globally unique by giving every node group a
+-- disjoint (groupId << 48) value window. A clone is a physical streaming
+-- replica, so its sequence objects start out carrying the SOURCE primary's
+-- window. After promotion the clone gets a brand-new group id, so its
+-- sequences must be re-ranged to the new window; otherwise the clone and its
+-- source primary emit values from the SAME window and collide.
+--
+-- CRITICAL: every table under test is created and seeded BEFORE the clone is
+-- promoted. That way the promotion-time re-range is the ONLY mechanism that can
+-- move the clone's sequence windows off the source primary's window. A table
+-- created AFTER promotion would be ranged by the normal creation path and would
+-- not exercise the promotion code at all.
+--
+-- Distributed / reference / Citus local tables: the sequence DEFAULT / IDENTITY
+-- value is evaluated on the node that runs the INSERT, so we generate values
+-- directly on the source primary and on the promoted clone (via MX worker
+-- connections) and compare their high-bit (>> 48) windows. Citus local tables
+-- keep their single shard on the coordinator but their shell table + sequences
+-- are synced to workers and support worker writes, so they follow the same
+-- per-group ranging rules (creating the coordinator metadata entry is required
+-- for them, hence citus_set_coordinator_host below).
+--
+
+-- Use a fresh worker/clone pair (worker_4 + follower_worker_4) that earlier
+-- tests in this schedule have not touched.
+SELECT 1 FROM master_add_node('localhost', :worker_4_port);
+
+-- Register the coordinator in the metadata so that Citus local tables can be
+-- created (their shell tables + sequences are then synced to workers, exactly
+-- like distributed / reference tables).
+SET client_min_messages TO WARNING;
+SELECT citus_set_coordinator_host('localhost', :master_port);
+SET client_min_messages TO DEFAULT;
+
+-- A higher shard count guarantees the new worker (and, after promotion, its
+-- clone) own several shards, so the cluster is genuinely distributed.
+SET citus.shard_count TO 32;
+
+-- ---------------------------------------------------------------------------
+-- Create all three Citus table types BEFORE promotion, each exercising the
+-- three sequence-backed column kinds:
+--   * bigserial               (implicit OWNED-BY sequence)
+--   * bigint DEFAULT nextval  (explicit dependent sequence)
+--   * GENERATED AS IDENTITY   (identity sequence)
+-- ---------------------------------------------------------------------------
+
+-- Distributed table.
+CREATE SEQUENCE clone_seq_dist_manual AS bigint;
+CREATE TABLE clone_seq_dist (
+    id int,
+    bigserial_col bigserial,
+    nextval_col bigint DEFAULT nextval('clone_seq_dist_manual'),
+    identity_col bigint GENERATED ALWAYS AS IDENTITY,
+    payload text
+);
+SELECT create_distributed_table('clone_seq_dist', 'id', 'hash');
+INSERT INTO clone_seq_dist (id, payload)
+    SELECT g, 'seed' FROM generate_series(1, 60) g;
+
+-- Reference table.
+CREATE SEQUENCE clone_seq_ref_manual AS bigint;
+CREATE TABLE clone_seq_ref (
+    id int,
+    bigserial_col bigserial,
+    nextval_col bigint DEFAULT nextval('clone_seq_ref_manual'),
+    identity_col bigint GENERATED ALWAYS AS IDENTITY,
+    payload text
+);
+SELECT create_reference_table('clone_seq_ref');
+INSERT INTO clone_seq_ref (id, payload)
+    SELECT g, 'seed' FROM generate_series(1, 20) g;
+
+-- Citus local table.
+CREATE SEQUENCE clone_seq_local_manual AS bigint;
+CREATE TABLE clone_seq_local (
+    id int,
+    bigserial_col bigserial,
+    nextval_col bigint DEFAULT nextval('clone_seq_local_manual'),
+    identity_col bigint GENERATED ALWAYS AS IDENTITY,
+    payload text
+);
+SELECT citus_add_local_table_to_metadata('clone_seq_local');
+INSERT INTO clone_seq_local (id, payload)
+    SELECT g, 'seed' FROM generate_series(1, 20) g;
+
+-- Quoted / mixed-case schema + sequence name coverage. The re-range command is
+-- built with generate_qualified_relation_name + quote_literal_cstr; the tables
+-- above all live in public with plain identifiers, so this case exercises the
+-- quoting/escaping path (which has historically been a source of deparse bugs).
+CREATE SCHEMA "Edge Schema";
+CREATE SEQUENCE "Edge Schema"."Weird Seq!" AS bigint;
+CREATE TABLE "Edge Schema"."Edge Tbl" (
+    id int,
+    nextval_col bigint DEFAULT nextval('"Edge Schema"."Weird Seq!"'),
+    payload text
+);
+SELECT create_distributed_table('"Edge Schema"."Edge Tbl"', 'id', 'hash');
+INSERT INTO "Edge Schema"."Edge Tbl" (id, payload)
+    SELECT g, 'seed' FROM generate_series(1, 20) g;
+
+-- Register follower_worker_4 as a clone of worker_4, then promote it. The
+-- promotion path must re-range the clone's sequences (for all of the tables
+-- above) to its new group window.
+SET client_min_messages TO WARNING;
+SELECT citus_add_clone_node('localhost', :follower_worker_4_port, 'localhost', :worker_4_port) AS clone_node_id \gset
+SELECT citus_promote_clone_and_rebalance(:clone_node_id);
+SET client_min_messages TO DEFAULT;
+
+-- ===========================================================================
+-- DISTRIBUTED table assertions
+-- ===========================================================================
+
+-- Generate values directly on the SOURCE PRIMARY (worker_4).
+\c - - - :worker_4_port
+SET client_min_messages TO WARNING;
+INSERT INTO clone_seq_dist (id, payload)
+    SELECT g, 'primary' FROM generate_series(1001, 1050) g;
+
+-- Generate values directly on the PROMOTED CLONE.
+\c - - - :follower_worker_4_port
+SET client_min_messages TO WARNING;
+INSERT INTO clone_seq_dist (id, payload)
+    SELECT g, 'clone' FROM generate_series(2001, 2050) g;
+
+\c - - - :master_port
+-- Uniqueness oracle: every generated value must be globally unique.
+SELECT
+    count(*) = count(DISTINCT bigserial_col) AS bigserial_unique,
+    count(*) = count(DISTINCT nextval_col)   AS nextval_unique,
+    count(*) = count(DISTINCT identity_col)  AS identity_unique
+FROM clone_seq_dist;
+
+-- Disjoint-window oracle: primary and clone values must fall in TWO buckets.
+SELECT
+    count(DISTINCT (bigserial_col >> 48)) AS bigserial_windows,
+    count(DISTINCT (nextval_col   >> 48)) AS nextval_windows,
+    count(DISTINCT (identity_col  >> 48)) AS identity_windows
+FROM clone_seq_dist
+WHERE payload IN ('primary', 'clone');
+
+SELECT count(*) AS total_dist_rows FROM clone_seq_dist;
+
+-- ===========================================================================
+-- REFERENCE table assertions
+-- ===========================================================================
+
+-- Generate values on the SOURCE PRIMARY.
+\c - - - :worker_4_port
+SET client_min_messages TO WARNING;
+INSERT INTO clone_seq_ref (id, payload)
+    SELECT g, 'ref_primary' FROM generate_series(3001, 3050) g;
+SELECT
+    max(bigserial_col >> 48) AS ref_primary_bigserial_window,
+    max(nextval_col   >> 48) AS ref_primary_nextval_window,
+    max(identity_col  >> 48) AS ref_primary_identity_window
+FROM clone_seq_ref
+WHERE payload = 'ref_primary' \gset
+
+-- Generate values on the PROMOTED CLONE.
+\c - - - :follower_worker_4_port
+SET client_min_messages TO WARNING;
+INSERT INTO clone_seq_ref (id, payload)
+    SELECT g, 'ref_clone' FROM generate_series(4001, 4050) g;
+SELECT
+    max(bigserial_col >> 48) AS ref_clone_bigserial_window,
+    max(nextval_col   >> 48) AS ref_clone_nextval_window,
+    max(identity_col  >> 48) AS ref_clone_identity_window
+FROM clone_seq_ref
+WHERE payload = 'ref_clone' \gset
+
+\c - - - :master_port
+-- The clone's window must differ from the source primary's for every kind.
+SELECT
+    :'ref_primary_bigserial_window'::bigint <> :'ref_clone_bigserial_window'::bigint AS ref_bigserial_windows_differ,
+    :'ref_primary_nextval_window'::bigint   <> :'ref_clone_nextval_window'::bigint   AS ref_nextval_windows_differ,
+    :'ref_primary_identity_window'::bigint  <> :'ref_clone_identity_window'::bigint  AS ref_identity_windows_differ;
+
+-- All generated values across the table must also be globally unique.
+SELECT
+    count(*) = count(DISTINCT bigserial_col) AS ref_bigserial_unique,
+    count(*) = count(DISTINCT nextval_col)   AS ref_nextval_unique,
+    count(*) = count(DISTINCT identity_col)  AS ref_identity_unique
+FROM clone_seq_ref;
+
+-- ===========================================================================
+-- CITUS LOCAL table assertions
+-- ===========================================================================
+-- A Citus local table keeps its single shard on the coordinator, but its shell
+-- table and sequences are created on workers too and support writes from
+-- workers, so its sequences are re-ranged per group exactly like distributed /
+-- reference tables. The sequence DEFAULT / IDENTITY is evaluated on the node
+-- running the INSERT, so we generate values on the source primary and on the
+-- promoted clone and compare their windows.
+
+-- Generate values on the SOURCE PRIMARY.
+\c - - - :worker_4_port
+SET client_min_messages TO WARNING;
+INSERT INTO clone_seq_local (id, payload)
+    SELECT g, 'local_primary' FROM generate_series(5001, 5050) g;
+
+-- Generate values on the PROMOTED CLONE.
+\c - - - :follower_worker_4_port
+SET client_min_messages TO WARNING;
+INSERT INTO clone_seq_local (id, payload)
+    SELECT g, 'local_clone' FROM generate_series(6001, 6050) g;
+
+\c - - - :master_port
+-- The clone's window must differ from the source primary's for every kind.
+SELECT
+    (SELECT max(bigserial_col >> 48) FROM clone_seq_local WHERE payload = 'local_primary')
+      <> (SELECT max(bigserial_col >> 48) FROM clone_seq_local WHERE payload = 'local_clone') AS local_bigserial_windows_differ,
+    (SELECT max(nextval_col >> 48) FROM clone_seq_local WHERE payload = 'local_primary')
+      <> (SELECT max(nextval_col >> 48) FROM clone_seq_local WHERE payload = 'local_clone') AS local_nextval_windows_differ,
+    (SELECT max(identity_col >> 48) FROM clone_seq_local WHERE payload = 'local_primary')
+      <> (SELECT max(identity_col >> 48) FROM clone_seq_local WHERE payload = 'local_clone') AS local_identity_windows_differ;
+
+-- All generated values across the table must also be globally unique.
+SELECT
+    count(*) = count(DISTINCT bigserial_col) AS local_bigserial_unique,
+    count(*) = count(DISTINCT nextval_col)   AS local_nextval_unique,
+    count(*) = count(DISTINCT identity_col)  AS local_identity_unique
+FROM clone_seq_local;
+
+-- ===========================================================================
+-- QUOTED / MIXED-CASE SCHEMA assertions
+-- ===========================================================================
+-- Same worker-vs-clone window check as the distributed section, but for a
+-- sequence whose qualified name needs quoting/escaping.
+
+-- Generate values on the SOURCE PRIMARY.
+\c - - - :worker_4_port
+SET client_min_messages TO WARNING;
+INSERT INTO "Edge Schema"."Edge Tbl" (id, payload)
+    SELECT g, 'edge_primary' FROM generate_series(7001, 7050) g;
+SELECT max(nextval_col >> 48) AS edge_primary_window
+FROM "Edge Schema"."Edge Tbl"
+WHERE payload = 'edge_primary' \gset
+
+-- Generate values on the PROMOTED CLONE.
+\c - - - :follower_worker_4_port
+SET client_min_messages TO WARNING;
+INSERT INTO "Edge Schema"."Edge Tbl" (id, payload)
+    SELECT g, 'edge_clone' FROM generate_series(8001, 8050) g;
+SELECT max(nextval_col >> 48) AS edge_clone_window
+FROM "Edge Schema"."Edge Tbl"
+WHERE payload = 'edge_clone' \gset
+
+\c - - - :master_port
+-- The clone's window must differ from the source primary's.
+SELECT :'edge_primary_window'::bigint <> :'edge_clone_window'::bigint AS edge_nextval_windows_differ;
+
+-- All generated values must be globally unique.
+SELECT count(*) = count(DISTINCT nextval_col) AS edge_nextval_unique
+FROM "Edge Schema"."Edge Tbl";
+
+-- cleanup
+DROP TABLE clone_seq_dist;
+DROP TABLE clone_seq_ref;
+DROP TABLE clone_seq_local;
+DROP SEQUENCE clone_seq_dist_manual;
+DROP SEQUENCE clone_seq_ref_manual;
+DROP SEQUENCE clone_seq_local_manual;
+DROP SCHEMA "Edge Schema" CASCADE;
+SET client_min_messages TO WARNING;
+SELECT citus_remove_node('localhost', :master_port);
+SET client_min_messages TO DEFAULT;
+SET citus.shard_count TO DEFAULT;

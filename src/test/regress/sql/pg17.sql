@@ -1,9 +1,6 @@
 --
 -- PG17
 --
-SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int >= 17 AS server_version_ge_17
-\gset
 
 SET client_min_messages TO WARNING;
 CREATE EXTENSION IF NOT EXISTS citus_columnar;
@@ -220,16 +217,6 @@ select * from
     on (t0.c3 = t3.c26 ))
 where (exists (select  * from t4)) order by 1, 2, 3;
 
-SET citus.enable_outer_joins_with_pseudoconstant_quals_pre_pg17 TO true;
-
--- wrong result pre-pg17
-select * from
-  (t0 full outer join t3
-    on (t0.c3 = t3.c26 ))
-where (exists (select  * from t4)) order by 1, 2, 3;
-
-RESET citus.enable_outer_joins_with_pseudoconstant_quals_pre_pg17;
-
 -- issue https://github.com/citusdata/citus/issues/7696
 create table t1 ( vkey int4 );
 create table t2 ( vkey int4 );
@@ -243,14 +230,6 @@ SELECT create_reference_table('t2');
 
 select * from (t2 full outer join t1 on(t2.vkey = t1.vkey ))
 where not((85) in (select 1 from t2));
-
-SET citus.enable_outer_joins_with_pseudoconstant_quals_pre_pg17 TO true;
-
--- wrong result pre-pg17
-select * from (t2 full outer join t1 on(t2.vkey = t1.vkey ))
-where not((85) in (select 1 from t2));
-
-RESET citus.enable_outer_joins_with_pseudoconstant_quals_pre_pg17;
 
 -- issue https://github.com/citusdata/citus/issues/7698
 create table t5 ( vkey int4, c10 int4 );
@@ -270,14 +249,12 @@ from (t5 right outer join t6
     on (t5.c10 = t6.vkey))
 where exists (select * from t6);
 
+-- citus.enable_outer_joins_with_pseudoconstant_quals_pre_pg17 restored the pre-PG17
+-- behaviour of the outer joins exercised above. It only ever applied to PG16, which
+-- Citus no longer supports, so the GUC is now inert. It is still accepted so that
+-- existing configurations keep loading, but setting it must emit a deprecation
+-- warning. Removal is tracked in https://github.com/citusdata/citus/issues/8751.
 SET citus.enable_outer_joins_with_pseudoconstant_quals_pre_pg17 TO true;
-
--- wrong result pre-pg17
-select t6.vkey
-from (t5 right outer join t6
-    on (t5.c10 = t6.vkey))
-where exists (select * from t6);
-
 RESET citus.enable_outer_joins_with_pseudoconstant_quals_pre_pg17;
 
 -- issue https://github.com/citusdata/citus/issues/7119
@@ -322,11 +299,6 @@ SET citus.next_shard_id TO 20240023;
 SET client_min_messages TO ERROR;
 DROP SCHEMA pg17_outerjoin CASCADE;
 RESET client_min_messages;
-
-\if :server_version_ge_17
-\else
-\q
-\endif
 
 -- PG17-specific tests go here.
 --
@@ -454,7 +426,8 @@ SELECT child.relname AS partition_name,
 FROM pg_inherits
 JOIN pg_class parent ON pg_inherits.inhparent = parent.oid
 JOIN pg_class child ON pg_inherits.inhrelid = child.oid
-WHERE parent.relname = 'partitioned_table';
+WHERE parent.relname = 'partitioned_table'
+ORDER BY partition_name;
 
 -- (2) The partitions have the same identity column as the parent table;
 -- This is PG17 behavior for support for identity in partitioned tables.
@@ -470,7 +443,8 @@ SELECT child.relname AS partition_name,
 FROM pg_inherits
 JOIN pg_class parent ON pg_inherits.inhparent = parent.oid
 JOIN pg_class child ON pg_inherits.inhrelid = child.oid
-WHERE parent.relname = 'partitioned_table';
+WHERE parent.relname = 'partitioned_table'
+ORDER BY partition_name;
 \d pt_3;
 
 -- Partition pt_4 has its own identity column, which is not allowed in PG17
@@ -488,7 +462,8 @@ SELECT child.relname AS partition_name,
 FROM pg_inherits
 JOIN pg_class parent ON pg_inherits.inhparent = parent.oid
 JOIN pg_class child ON pg_inherits.inhrelid = child.oid
-WHERE parent.relname = 'partitioned_table';
+WHERE parent.relname = 'partitioned_table'
+ORDER BY partition_name;
 
 -- (2) The partititions have the same identity column as the parent table
 \d pt_1;
@@ -508,7 +483,8 @@ SELECT child.relname AS partition_name,
 FROM pg_inherits
 JOIN pg_class parent ON pg_inherits.inhparent = parent.oid
 JOIN pg_class child ON pg_inherits.inhrelid = child.oid
-WHERE parent.relname = 'partitioned_table';
+WHERE parent.relname = 'partitioned_table'
+ORDER BY partition_name;
 \d pt_3;
 
 -- Verify that the detach has propagated to the worker node
@@ -520,7 +496,8 @@ SELECT child.relname AS partition_name,
 FROM pg_inherits
 JOIN pg_class parent ON pg_inherits.inhparent = parent.oid
 JOIN pg_class child ON pg_inherits.inhrelid = child.oid
-WHERE parent.relname = 'partitioned_table';
+WHERE parent.relname = 'partitioned_table'
+ORDER BY partition_name;
 \d pt_3;
 
 \c - - - :master_port
@@ -631,7 +608,8 @@ SELECT child.relname AS partition_name,
 FROM pg_inherits
 JOIN pg_class parent ON pg_inherits.inhparent = parent.oid
 JOIN pg_class child ON pg_inherits.inhrelid = child.oid
-WHERE parent.relname = 'local_partitioned_table';
+WHERE parent.relname = 'local_partitioned_table'
+ORDER BY partition_name;
 \d lpt_1;
 \d lpt_2;
 \d lpt_3;
@@ -644,7 +622,8 @@ SELECT child.relname AS partition_name,
 FROM pg_inherits
 JOIN pg_class parent ON pg_inherits.inhparent = parent.oid
 JOIN pg_class child ON pg_inherits.inhrelid = child.oid
-WHERE parent.relname = 'local_partitioned_table';
+WHERE parent.relname = 'local_partitioned_table'
+ORDER BY partition_name;
 \d lpt_1;
 \d lpt_2;
 \d lpt_3;
@@ -660,7 +639,8 @@ SELECT child.relname AS partition_name,
 FROM pg_inherits
 JOIN pg_class parent ON pg_inherits.inhparent = parent.oid
 JOIN pg_class child ON pg_inherits.inhrelid = child.oid
-WHERE parent.relname = 'local_partitioned_table';
+WHERE parent.relname = 'local_partitioned_table'
+ORDER BY partition_name;
 \d lpt_3;
 
 \c - - - :worker_1_port
@@ -671,7 +651,8 @@ SELECT child.relname AS partition_name,
 FROM pg_inherits
 JOIN pg_class parent ON pg_inherits.inhparent = parent.oid
 JOIN pg_class child ON pg_inherits.inhrelid = child.oid
-WHERE parent.relname = 'local_partitioned_table';
+WHERE parent.relname = 'local_partitioned_table'
+ORDER BY partition_name;
 \d lpt_3;
 
 \c - - - :master_port
@@ -835,11 +816,11 @@ ALTER INDEX tbl_idx ALTER COLUMN 2 SET STATISTICS -1;
 CREATE TABLE check_ign_err (n int, m int[], k int);
 SELECT create_distributed_table('check_ign_err', 'n');
 
-COPY check_ign_err FROM STDIN WITH (on_error stop);
-COPY check_ign_err FROM STDIN WITH (ON_ERROR ignore);
-COPY check_ign_err FROM STDIN WITH (on_error ignore, log_verbosity verbose);
-COPY check_ign_err FROM STDIN WITH (log_verbosity verbose, on_error ignore);
-COPY check_ign_err FROM STDIN WITH (log_verbosity verbose);
+\copy check_ign_err FROM PROGRAM 'true' WITH (on_error stop)
+\copy check_ign_err FROM PROGRAM 'true' WITH (ON_ERROR ignore)
+\copy check_ign_err FROM PROGRAM 'true' WITH (on_error ignore, log_verbosity verbose)
+\copy check_ign_err FROM PROGRAM 'true' WITH (log_verbosity verbose, on_error ignore)
+\copy check_ign_err FROM PROGRAM 'true' WITH (log_verbosity verbose)
 
 -- End of Test for COPY ON_ERROR option
 

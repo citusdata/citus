@@ -37,9 +37,16 @@
 List *
 SortList(List *pointerList, int (*comparisonFunction)(const void *, const void *))
 {
+	uint32 arraySize = (uint32) list_length(pointerList);
+
+	/* lists with 0 or 1 elements are already sorted */
+	if (arraySize <= 1)
+	{
+		return pointerList;
+	}
+
 	List *sortedList = NIL;
 	uint32 arrayIndex = 0;
-	uint32 arraySize = (uint32) list_length(pointerList);
 	void **array = (void **) palloc0(arraySize * sizeof(void *));
 
 	void *pointer = NULL;

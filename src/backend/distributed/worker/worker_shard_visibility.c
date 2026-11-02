@@ -474,8 +474,6 @@ FilterShardsFromPgclass(Node *node, void *context)
 			/* add relation_is_a_known_shard(oid) IS NOT TRUE to the quals of the query */
 			Node *newQual = CreateRelationIsAKnownShardFilter(varno);
 
-#if PG_VERSION_NUM >= PG_VERSION_17
-
 			/*
 			 * In PG17, MERGE queries introduce a new struct `mergeJoinCondition`.
 			 * We need to handle this condition safely.
@@ -489,7 +487,6 @@ FilterShardsFromPgclass(Node *node, void *context)
 					-1);
 			}
 			else
-#endif
 			{
 				/* Handle older versions or queries without mergeJoinCondition */
 				Node *oldQuals = query->jointree->quals;

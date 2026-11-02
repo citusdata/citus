@@ -11,14 +11,6 @@
 -- https://github.com/postgres/postgres/commit/de3600452
 --
 
-SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int >= 17 AS server_version_ge_17
-\gset
-\if :server_version_ge_17
-\else
-\q
-\endif
-
 CREATE SCHEMA pg17_json;
 SET search_path TO pg17_json;
 

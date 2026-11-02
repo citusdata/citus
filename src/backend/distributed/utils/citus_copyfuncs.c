@@ -14,6 +14,7 @@
 #include "utils/datum.h"
 
 #include "distributed/citus_nodefuncs.h"
+#include "distributed/citus_safe_lib.h"
 #include "distributed/listutils.h"
 #include "distributed/multi_server_executor.h"
 
@@ -140,6 +141,8 @@ CopyNodeDistributedPlan(COPYFUNC_ARGS)
 
 	COPY_SCALAR_FIELD(sourceResultRepartitionColumnIndex);
 	COPY_SCALAR_FIELD(disableTrackingQueryCounters);
+
+	COPY_SCALAR_FIELD(useSortedMerge);
 }
 
 

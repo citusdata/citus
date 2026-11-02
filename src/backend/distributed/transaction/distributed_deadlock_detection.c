@@ -108,6 +108,7 @@ CheckForDistributedDeadlocks(void)
 	TransactionNode *transactionNode = NULL;
 	int32 localGroupId = GetLocalGroupId();
 	List *workerNodeList = ActiveReadableNodeList();
+	bool uncancelledDeadlockFound = false;
 
 	/*
 	 * We don't need to do any distributed deadlock checking if there
@@ -208,17 +209,32 @@ CheckForDistributedDeadlocks(void)
 			/* we found the deadlock and its associated proc exists */
 			if (youngestAliveTransaction)
 			{
-				CancelTransactionDueToDeadlock(youngestAliveTransaction->initiatorProc);
-				LogCancellingBackend(youngestAliveTransaction);
+				if (CancelTransactionDueToDeadlock(
+						youngestAliveTransaction->initiatorProc,
+						&youngestAliveTransaction->transactionId))
+				{
+					LogCancellingBackend(youngestAliveTransaction);
 
-				hash_seq_term(&status);
+					hash_seq_term(&status);
 
-				return true;
+					return true;
+				}
+
+				/*
+				 * The backend is no longer running the deadlocked transaction, so
+				 * the deadlock might already be resolved. Keep looking for other
+				 * deadlocks, and still report this one so that the maintenance
+				 * daemon checks again soon.
+				 */
+				LogDistributedDeadlockDebugMessage("Skipped cancelling the backend "
+												   "since it is no longer running "
+												   "the deadlocked transaction");
+				uncancelledDeadlockFound = true;
 			}
 		}
 	}
 
-	return false;
+	return uncancelledDeadlockFound;
 }
 
 
@@ -397,6 +413,16 @@ AssociateDistributedTransactionWithBackendProc(TransactionNode *transactionNode)
 
 		if (currentTransactionId->transactionNumber != transactionNode->transactionId.
 			transactionNumber)
+		{
+			continue;
+		}
+
+		/*
+		 * Transaction numbers are only unique per initiator node, so a transaction
+		 * initiated on another node may share its number with a local one.
+		 */
+		if (currentTransactionId->initiatorNodeIdentifier != transactionNode->
+			transactionId.initiatorNodeIdentifier)
 		{
 			continue;
 		}

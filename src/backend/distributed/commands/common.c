@@ -101,7 +101,9 @@ PostprocessCreateDistributedObjectFromCatalogStmt(Node *stmt, const char *queryS
 
 	EnsureAllObjectDependenciesExistOnAllNodes(addresses);
 
-	List *commands = GetAllDependencyCreateDDLCommands(addresses);
+	bool bundlePartitionMetadata = false;
+	List *commands = GetAllDependencyCreateDDLCommands(addresses,
+													   bundlePartitionMetadata);
 
 	commands = lcons(DISABLE_DDL_PROPAGATION, commands);
 	commands = lappend(commands, ENABLE_DDL_PROPAGATION);

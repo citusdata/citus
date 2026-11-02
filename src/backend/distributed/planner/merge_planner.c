@@ -153,9 +153,6 @@ CreateMergePlan(uint64 planId, Query *originalQuery, Query *query,
 FromExpr *
 GetMergeJoinTree(Query *mergeQuery)
 {
-	FromExpr *mergeJointree = NULL;
-#if PG_VERSION_NUM >= PG_VERSION_17
-
 	/*
 	 * In Postgres 17, the query tree has a specific field for the merge condition.
 	 * For deriving the WhereClauseList from the merge condition, we construct a dummy
@@ -164,10 +161,7 @@ GetMergeJoinTree(Query *mergeQuery)
 	 * disregarded by the WhereClauseList() walker.
 	 * Relevant PG17 commit: 0294df2f1
 	 */
-	mergeJointree = makeFromExpr(NIL, mergeQuery->mergeJoinCondition);
-#else
-	mergeJointree = mergeQuery->jointree;
-#endif
+	FromExpr *mergeJointree = makeFromExpr(NIL, mergeQuery->mergeJoinCondition);
 
 	return mergeJointree;
 }
@@ -179,12 +173,7 @@ GetMergeJoinTree(Query *mergeQuery)
 static Node *
 GetMergeJoinCondition(Query *mergeQuery)
 {
-	Node *joinCondition = NULL;
-#if PG_VERSION_NUM >= PG_VERSION_17
-	joinCondition = (Node *) mergeQuery->mergeJoinCondition;
-#else
-	joinCondition = (Node *) mergeQuery->jointree->quals;
-#endif
+	Node *joinCondition = (Node *) mergeQuery->mergeJoinCondition;
 	return joinCondition;
 }
 
@@ -1166,7 +1155,7 @@ DeferErrorIfRoutableMergeNotSupported(Query *query, List *rangeTableList,
 		deferredError =
 			DeferErrorIfUnsupportedSubqueryPushdown(query,
 													plannerRestrictionContext,
-													true);
+													true, false);
 		if (deferredError)
 		{
 			ereport(DEBUG1, (errmsg("Sub-query is not pushable, try repartitioning")));

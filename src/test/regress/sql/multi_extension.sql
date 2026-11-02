@@ -42,26 +42,6 @@ CREATE TABLE multi_extension.prev_objects(description text);
 CREATE TABLE multi_extension.extension_diff(previous_object text COLLATE "C",
                             current_object text COLLATE "C");
 
--- In PG17, Auto-generated array types, multirange types, and relation rowtypes
--- are treated as dependent objects, hence changing the output of the
--- print_extension_changes function.
--- Relevant PG commit: e5bc9454e527b1cba97553531d8d4992892fdeef
--- Here we create a table with only the basic extension types
--- in order to avoid printing extra ones for now
--- This can be removed when we drop PG16 support.
-
-CREATE TABLE multi_extension.extension_basic_types (description text);
-INSERT INTO multi_extension.extension_basic_types VALUES ('type citus.distribution_type'),
-                                                         ('type citus.shard_transfer_mode'),
-                                                         ('type citus_copy_format'),
-                                                         ('type noderole'),
-                                                         ('type citus_job_status'),
-                                                         ('type citus_task_status'),
-                                                         ('type replication_slot_info'),
-                                                         ('type split_copy_info'),
-                                                         ('type split_shard_info'),
-                                                         ('type cluster_clock');
-
 CREATE FUNCTION multi_extension.print_extension_changes()
 RETURNS TABLE(previous_object text, current_object text)
 AS $func$
@@ -77,10 +57,7 @@ BEGIN
 	WHERE refclassid = 'pg_catalog.pg_extension'::pg_catalog.regclass
 		AND refobjid = e.oid
 		AND deptype = 'e'
-		AND e.extname='citus'
-        AND (pg_catalog.pg_describe_object(classid, objid, 0) NOT LIKE 'type%'
-             OR
-             pg_catalog.pg_describe_object(classid, objid, 0) IN (SELECT * FROM extension_basic_types));
+		AND e.extname='citus';
 
 	INSERT INTO extension_diff
 	SELECT p.description previous_object, c.description current_object
@@ -771,9 +748,29 @@ SELECT * FROM multi_extension.print_extension_changes();
 ALTER EXTENSION citus UPDATE TO '13.2-1';
 SELECT * FROM multi_extension.print_extension_changes();
 
--- Test downgrade to 13.2-1 from 14.0-1
-ALTER EXTENSION citus UPDATE TO '14.0-1';
+-- Test downgrade to 13.2-1 from 13.3-1
+ALTER EXTENSION citus UPDATE TO '13.3-1';
 ALTER EXTENSION citus UPDATE TO '13.2-1';
+-- Should be empty result since upgrade+downgrade should be a no-op
+SELECT * FROM multi_extension.print_extension_changes();
+
+-- Snapshot of state at 13.3-1
+ALTER EXTENSION citus UPDATE TO '13.3-1';
+SELECT * FROM multi_extension.print_extension_changes();
+
+-- Test downgrade to 13.3-1 from 13.4-1
+ALTER EXTENSION citus UPDATE TO '13.4-1';
+ALTER EXTENSION citus UPDATE TO '13.3-1';
+-- Should be empty result since upgrade+downgrade should be a no-op
+SELECT * FROM multi_extension.print_extension_changes();
+
+-- Snapshot of state at 13.4-1
+ALTER EXTENSION citus UPDATE TO '13.4-1';
+SELECT * FROM multi_extension.print_extension_changes();
+
+-- Test downgrade to 13.4-1 from 14.0-1
+ALTER EXTENSION citus UPDATE TO '14.0-1';
+ALTER EXTENSION citus UPDATE TO '13.4-1';
 -- Should be empty result since upgrade+downgrade should be a no-op
 SELECT * FROM multi_extension.print_extension_changes();
 
@@ -781,13 +778,33 @@ SELECT * FROM multi_extension.print_extension_changes();
 ALTER EXTENSION citus UPDATE TO '14.0-1';
 SELECT * FROM multi_extension.print_extension_changes();
 
--- Test downgrade to 14.0-1 from 15.0-1
-ALTER EXTENSION citus UPDATE TO '15.0-1';
+-- Test downgrade to 14.0-1 from 14.1-1
+ALTER EXTENSION citus UPDATE TO '14.1-1';
 ALTER EXTENSION citus UPDATE TO '14.0-1';
 -- Should be empty result since upgrade+downgrade should be a no-op
 SELECT * FROM multi_extension.print_extension_changes();
 
--- In 14.0-1, citus_tables view inner joins with table_sizes, so citus_shard_sizes()
+-- Snapshot of state at 14.1-1
+ALTER EXTENSION citus UPDATE TO '14.1-1';
+SELECT * FROM multi_extension.print_extension_changes();
+
+-- Test downgrade to 14.1-1 from 14.2-1
+ALTER EXTENSION citus UPDATE TO '14.2-1';
+ALTER EXTENSION citus UPDATE TO '14.1-1';
+-- Should be empty result since upgrade+downgrade should be a no-op
+SELECT * FROM multi_extension.print_extension_changes();
+
+-- Snapshot of state at 14.2-1
+ALTER EXTENSION citus UPDATE TO '14.2-1';
+SELECT * FROM multi_extension.print_extension_changes();
+
+-- Test downgrade to 14.2-1 from 15.0-1
+ALTER EXTENSION citus UPDATE TO '15.0-1';
+ALTER EXTENSION citus UPDATE TO '14.2-1';
+-- Should be empty result since upgrade+downgrade should be a no-op
+SELECT * FROM multi_extension.print_extension_changes();
+
+-- In 14.2-1, citus_tables view inner joins with table_sizes, so citus_shard_sizes()
 -- is called even when the query doesn't use table_size.
 SELECT multi_extension.explain_has_citus_shard_sizes($$
   EXPLAIN (COSTS OFF) SELECT table_name, citus_table_type FROM citus_tables
@@ -809,6 +826,29 @@ SELECT multi_extension.explain_has_citus_shard_sizes($$
 $$);
 
 DROP FUNCTION multi_extension.explain_has_citus_shard_sizes(text);
+
+-- Exercise time_partitions after upgrading to the planner-safe definition.
+-- Keep this here rather than in multi_partitioning, which also runs against N-1 SQL.
+BEGIN;
+CREATE TABLE multi_extension.range_parent (k int) PARTITION BY RANGE (k);
+CREATE TABLE multi_extension.range_child PARTITION OF multi_extension.range_parent FOR VALUES FROM (0) TO (10);
+CREATE TABLE multi_extension.hash_parent (k int) PARTITION BY HASH (k);
+CREATE TABLE multi_extension.hash_child PARTITION OF multi_extension.hash_parent FOR VALUES WITH (MODULUS 1, REMAINDER 0);
+SET LOCAL geqo_threshold = 2;
+SET LOCAL geqo_pool_size = 2;
+SET LOCAL geqo_generations = 1;
+-- EXECUTE replans each query, including join orders that call the function
+-- before matching the child to its parent and applying the partition filters.
+DO $$
+BEGIN
+  FOR seed IN 0..20 LOOP
+    PERFORM set_config('geqo_seed', (seed / 20.0)::text, true);
+    EXECUTE 'SELECT * FROM time_partitions';
+    EXECUTE 'SELECT parent_table, partition_column, partition, from_value, to_value FROM time_partitions';
+  END LOOP;
+END;
+$$;
+ROLLBACK;
 
 DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;
 
@@ -1190,5 +1230,4 @@ DROP EXTENSION citus;
 CREATE EXTENSION citus;
 
 DROP TABLE version_mismatch_table;
-DROP TABLE  multi_extension.extension_basic_types;
 DROP SCHEMA multi_extension;

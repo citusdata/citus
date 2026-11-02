@@ -95,9 +95,23 @@ LookupSplitMode(Oid shardTransferModeOid)
 	{
 		shardSplitMode = AUTO_SPLIT;
 	}
+	else if (strncmp(enumLabel, "force_logical_auto_identity", NAMEDATALEN) == 0)
+	{
+		/*
+		 * force_logical_auto_identity only changes how shard moves perform logical
+		 * replication (see LogicallyReplicateShards); shard splits and tenant
+		 * isolation do not go through that path yet. Reject it explicitly here instead
+		 * of silently downgrading to a plain non-blocking split.
+		 */
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("shard transfer mode 'force_logical_auto_identity' "
+							   "is not supported for shard splits or tenant isolation"),
+						errhint("Use 'force_logical', 'auto' or 'block_writes' "
+								"instead.")));
+	}
 	else
 	{
-		/* We will not get here as postgres will validate the enum value. */
+		/* postgres validates the enum value, so any other label is an internal error */
 		ereport(ERROR, (errmsg(
 							"Invalid shard tranfer mode: '%s'. Expected split mode is 'block_writes/auto/force_logical'.",
 							enumLabel)));

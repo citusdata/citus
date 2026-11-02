@@ -21,16 +21,20 @@
 #include "access/htup_details.h"
 #include "catalog/namespace.h"
 #include "catalog/pg_proc.h"
+#include "catalog/pg_type.h"
+#include "nodes/value.h"
 #include "parser/parse_func.h"
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
 
 #include "distributed/deparser.h"
+#include "distributed/listutils.h"
 #include "distributed/version_compat.h"
 
 /* forward declaration for qualify functions */
 static void QualifyFunction(ObjectWithArgs *func, ObjectType type);
 static void QualifyFunctionSchemaName(ObjectWithArgs *func, ObjectType type);
+static void QualifySupportFunctionName(DefElem *supportDefElem);
 
 
 /* AssertObjectTypeIsFunctionType asserts we aren't receiving something we shouldn't */
@@ -59,6 +63,48 @@ QualifyAlterFunctionStmt(Node *node)
 	AssertObjectTypeIsFunctional(stmt->objtype);
 
 	QualifyFunction(stmt->func, stmt->objtype);
+
+	DefElem *action = NULL;
+	foreach_declared_ptr(action, stmt->actions)
+	{
+		if (strcmp(action->defname, "support") == 0)
+		{
+			QualifySupportFunctionName(action);
+		}
+	}
+}
+
+
+/*
+ * QualifySupportFunctionName makes the support function name of an
+ * ALTER FUNCTION .. SUPPORT .. statement fully qualified, so the workers
+ * resolve the same function the coordinator does regardless of search_path.
+ */
+static void
+QualifySupportFunctionName(DefElem *supportDefElem)
+{
+	List *supportName = castNode(List, supportDefElem->arg);
+	char *schemaName = NULL;
+	char *functionName = NULL;
+
+	DeconstructQualifiedName(supportName, &schemaName, &functionName);
+	if (schemaName != NULL)
+	{
+		return;
+	}
+
+	/* support functions take a single internal argument, see interpret_func_support */
+	Oid argTypes[1] = { INTERNALOID };
+	Oid supportOid = LookupFuncName(supportName, 1, argTypes, true);
+	if (!OidIsValid(supportOid))
+	{
+		/* postgres reports the missing function when it executes the statement */
+		return;
+	}
+
+	schemaName = get_namespace_name(get_func_namespace(supportOid));
+	supportDefElem->arg = (Node *) list_make2(makeString(schemaName),
+											  makeString(pstrdup(functionName)));
 }
 
 

@@ -30,6 +30,8 @@ typedef enum
 extern int MetadataSyncInterval;
 extern int MetadataSyncRetryInterval;
 extern int MetadataSyncTransMode;
+extern int MetadataSyncCacheFlushInterval;
+extern int MetadataSyncSetBatchSize;
 
 /*
  * MetadataSyncContext is used throughout metadata sync.
@@ -85,6 +87,8 @@ extern bool ShouldSyncTableMetadataViaCatalog(Oid relationId);
 extern Oid FetchRelationIdFromPgPartitionHeapTuple(HeapTuple heapTuple,
 												   TupleDesc tupleDesc);
 extern bool ShouldSyncSequenceMetadata(Oid relationId);
+extern bool MetadataSyncCacheFlushIntervalReached(int64 processedCount);
+extern void FlushCachesForMetadataSync(void);
 extern List * NodeMetadataCreateCommands(void);
 extern List * CitusTableMetadataCreateCommandList(Oid relationId);
 extern List * NodeMetadataDropCommands(void);
@@ -127,6 +131,7 @@ extern void SignalMetadataSyncDaemon(Oid database, int sig);
 extern bool ShouldInitiateMetadataSync(bool *lockFailure);
 extern List * SequenceDependencyCommandList(Oid relationId);
 extern List * IdentitySequenceDependencyCommandList(Oid targetRelationId);
+extern List * SequenceRangeAdjustCommandList(Oid relationId);
 
 extern List * DDLCommandsForSequence(Oid sequenceOid, char *ownerName);
 extern List * GetSequencesFromAttrDef(Oid attrdefOid);
@@ -169,6 +174,7 @@ extern void ActivateNodeList(MetadataSyncContext *context);
 
 extern char * WorkerDropAllShellTablesCommand(bool singleTransaction);
 extern char * WorkerDropSequenceDependencyCommand(Oid relationId);
+extern List * ShellTableCreationCommandList(Oid relationId, bool bundlePartitionMetadata);
 
 extern void SyncDistributedObjects(MetadataSyncContext *context);
 extern void SendNodeWideObjectsSyncCommands(MetadataSyncContext *context);
@@ -206,8 +212,6 @@ extern void SendInterTableRelationshipCommands(MetadataSyncContext *context);
 #define ENABLE_METADATA_SYNC "SET citus.enable_metadata_sync TO 'on'"
 #define WORKER_APPLY_SEQUENCE_COMMAND \
 		"SELECT worker_apply_sequence_command (%s,%s," INT64_FORMAT ", %s)"
-#define WORKER_APPLY_SEQUENCE_COMMAND_LEGACY \
-		"SELECT worker_apply_sequence_command (%s,%s)"
 #define UPSERT_PLACEMENT \
 		"INSERT INTO pg_dist_placement " \
 		"(shardid, shardstate, shardlength, " \
@@ -221,8 +225,6 @@ extern void SendInterTableRelationshipCommands(MetadataSyncContext *context);
 		"placementid = EXCLUDED.placementid"
 #define METADATA_SYNC_CHANNEL "metadata_sync"
 
-#define WORKER_ADJUST_IDENTITY_COLUMN_SEQ_RANGES_LEGACY \
-		"SELECT pg_catalog.worker_adjust_identity_column_seq_ranges(%s)"
 #define WORKER_ADJUST_IDENTITY_COLUMN_SEQ_SETTINGS \
 		"SELECT citus_internal.adjust_identity_column_seq_settings(%s, " INT64_FORMAT \
 		", %s)"

@@ -1351,5 +1351,112 @@ UPDATE t1 set c1 = 'foo' WHERE
        from (t3 as ref_3 full outer join t4 as ref_4
           on (ref_3.vkey = ref_4.vkey )) limit 1));
 
+-- Regression coverage for zero-shard modifying CTE inside an outer SELECT.
+-- Prior to the fix, WITH u AS (UPDATE ... WHERE dist_key = X AND false
+-- RETURNING ...) SELECT ... FROM u; would fail at execution time in
+-- AcquireMetadataLocks -> LookupShardIdCacheEntry(0) with
+-- "could not find valid entry for shard 0", because
+-- UpdateRelationToShardNames flipped every Citus-relation RTE to
+-- an empty-result RTE_SUBQUERY while the outer query's resultRelation
+-- (0 for a SELECT) did not trigger the direct UPDATE/DELETE escape in
+-- RouterJob. The fix rewrites each modifying CTE in-place to a plain
+-- SELECT returning matching-shape NULL columns under WHERE false and
+-- clears hasModifyingCTE, so the outer SELECT flows through the normal
+-- zero-shard router-SELECT machinery and emits the correct empty-CTE
+-- result set to its consumer.
+RESET client_min_messages;
+CREATE TABLE zero_shard_cte(dist_key int, val int, tag text);
+SELECT create_distributed_table('zero_shard_cte', 'dist_key');
+INSERT INTO zero_shard_cte VALUES (7, 42, 'seven'), (8, 43, 'eight');
+
+CREATE TABLE zero_shard_cte_ref(k int, v int);
+SELECT create_reference_table('zero_shard_cte_ref');
+INSERT INTO zero_shard_cte_ref VALUES (1, 100);
+
+SET client_min_messages TO DEBUG2;
+
+-- Literal false, folded (1 = 0), UPDATE and DELETE CTE variants -- all
+-- must return one row containing count = 0 from the outer SELECT.
+WITH u AS (UPDATE zero_shard_cte SET val = val WHERE dist_key = 7 AND false
+           RETURNING dist_key) SELECT count(*) FROM u;
+WITH u AS (DELETE FROM zero_shard_cte WHERE dist_key = 7 AND false
+           RETURNING dist_key) SELECT count(*) FROM u;
+WITH u AS (UPDATE zero_shard_cte SET val = val WHERE dist_key = 7 AND 1 = 0
+           RETURNING dist_key) SELECT count(*) FROM u;
+
+-- Multiple outer-consumer shapes: SELECT *, array_agg, max/count.
+WITH u AS (UPDATE zero_shard_cte SET val = val WHERE dist_key = 7 AND false
+           RETURNING dist_key) SELECT * FROM u;
+WITH u AS (UPDATE zero_shard_cte SET val = val WHERE dist_key = 7 AND false
+           RETURNING dist_key) SELECT array_agg(dist_key) FROM u;
+WITH u AS (UPDATE zero_shard_cte SET val = val WHERE dist_key = 7 AND false
+           RETURNING dist_key, val)
+SELECT max(dist_key) AS mx, count(*) AS n FROM u;
+
+-- RETURNING more than one column: the transform preserves output shape.
+WITH u AS (UPDATE zero_shard_cte SET val = val WHERE dist_key = 7 AND false
+           RETURNING dist_key, val, tag)
+SELECT count(*) AS n, count(tag) AS tag_n FROM u;
+
+-- Sanity: satisfiable modifying-CTE still performs the modification.
+WITH u AS (UPDATE zero_shard_cte SET val = val + 100 WHERE dist_key = 7
+           RETURNING dist_key, val)
+SELECT count(*) FROM u;
 SET client_min_messages TO WARNING;
+SELECT dist_key, val FROM zero_shard_cte WHERE dist_key = 7;
+SET client_min_messages TO DEBUG2;
+
+-- Sanity: satisfiable modifying-CTE that matches zero rows on a real
+-- shard still returns count = 0 (does not accidentally short-circuit
+-- through the Phase 2 gate).
+WITH u AS (UPDATE zero_shard_cte SET val = val WHERE dist_key = 999
+           RETURNING dist_key) SELECT count(*) FROM u;
+
+-- Standalone RETURNING at top level: client sees an empty result set,
+-- distinct from the CTE-wrapped `count = 0` shape.
+UPDATE zero_shard_cte SET val = val WHERE dist_key = 7 AND false
+    RETURNING dist_key;
+DELETE FROM zero_shard_cte WHERE dist_key = 7 AND false
+    RETURNING dist_key;
+
+-- Explicit transaction block: the no-op must not abort the surrounding
+-- transaction; subsequent statements proceed normally.
+BEGIN;
+WITH u AS (UPDATE zero_shard_cte SET val = val WHERE dist_key = 7 AND false
+           RETURNING dist_key) SELECT count(*) FROM u;
+UPDATE zero_shard_cte SET val = val WHERE dist_key = 7 AND false;
+SELECT 1 AS still_alive;
+COMMIT;
+
+-- Reference-table modifying-CTE: reference-table UPDATE/DELETE is
+-- multi-placement so this path is not fast-path; it goes through
+-- recursive planning, but should still succeed and return count = 0.
+WITH u AS (UPDATE zero_shard_cte_ref SET v = v WHERE k = 1 AND false
+           RETURNING k) SELECT count(*) FROM u;
+WITH u AS (DELETE FROM zero_shard_cte_ref WHERE k = 1 AND false
+           RETURNING k) SELECT count(*) FROM u;
+
+-- Parameterised parameter that resolves to false at execution time.
+PREPARE cte_zero_prep(bool) AS
+WITH u AS (UPDATE zero_shard_cte SET val = val WHERE dist_key = 7 AND $1
+           RETURNING dist_key) SELECT count(*) FROM u;
+EXECUTE cte_zero_prep(false);
+EXECUTE cte_zero_prep(false);
+EXECUTE cte_zero_prep(false);
+EXECUTE cte_zero_prep(false);
+EXECUTE cte_zero_prep(false);
+EXECUTE cte_zero_prep(false);
+DEALLOCATE cte_zero_prep;
+
+-- Two modifying CTEs where only one prunes to zero shards -- the
+-- satisfiable CTE must still update; overall the query executes and
+-- returns the correct aggregate.
+WITH u1 AS (UPDATE zero_shard_cte SET val = val WHERE dist_key = 7 AND false
+            RETURNING dist_key),
+     u2 AS (UPDATE zero_shard_cte SET val = val + 1000 WHERE dist_key = 8
+            RETURNING dist_key, val)
+SELECT (SELECT count(*) FROM u1) AS n1, (SELECT count(*) FROM u2) AS n2;
+SET client_min_messages TO WARNING;
+SELECT dist_key, val FROM zero_shard_cte ORDER BY dist_key;
+
 DROP SCHEMA multi_modifications CASCADE;

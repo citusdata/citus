@@ -50,6 +50,7 @@
 #include "distributed/function_utils.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/multi_executor.h"
 #include "distributed/multi_logical_optimizer.h"
 #include "distributed/multi_logical_planner.h"
 #include "distributed/multi_physical_planner.h"
@@ -142,6 +143,7 @@ typedef struct QueryOrderByLimit
 {
 	Node *workerLimitCount;
 	List *workerSortClauseList;
+	bool sortedMergeEligible;
 	Index *nextSortGroupRefIndex; /* see QueryGroupClause */
 } QueryOrderByLimit;
 
@@ -329,7 +331,8 @@ static Node * WorkerLimitCount(Node *limitCount, Node *limitOffset, OrderByLimit
 							   orderByLimitReference);
 static List * WorkerSortClauseList(Node *limitCount,
 								   List *groupClauseList, List *sortClauseList,
-								   OrderByLimitReference orderByLimitReference);
+								   OrderByLimitReference orderByLimitReference,
+								   bool *sortedMergeEligible);
 static bool CanPushDownLimitApproximate(List *sortClauseList, List *targetList);
 static bool HaveNonVarGrouping(List *groupByTargetEntryList);
 static bool HasOrderByAggregate(List *sortClauseList, List *targetList);
@@ -2549,6 +2552,8 @@ WorkerExtendedOpNode(MultiExtendedOp *originalOpNode,
 	 */
 	workerExtendedOpNode->limitOption = originalOpNode->limitOption;
 
+	workerExtendedOpNode->sortedMergeEligible = queryOrderByLimit.sortedMergeEligible;
+
 	return workerExtendedOpNode;
 }
 
@@ -2864,7 +2869,8 @@ ProcessLimitOrderByForWorkerQuery(OrderByLimitReference orderByLimitReference,
 		WorkerSortClauseList(originalLimitCount,
 							 groupClauseList,
 							 sortClauseList,
-							 orderByLimitReference);
+							 orderByLimitReference,
+							 &queryOrderByLimit->sortedMergeEligible);
 }
 
 
@@ -3879,7 +3885,7 @@ CitusFunctionOidWithSignature(char *functionName, int numargs, Oid *argtypes)
  * WorkerPartialAggOid looks up oid of pg_catalog.worker_partial_agg
  */
 static Oid
-WorkerPartialAggOid()
+WorkerPartialAggOid(void)
 {
 	Oid argtypes[] = {
 		OIDOID,
@@ -3894,7 +3900,7 @@ WorkerPartialAggOid()
  * CoordCombineAggOid looks up oid of pg_catalog.coord_combine_agg
  */
 static Oid
-CoordCombineAggOid()
+CoordCombineAggOid(void)
 {
 	Oid argtypes[] = {
 		OIDOID,
@@ -3910,7 +3916,7 @@ CoordCombineAggOid()
  * WorkerBinaryPartialAggOid looks up oid of pg_catalog.worker_binary_partial_agg
  */
 static Oid
-WorkerBinaryPartialAggOid()
+WorkerBinaryPartialAggOid(void)
 {
 	Oid argtypes[] = {
 		OIDOID,
@@ -3926,7 +3932,7 @@ WorkerBinaryPartialAggOid()
  * CoordBinaryCombineAggOid looks up oid of pg_catalog.coord_binary_combine_agg
  */
 static Oid
-CoordBinaryCombineAggOid()
+CoordBinaryCombineAggOid(void)
 {
 	Oid argtypes[] = {
 		OIDOID,
@@ -5158,12 +5164,38 @@ WorkerLimitCount(Node *limitCount, Node *limitOffset, OrderByLimitReference
  * checks if we need to add any sorting and grouping clauses to the sort list we
  * push down for the limit. If we do, the function adds these clauses and
  * returns them. Otherwise, the function returns null.
+ *
+ * When citus.enable_sorted_merge is enabled, we also push down the sort
+ * clause to workers even without a LIMIT, for queries where the sort
+ * is safe to push (no aggregates in ORDER BY, no non-pushable window
+ * functions, and either no GROUP BY or GROUP BY on partition column).
+ * This enables the coordinator to merge pre-sorted worker results.
  */
 static List *
 WorkerSortClauseList(Node *limitCount, List *groupClauseList, List *sortClauseList,
-					 OrderByLimitReference orderByLimitReference)
+					 OrderByLimitReference orderByLimitReference,
+					 bool *sortedMergeEligible)
 {
 	List *workerSortClauseList = NIL;
+
+	*sortedMergeEligible = false;
+
+	/*
+	 * When sorted merge is enabled, push the sort clause to workers even
+	 * without a LIMIT. The coordinator will merge the sorted streams
+	 * instead of doing a full re-sort.
+	 */
+	if (EnableSortedMerge && sortClauseList != NIL &&
+		orderByLimitReference.onlyPushableWindowFunctions &&
+		!orderByLimitReference.hasOrderByAggregate)
+	{
+		if (orderByLimitReference.groupClauseIsEmpty ||
+			orderByLimitReference.groupedByDisjointPartitionColumn)
+		{
+			*sortedMergeEligible = true;
+			return copyObject(sortClauseList);
+		}
+	}
 
 	/* if no limit node and no hasDistinctOn, no need to push down sort clauses */
 	if (limitCount == NULL && !orderByLimitReference.hasDistinctOn)

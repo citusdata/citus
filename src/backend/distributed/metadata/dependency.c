@@ -37,6 +37,7 @@
 #include "common/hashfn.h"
 #include "utils/fmgroids.h"
 #include "utils/hsearch.h"
+#include "utils/inval.h"
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
 
@@ -187,10 +188,13 @@ static void ApplyAddCitusDependedObjectsToDependencyList(ObjectAddressCollector 
 static List * GetViewRuleReferenceDependencyList(Oid relationId);
 static List * ExpandCitusSupportedTypes(ObjectAddressCollector *collector,
 										ObjectAddress target);
+static List * ExpandCitusSupportedTypesForNodeActivation(ObjectAddressCollector *
+														 collector,
+														 ObjectAddress target);
 static List * ExpandForPgVanilla(ObjectAddressCollector *collector,
 								 ObjectAddress target);
 static List * GetDependentRoleIdsFDW(Oid FDWOid);
-static List * ExpandRolesToGroups(Oid roleid);
+static List * ExpandRolesToGroups(Oid roleid, bool includeGrantors);
 static ViewDependencyNode * BuildViewDependencyGraph(Oid relationId, HTAB *nodeMap);
 static bool IsObjectAddressOwnedByExtension(const ObjectAddress *target,
 											ObjectAddress *extensionAddress);
@@ -327,14 +331,18 @@ GetAllCitusDependedDependenciesForObject(const ObjectAddress *target)
  *
  * If the object is already in the list it is skipped for traversal. This happens when an
  * object was already added to the target list before it occurred in the input list.
+ *
+ * When flushCaches is true, the caller opts into periodically flushing the coordinator
+ * caches that grow while traversing pg_depend.
  */
 List *
-OrderObjectAddressListInDependencyOrder(List *objectAddressList)
+OrderObjectAddressListInDependencyOrder(List *objectAddressList, bool flushCaches)
 {
 	ObjectAddressCollector collector = { 0 };
 	InitObjectAddressCollector(&collector);
 
 	ObjectAddress *objectAddress = NULL;
+	int64 processedCount = 0;
 	foreach_declared_ptr(objectAddress, objectAddressList)
 	{
 		if (IsObjectAddressCollected(*objectAddress, &collector))
@@ -344,12 +352,26 @@ OrderObjectAddressListInDependencyOrder(List *objectAddressList)
 		}
 
 		RecurseObjectDependencies(*objectAddress,
-								  &ExpandCitusSupportedTypes,
+								  &ExpandCitusSupportedTypesForNodeActivation,
 								  &FollowAllSupportedDependencies,
 								  &ApplyAddToDependencyList,
 								  &collector);
 
 		CollectObjectAddress(&collector, objectAddress);
+
+		/*
+		 * This loop opens each Citus table (and its dependencies) to traverse pg_depend,
+		 * which accumulates postgres relcache/catcache and Citus metadata cache entries
+		 * on the coordinator. For a very large number of distributed objects this transient
+		 * cache growth can exhaust coordinator memory during metadata sync, even before the
+		 * ordered list is returned.
+		 *
+		 * The collector only keeps ObjectAddresses, so it's safe to flush the caches.
+		 */
+		if (flushCaches && MetadataSyncCacheFlushIntervalReached(++processedCount))
+		{
+			FlushCachesForMetadataSync();
+		}
 	}
 
 	return collector.dependencyList;
@@ -1545,9 +1567,15 @@ ExpandCitusSupportedTypes(ObjectAddressCollector *collector, ObjectAddress targe
 		{
 			/*
 			 * Roles are members of other roles. These relations are not recorded directly
-			 * but can be deduced from pg_auth_members
+			 * but can be deduced from pg_auth_members.
+			 *
+			 * Note: we intentionally do NOT include grantors here. Grantors are
+			 * only relevant for ordering role creation during node activation
+			 * (see ExpandCitusSupportedTypesForNodeActivation). Including them
+			 * in the generic dependency graph would produce false-positive
+			 * circular-dependency errors for legitimate mutual GRANTs.
 			 */
-			return ExpandRolesToGroups(target.objectId);
+			return ExpandRolesToGroups(target.objectId, false);
 		}
 
 		case ExtensionRelationId:
@@ -1738,6 +1766,32 @@ ExpandCitusSupportedTypes(ObjectAddressCollector *collector, ObjectAddress targe
 
 
 /*
+ * ExpandCitusSupportedTypesForNodeActivation is a variant of
+ * ExpandCitusSupportedTypes used only when ordering distributed objects for
+ * propagation to a newly-activated node. For roles, it additionally treats
+ * grantors of membership tuples as dependencies so that a role used as a
+ * grantor is created on the new node before the grantee role. This is what
+ * fixes issue #8425.
+ *
+ * This expansion must NOT be used by the generic dependency-collection paths
+ * (creation, cycle-detection, DDL propagation) because mutually-granted roles
+ * would appear to form a cycle and be rejected by
+ * DeferErrorIfCircularDependencyExists.
+ */
+static List *
+ExpandCitusSupportedTypesForNodeActivation(ObjectAddressCollector *collector,
+										   ObjectAddress target)
+{
+	if (target.classId == AuthIdRelationId)
+	{
+		return ExpandRolesToGroups(target.objectId, true);
+	}
+
+	return ExpandCitusSupportedTypes(collector, target);
+}
+
+
+/*
  * ExpandForPgVanilla only expands only comosite types because other types
  * will find their dependencies in pg_depend. The method should only be called by
  * is_citus_depended_object udf.
@@ -1800,10 +1854,19 @@ GetDependentRoleIdsFDW(Oid FDWOid)
 
 /*
  * ExpandRolesToGroups returns a list of object addresses pointing to roles that roleid
- * depends on.
+ * depends on. This always includes:
+ *   1. Roles that roleid is a member of (membership->roleid)
+ *
+ * When includeGrantors is true, it additionally includes:
+ *   2. Roles that are used as grantors for roleid's memberships (membership->grantor)
+ *
+ * The grantor dependency is only used for ordering role propagation during node
+ * activation (see ExpandCitusSupportedTypesForNodeActivation). It must NOT be used
+ * in the generic dependency graph because legitimate mutual GRANTs between roles
+ * would otherwise be reported as circular dependencies.
  */
 static List *
-ExpandRolesToGroups(Oid roleid)
+ExpandRolesToGroups(Oid roleid, bool includeGrantors)
 {
 	Relation pgAuthMembers = table_open(AuthMemRelationId, AccessShareLock);
 	HeapTuple tuple = NULL;
@@ -1819,15 +1882,47 @@ ExpandRolesToGroups(Oid roleid)
 													true, NULL, scanKeyCount, scanKey);
 
 	List *roles = NIL;
+
+	/*
+	 * Track all role OIDs we have already emitted as dependencies so that
+	 * parent roles and grantors are de-duplicated through a single set.
+	 * A role can appear multiple times in pg_auth_members for the same
+	 * member (different grantors), and the same OID may show up as both a
+	 * parent role and a grantor; one DependencyDefinition per OID is enough.
+	 *
+	 * Note: For roles with many memberships this O(n) membership check could
+	 * be replaced with a hash set, but in practice the number of memberships
+	 * per role is small.
+	 */
+	List *seenRoleIds = NIL;
 	while ((tuple = systable_getnext(scanDescriptor)) != NULL)
 	{
 		Form_pg_auth_members membership = (Form_pg_auth_members) GETSTRUCT(tuple);
 
-		DependencyDefinition *definition = palloc0(sizeof(DependencyDefinition));
-		definition->mode = DependencyObjectAddress;
-		ObjectAddressSet(definition->data.address, AuthIdRelationId, membership->roleid);
+		Oid candidates[2] = { membership->roleid, membership->grantor };
+		int numCandidates = includeGrantors ? 2 : 1;
+		for (int i = 0; i < numCandidates; i++)
+		{
+			Oid candidateOid = candidates[i];
 
-		roles = lappend(roles, definition);
+			/*
+			 * Skip self-references: a role cannot depend on itself (the
+			 * parent-role case cannot hit this because pg_auth_members does
+			 * not allow roleid == member, but the grantor case can).
+			 */
+			if (candidateOid == roleid ||
+				!OidIsValid(candidateOid) ||
+				list_member_oid(seenRoleIds, candidateOid))
+			{
+				continue;
+			}
+
+			DependencyDefinition *definition = palloc0(sizeof(DependencyDefinition));
+			definition->mode = DependencyObjectAddress;
+			ObjectAddressSet(definition->data.address, AuthIdRelationId, candidateOid);
+			roles = lappend(roles, definition);
+			seenRoleIds = lappend_oid(seenRoleIds, candidateOid);
+		}
 	}
 
 	systable_endscan(scanDescriptor);
@@ -2000,8 +2095,28 @@ GetRelationTriggerFunctionDependencyList(Oid relationId)
 static List *
 GetPublicationRelationsDependencyList(Oid publicationId)
 {
-	List *allRelationIds = GetPublicationRelations(publicationId, PUBLICATION_PART_ROOT);
+	List *allRelationIds = NIL;
 	List *citusRelationIds = NIL;
+
+#if PG_VERSION_NUM >= PG_VERSION_19
+	if (GetPublication(publicationId)->alltables)
+	{
+		/*
+		 * A FOR ALL TABLES publication records only its EXCEPT tables in
+		 * pg_publication_rel, and GetIncludedPublicationRelations() asserts that
+		 * the publication is not FOR ALL TABLES. The DDL we reconstruct for such
+		 * a publication names the excluded tables, so those are the relations it
+		 * depends on.
+		 */
+		allRelationIds = GetExcludedPublicationTables(publicationId,
+													  PUBLICATION_PART_ROOT);
+	}
+	else
+#endif
+	{
+		allRelationIds = GetPublicationRelations(publicationId,
+												 PUBLICATION_PART_ROOT);
+	}
 
 	Oid relationId = InvalidOid;
 

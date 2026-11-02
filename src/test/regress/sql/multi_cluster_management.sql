@@ -529,7 +529,8 @@ SELECT nextval('pg_catalog.pg_dist_groupid_seq') AS last_group_id_cls \gset
 SELECT nextval('pg_catalog.pg_dist_node_nodeid_seq') AS last_node_id_cls \gset
 
 BEGIN;
-	-- show that we do not send any metadata to any nodes if not enabled
+	-- Metadata sync is disabled, but removed nodes must still discard their
+	-- old cluster identity and routes.
 	SET LOCAL citus.log_remote_commands TO ON;
 	SET LOCAL citus.grep_remote_commands TO '%pg_dist%';
 	SET citus.enable_metadata_sync TO OFF;

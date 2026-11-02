@@ -13,14 +13,14 @@ RETURNS boolean AS $$
     -- Note that worker process may be blocked or waiting for a lock. So we need to
     -- get transaction number for both of them. Following IF provides the transaction
     -- number when the worker process waiting for other session.
-    IF EXISTS (SELECT 1 FROM get_global_active_transactions()
+    IF EXISTS (SELECT 1 FROM pg_catalog.get_global_active_transactions()
                WHERE process_id = workerProcessId AND pBlockedPid = coordinatorProcessId) THEN
-      SELECT global_pid INTO mBlockedGlobalPid FROM get_global_active_transactions()
+      SELECT global_pid INTO mBlockedGlobalPid FROM pg_catalog.get_global_active_transactions()
       WHERE process_id = workerProcessId AND pBlockedPid = coordinatorProcessId;
     ELSE
       -- Check whether transactions initiated from the coordinator get locked
       SELECT global_pid INTO mBlockedGlobalPid
-        FROM get_all_active_transactions() WHERE process_id = pBlockedPid;
+        FROM pg_catalog.get_all_active_transactions() WHERE process_id = pBlockedPid;
     END IF;
 
     -- We convert the blocking_global_pid to a regular pid and only look at
@@ -33,13 +33,14 @@ RETURNS boolean AS $$
       SELECT 1 FROM citus_internal.global_blocked_processes()
         WHERE waiting_global_pid = mBlockedGlobalPid
         AND (
-          citus_pid_for_gpid(blocking_global_pid) in (
+          pg_catalog.citus_pid_for_gpid(blocking_global_pid) in (
               select * from unnest(pInterestingPids)
           )
-          OR citus_pid_for_gpid(blocking_global_pid) = workerProcessId
+          OR pg_catalog.citus_pid_for_gpid(blocking_global_pid) = workerProcessId
         )
     );
   END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql
+SET search_path = pg_catalog, pg_temp;
 
 REVOKE ALL ON FUNCTION citus_isolation_test_session_is_blocked(integer,integer[]) FROM PUBLIC;

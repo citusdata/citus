@@ -317,7 +317,7 @@ CreatePartitionedSplitCopyDestReceiver(EState *estate,
 	Oid shardRelationId = LookupShardRelationFromCatalog(shardId, missingOK);
 	Var *partitionColumn = BuildDistributionKeyFromColumnName(shardRelationId,
 															  partitionColumnName,
-															  AccessShareLock);
+															  AccessShareLock, false);
 
 	CitusTableCacheEntry *shardSearchInfo =
 		QueryTupleShardSearchInfo(minValuesArray, maxValuesArray,

@@ -1,4 +1,3 @@
-SET search_path = 'pg_catalog';
 DROP VIEW IF EXISTS pg_catalog.citus_nodes;
 
 CREATE OR REPLACE VIEW citus.citus_nodes AS
@@ -14,5 +13,3 @@ FROM pg_dist_node;
 
 ALTER VIEW citus.citus_nodes SET SCHEMA pg_catalog;
 GRANT SELECT ON pg_catalog.citus_nodes TO PUBLIC;
-
-RESET search_path;

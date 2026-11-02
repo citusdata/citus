@@ -87,7 +87,7 @@ DECLARE
   partitioned_table_exists bool :=false;
 BEGIN
       SELECT count(*) > 0 INTO partitioned_table_exists FROM pg_dist_partition p JOIN pg_class c ON p.logicalrelid = c.oid WHERE c.relkind = 'p';
-      UPDATE pg_dist_node_metadata SET metadata=jsonb_set(metadata, '{partitioned_citus_table_exists_pre_11}', to_jsonb(partitioned_table_exists), true);
+      UPDATE pg_dist_node_metadata SET metadata=pg_catalog.jsonb_set(metadata, '{partitioned_citus_table_exists_pre_11}', pg_catalog.to_jsonb(partitioned_table_exists), true);
 END;
 $$;
 

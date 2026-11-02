@@ -317,7 +317,7 @@ GetRelationshipNodeForRelationId(Oid relationId, bool *isFound)
  * foreign constraint provided by pg_constraint metadata table.
  */
 static void
-CreateForeignConstraintRelationshipGraph()
+CreateForeignConstraintRelationshipGraph(void)
 {
 	/* if we have already created the graph, use it */
 	if (IsForeignConstraintRelationshipGraphValid())
@@ -374,7 +374,7 @@ CreateForeignConstraintRelationshipGraph()
  * IsForeignConstraintGraphValid check whether there is a valid graph.
  */
 static bool
-IsForeignConstraintRelationshipGraphValid()
+IsForeignConstraintRelationshipGraphValid(void)
 {
 	/*
 	 * We might have some concurrent metadata changes. In order to get the changes,
@@ -395,7 +395,7 @@ IsForeignConstraintRelationshipGraphValid()
  * SetForeignConstraintGraphInvalid sets the validity of the graph to false.
  */
 void
-SetForeignConstraintRelationshipGraphInvalid()
+SetForeignConstraintRelationshipGraphInvalid(void)
 {
 	if (fConstraintRelationshipGraph != NULL)
 	{

@@ -1358,7 +1358,7 @@ CreateTableConversion(TableConversionParameters *params)
 	relation_close(relation, NoLock);
 	con->distributionKey =
 		BuildDistributionKeyFromColumnName(con->relationId, con->distributionColumn,
-										   NoLock);
+										   NoLock, false);
 
 	con->originalAccessMethod = NULL;
 	if (!PartitionedTable(con->relationId) && !IsForeignTable(con->relationId))
@@ -1371,7 +1371,7 @@ CreateTableConversion(TableConversionParameters *params)
 								   relam)));
 		}
 		Form_pg_am amForm = (Form_pg_am) GETSTRUCT(amTuple);
-		con->originalAccessMethod = NameStr(amForm->amname);
+		con->originalAccessMethod = pstrdup(NameStr(amForm->amname));
 		ReleaseSysCache(amTuple);
 	}
 

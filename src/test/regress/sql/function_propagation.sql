@@ -861,6 +861,16 @@ CREATE FUNCTION func_with_support_2(int, int) RETURNS bool
 
 ALTER FUNCTION func_with_support_2(int, int) SUPPORT generate_series_int8_support;
 
+-- user-defined support functions must resolve on the workers too, even when the
+-- name is not schema qualified or needs quoting
+CREATE FUNCTION my_support(internal) RETURNS internal
+  LANGUAGE internal STRICT AS $$generate_series_int8_support$$;
+ALTER FUNCTION func_with_support_2(int, int) SUPPORT my_support;
+CREATE FUNCTION "Support Func"(internal) RETURNS internal
+  LANGUAGE internal STRICT AS $$generate_series_int8_support$$;
+ALTER FUNCTION func_with_support(int, int) SUPPORT "Support Func";
+SELECT result FROM run_command_on_workers($$SELECT string_agg(prosupport::regproc::text, ', ' ORDER BY proname) FROM pg_proc WHERE proname IN ('func_with_support', 'func_with_support_2')$$);
+
 RESET search_path;
 SET client_min_messages TO WARNING;
 DROP SCHEMA function_propagation_schema CASCADE;

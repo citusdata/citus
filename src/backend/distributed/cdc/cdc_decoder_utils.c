@@ -131,7 +131,7 @@ CdcIsCoordinator(void)
  * CdcCitusHasBeenLoaded function returns true if the citus extension has been loaded.
  */
 bool
-CdcCitusHasBeenLoaded()
+CdcCitusHasBeenLoaded(void)
 {
 	if (!IsCitusExtensionLoaded)
 	{
@@ -153,7 +153,7 @@ CdcExtractShardIdFromTableName(const char *tableName, bool missingOk)
 	char *shardIdStringEnd = NULL;
 
 	/* find the last underscore and increment for shardId string */
-	char *shardIdString = strrchr(tableName, SHARD_NAME_SEPARATOR);
+	const char *shardIdString = strrchr(tableName, SHARD_NAME_SEPARATOR);
 	if (shardIdString == NULL && !missingOk)
 	{
 		ereport(ERROR, (errmsg("could not extract shardId from table name \"%s\"",

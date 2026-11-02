@@ -118,7 +118,6 @@ HasMergeNotMatchedBySource(Query *query)
 
 	bool haveNotMatchedBySource = false;
 
-	#if PG_VERSION_NUM >= PG_VERSION_17
 	ListCell *lc;
 	foreach(lc, query->mergeActionList)
 	{
@@ -130,7 +129,6 @@ HasMergeNotMatchedBySource(Query *query)
 			break;
 		}
 	}
-	#endif
 
 	return haveNotMatchedBySource;
 }

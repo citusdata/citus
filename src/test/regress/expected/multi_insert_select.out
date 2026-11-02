@@ -621,6 +621,7 @@ DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 SELECT user_id, value_1_agg FROM agg_events ORDER BY 1,2;
 DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  sorted merge: per-task work_mem 1024 kB × 4 tasks (aggregate floor 4096 kB), session work_mem 4096 kB
  user_id | value_1_agg
 ---------------------------------------------------------------------
        1 |          10
@@ -651,6 +652,7 @@ DEBUG:  distributed statement: INSERT INTO multi_insert_select.agg_events_133000
 DEBUG:  distributed statement: INSERT INTO multi_insert_select.agg_events_13300011 AS citus_table_alias (user_id, value_1_agg) SELECT DISTINCT ON (raw_events_first.user_id) raw_events_first.user_id, raw_events_first.value_1 FROM multi_insert_select.raw_events_first_13300003 raw_events_first WHERE (raw_events_first.user_id IS NOT NULL)
 SELECT user_id, value_1_agg FROM agg_events ORDER BY 1,2;
 DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  sorted merge: per-task work_mem 1024 kB × 4 tasks (aggregate floor 4096 kB), session work_mem 4096 kB
  user_id | value_1_agg
 ---------------------------------------------------------------------
        1 |          10
@@ -2397,6 +2399,7 @@ DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 SELECT user_id, value_1 FROM raw_events_first ORDER BY user_id, value_1;
 DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  sorted merge: per-task work_mem 1024 kB × 4 tasks (aggregate floor 4096 kB), session work_mem 4096 kB
  user_id | value_1
 ---------------------------------------------------------------------
        1 |       1
@@ -3386,7 +3389,7 @@ $$);
 (4 rows)
 
 -- verify that insert select cannot be pushed down when we have reference table in outside of outer join in a chained-join.
- SELECT coordinator_plan($$
+SELECT coordinator_plan($$
   EXPLAIN (COSTS FALSE) INSERT INTO dist_table_5 SELECT a.id FROM dist_table_5 a LEFT JOIN ref_table_1 b ON (true) RIGHT JOIN ref_table_1 c ON (true);
 $$);
                 coordinator_plan

@@ -222,7 +222,7 @@ CreateShardSplitInfo(uint64 sourceShardIdToSplit,
 	/* determine the partition column in the tuple descriptor */
 	Var *partitionColumn = BuildDistributionKeyFromColumnName(sourceShardToSplitOid,
 															  partitionColumnName,
-															  AccessShareLock);
+															  AccessShareLock, false);
 	if (partitionColumn == NULL)
 	{
 		ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR),

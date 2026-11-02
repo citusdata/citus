@@ -1,7 +1,7 @@
 CREATE OR REPLACE FUNCTION columnar_internal.columnar_ensure_am_depends_catalog()
   RETURNS void
   LANGUAGE plpgsql
-  SET search_path = pg_catalog
+  SET search_path = pg_catalog, pg_temp
 AS $func$
 BEGIN
   INSERT INTO pg_depend

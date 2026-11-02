@@ -126,7 +126,7 @@ CREATE TABLE cursor_me (x int, y int);
 SELECT create_distributed_table('cursor_me', 'x');
 INSERT INTO cursor_me SELECT s/10, s FROM generate_series(1, 100) s;
 
-DECLARE holdCursor CURSOR WITH HOLD FOR
+DECLARE holdCursor SCROLL CURSOR WITH HOLD FOR
 		SELECT * FROM cursor_me WHERE x = 1 ORDER BY y;
 
 FETCH NEXT FROM holdCursor;
@@ -139,7 +139,7 @@ CLOSE holdCursor;
 
 -- Test DECLARE CURSOR .. WITH HOLD inside transaction block
 BEGIN;
-DECLARE holdCursor CURSOR WITH HOLD FOR
+DECLARE holdCursor SCROLL CURSOR WITH HOLD FOR
 		SELECT * FROM cursor_me WHERE x = 1 ORDER BY y;
 FETCH 3 FROM holdCursor;
 FETCH BACKWARD 3 FROM holdCursor;
@@ -164,7 +164,7 @@ CLOSE holdCursor;
 -- Test DECLARE CURSOR .. WITH HOLD with parameter
 CREATE OR REPLACE FUNCTION declares_cursor(p int)
 RETURNS void AS $$
-	DECLARE c CURSOR WITH HOLD FOR SELECT * FROM cursor_me WHERE x = $1;
+	DECLARE c SCROLL CURSOR WITH HOLD FOR SELECT * FROM cursor_me WHERE x = $1;
 $$ LANGUAGE SQL;
 
 SELECT declares_cursor(5);
@@ -187,7 +187,7 @@ SELECT declares_cursor_2();
 -- Test DECLARE CURSOR .. WITH HOLD with parameter on non-dist key
 CREATE OR REPLACE FUNCTION declares_cursor_3(p int)
 RETURNS void AS $$
-	DECLARE c3 CURSOR WITH HOLD FOR SELECT * FROM cursor_me WHERE y = $1;
+	DECLARE c3 SCROLL CURSOR WITH HOLD FOR SELECT * FROM cursor_me WHERE y = $1;
 $$ LANGUAGE SQL;
 
 SELECT declares_cursor_3(5);
@@ -202,7 +202,7 @@ CLOSE c3;
 -- Test DECLARE CURSOR .. WITH HOLD with parameter on dist key, but not fast-path planner
 CREATE OR REPLACE FUNCTION declares_cursor_4(p int)
 RETURNS void AS $$
-	DECLARE c4 CURSOR WITH HOLD FOR SELECT *, (SELECT 1) FROM cursor_me WHERE x = $1;
+	DECLARE c4 SCROLL CURSOR WITH HOLD FOR SELECT *, (SELECT 1) FROM cursor_me WHERE x = $1;
 $$ LANGUAGE SQL;
 
 SELECT declares_cursor_4(5);
