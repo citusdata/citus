@@ -9,3 +9,5 @@
 #include "udfs/citus_internal_lock_colocation_id/15.0-1.sql"
 
 #include "udfs/citus_internal_acquire_placement_colocation_lock/15.0-1.sql"
+
+#include "udfs/citus_tables/15.0-1.sql"

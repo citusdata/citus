@@ -9,3 +9,5 @@ DROP FUNCTION IF EXISTS pg_catalog.worker_apply_sequence_command(text, regtype, 
 DROP FUNCTION IF EXISTS citus_internal.lock_colocation_id(int, int);
 
 DROP FUNCTION IF EXISTS citus_internal.acquire_placement_colocation_lock(bigint, int);
+
+#include "../udfs/citus_tables/12.0-1.sql"
