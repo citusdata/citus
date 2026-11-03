@@ -129,3 +129,11 @@ test: multi_or_arm_pruning
 # check-multi-1-create-citus, which is not part of the N-1 test matrix.
 # ----------
 test: node_removal_transaction_recovery
+
+# ----------
+# insert_select_single_shard_table_8959 covers an INSERT ... SELECT crash
+# (#8959) fixed in 14.3; the N-1 (14.2-1) coordinator library still segfaults
+# or produces invalid worker SQL on these statements, so this cannot run under
+# the N-1 test matrix. Move back to multi_1_schedule at Citus 15.
+# ----------
+test: insert_select_single_shard_table_8959

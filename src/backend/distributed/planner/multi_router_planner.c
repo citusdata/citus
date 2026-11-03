@@ -401,22 +401,13 @@ AddPartitionKeyNotNullFilterToSelect(Query *subqery, bool
 		return;
 	}
 
-	/*
-	 * Defense in depth: if the SELECT does not project a partition-key Var at
-	 * all - e.g. the target is a single-shard distributed table with no
-	 * distribution column - there is nothing to filter on. Historically this
-	 * was guarded by Assert() only, which compiles out in release builds and
-	 * then crashes with a NULL deref (see #8959). Callers should gate on
-	 * HasDistributionKey() before invoking this, but we keep the runtime
-	 * check so a stray caller cannot segfault the coordinator.
-	 */
+	/* Caller must gate on HasDistributionKey(); surface stray callers (#8959). */
 	if (targetPartitionColumnVar == NULL)
 	{
-		return;
+		ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
+						errmsg("AddPartitionKeyNotNullFilterToSelect called "
+							   "without a partition-key Var in the target list")));
 	}
-
-	/* we should have found target partition column */
-	Assert(targetPartitionColumnVar != NULL);
 
 #if PG_VERSION_NUM >= PG_VERSION_18
 	if (subqery->hasGroupRTE)
