@@ -36,6 +36,7 @@ extern void SetTaskQueryString(Task *task, char *queryString);
 extern void SetTaskQueryStringList(Task *task, List *queryStringList);
 extern void SetTaskQueryPlan(Task *task, Query *query, PlannedStmt *localPlan);
 extern char * TaskQueryString(Task *task);
+extern char * DeparseTaskQueryTemplate(Task *task);
 extern PlannedStmt * TaskQueryLocalPlan(Task *task);
 extern char * TaskQueryStringAtIndex(Task *task, int index);
 extern int GetTaskQueryType(Task *task);

@@ -91,6 +91,7 @@
 #include "distributed/multi_server_executor.h"
 #include "distributed/pg_dist_partition.h"
 #include "distributed/placement_connection.h"
+#include "distributed/prepared_statement_cache.h"
 #include "distributed/priority.h"
 #include "distributed/procedure_body_analysis.h"
 #include "distributed/query_pushdown_planning.h"
@@ -211,6 +212,8 @@ static bool ErrorIfNotASuitableDeadlockFactor(double *newval, void **extra,
 static bool WarnIfDeprecatedExecutorUsed(int *newval, void **extra, GucSource source);
 static bool WarnIfReplicationModelIsSet(int *newval, void **extra, GucSource source);
 static bool NoticeIfSubqueryPushdownEnabled(bool *newval, void **extra, GucSource source);
+static bool CheckPreparedStatementCaching(bool *newval, void **extra, GucSource source);
+static bool CheckStatTenantsTrack(int *newval, void **extra, GucSource source);
 static bool WarnIfDeprecatedPseudoconstantQualsGucIsSet(bool *newval, void **extra,
 														GucSource source);
 static bool ShowShardsForAppNamePrefixesCheckHook(char **newval, void **extra,
@@ -1605,6 +1608,26 @@ RegisterCitusConfigVariables(void)
 		WarnIfDeprecatedPseudoconstantQualsGucIsSet, NULL, NULL);
 
 	DefineCustomBoolVariable(
+		"citus.enable_prepared_statement_caching",
+		gettext_noop("Enables caching prepared statement plans on worker connections."),
+		gettext_noop("When enabled, Citus uses PQprepare/PQsendQueryPrepared on "
+					 "worker connections for fast-path prepared statement executions, "
+					 "eliminating redundant parse/plan cycles on workers. "
+					 "Up to 1000 statements per connection retain worker plan-cache "
+					 "memory until the connection closes; entries are not evicted "
+					 "on client DEALLOCATE or replanning. Once full, cache misses "
+					 "use parameterized SQL until the connection is recycled. "
+					 "Requires citus.stat_tenants_track = 'none'. "
+					 "Worker connections through PgBouncer transaction pooling "
+					 "require PgBouncer 1.21 or newer with "
+					 "max_prepared_statements > 0."),
+		&EnablePreparedStatementCaching,
+		false,
+		PGC_USERSET,
+		GUC_STANDARD,
+		CheckPreparedStatementCaching, NULL, NULL);
+
+	DefineCustomBoolVariable(
 		"citus.enable_procedure_transaction_skip",
 		gettext_noop("Skip coordinated transactions for single-statement, "
 					 "single-shard procedure calls."),
@@ -2869,7 +2892,7 @@ RegisterCitusConfigVariables(void)
 		stat_tenants_track_options,
 		PGC_SUSET,
 		GUC_STANDARD,
-		NULL, NULL, NULL);
+		CheckStatTenantsTrack, NULL, NULL);
 
 	DefineCustomRealVariable(
 		"citus.stat_tenants_untracked_sample_rate",
@@ -3126,6 +3149,48 @@ WarnIfLocalExecutionDisabled(bool *newval, void **extra, GucSource source)
 						  errmsg(
 							  "citus.enable_local_execution must be set in order for "
 							  "citus.enable_local_fast_path_query_optimization to be effective.")));
+	}
+
+	return true;
+}
+
+
+/*
+ * CheckPreparedStatementCaching warns on interactive changes that enable an
+ * ineffective cache. Config-file processing can see the other GUC's old value.
+ */
+static bool
+CheckPreparedStatementCaching(bool *newval, void **extra, GucSource source)
+{
+	if (source >= PGC_S_INTERACTIVE && *newval &&
+		StatTenantsTrack != STAT_TENANTS_TRACK_NONE)
+	{
+		ereport(WARNING,
+				(errmsg("prepared statement caching is disabled while "
+						"citus.stat_tenants_track is not 'none'"),
+				 errhint("Set citus.stat_tenants_track to 'none' to use "
+						 "prepared statement caching.")));
+	}
+
+	return true;
+}
+
+
+/*
+ * CheckStatTenantsTrack warns on interactive changes that make prepared
+ * statement caching ineffective.
+ */
+static bool
+CheckStatTenantsTrack(int *newval, void **extra, GucSource source)
+{
+	if (source >= PGC_S_INTERACTIVE && *newval != STAT_TENANTS_TRACK_NONE &&
+		EnablePreparedStatementCaching)
+	{
+		ereport(WARNING,
+				(errmsg("prepared statement caching is disabled while "
+						"citus.stat_tenants_track is not 'none'"),
+				 errhint("Set citus.stat_tenants_track to 'none' to use "
+						 "prepared statement caching.")));
 	}
 
 	return true;
