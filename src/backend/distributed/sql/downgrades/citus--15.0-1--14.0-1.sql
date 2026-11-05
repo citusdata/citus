@@ -43,3 +43,5 @@ DROP FUNCTION IF EXISTS citus_internal.distribute_object(oid, oid, int, boolean)
 -- existing enum type. Leaving the value in place is harmless: the downgraded Citus
 -- code never produces it, and LookupShardTransferMode rejects it as an invalid label
 -- if a user passes it explicitly. This is a documented no-op.
+
+#include "../udfs/citus_tables/12.0-1.sql"
