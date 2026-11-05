@@ -1338,10 +1338,10 @@ ROLLBACK;
 -- resolves against the shard alias.
 SET citus.shard_replication_factor TO 1;
 SET citus.shard_count TO 4;
-SET citus.enable_prepared_statement_caching TO on;
 
 -- the suite runs with citus.stat_tenants_track = 'ALL', which the cache declines
 SET citus.stat_tenants_track TO 'none';
+SET citus.enable_prepared_statement_caching TO on;
 
 CREATE TABLE single_node.upsert_cache_test (key int PRIMARY KEY, value int);
 SELECT create_distributed_table('single_node.upsert_cache_test', 'key');

@@ -778,6 +778,33 @@ TaskQueryStringAtIndex(Task *task, int index)
 
 
 /*
+ * DeparseTaskQueryTemplate deparses a working copy of the shared parameterized
+ * query template for the task's shard, leaving Param nodes intact.
+ */
+char *
+DeparseTaskQueryTemplate(Task *task)
+{
+	Query *queryCopy = copyObject(task->jobQueryForPrepare);
+	StringInfoData buf;
+	initStringInfo(&buf);
+
+	if (queryCopy->commandType == CMD_INSERT)
+	{
+		AddInsertAliasIfNeeded(queryCopy);
+		deparse_shard_query(queryCopy, task->anchorDistributedTableId,
+							task->anchorShardId, &buf);
+	}
+	else
+	{
+		UpdateRelationToShardNames((Node *) queryCopy, task->relationShardList);
+		pg_get_query_def(queryCopy, &buf);
+	}
+
+	return buf.data;
+}
+
+
+/*
  * TaskQueryString generates task query string text if missing.
  *
  * For performance reasons, the queryString is generated lazily. For example
@@ -797,8 +824,6 @@ TaskQueryString(Task *task)
 			 * query from the saved template and cache the result on the task
 			 * so subsequent calls don't re-deparse.
 			 */
-			Query *queryForDeparse = copyObject(task->jobQueryForPrepare);
-
 			/*
 			 * The task retains the string, so allocate it in the task's own
 			 * context rather than CurrentMemoryContext, which may be a
@@ -806,27 +831,10 @@ TaskQueryString(Task *task)
 			 */
 			MemoryContext previousContext =
 				MemoryContextSwitchTo(GetMemoryChunkContext(task));
-			StringInfoData buf;
-			initStringInfo(&buf);
+			char *queryString = DeparseTaskQueryTemplate(task);
 			MemoryContextSwitchTo(previousContext);
 
-			if (queryForDeparse->commandType == CMD_INSERT)
-			{
-				/* upserts reference the target by name, which becomes the shard name */
-				AddInsertAliasIfNeeded(queryForDeparse);
-
-				deparse_shard_query(queryForDeparse,
-									task->anchorDistributedTableId,
-									task->anchorShardId, &buf);
-			}
-			else
-			{
-				UpdateRelationToShardNames((Node *) queryForDeparse,
-										   task->relationShardList);
-				pg_get_query_def(queryForDeparse, &buf);
-			}
-
-			SetTaskQueryString(task, buf.data);
+			SetTaskQueryString(task, queryString);
 			return task->taskQuery.data.queryStringLazy;
 		}
 

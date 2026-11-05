@@ -587,7 +587,12 @@ SendRemotePrepare(MultiConnection *connection, const char *stmtName,
 {
 	PGconn *pgConn = connection->pgConn;
 
-	LogRemoteCommand(connection, query);
+	if (LogRemoteCommands)
+	{
+		char *command = psprintf("PREPARE %s AS %s", stmtName, query);
+		LogRemoteCommand(connection, command);
+		pfree(command);
+	}
 
 	if (!pgConn || PQstatus(pgConn) != CONNECTION_OK)
 	{
@@ -639,8 +644,12 @@ SendRemotePreparedQuery(MultiConnection *connection, const char *stmtName,
 {
 	PGconn *pgConn = connection->pgConn;
 
-	/* log the statement name for debugging */
-	LogRemoteCommand(connection, stmtName);
+	if (LogRemoteCommands)
+	{
+		char *command = psprintf("EXECUTE %s", stmtName);
+		LogRemoteCommand(connection, command);
+		pfree(command);
+	}
 
 	if (!pgConn || PQstatus(pgConn) != CONNECTION_OK)
 	{

@@ -36,7 +36,6 @@
 #include "utils/memutils.h"
 
 #include "distributed/citus_custom_scan.h"
-#include "distributed/citus_ruleutils.h"
 #include "distributed/citus_safe_lib.h"
 #include "distributed/deparse_shard_query.h"
 #include "distributed/distributed_execution_locks.h"
@@ -179,36 +178,6 @@ PreparedStatementCacheDestroy(HTAB **cache_ptr)
 
 
 /*
- * DeparseTaskTemplate deparses the task's parameterized job query into SQL
- * targeting the task's shard, leaving Param nodes ($1, ...) intact.
- *
- * The template is shared across executions, so a working copy is deparsed.
- */
-static char *
-DeparseTaskTemplate(Task *task)
-{
-	Query *queryCopy = copyObject(task->jobQueryForPrepare);
-	StringInfoData buf;
-	initStringInfo(&buf);
-
-	if (queryCopy->commandType == CMD_INSERT)
-	{
-		/* upserts reference the target by name, which becomes the shard name */
-		AddInsertAliasIfNeeded(queryCopy);
-		deparse_shard_query(queryCopy, task->anchorDistributedTableId,
-							task->anchorShardId, &buf);
-	}
-	else
-	{
-		UpdateRelationToShardNames((Node *) queryCopy, task->relationShardList);
-		pg_get_query_def(queryCopy, &buf);
-	}
-
-	return buf.data;
-}
-
-
-/*
  * PreparedStatementCacheSendQuery dispatches a task on a worker connection
  * using a named prepared statement, preparing it first if this connection has
  * not seen it before.
@@ -267,7 +236,7 @@ PreparedStatementCacheSendQuery(MultiConnection *connection, Task *task,
 			 * hand the caller freshly deparsed SQL. Clearing the resolved flag
 			 * routes it through the parameterized send path.
 			 */
-			*fallbackQueryString = DeparseTaskTemplate(task);
+			*fallbackQueryString = DeparseTaskQueryTemplate(task);
 			task->parametersInQueryStringResolved = false;
 			return PREPARED_STMT_FALLBACK;
 		}
@@ -276,7 +245,7 @@ PreparedStatementCacheSendQuery(MultiConnection *connection, Task *task,
 		SafeSnprintf(stmtName, MAX_STMT_NAME_LENGTH, "__citus_stmt_%ld",
 					 (long) hash_get_num_entries(cache) + 1);
 
-		char *queryString = DeparseTaskTemplate(task);
+		char *queryString = DeparseTaskQueryTemplate(task);
 
 		if (SendRemotePrepare(connection, stmtName, queryString,
 							  parameterCount, parameterTypes) == 0)
@@ -473,7 +442,13 @@ FastPathShardInterval(DistributedPlan *plan, Job *workerJob, EState *estate,
 	Const *valueConst = makeConst(param->ptype, -1, InvalidOid, (int) typeLength,
 								  param->value, false, typeByValue);
 
-	if (param->ptype != partitionColumn->vartype)
+	/*
+	 * INSERT applies assignment coercion, including rounding to the column's
+	 * typmod, before hashing. WHERE comparisons must not round their operands.
+	 */
+	if (param->ptype != partitionColumn->vartype ||
+		(workerJob->jobQuery->commandType == CMD_INSERT &&
+		 partitionColumn->vartypmod != -1))
 	{
 		bool missingOk = true;
 		valueConst = TransformPartitionRestrictionValue(partitionColumn, valueConst,

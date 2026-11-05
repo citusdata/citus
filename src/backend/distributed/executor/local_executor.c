@@ -403,32 +403,13 @@ ExecuteLocalTaskListExtended(List *taskList,
 				 * deparsing.  Deparse from the saved job query template now
 				 * so we can plan locally.
 				 */
-				Query *queryForDeparse = copyObject(task->jobQueryForPrepare);
-				StringInfoData buf;
-				initStringInfo(&buf);
-
-				if (queryForDeparse->commandType == CMD_INSERT)
-				{
-					/* upserts reference the target by name, which becomes the shard name */
-					AddInsertAliasIfNeeded(queryForDeparse);
-
-					deparse_shard_query(queryForDeparse,
-										task->anchorDistributedTableId,
-										task->anchorShardId, &buf);
-				}
-				else
-				{
-					UpdateRelationToShardNames((Node *) queryForDeparse,
-											   task->relationShardList);
-					pg_get_query_def(queryForDeparse, &buf);
-				}
-
-				Query *shardQuery = ParseQueryString(buf.data,
+				char *queryString = DeparseTaskQueryTemplate(task);
+				Query *shardQuery = ParseQueryString(queryString,
 													 taskParameterTypes,
 													 taskNumParams);
 				localPlan = planner(shardQuery, NULL, CURSOR_OPT_PARALLEL_OK,
 									paramListInfo);
-				pfree(buf.data);
+				pfree(queryString);
 			}
 			else if (taskType != TASK_QUERY_LOCAL_PLAN)
 			{

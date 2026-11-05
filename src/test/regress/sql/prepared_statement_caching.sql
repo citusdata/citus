@@ -775,7 +775,72 @@ COMMIT;
 DROP FUNCTION open_cached_cursor(int);
 
 -- ============================================================
--- Test 18: DEALLOCATE does not evict worker statements. Fill the
+-- Test 18: INSERT routing must apply the column typmod even when
+--          the parameter already has the same base type.
+-- ============================================================
+
+CREATE TABLE numeric_typmod (key numeric(10,2) PRIMARY KEY, value int);
+SELECT create_distributed_table('numeric_typmod', 'key');
+CREATE TABLE timestamp_typmod (key timestamp(0) PRIMARY KEY, value int);
+SELECT create_distributed_table('timestamp_typmod', 'key');
+
+PREPARE numeric_typmod_insert(numeric) AS
+    INSERT INTO numeric_typmod VALUES ($1, 1);
+PREPARE timestamp_typmod_insert(timestamp) AS
+    INSERT INTO timestamp_typmod VALUES ($1, 1);
+
+DO $$
+BEGIN
+    FOR i IN 1..12 LOOP
+        EXECUTE format('EXECUTE numeric_typmod_insert(%s)', i + 0.006);
+        EXECUTE format('EXECUTE timestamp_typmod_insert(%L)',
+                       timestamp '2024-01-01' + (i + 0.6) * interval '1 second');
+    END LOOP;
+END;
+$$;
+
+-- Check physical placement, not just the multi-shard row count.
+SELECT bool_and(result = '' OR result = shardid::text) AS correct_numeric_placement
+FROM run_command_on_shards('numeric_typmod',
+    $$SELECT coalesce(string_agg(DISTINCT get_shard_id_for_distribution_column(
+        'prepared_stmt_caching.numeric_typmod', key)::text, ','), '') FROM %s$$);
+SELECT bool_and(result = '' OR result = shardid::text) AS correct_timestamp_placement
+FROM run_command_on_shards('timestamp_typmod',
+    $$SELECT coalesce(string_agg(DISTINCT get_shard_id_for_distribution_column(
+        'prepared_stmt_caching.timestamp_typmod', key)::text, ','), '') FROM %s$$);
+
+SELECT count(*) FROM numeric_typmod;
+SELECT key, value FROM numeric_typmod WHERE key = 8.01;
+SELECT count(*) FROM timestamp_typmod;
+SELECT key, value FROM timestamp_typmod WHERE key = timestamp '2024-01-01 00:00:09';
+
+CREATE FUNCTION insert_numeric_typmod(k numeric) RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+    INSERT INTO numeric_typmod VALUES (k, 2);
+END;
+$$;
+
+DO $$
+BEGIN
+    FOR i IN 20..31 LOOP
+        PERFORM insert_numeric_typmod(i + 0.006);
+    END LOOP;
+END;
+$$;
+
+SELECT bool_and(result = '' OR result = shardid::text) AS correct_plpgsql_placement
+FROM run_command_on_shards('numeric_typmod',
+    $$SELECT coalesce(string_agg(DISTINCT get_shard_id_for_distribution_column(
+        'prepared_stmt_caching.numeric_typmod', key)::text, ','), '') FROM %s$$);
+SELECT key, value FROM numeric_typmod WHERE key = 28.01;
+
+DEALLOCATE numeric_typmod_insert;
+DEALLOCATE timestamp_typmod_insert;
+DROP FUNCTION insert_numeric_typmod(numeric);
+DROP TABLE numeric_typmod, timestamp_typmod;
+
+-- ============================================================
+-- Test 19: DEALLOCATE does not evict worker statements. Fill the
 --          per-connection cache and verify that a new statement
 --          reports the cap and still executes with bound params.
 -- ============================================================
@@ -799,6 +864,19 @@ RESET client_min_messages;
 DEALLOCATE full_cache;
 
 RESET plan_cache_mode;
+
+-- ============================================================
+-- Test 20: interactive changes warn in either setting order when
+--          tenant tracking makes prepared statement caching ineffective.
+-- ============================================================
+
+SET citus.enable_prepared_statement_caching TO off;
+SET citus.stat_tenants_track TO 'all';
+SET citus.enable_prepared_statement_caching TO on;
+SET citus.stat_tenants_track TO none;
+SET citus.stat_tenants_track TO 'all';
+SET citus.enable_prepared_statement_caching TO off;
+SET citus.stat_tenants_track TO none;
 
 -- ============================================================
 -- Cleanup

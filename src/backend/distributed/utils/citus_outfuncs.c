@@ -586,7 +586,7 @@ OutTask(OUTFUNC_ARGS)
 	WRITE_FLOAT_FIELD(fetchedExplainAnalyzeExecutionDuration, "%.2f");
 	WRITE_BOOL_FIELD(isLocalTableModification);
 	WRITE_BOOL_FIELD(cannotBeExecutedInTransaction);
-	WRITE_INT_FIELD(colocationId);
+	WRITE_UINT_FIELD(colocationId);
 }
 
 
