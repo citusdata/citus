@@ -59,7 +59,7 @@ static int ConnectionHashCompare(const void *a, const void *b, Size keysize);
 static void StartConnectionEstablishment(MultiConnection *connectionn,
 										 ConnectionHashKey *key);
 static MultiConnection * FindAvailableConnection(dlist_head *connections, uint32 flags);
-static void ErrorIfMultipleMetadataConnectionExists(dlist_head *connections);
+static void ErrorIfMetadataConnectionExists(dlist_head *connections);
 static void FreeConnParamsHashEntryFields(ConnParamsHashEntry *entry);
 static void AfterXactHostConnectionHandling(ConnectionHashEntry *entry, bool isCommit);
 static bool ShouldShutdownConnection(MultiConnection *connection, const int
@@ -530,6 +530,15 @@ FindAvailableConnection(dlist_head *connections, uint32 flags)
 		return connection;
 	}
 
+	if (flags & REQUIRE_METADATA_CONNECTION)
+	{
+		/*
+		 * Check before designating a cached connection or falling back to
+		 * allocating a new one.
+		 */
+		ErrorIfMetadataConnectionExists(connections);
+	}
+
 	if ((flags & REQUIRE_METADATA_CONNECTION) &&
 		list_length(metadataConnectionCandidateList) > 0)
 	{
@@ -547,13 +556,6 @@ FindAvailableConnection(dlist_head *connections, uint32 flags)
 		/* remember that we use this connection for metadata operations */
 		metadataConnection->useForMetadataOperations = true;
 
-		/*
-		 * We cannot have multiple metadata connections. If we see
-		 * this error, it is likely that there is a bug in connection
-		 * management.
-		 */
-		ErrorIfMultipleMetadataConnectionExists(connections);
-
 		return metadataConnection;
 	}
 
@@ -562,27 +564,25 @@ FindAvailableConnection(dlist_head *connections, uint32 flags)
 
 
 /*
- * ErrorIfMultipleMetadataConnectionExists throws an error if the
- * input connection dlist contains more than one metadata connections.
+ * ErrorIfMetadataConnectionExists throws an error if a metadata connection still
+ * needs to be used. Only retired, unclaimed connections with no remote BEGIN sent
+ * are excluded. They retain their metadata flag and valid handles until cleanup.
  */
 static void
-ErrorIfMultipleMetadataConnectionExists(dlist_head *connections)
+ErrorIfMetadataConnectionExists(dlist_head *connections)
 {
-	bool foundMetadataConnection = false;
 	dlist_iter iter;
 	dlist_foreach(iter, connections)
 	{
 		MultiConnection *connection =
 			dlist_container(MultiConnection, connectionNode, iter.cur);
 
-		if (connection->useForMetadataOperations)
+		if (connection->useForMetadataOperations &&
+			(!connection->forceCloseAtTransactionEnd ||
+			 connection->remoteTransaction.beginSent ||
+			 connection->claimedExclusively))
 		{
-			if (foundMetadataConnection)
-			{
-				ereport(ERROR, (errmsg("cannot have multiple metadata connections")));
-			}
-
-			foundMetadataConnection = true;
+			ereport(ERROR, (errmsg("cannot have multiple metadata connections")));
 		}
 	}
 }
