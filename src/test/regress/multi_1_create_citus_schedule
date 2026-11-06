@@ -57,6 +57,7 @@ test: multi_drop_extension
 # ---
 test: multi_metadata_sync
 test: multi_metadata_sync_domain
+test: metadata_replay_security
 test: metadata_sync_batching
 test: metadata_sync_batching_edge_cases
 
