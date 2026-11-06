@@ -437,9 +437,9 @@ PruneShards(Oid relationId, Index rangeTableId, List *whereClauseList,
 				prune->lessEqualIsIntegerComparison &&
 				prune->greaterEqualIsIntegerComparison &&
 				PerformValueCompare((FunctionCallInfo) &
-					context.compareValueFunctionCall,
-					prune->lessEqualConsts->constvalue,
-					prune->greaterEqualConsts->constvalue) == 0)
+									context.compareValueFunctionCall,
+									prune->lessEqualConsts->constvalue,
+									prune->greaterEqualConsts->constvalue) == 0)
 			{
 				prune->equalConsts = prune->greaterEqualConsts;
 			}
@@ -1195,7 +1195,9 @@ AddPartitionKeyRestrictionToInstance(ClauseWalkerContext *context, OpExpr *opCla
 					prune->lessEqualIsIntegerComparison =
 						sameIntegerType &&
 						opClause->opno == get_opfamily_member(INTEGER_BTREE_FAM_OID,
-							partitionType, partitionType, BTLessEqualStrategyNumber);
+															  partitionType, partitionType
+																						  ,
+															  BTLessEqualStrategyNumber);
 				}
 				break;
 			}
@@ -1230,7 +1232,9 @@ AddPartitionKeyRestrictionToInstance(ClauseWalkerContext *context, OpExpr *opCla
 					prune->greaterEqualIsIntegerComparison =
 						sameIntegerType &&
 						opClause->opno == get_opfamily_member(INTEGER_BTREE_FAM_OID,
-							partitionType, partitionType, BTGreaterEqualStrategyNumber);
+															  partitionType, partitionType
+																						  ,
+															  BTGreaterEqualStrategyNumber);
 				}
 				break;
 			}
