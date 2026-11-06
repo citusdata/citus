@@ -613,5 +613,74 @@ select pg_sleep(0.1); -- wait for config reload to apply
 
 (1 row)
 
+-- A retired metadata connection must not block promotion of an ordinary connection.
+CREATE VIEW metadata_warm AS SELECT a FROM test;
+ALTER SYSTEM SET citus.node_conninfo = 'sslmode=allow';
+BEGIN;
+SELECT pg_reload_conf();
+ pg_reload_conf
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT pg_sleep(0.1);
+ pg_sleep
+---------------------------------------------------------------------
+
+(1 row)
+
+SHOW citus.node_conninfo;
+ citus.node_conninfo
+---------------------------------------------------------------------
+ sslmode=allow
+(1 row)
+
+SELECT count(*) FROM test WHERE a = 0;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+SAVEPOINT metadata_retry;
+CREATE VIEW metadata_after_select AS SELECT a FROM test;
+ROLLBACK TO metadata_retry;
+CREATE VIEW metadata_after_select AS SELECT a FROM test;
+COMMIT;
+SELECT count(*) FROM metadata_after_select;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+-- Without an intervening SELECT, allocating a replacement must work as well.
+ALTER SYSTEM RESET citus.node_conninfo;
+BEGIN;
+SELECT pg_reload_conf();
+ pg_reload_conf
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT pg_sleep(0.1);
+ pg_sleep
+---------------------------------------------------------------------
+
+(1 row)
+
+SHOW citus.node_conninfo;
+ citus.node_conninfo
+---------------------------------------------------------------------
+ sslmode=require
+(1 row)
+
+CREATE VIEW metadata_without_select AS SELECT a FROM test;
+COMMIT;
+SELECT count(*) FROM metadata_without_select;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+DROP VIEW metadata_warm, metadata_after_select, metadata_without_select;
 DROP SCHEMA node_conninfo_reload CASCADE;
 NOTICE:  drop cascades to table test
