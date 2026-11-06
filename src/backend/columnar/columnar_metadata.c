@@ -143,6 +143,7 @@ static void CheckStripeMetadataConsistency(StripeMetadata *stripeMetadata);
 
 PG_FUNCTION_INFO_V1(columnar_relation_storageid);
 PG_FUNCTION_INFO_V1(test_columnar_metadata_xmin_aborted);
+PG_FUNCTION_INFO_V1(test_columnar_complete_stripe_reservation);
 
 /* constants for columnar.options */
 #define Natts_columnar_options 5
@@ -1473,6 +1474,13 @@ UpdateStripeMetadataRow(uint64 storageId, uint64 stripeId, uint64 fileOffset,
 	newValues[Anum_columnar_stripe_row_count - 1] = UInt64GetDatum(rowCount);
 	newValues[Anum_columnar_stripe_chunk_count - 1] = Int32GetDatum(chunkCount);
 
+	/*
+	 * Read MVCC state from the original heap tuple. heap_modify_tuple returns
+	 * a new tuple whose header contains Datum fields, not valid MVCC fields.
+	 */
+	StripeMetadata *modifiedStripeMetadata = BuildStripeMetadata(columnarStripes,
+																 tuple);
+
 	tuple = heap_modify_tuple(tuple,
 							  tupleDescriptor,
 							  newValues,
@@ -1481,8 +1489,11 @@ UpdateStripeMetadataRow(uint64 storageId, uint64 stripeId, uint64 fileOffset,
 
 	systable_inplace_update_finish(state, tuple);
 
-	StripeMetadata *modifiedStripeMetadata = BuildStripeMetadata(columnarStripes,
-																 tuple);
+	modifiedStripeMetadata->fileOffset = fileOffset;
+	modifiedStripeMetadata->dataLength = dataLength;
+	modifiedStripeMetadata->rowCount = rowCount;
+	modifiedStripeMetadata->chunkCount = chunkCount;
+	CheckStripeMetadataConsistency(modifiedStripeMetadata);
 
 	CommandCounterIncrement();
 
@@ -1653,6 +1664,33 @@ test_columnar_metadata_xmin_aborted(PG_FUNCTION_ARGS)
 	}
 
 	PG_RETURN_BOOL(StripeMetadataXminAborted(&tupleHeader));
+}
+
+
+/*
+ * test_columnar_complete_stripe_reservation checks that completing a reservation
+ * preserves the original tuple's MVCC state and returns updated stripe values.
+ * The caller must roll back the transaction since no stripe data is written.
+ */
+Datum
+test_columnar_complete_stripe_reservation(PG_FUNCTION_ARGS)
+{
+	Relation rel = table_open(PG_GETARG_OID(0), RowExclusiveLock);
+	EmptyStripeReservation *reservation =
+		ReserveEmptyStripe(rel, RelationGetDescr(rel)->natts, 1000, 1);
+	StripeMetadata *stripe =
+		CompleteStripeReservation(rel, reservation->stripeId, 100, 1, 1);
+
+	bool valid = stripe->insertedByCurrentXact && !stripe->aborted &&
+				 stripe->id == reservation->stripeId &&
+				 stripe->firstRowNumber == reservation->stripeFirstRowNumber &&
+				 stripe->fileOffset != ColumnarInvalidLogicalOffset &&
+				 stripe->dataLength == 100 && stripe->rowCount == 1 &&
+				 stripe->chunkCount == 1;
+
+	table_close(rel, RowExclusiveLock);
+
+	PG_RETURN_BOOL(valid);
 }
 
 
