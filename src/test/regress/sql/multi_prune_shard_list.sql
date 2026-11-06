@@ -288,5 +288,90 @@ WHERE dist_col > '(20,99)'::comp_type;
 DROP TABLE range_dist_table_1, range_dist_table_2;
 DROP TYPE comp_type CASCADE;
 
+-- Regression for #8934: infer integer equality from singleton ranges.
+SET citus.shard_count TO 4;
+CREATE TABLE singleton_int2 (k smallint);
+CREATE TABLE singleton_int4 (k integer);
+CREATE TABLE singleton_int8 (k bigint);
+SELECT create_distributed_table('singleton_int2', 'k');
+SELECT create_distributed_table('singleton_int4', 'k');
+SELECT create_distributed_table('singleton_int8', 'k');
+
+INSERT INTO singleton_int2 SELECT generate_series(-3, 3);
+INSERT INTO singleton_int4 SELECT generate_series(-3, 3);
+INSERT INTO singleton_int8 SELECT generate_series(-3, 3);
+CREATE TEMP TABLE singleton_reference AS SELECT generate_series(-3, 3) AS k;
+
+-- Check routing with both planner settings and explicitly matching bound types.
+SET citus.enable_fast_path_router_planner TO on;
+SELECT public.explain_has_single_task('EXPLAIN (COSTS OFF) SELECT * FROM singleton_int2 WHERE k BETWEEN 2::smallint AND 2::smallint') AS singleton_one_task;
+SELECT public.explain_has_single_task('EXPLAIN (COSTS OFF) SELECT * FROM singleton_int4 WHERE k BETWEEN 2::integer AND 2::integer') AS singleton_one_task;
+SELECT public.explain_has_single_task('EXPLAIN (COSTS OFF) SELECT * FROM singleton_int8 WHERE k BETWEEN 2::bigint AND 2::bigint') AS singleton_one_task;
+SET citus.enable_fast_path_router_planner TO off;
+SELECT public.explain_has_single_task('EXPLAIN (COSTS OFF) SELECT * FROM singleton_int2 WHERE k BETWEEN 2::smallint AND 2::smallint') AS singleton_one_task;
+SELECT public.explain_has_single_task('EXPLAIN (COSTS OFF) SELECT * FROM singleton_int4 WHERE k BETWEEN 2::integer AND 2::integer') AS singleton_one_task;
+SELECT public.explain_has_single_task('EXPLAIN (COSTS OFF) SELECT * FROM singleton_int8 WHERE k BETWEEN 2::bigint AND 2::bigint') AS singleton_one_task;
+
+SELECT public.explain_has_single_task(
+    'EXPLAIN (COSTS OFF) SELECT * FROM singleton_int4
+     WHERE 2 <= k AND 2 >= k') AS reversed_one_task;
+SELECT public.explain_has_single_task(
+    'EXPLAIN (COSTS OFF) SELECT * FROM singleton_int4
+     WHERE k BETWEEN (1 + 1) AND (4 / 2)') AS folded_one_task;
+SELECT public.explain_has_single_task(
+    'EXPLAIN (COSTS OFF) SELECT * FROM singleton_int4
+     WHERE k BETWEEN 1 AND 2 AND k BETWEEN 2 AND 3') AS intersected_one_task;
+SELECT public.explain_has_single_task(
+    'EXPLAIN (COSTS OFF) SELECT * FROM singleton_int4
+     WHERE k BETWEEN -3 AND 3') AS wider_one_task;
+SELECT public.explain_has_single_task(
+    'EXPLAIN (COSTS OFF) SELECT * FROM singleton_int4
+     WHERE k >= 2') AS lower_only_one_task;
+
+-- A singleton OR branch must not hide rows allowed by another branch.
+SELECT array_agg(k ORDER BY k) FROM singleton_int4
+WHERE k BETWEEN 2 AND 2 OR k BETWEEN -3 AND -2;
+SELECT array_agg(k ORDER BY k) FROM singleton_int4
+WHERE k BETWEEN 2 AND 2 OR k = 3;
+SELECT array_agg(k ORDER BY k) FROM singleton_int4
+WHERE k BETWEEN 2 AND 2 OR k < 0;
+
+-- Compare distributed results with PostgreSQL's local evaluation.
+SELECT
+    (SELECT array_agg(k ORDER BY k) FROM singleton_int4
+     WHERE k BETWEEN -3 AND 3)
+    IS NOT DISTINCT FROM
+    (SELECT array_agg(k ORDER BY k) FROM singleton_reference
+     WHERE k BETWEEN -3 AND 3) AS wider_results_match;
+SELECT count(*) FROM singleton_int4 WHERE k BETWEEN NULL::integer AND 2;
+SELECT count(*) FROM singleton_int4 WHERE k BETWEEN 2 AND NULL::integer;
+SELECT count(*) FROM singleton_int4 WHERE k > 2 AND k <= 2;
+SELECT count(*) FROM singleton_int4 WHERE k BETWEEN 3 AND 2;
+
+-- Keep comparisons outside the supported scope on their existing path.
+SELECT public.explain_has_single_task(
+    'EXPLAIN (COSTS OFF) SELECT * FROM singleton_int4
+     WHERE k BETWEEN 2::bigint AND 2::bigint') AS mixed_type_one_task;
+SELECT array_agg(k ORDER BY k) FROM singleton_int4
+WHERE k BETWEEN 2::bigint AND 2::bigint;
+
+SELECT public.explain_has_single_task(
+    'EXPLAIN (COSTS OFF) SELECT * FROM singleton_int4
+     WHERE k > 2 AND k <= 2') AS exclusive_bound_one_task;
+
+CREATE TABLE singleton_numeric (k numeric);
+SELECT create_distributed_table('singleton_numeric', 'k');
+INSERT INTO singleton_numeric VALUES (2), (2.5), (3);
+SELECT public.explain_has_single_task(
+    'EXPLAIN (COSTS OFF) SELECT * FROM singleton_numeric
+     WHERE k BETWEEN 2::numeric AND 2::numeric') AS numeric_one_task;
+SELECT array_agg(k ORDER BY k) FROM singleton_numeric
+WHERE k BETWEEN 2::numeric AND 2::numeric;
+DROP TABLE singleton_numeric;
+
+DROP TABLE singleton_reference;
+RESET citus.enable_fast_path_router_planner;
+RESET citus.shard_count;
+
 SET search_path TO public;
 DROP SCHEMA prune_shard_list CASCADE;
