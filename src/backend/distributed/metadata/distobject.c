@@ -120,6 +120,7 @@ citus_unmark_object_distributed(PG_FUNCTION_ARGS)
 	bool checkObjectExistence = true;
 	if (PG_NARGS() == 4)
 	{
+		EnsureSuperUser();
 		checkObjectExistence = PG_GETARG_BOOL(3);
 	}
 
