@@ -34,6 +34,7 @@
 #include "utils/fmgroids.h"
 #include "utils/memutils.h"
 #include "utils/rel.h"
+#include "utils/snapmgr.h"
 #include "utils/syscache.h"
 #include "utils/xid8.h"
 
@@ -57,8 +58,10 @@ PG_FUNCTION_INFO_V1(recover_prepared_transactions);
 
 /* Local functions forward declarations */
 static int RecoverWorkerTransactions(WorkerNode *workerNode,
-									 MultiConnection *connection);
-static List * PendingWorkerTransactionList(MultiConnection *connection);
+									 MultiConnection *connection,
+									 int32 localGroupId);
+static List * PendingWorkerTransactionList(MultiConnection *connection,
+										   int32 localGroupId);
 static bool IsTransactionInProgress(HTAB *activeTransactionNumberSet,
 									char *preparedTransactionName);
 static bool RecoverPreparedTransactionOnWorker(MultiConnection *connection,
@@ -132,10 +135,33 @@ RecoverTwoPhaseCommits(void)
 	/* take advisory lock first to avoid running concurrently */
 	LockTransactionRecovery(ShareUpdateExclusiveLock);
 
-	List *workerList = ActivePrimaryNodeList(NoLock);
+	/*
+	 * Recovery treats the prepared transactions named after the local group ID
+	 * as its own, so the group ID and the worker list must come from the same
+	 * point in time. For example, removing this node from its cluster resets
+	 * its group ID to 0 and clears its worker list. Group ID 0 with the old
+	 * worker list would match the coordinator's prepared transactions. Read
+	 * both from one snapshot, and use them for the whole run.
+	 */
+	EnsureModificationsCanRun();
+	Snapshot snapshot = RegisterSnapshot(GetLatestSnapshot());
+	int32 localGroupId = ReadLocalGroupId(snapshot);
+	bool includeNodesFromOtherClusters = false;
+	List *nodeList = ReadDistNodeWithSnapshot(includeNodesFromOtherClusters, snapshot);
+	UnregisterSnapshot(snapshot);
+
+	List *workerList = NIL;
 	List *workerConnections = NIL;
 	WorkerNode *workerNode = NULL;
 	MultiConnection *connection = NULL;
+
+	foreach_declared_ptr(workerNode, nodeList)
+	{
+		if (workerNode->isActive && NodeIsPrimary(workerNode))
+		{
+			workerList = lappend(workerList, workerNode);
+		}
+	}
 
 	/*
 	 * Pre-establish all connections to worker nodes.
@@ -175,9 +201,11 @@ RecoverTwoPhaseCommits(void)
 		 */
 		workerConnections = lappend(workerConnections, connection);
 	}
+
 	forboth_ptr(workerNode, workerList, connection, workerConnections)
 	{
-		recoveredTransactionCount += RecoverWorkerTransactions(workerNode, connection);
+		recoveredTransactionCount += RecoverWorkerTransactions(workerNode, connection,
+															   localGroupId);
 	}
 
 	return recoveredTransactionCount;
@@ -187,9 +215,17 @@ RecoverTwoPhaseCommits(void)
 /*
  * RecoverWorkerTransactions recovers any pending prepared transactions
  * started by this node on the specified worker.
+ *
+ * localGroupId identifies the prepared transactions that this node started.
+ * The caller must read it from the same snapshot that it used to read the
+ * worker list, rather than letting this function call GetLocalGroupId().
+ * Otherwise a concurrent node removal could pair the new group ID 0 with the
+ * old worker list, and we would roll back the coordinator's prepared
+ * transactions.
  */
 static int
-RecoverWorkerTransactions(WorkerNode *workerNode, MultiConnection *connection)
+RecoverWorkerTransactions(WorkerNode *workerNode, MultiConnection *connection,
+						  int32 localGroupId)
 {
 	int recoveredTransactionCount = 0;
 
@@ -261,7 +297,8 @@ RecoverWorkerTransactions(WorkerNode *workerNode, MultiConnection *connection)
 	 */
 
 	/* find stale prepared transactions on the remote node */
-	List *pendingTransactionList = PendingWorkerTransactionList(connection);
+	List *pendingTransactionList = PendingWorkerTransactionList(connection,
+																localGroupId);
 	HTAB *pendingTransactionSet = ListToHashSet(pendingTransactionList, NAMEDATALEN,
 												true);
 
@@ -281,7 +318,8 @@ RecoverWorkerTransactions(WorkerNode *workerNode, MultiConnection *connection)
 													NULL, scanKeyCount, scanKey);
 
 	/* find stale prepared transactions on the remote node */
-	List *recheckTransactionList = PendingWorkerTransactionList(connection);
+	List *recheckTransactionList = PendingWorkerTransactionList(connection,
+																localGroupId);
 	HTAB *recheckTransactionSet = ListToHashSet(recheckTransactionList, NAMEDATALEN,
 												true);
 
@@ -510,20 +548,22 @@ RecoverWorkerTransactions(WorkerNode *workerNode, MultiConnection *connection)
 
 /*
  * PendingWorkerTransactionList returns a list of pending prepared
- * transactions on a remote node that were started by this node.
+ * transactions on a remote node that were started by the node with the given
+ * group ID, i.e. those named citus_<localGroupId>_*. Callers pass the group ID
+ * that they read together with the worker list, rather than the current
+ * GetLocalGroupId(), so that it cannot change during a recovery run.
  */
 static List *
-PendingWorkerTransactionList(MultiConnection *connection)
+PendingWorkerTransactionList(MultiConnection *connection, int32 localGroupId)
 {
 	StringInfo command = makeStringInfo();
 	bool raiseInterrupts = true;
 	List *transactionNames = NIL;
-	int32 coordinatorId = GetLocalGroupId();
 
 	appendStringInfo(command,
 					 "SELECT gid FROM pg_prepared_xacts "
 					 "WHERE gid COLLATE pg_catalog.default LIKE 'citus\\_%d\\_%%' COLLATE pg_catalog.default AND database = current_database()",
-					 coordinatorId);
+					 localGroupId);
 
 	int querySent = SendRemoteCommand(connection, command->data);
 	if (querySent == 0)

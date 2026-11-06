@@ -187,11 +187,11 @@ CREATE INDEX cc_idx on cluster_clock_type(cc);
 -- Multiply rows to check index usage
 INSERT INTO cluster_clock_type SELECT a.cc FROM cluster_clock_type a, cluster_clock_type b;
 INSERT INTO cluster_clock_type SELECT a.cc FROM cluster_clock_type a, cluster_clock_type b;
-EXPLAIN SELECT cc FROM cluster_clock_type ORDER BY 1 ASC LIMIT 1;
-                                            QUERY PLAN
+EXPLAIN (COSTS OFF) SELECT cc FROM cluster_clock_type ORDER BY 1 ASC LIMIT 1;
+                         QUERY PLAN
 ---------------------------------------------------------------------
- Limit  (cost=0.28..0.92 rows=1 width=12)
-   ->  Index Only Scan using cc_idx on cluster_clock_type  (cost=0.28..667.95 rows=1045 width=12)
+ Limit
+   ->  Index Only Scan using cc_idx on cluster_clock_type
 (2 rows)
 
 SELECT cc FROM cluster_clock_type ORDER BY 1 ASC LIMIT 1;
@@ -200,13 +200,13 @@ SELECT cc FROM cluster_clock_type ORDER BY 1 ASC LIMIT 1;
  (0,100)
 (1 row)
 
-EXPLAIN SELECT cc FROM cluster_clock_type where cc = '(200, 20)' LIMIT 5;
-                                    QUERY PLAN
+EXPLAIN (COSTS OFF) SELECT cc FROM cluster_clock_type where cc = '(200, 20)' LIMIT 5;
+                       QUERY PLAN
 ---------------------------------------------------------------------
- Limit  (cost=4.32..20.94 rows=5 width=12)
-   ->  Bitmap Heap Scan on cluster_clock_type  (cost=4.32..20.94 rows=5 width=12)
+ Limit
+   ->  Bitmap Heap Scan on cluster_clock_type
          Recheck Cond: (cc = '(200,20)'::cluster_clock)
-         ->  Bitmap Index Scan on cc_idx  (cost=0.00..4.31 rows=5 width=0)
+         ->  Bitmap Index Scan on cc_idx
                Index Cond: (cc = '(200,20)'::cluster_clock)
 (5 rows)
 

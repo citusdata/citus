@@ -37,6 +37,7 @@
 #include "common/hashfn.h"
 #include "utils/fmgroids.h"
 #include "utils/hsearch.h"
+#include "utils/inval.h"
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
 
@@ -330,14 +331,18 @@ GetAllCitusDependedDependenciesForObject(const ObjectAddress *target)
  *
  * If the object is already in the list it is skipped for traversal. This happens when an
  * object was already added to the target list before it occurred in the input list.
+ *
+ * When flushCaches is true, the caller opts into periodically flushing the coordinator
+ * caches that grow while traversing pg_depend.
  */
 List *
-OrderObjectAddressListInDependencyOrder(List *objectAddressList)
+OrderObjectAddressListInDependencyOrder(List *objectAddressList, bool flushCaches)
 {
 	ObjectAddressCollector collector = { 0 };
 	InitObjectAddressCollector(&collector);
 
 	ObjectAddress *objectAddress = NULL;
+	int64 processedCount = 0;
 	foreach_declared_ptr(objectAddress, objectAddressList)
 	{
 		if (IsObjectAddressCollected(*objectAddress, &collector))
@@ -353,6 +358,20 @@ OrderObjectAddressListInDependencyOrder(List *objectAddressList)
 								  &collector);
 
 		CollectObjectAddress(&collector, objectAddress);
+
+		/*
+		 * This loop opens each Citus table (and its dependencies) to traverse pg_depend,
+		 * which accumulates postgres relcache/catcache and Citus metadata cache entries
+		 * on the coordinator. For a very large number of distributed objects this transient
+		 * cache growth can exhaust coordinator memory during metadata sync, even before the
+		 * ordered list is returned.
+		 *
+		 * The collector only keeps ObjectAddresses, so it's safe to flush the caches.
+		 */
+		if (flushCaches && MetadataSyncCacheFlushIntervalReached(++processedCount))
+		{
+			FlushCachesForMetadataSync();
+		}
 	}
 
 	return collector.dependencyList;
@@ -2076,8 +2095,28 @@ GetRelationTriggerFunctionDependencyList(Oid relationId)
 static List *
 GetPublicationRelationsDependencyList(Oid publicationId)
 {
-	List *allRelationIds = GetPublicationRelations(publicationId, PUBLICATION_PART_ROOT);
+	List *allRelationIds = NIL;
 	List *citusRelationIds = NIL;
+
+#if PG_VERSION_NUM >= PG_VERSION_19
+	if (GetPublication(publicationId)->alltables)
+	{
+		/*
+		 * A FOR ALL TABLES publication records only its EXCEPT tables in
+		 * pg_publication_rel, and GetIncludedPublicationRelations() asserts that
+		 * the publication is not FOR ALL TABLES. The DDL we reconstruct for such
+		 * a publication names the excluded tables, so those are the relations it
+		 * depends on.
+		 */
+		allRelationIds = GetExcludedPublicationTables(publicationId,
+													  PUBLICATION_PART_ROOT);
+	}
+	else
+#endif
+	{
+		allRelationIds = GetPublicationRelations(publicationId,
+												 PUBLICATION_PART_ROOT);
+	}
 
 	Oid relationId = InvalidOid;
 

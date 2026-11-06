@@ -109,7 +109,17 @@ RebuildQueryStrings(Job *workerJob)
 			/* there are no restrictions to add for reference and citus local tables */
 			if (IsCitusTableType(shardInterval->relationId, DISTRIBUTED_TABLE))
 			{
-				AddPartitionKeyNotNullFilterToSelect(copiedSubquery);
+				bool distributionColumnIsShardKeyIdentity =
+					InsertPartitionColumnIsShardKeyIdentity(query, copiedInsertRte,
+															copiedSubqueryRte);
+				AddPartitionKeyNotNullFilterToSelect(copiedSubquery,
+													 distributionColumnIsShardKeyIdentity)
+				;
+				if (distributionColumnIsShardKeyIdentity)
+				{
+					AddShardKeyIdentityNotNullFilter(query, copiedInsertRte,
+													 copiedSubqueryRte);
+				}
 			}
 
 			ReorderInsertSelectTargetLists(query, copiedInsertRte, copiedSubqueryRte);
@@ -768,6 +778,33 @@ TaskQueryStringAtIndex(Task *task, int index)
 
 
 /*
+ * DeparseTaskQueryTemplate deparses a working copy of the shared parameterized
+ * query template for the task's shard, leaving Param nodes intact.
+ */
+char *
+DeparseTaskQueryTemplate(Task *task)
+{
+	Query *queryCopy = copyObject(task->jobQueryForPrepare);
+	StringInfoData buf;
+	initStringInfo(&buf);
+
+	if (queryCopy->commandType == CMD_INSERT)
+	{
+		AddInsertAliasIfNeeded(queryCopy);
+		deparse_shard_query(queryCopy, task->anchorDistributedTableId,
+							task->anchorShardId, &buf);
+	}
+	else
+	{
+		UpdateRelationToShardNames((Node *) queryCopy, task->relationShardList);
+		pg_get_query_def(queryCopy, &buf);
+	}
+
+	return buf.data;
+}
+
+
+/*
  * TaskQueryString generates task query string text if missing.
  *
  * For performance reasons, the queryString is generated lazily. For example
@@ -780,6 +817,27 @@ TaskQueryString(Task *task)
 	int taskQueryType = GetTaskQueryType(task);
 	if (taskQueryType == TASK_QUERY_NULL)
 	{
+		if (task->jobQueryForPrepare != NULL)
+		{
+			/*
+			 * Fast-path task from prepared statement caching: deparse the
+			 * query from the saved template and cache the result on the task
+			 * so subsequent calls don't re-deparse.
+			 */
+			/*
+			 * The task retains the string, so allocate it in the task's own
+			 * context rather than CurrentMemoryContext, which may be a
+			 * short-lived per-tuple context.
+			 */
+			MemoryContext previousContext =
+				MemoryContextSwitchTo(GetMemoryChunkContext(task));
+			char *queryString = DeparseTaskQueryTemplate(task);
+			MemoryContextSwitchTo(previousContext);
+
+			SetTaskQueryString(task, queryString);
+			return task->taskQuery.data.queryStringLazy;
+		}
+
 		/* if task query type is TASK_QUERY_NULL then the data will be NULL,
 		 * this is unexpected state */
 		ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),

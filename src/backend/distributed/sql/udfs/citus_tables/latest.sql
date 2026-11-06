@@ -24,7 +24,7 @@ citus_tables_create_query=$CTCQ$
         pg_class c ON (p.logicalrelid = c.oid)
     LEFT JOIN
         pg_am a ON (a.oid = c.relam)
-    JOIN
+    LEFT OUTER JOIN
         (
             SELECT ds.logicalrelid AS table_id, SUM(css.size) AS table_size
             FROM citus_shard_sizes() css, pg_dist_shard ds

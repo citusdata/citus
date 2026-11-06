@@ -297,5 +297,17 @@ SELECT table_inherited('date_partitioned_table');
 SELECT master_get_table_ddl_events('capitals');
 SELECT master_get_table_ddl_events('cities');
 
--- dropping parents frop the partitions
-DROP TABLE date_partitioned_table, multi_column_partitioned, list_partitioned, partition_parent_schema.parent_table, cities, capitals;
+-- clean up all objects created by this test
+DROP TABLE date_partitioned_table, date_partitioned_table_100, date_partition_2007_100,
+	multi_column_partitioned, list_partitioned, partition_parent_schema.parent_table,
+	cities, capitals;
+DROP SCHEMA partition_parent_schema, partition_child_1_schema, partition_child_2_schema;
+DROP FUNCTION generate_alter_table_detach_partition_command(regclass),
+	generate_alter_table_attach_partition_command(regclass),
+	generate_partition_information(regclass),
+	print_partitions(regclass),
+	table_inherits(regclass),
+	table_inherited(regclass),
+	detach_and_attach_partition(regclass, regclass),
+	drop_and_recreate_partitioned_table(regclass),
+	some_function(text);

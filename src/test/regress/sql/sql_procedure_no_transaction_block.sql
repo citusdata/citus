@@ -119,6 +119,109 @@ BEGIN
 END;
 $$;
 
+CREATE OR REPLACE PROCEDURE loop_insert(start_val int, end_val int)
+LANGUAGE plpgsql AS $$
+BEGIN
+    FOR i IN start_val..end_val LOOP
+        INSERT INTO test_dist VALUES (i, i * 10);
+    END LOOP;
+END;
+$$;
+
+-- IF/ELSE with exactly one SQL statement per branch. Only one branch runs,
+-- so with max-based branch counting the body is single-statement and the
+-- executed single-shard write is eligible for the 2PC skip.
+CREATE OR REPLACE PROCEDURE if_one_per_branch(val int, flag boolean)
+LANGUAGE plpgsql AS $$
+BEGIN
+    IF flag THEN
+        INSERT INTO test_dist VALUES (val, val * 10);
+    ELSE
+        INSERT INTO test_dist VALUES (val + 1, (val + 1) * 10);
+    END IF;
+END;
+$$;
+
+-- IF branch containing two SQL statements: that single branch already holds
+-- two statements, so the body is multi-statement regardless of max counting
+-- and falls back to a coordinated transaction.
+CREATE OR REPLACE PROCEDURE if_two_in_branch(val int)
+LANGUAGE plpgsql AS $$
+BEGIN
+    IF true THEN
+        INSERT INTO test_dist VALUES (val, val * 10);
+        INSERT INTO test_dist VALUES (val + 1, (val + 1) * 10);
+    END IF;
+END;
+$$;
+
+-- Searched CASE with one SQL statement per branch: like IF, max-based
+-- counting keeps it single-statement and eligible for the skip.
+CREATE OR REPLACE PROCEDURE case_one_per_branch(val int)
+LANGUAGE plpgsql AS $$
+BEGIN
+    CASE
+        WHEN val > 0 THEN
+            INSERT INTO test_dist VALUES (val, val * 10);
+        ELSE
+            INSERT INTO test_dist VALUES (val + 1, (val + 1) * 10);
+    END CASE;
+END;
+$$;
+
+-- Single SQL statement wrapped in a nested BEGIN ... END sub-block. The
+-- walker recurses into the block and counts the single write, so the
+-- procedure remains eligible for the skip.
+CREATE OR REPLACE PROCEDURE nested_block_single(val int)
+LANGUAGE plpgsql AS $$
+BEGIN
+    BEGIN
+        INSERT INTO test_dist VALUES (val, val * 10);
+    END;
+END;
+$$;
+
+-- Two SQL statements inside a nested sub-block: recursion counts both, so
+-- the body is multi-statement and falls back to a coordinated transaction.
+CREATE OR REPLACE PROCEDURE nested_block_two(val int)
+LANGUAGE plpgsql AS $$
+BEGIN
+    BEGIN
+        INSERT INTO test_dist VALUES (val, val * 10);
+        INSERT INTO test_dist VALUES (val + 1, (val + 1) * 10);
+    END;
+END;
+$$;
+
+-- Nested block with an exception handler. The walker sums the block body and
+-- the exception-handler action (both are counted), so this two-statement
+-- body falls back to a coordinated transaction. Exercises the exception
+-- recursion path of the walker.
+CREATE OR REPLACE PROCEDURE exception_handler_proc(val int)
+LANGUAGE plpgsql AS $$
+BEGIN
+    BEGIN
+        INSERT INTO test_dist VALUES (val, val * 10);
+    EXCEPTION WHEN others THEN
+        INSERT INTO test_dist VALUES (val + 1, (val + 1) * 10);
+    END;
+END;
+$$;
+
+-- Loop nested inside an IF branch. The loop disqualifier must propagate out
+-- of the IF, disqualifying the whole procedure even though max-based branch
+-- counting is used. Guards the F6 short-circuit.
+CREATE OR REPLACE PROCEDURE loop_in_if(start_val int, end_val int)
+LANGUAGE plpgsql AS $$
+BEGIN
+    IF true THEN
+        FOR i IN start_val..end_val LOOP
+            INSERT INTO test_dist VALUES (i, i * 10);
+        END LOOP;
+    END IF;
+END;
+$$;
+
 -- log_remote_commands is toggled ON only around single-shard CALL statements
 -- whose NOTICE output is deterministic (single connection, single shard).
 -- It is kept OFF for multi-shard operations (TRUNCATE, multi-shard CALL,
@@ -149,12 +252,14 @@ TRUNCATE test_dist;
 
 ------------------------------------------------------------
 -- TEST 3: Two single-shard inserts in procedure
--- Should ERROR on second statement with optimization ON
+-- With static body analysis, this is detected as multi-statement
+-- before execution, so it falls back to coordinated transactions.
+-- No ERROR, both inserts succeed.
+-- logging off: multi-statement procedures use coordinated
+-- transactions with non-deterministic output.
 ------------------------------------------------------------
 SET citus.enable_procedure_transaction_skip TO on;
-SET citus.log_remote_commands TO on;
 CALL two_single_inserts(10, 20);
-SET citus.log_remote_commands TO off;
 SELECT * FROM test_dist ORDER BY shard_key;
 TRUNCATE test_dist;
 
@@ -230,15 +335,13 @@ TRUNCATE test_dist;
 
 ------------------------------------------------------------
 -- TEST 10: Two UPDATEs by shard_key in one procedure
--- Should ERROR on second statement with optimization ON
+-- Detected as multi-statement, uses coordinated transaction.
+-- Both updates succeed, no error.
+-- logging off: multi-shard coordinated output is non-deterministic
 ------------------------------------------------------------
 INSERT INTO test_dist VALUES (1, 10), (2, 20), (3, 30);
 SET citus.enable_procedure_transaction_skip TO on;
-SET citus.log_remote_commands TO on;
 CALL two_updates_by_shard_key(1, 111, 2, 222);
-SET citus.log_remote_commands TO off;
--- Second UPDATE triggers ERROR; the first UPDATE (row 1 -> 111) was already
--- committed on the worker and is NOT rolled back, so it remains visible.
 SELECT * FROM test_dist ORDER BY shard_key;
 TRUNCATE test_dist;
 
@@ -256,12 +359,12 @@ TRUNCATE test_dist;
 
 ------------------------------------------------------------
 -- TEST 12: INSERT + UPDATE in same procedure with optimization ON
--- Should ERROR on the second statement (UPDATE)
+-- Detected as multi-statement, uses coordinated transaction.
+-- Both operations succeed, no error.
+-- logging off: coordinated output is non-deterministic
 ------------------------------------------------------------
 SET citus.enable_procedure_transaction_skip TO on;
-SET citus.log_remote_commands TO on;
 CALL insert_then_update(5, 5, 555);
-SET citus.log_remote_commands TO off;
 SELECT * FROM test_dist ORDER BY shard_key;
 TRUNCATE test_dist;
 
@@ -292,14 +395,13 @@ TRUNCATE test_dist;
 
 ------------------------------------------------------------
 -- TEST 15: Two single-shard DELETEs in one procedure
--- Should ERROR on second statement with optimization ON
+-- Detected as multi-statement, uses coordinated transaction.
+-- Both deletes succeed, no error.
+-- logging off: multi-shard coordinated output is non-deterministic
 ------------------------------------------------------------
 INSERT INTO test_dist VALUES (1, 10), (2, 20), (3, 30);
 SET citus.enable_procedure_transaction_skip TO on;
-SET citus.log_remote_commands TO on;
 CALL two_deletes(1, 2);
-SET citus.log_remote_commands TO off;
--- Second DELETE triggers ERROR; first DELETE (row 1) was already committed
 SELECT * FROM test_dist ORDER BY shard_key;
 TRUNCATE test_dist;
 
@@ -316,16 +418,14 @@ SELECT * FROM test_dist ORDER BY shard_key;
 TRUNCATE test_dist;
 
 ------------------------------------------------------------
--- TEST 17: Read(s) then write should NOT error
--- A SELECT (read-only task) does not count toward the
--- non-coordinated execution counter, so a subsequent single-
--- shard write should still be able to skip coordination.
+-- TEST 17: Read(s) then write
+-- Static analysis detects 2 SQL statements (SELECT + INSERT),
+-- so the procedure falls back to coordinated transactions.
+-- logging off: coordinated output is non-deterministic
 ------------------------------------------------------------
 INSERT INTO test_dist VALUES (1, 10), (2, 20), (3, 30);
 SET citus.enable_procedure_transaction_skip TO on;
-SET citus.log_remote_commands TO on;
 CALL reads_then_write(1);
-SET citus.log_remote_commands TO off;
 SELECT * FROM test_dist ORDER BY shard_key;
 TRUNCATE test_dist;
 
@@ -346,7 +446,8 @@ TRUNCATE test_dist;
 
 ------------------------------------------------------------
 -- TEST 19: Two single-shard inserts with local execution ON
--- Should ERROR on second statement just like the remote case
+-- Detected as multi-statement, uses coordinated transaction.
+-- Both inserts succeed, no error.
 ------------------------------------------------------------
 SET citus.enable_procedure_transaction_skip TO on;
 CALL two_single_inserts(10, 20);
@@ -375,6 +476,103 @@ CALL reads_then_write(1);
 SELECT * FROM test_dist ORDER BY shard_key;
 TRUNCATE test_dist;
 
+------------------------------------------------------------
+-- TEST 22: Loop with single INSERT inside
+-- Static analysis detects the FOR loop and disqualifies the
+-- procedure to prevent partial commits if a mid-loop iteration
+-- fails. Uses coordinated transaction.
+------------------------------------------------------------
+SET citus.enable_procedure_transaction_skip TO on;
+SET citus.enable_local_execution TO off;
+CALL loop_insert(1, 3);
+SELECT * FROM test_dist ORDER BY shard_key;
+TRUNCATE test_dist;
+
+------------------------------------------------------------
+-- TEST 23: IF/ELSE with one SQL statement per branch
+-- Only one branch executes, so with max-based branch counting
+-- the body is single-statement and the single-shard write skips
+-- 2PC (no BEGIN/PREPARE/COMMIT in the remote command log).
+------------------------------------------------------------
+SET citus.enable_procedure_transaction_skip TO on;
+SET citus.enable_local_execution TO off;
+SET citus.log_remote_commands TO on;
+CALL if_one_per_branch(31, true);
+SET citus.log_remote_commands TO off;
+SELECT * FROM test_dist ORDER BY shard_key;
+TRUNCATE test_dist;
+
+------------------------------------------------------------
+-- TEST 24: IF branch containing two SQL statements
+-- The executed branch already holds two statements, so the body
+-- is multi-statement and falls back to a coordinated transaction.
+-- logging off: multi-shard coordinated output is non-deterministic
+------------------------------------------------------------
+SET citus.enable_procedure_transaction_skip TO on;
+CALL if_two_in_branch(40);
+SELECT * FROM test_dist ORDER BY shard_key;
+TRUNCATE test_dist;
+
+------------------------------------------------------------
+-- TEST 25: Searched CASE with one SQL statement per branch
+-- Like TEST 23, max-based counting makes this single-statement and
+-- the executed single-shard write skips 2PC.
+------------------------------------------------------------
+SET citus.enable_procedure_transaction_skip TO on;
+SET citus.log_remote_commands TO on;
+CALL case_one_per_branch(33);
+SET citus.log_remote_commands TO off;
+SELECT * FROM test_dist ORDER BY shard_key;
+TRUNCATE test_dist;
+
+------------------------------------------------------------
+-- TEST 26: Single SQL statement inside a nested BEGIN ... END block
+-- The walker recurses into the sub-block and counts the single write,
+-- so the procedure is single-statement and skips 2PC.
+------------------------------------------------------------
+SET citus.enable_procedure_transaction_skip TO on;
+SET citus.log_remote_commands TO on;
+CALL nested_block_single(35);
+SET citus.log_remote_commands TO off;
+SELECT * FROM test_dist ORDER BY shard_key;
+TRUNCATE test_dist;
+
+------------------------------------------------------------
+-- TEST 27: Two SQL statements inside a nested sub-block
+-- Recursion counts both, so the body is multi-statement and falls
+-- back to a coordinated transaction.
+-- logging off: multi-shard coordinated output is non-deterministic
+------------------------------------------------------------
+SET citus.enable_procedure_transaction_skip TO on;
+CALL nested_block_two(42);
+SELECT * FROM test_dist ORDER BY shard_key;
+TRUNCATE test_dist;
+
+------------------------------------------------------------
+-- TEST 28: Nested block with an exception handler
+-- The walker sums the block body and the exception-handler action,
+-- so this two-statement body falls back to a coordinated transaction.
+-- Exercises the exception-recursion path. No error is raised, so only
+-- the body INSERT takes effect.
+-- logging off: coordinated output is non-deterministic
+------------------------------------------------------------
+SET citus.enable_procedure_transaction_skip TO on;
+CALL exception_handler_proc(37);
+SELECT * FROM test_dist ORDER BY shard_key;
+TRUNCATE test_dist;
+
+------------------------------------------------------------
+-- TEST 29: Loop nested inside an IF branch
+-- The loop disqualifier propagates out of the IF, disqualifying the
+-- whole procedure despite max-based branch counting. Falls back to a
+-- coordinated transaction.
+-- logging off: multi-shard coordinated output is non-deterministic
+------------------------------------------------------------
+SET citus.enable_procedure_transaction_skip TO on;
+CALL loop_in_if(44, 46);
+SELECT * FROM test_dist ORDER BY shard_key;
+TRUNCATE test_dist;
+
 -- Cleanup
 DROP TABLE test_dist;
 DROP PROCEDURE single_insert;
@@ -390,6 +588,14 @@ DROP PROCEDURE delete_by_shard_key;
 DROP PROCEDURE two_deletes;
 DROP PROCEDURE delete_by_other_key;
 DROP PROCEDURE reads_then_write;
+DROP PROCEDURE loop_insert;
+DROP PROCEDURE if_one_per_branch;
+DROP PROCEDURE if_two_in_branch;
+DROP PROCEDURE case_one_per_branch;
+DROP PROCEDURE nested_block_single;
+DROP PROCEDURE nested_block_two;
+DROP PROCEDURE exception_handler_proc;
+DROP PROCEDURE loop_in_if;
 DROP SCHEMA sql_proc_no_txn_block;
 
 RESET citus.enable_procedure_transaction_skip;

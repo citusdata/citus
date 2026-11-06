@@ -5,6 +5,7 @@
 --   transfer sizes for aggregates not grouped by the distribution column
 --
 
+SET citus.allow_aggregate_worker_combine_on_internal_types TO off;
 SET citus.next_shard_id TO 20070000;
 CREATE SCHEMA tdigest_aggregate_support;
 SET search_path TO tdigest_aggregate_support, public;

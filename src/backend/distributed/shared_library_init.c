@@ -34,6 +34,9 @@
 #include "optimizer/paths.h"
 #include "optimizer/plancat.h"
 #include "optimizer/planner.h"
+#if PG_VERSION_NUM >= PG_VERSION_19
+#include "optimizer/pathnode.h"
+#endif
 #include "port/atomics.h"
 #include "postmaster/postmaster.h"
 #include "replication/walsender.h"
@@ -76,6 +79,7 @@
 #include "distributed/log_utils.h"
 #include "distributed/maintenanced.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/metadata_replay_security.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/metadata_utility.h"
 #include "distributed/multi_executor.h"
@@ -88,7 +92,9 @@
 #include "distributed/multi_server_executor.h"
 #include "distributed/pg_dist_partition.h"
 #include "distributed/placement_connection.h"
+#include "distributed/prepared_statement_cache.h"
 #include "distributed/priority.h"
+#include "distributed/procedure_body_analysis.h"
 #include "distributed/query_pushdown_planning.h"
 #include "distributed/recursive_planning.h"
 #include "distributed/reference_table_utils.h"
@@ -157,6 +163,7 @@ DEFINE_COLUMNAR_PASSTHROUGH_FUNC(columnar_relation_storageid)
 DEFINE_COLUMNAR_PASSTHROUGH_FUNC(columnar_storage_info)
 DEFINE_COLUMNAR_PASSTHROUGH_FUNC(columnar_store_memory_stats)
 DEFINE_COLUMNAR_PASSTHROUGH_FUNC(test_columnar_storage_write_new_page)
+DEFINE_COLUMNAR_PASSTHROUGH_FUNC(test_columnar_metadata_xmin_aborted)
 
 #define DUMMY_REAL_TIME_EXECUTOR_ENUM_VALUE 9999999
 static char *CitusVersion = CITUS_VERSION;
@@ -201,11 +208,17 @@ static void DecrementExternalClientBackendCounterAtExit(int code, Datum arg);
 static void CreateRequiredDirectories(void);
 static void RegisterCitusConfigVariables(void);
 static void OverridePostgresConfigProperties(void);
+static bool MetadataReplayOwnerCheckHook(char **newval, void **extra,
+										 GucSource source);
 static bool ErrorIfNotASuitableDeadlockFactor(double *newval, void **extra,
 											  GucSource source);
 static bool WarnIfDeprecatedExecutorUsed(int *newval, void **extra, GucSource source);
 static bool WarnIfReplicationModelIsSet(int *newval, void **extra, GucSource source);
 static bool NoticeIfSubqueryPushdownEnabled(bool *newval, void **extra, GucSource source);
+static bool CheckPreparedStatementCaching(bool *newval, void **extra, GucSource source);
+static bool CheckStatTenantsTrack(int *newval, void **extra, GucSource source);
+static bool WarnIfDeprecatedPseudoconstantQualsGucIsSet(bool *newval, void **extra,
+														GucSource source);
 static bool ShowShardsForAppNamePrefixesCheckHook(char **newval, void **extra,
 												  GucSource source);
 static void ShowShardsForAppNamePrefixesAssignHook(const char *newval, void *extra);
@@ -379,6 +392,13 @@ static const struct config_enum_entry cpu_priority_options[] = {
 	{ NULL, 0, false}
 };
 
+static const struct config_enum_entry metadata_replay_protection_options[] = {
+	{ "off", METADATA_REPLAY_PROTECTION_OFF, false },
+	{ "warn", METADATA_REPLAY_PROTECTION_WARN, false },
+	{ "require", METADATA_REPLAY_PROTECTION_REQUIRE, false },
+	{ NULL, 0, false }
+};
+
 static const struct config_enum_entry metadata_sync_mode_options[] = {
 	{ "transactional", METADATA_SYNC_TRANSACTIONAL, false },
 	{ "nontransactional", METADATA_SYNC_NON_TRANSACTIONAL, false },
@@ -486,7 +506,11 @@ _PG_init(void)
 
 	/* register for planner hook */
 	set_rel_pathlist_hook = multi_relation_restriction_hook;
+#if PG_VERSION_NUM < PG_VERSION_19
 	get_relation_info_hook = multi_get_relation_info_hook;
+#else
+	build_simple_rel_hook = multi_build_simple_rel_hook;
+#endif
 	set_join_pathlist_hook = multi_join_restriction_hook;
 	ExecutorStart_hook = CitusExecutorStart;
 	ExecutorRun_hook = citus_executor_run_adapter;
@@ -515,6 +539,9 @@ _PG_init(void)
 
 	/* initialize coordinated transaction management */
 	InitializeTransactionManagement();
+
+	/* install PLpgSQL plugin for procedure body analysis */
+	InstallProcedureBodyAnalysisPlugin();
 	InitializeBackendManagement();
 	InitializeConnectionManagement();
 	InitPlacementConnectionManagement();
@@ -606,6 +633,7 @@ _PG_init(void)
 	INIT_COLUMNAR_SYMBOL(PGFunction, columnar_storage_info);
 	INIT_COLUMNAR_SYMBOL(PGFunction, columnar_store_memory_stats);
 	INIT_COLUMNAR_SYMBOL(PGFunction, test_columnar_storage_write_new_page);
+	INIT_COLUMNAR_SYMBOL(PGFunction, test_columnar_metadata_xmin_aborted);
 
 	/*
 	 * This part is only for SECURITY LABEL tests
@@ -646,15 +674,35 @@ citus_shmem_request(void)
 		prev_shmem_request_hook();
 	}
 
-	RequestAddinShmemSpace(BackendManagementShmemSize());
-	RequestAddinShmemSpace(SharedConnectionStatsShmemSize());
-	RequestAddinShmemSpace(MaintenanceDaemonShmemSize());
-	RequestAddinShmemSpace(CitusQueryStatsSharedMemSize());
-	RequestAddinShmemSpace(LogicalClockShmemSize());
-	RequestAddinShmemSpace(ClusterChangesBlockShmemSize());
+	Size sz_bm = BackendManagementShmemSize();
+	Size sz_scs = SharedConnectionStatsShmemSize();
+	Size sz_md = MaintenanceDaemonShmemSize();
+	Size sz_qs = CitusQueryStatsSharedMemSize();
+	Size sz_lc = LogicalClockShmemSize();
+	Size sz_ccb = ClusterChangesBlockShmemSize();
+	Size sz_sc = StatCountersShmemSize();
+	RequestAddinShmemSpace(sz_bm);
+	RequestAddinShmemSpace(sz_scs);
+	RequestAddinShmemSpace(sz_md);
+	RequestAddinShmemSpace(sz_qs);
+	RequestAddinShmemSpace(sz_lc);
+	RequestAddinShmemSpace(sz_ccb);
 	RequestNamedLWLockTranche(STATS_SHARED_MEM_NAME, 1);
-	RequestAddinShmemSpace(StatCountersShmemSize());
+	RequestAddinShmemSpace(sz_sc);
 	RequestNamedLWLockTranche(SAVED_BACKEND_STATS_HASH_LOCK_TRANCHE_NAME, 1);
+#if PG_VERSION_NUM >= PG_VERSION_19
+
+	/*
+	 * PG19's ShmemInitHash now allocates all hash elements upfront in shared
+	 * memory.  Each ShmemInitStruct/ShmemInitHash allocation is aligned to a
+	 * cache line, which can waste up to PG_CACHE_LINE_SIZE-1 bytes per call.
+	 * Citus makes well under 1024 such allocations across all of its shared
+	 * memory components, so reserve that many cache lines of slack to absorb
+	 * the alignment overhead and keep the final allocation from failing when
+	 * the addin space is exhausted.
+	 */
+	RequestAddinShmemSpace(1024 * PG_CACHE_LINE_SIZE);
+#endif
 }
 
 
@@ -840,10 +888,17 @@ StartupCitusBackend(void)
 const char *
 GetClientMinMessageLevelNameForValue(int minMessageLevel)
 {
+#if PG_VERSION_NUM >= PG_VERSION_19
+	struct config_generic record = { 0 };
+	record._enum.options = log_level_options;
+	const char *clientMinMessageLevelName =
+		config_enum_lookup_by_value(&record, minMessageLevel);
+#else
 	struct config_enum record = { 0 };
 	record.options = log_level_options;
-	const char *clientMinMessageLevelName = config_enum_lookup_by_value(&record,
-																		minMessageLevel);
+	const char *clientMinMessageLevelName =
+		config_enum_lookup_by_value(&record, minMessageLevel);
+#endif
 	return clientMinMessageLevelName;
 }
 
@@ -1052,6 +1107,38 @@ RegisterCitusConfigVariables(void)
 					 "separately may not be desirable. This setting can then be used "
 					 "to disable the check."),
 		&AllowUnsafeConstraints,
+		false,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		"citus.allow_unsafe_insert_select_pushdown",
+		gettext_noop("Allows pushdown of otherwise-unsafe colocated "
+					 "INSERT ... SELECT queries."),
+		gettext_noop("When enabled, Citus relaxes safety checks (GROUP BY / window / "
+					 "aggregate / DISTINCT constructs on non-distribution columns) "
+					 "for colocated INSERT ... SELECT, so that batching and any batch "
+					 "UDF call run on the shards instead of pulling data to the "
+					 "coordinator. The INSERT's distribution column may then be a "
+					 "provably shard-local unnest(array_agg(<distribution column>)); "
+					 "any other derived distribution value is still rejected, since it "
+					 "could route rows that actually belong to a different shard. "
+					 "Colocation is still enforced, but the user takes responsibility "
+					 "for keeping batches order-preserving; otherwise results may be "
+					 "silently incorrect. Because the relaxed checks also apply to "
+					 "nested subqueries, any grouping, window, or aggregate now runs "
+					 "per shard rather than across the whole table, so a global "
+					 "window/aggregate (e.g. count(*) OVER ()) silently becomes "
+					 "per-shard. Finally, the runtime NOT NULL filter guards only the "
+					 "distribution column, not the other projected values, so a batch "
+					 "UDF that returns fewer values than its input inserts NULLs into "
+					 "those value columns; the distribution column itself is never NULL "
+					 "here, since a NULL-padded key is dropped by that filter. The "
+					 "user must ensure the batch produces exactly one value per input "
+					 "row. This is an experimental feature and semantics "
+					 "may change in future releases."),
+		&AllowUnsafeInsertSelectPushdown,
 		false,
 		PGC_USERSET,
 		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
@@ -1502,35 +1589,67 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
-		"citus.enable_outer_joins_with_pseudoconstant_quals_pre_pg17",
-		gettext_noop("Enables running distributed queries with outer joins "
-					 "and pseudoconstant quals pre PG17."),
-		gettext_noop("Set to false by default. If set to true, enables "
-					 "running distributed queries with outer joins and  "
-					 "pseudoconstant quals, at user's own risk, because "
-					 "pre PG17, Citus doesn't have access to "
-					 "set_join_pathlist_hook, which doesn't guarantee correct"
-					 "query results. Note that in PG17+, this GUC has no effect"
-					 "and the user can run such queries"),
-		&EnableOuterJoinsWithPseudoconstantQualsPrePG17,
-		false,
+		"citus.enable_or_clause_arm_pruning",
+		gettext_noop("Enables removing the arms of a top-level OR clause that "
+					 "cannot match any row on a shard when generating the "
+					 "per-shard query."),
+		gettext_noop("When a query filters on the distribution column inside "
+					 "each arm of an OR (e.g. (dist=a AND ...) OR (dist=b AND "
+					 "...)), every shard otherwise receives the full OR. With "
+					 "this enabled, each shard's query only keeps the arms that "
+					 "can match on that shard, allowing a single precise index "
+					 "scan instead of an N-way bitmap OR."),
+		&EnableOrClauseArmPruning,
+		true,
 		PGC_USERSET,
 		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
+		"citus.enable_outer_joins_with_pseudoconstant_quals_pre_pg17",
+		gettext_noop("This setting has no effect and is deprecated."),
+		gettext_noop("It only applied to PostgreSQL 16, which Citus no longer "
+					 "supports. The setting is retained so existing configurations "
+					 "keep loading, and will be removed in a future Citus release."),
+		&EnableOuterJoinsWithPseudoconstantQualsPrePG17,
+		false,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
+		WarnIfDeprecatedPseudoconstantQualsGucIsSet, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		"citus.enable_prepared_statement_caching",
+		gettext_noop("Enables caching prepared statement plans on worker connections."),
+		gettext_noop("When enabled, Citus uses PQprepare/PQsendQueryPrepared on "
+					 "worker connections for fast-path prepared statement executions, "
+					 "eliminating redundant parse/plan cycles on workers. "
+					 "Up to 1000 statements per connection retain worker plan-cache "
+					 "memory until the connection closes; entries are not evicted "
+					 "on client DEALLOCATE or replanning. Once full, cache misses "
+					 "use parameterized SQL until the connection is recycled. "
+					 "Requires citus.stat_tenants_track = 'none'. "
+					 "Worker connections through PgBouncer transaction pooling "
+					 "require PgBouncer 1.21 or newer with "
+					 "max_prepared_statements > 0."),
+		&EnablePreparedStatementCaching,
+		false,
+		PGC_USERSET,
+		GUC_STANDARD,
+		CheckPreparedStatementCaching, NULL, NULL);
+
+	DefineCustomBoolVariable(
 		"citus.enable_procedure_transaction_skip",
 		gettext_noop("Skip coordinated transactions for single-statement, "
 					 "single-shard procedure calls."),
-		gettext_noop("When enabled, CALL statements that execute exactly one "
-					 "distributed write targeting a single task on a single "
-					 "shard with a single placement skip coordinated (2PC) "
-					 "transactions. Only applies to non-nested procedure calls "
-					 "outside of explicit transaction blocks. "
-					 "WARNING: this is intended for single-statement procedures "
-					 "only. If a procedure issues a second distributed statement, "
-					 "it will raise an ERROR, but the first statement will have "
-					 "already been committed and cannot be rolled back."),
+		gettext_noop("When enabled, CALL statements whose procedure body "
+					 "contains exactly one SQL statement (determined by static "
+					 "analysis before execution) and that target a single task "
+					 "on a single shard skip coordinated (2PC) transactions. "
+					 "Multi-statement procedures gracefully fall back to the "
+					 "normal coordinated transaction path. The optimization "
+					 "applies to PLpgSQL procedures only; SQL-language and C "
+					 "procedures never set the single-statement flag and are "
+					 "never eligible."),
 		&EnableProcedureTransactionSkip,
 		false,
 		PGC_USERSET,
@@ -2198,6 +2317,51 @@ RegisterCitusConfigVariables(void)
 		GUC_STANDARD,
 		NULL, NULL, NULL);
 
+	DefineCustomStringVariable(
+		"citus.metadata_replay_owner",
+		gettext_noop("Role that expressions run as while metadata is replayed."),
+		gettext_noop("Citus recreates distributed objects through a superuser "
+					 "connection. While this is set, the replayed statement runs as "
+					 "the given role instead."),
+		&MetadataReplayOwner,
+		"",
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
+		MetadataReplayOwnerCheckHook, NULL, NULL);
+
+	DefineCustomEnumVariable(
+		"citus.metadata_replay_protection",
+		gettext_noop("Sets how replay reacts to a node that cannot apply the "
+					 "owner marker."),
+		gettext_noop("Replayed commands that carry tenant-authored expressions run "
+					 "as the object owner. A node that predates this protection ignores "
+					 "the marker and evaluates them with the rights of the replaying "
+					 "superuser. Use warn to report such a node, require to refuse it, "
+					 "or off to disable the marker entirely."),
+		&MetadataReplayProtection,
+		METADATA_REPLAY_PROTECTION_WARN,
+		metadata_replay_protection_options,
+		PGC_SUSET,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomIntVariable(
+		"citus.metadata_sync_cache_flush_interval",
+		gettext_noop("Sets the number of distributed objects processed between "
+					 "backend cache flushes while syncing metadata to a node."),
+		gettext_noop("While activating a node, Citus opens each Citus table to "
+					 "build its shell table and metadata commands, which "
+					 "accumulates PostgreSQL relcache/catcache and Citus metadata "
+					 "cache entries on the coordinator. Citus flushes these caches "
+					 "once every this many objects so that syncing metadata for a "
+					 "very large number of Citus tables does not exhaust coordinator"
+					 "memory. Setting this to 0 disables the periodic flushing."),
+		&MetadataSyncCacheFlushInterval,
+		1000, 0, INT_MAX,
+		PGC_USERSET,
+		GUC_NOT_IN_SAMPLE,
+		NULL, NULL, NULL);
+
 	DefineCustomIntVariable(
 		"citus.metadata_sync_interval",
 		gettext_noop("Sets the time to wait between metadata syncs."),
@@ -2235,6 +2399,29 @@ RegisterCitusConfigVariables(void)
 		5 * MS_PER_SECOND, 1, 7 * MS_PER_DAY,
 		PGC_SIGHUP,
 		GUC_UNIT_MS | GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE,
+		NULL, NULL, NULL);
+
+	DefineCustomIntVariable(
+		"citus.metadata_sync_set_batch_size",
+		gettext_noop("Sets the number of objects (colocation groups, Citus tables, "
+					 "distributed objects or tenant schemas) whose metadata is "
+					 "folded into a single set-based statement during metadata "
+					 "sync."),
+		gettext_noop("The per-object metadata layers (pg_dist_colocation, "
+					 "pg_dist_partition, pg_dist_shard, pg_dist_placement, "
+					 "pg_dist_object and pg_dist_schema) are synced by rendering "
+					 "each object's rows into a multi-row VALUES list fed to one "
+					 "set-based citus_internal metadata statement per layer, "
+					 "instead of one statement per object. This setting "
+					 "bounds how many objects' rows are packed into each such "
+					 "statement. Larger values emit fewer, larger statements "
+					 "(peak coordinator memory stays bounded by the batch, which "
+					 "is reset after every flush); 1 restores one statement per "
+					 "object."),
+		&MetadataSyncSetBatchSize,
+		1000, 1, 10000,
+		PGC_SUSET,
+		GUC_NOT_IN_SAMPLE,
 		NULL, NULL, NULL);
 
 	/*
@@ -2743,7 +2930,7 @@ RegisterCitusConfigVariables(void)
 		stat_tenants_track_options,
 		PGC_SUSET,
 		GUC_STANDARD,
-		NULL, NULL, NULL);
+		CheckStatTenantsTrack, NULL, NULL);
 
 	DefineCustomRealVariable(
 		"citus.stat_tenants_untracked_sample_rate",
@@ -2913,7 +3100,18 @@ OverridePostgresConfigProperties(void)
 
 		if (strcmp(var->name, "application_name") == 0)
 		{
+#if PG_VERSION_NUM >= PG_VERSION_19
+
+			/*
+			 * In PG19, struct config_generic embeds a union of the
+			 * type-specific fields (e.g. _string) rather than being a
+			 * prefix of struct config_string.  Access the embedded
+			 * config_string via the union member.
+			 */
+			struct config_string *stringVar = &var->_string;
+#else
 			struct config_string *stringVar = (struct config_string *) var;
+#endif
 
 			OldApplicationNameAssignHook = stringVar->assign_hook;
 			stringVar->assign_hook = ApplicationNameAssignHook;
@@ -2947,6 +3145,42 @@ ErrorIfNotASuitableDeadlockFactor(double *newval, void **extra, GucSource source
 							  "citus.distributed_deadlock_detection_factor cannot be less than 1. "
 							  "To disable distributed deadlock detection set the value to -1.")));
 
+		return false;
+	}
+
+	return true;
+}
+
+
+/*
+ * MetadataReplayOwnerCheckHook only lets Citus reduce the rights of a privileged
+ * replay session. A tenant must never be able to lift the marker, and neither may
+ * a function that we already de-escalated.
+ */
+static bool
+MetadataReplayOwnerCheckHook(char **newval, void **extra, GucSource source)
+{
+	if (source == PGC_S_DEFAULT)
+	{
+		return true;
+	}
+
+	/*
+	 * The current user is what decides privileges, and it is not the session user
+	 * inside a SECURITY DEFINER function owned by a tenant. Checking only the
+	 * session user would let such a function raise itself to the caller's rights.
+	 */
+	if (!superuser_arg(GetUserId()) || !superuser_arg(GetSessionUserId()) ||
+		InSecurityRestrictedOperation())
+	{
+		GUC_check_errmsg("permission denied to set metadata replay security context");
+		return false;
+	}
+
+	if ((*newval)[0] != '\0' &&
+		!OidIsValid(get_role_oid(*newval, true)))
+	{
+		GUC_check_errmsg("metadata replay owner does not exist");
 		return false;
 	}
 
@@ -2996,6 +3230,48 @@ WarnIfLocalExecutionDisabled(bool *newval, void **extra, GucSource source)
 
 
 /*
+ * CheckPreparedStatementCaching warns on interactive changes that enable an
+ * ineffective cache. Config-file processing can see the other GUC's old value.
+ */
+static bool
+CheckPreparedStatementCaching(bool *newval, void **extra, GucSource source)
+{
+	if (source >= PGC_S_INTERACTIVE && *newval &&
+		StatTenantsTrack != STAT_TENANTS_TRACK_NONE)
+	{
+		ereport(WARNING,
+				(errmsg("prepared statement caching is disabled while "
+						"citus.stat_tenants_track is not 'none'"),
+				 errhint("Set citus.stat_tenants_track to 'none' to use "
+						 "prepared statement caching.")));
+	}
+
+	return true;
+}
+
+
+/*
+ * CheckStatTenantsTrack warns on interactive changes that make prepared
+ * statement caching ineffective.
+ */
+static bool
+CheckStatTenantsTrack(int *newval, void **extra, GucSource source)
+{
+	if (source >= PGC_S_INTERACTIVE && *newval != STAT_TENANTS_TRACK_NONE &&
+		EnablePreparedStatementCaching)
+	{
+		ereport(WARNING,
+				(errmsg("prepared statement caching is disabled while "
+						"citus.stat_tenants_track is not 'none'"),
+				 errhint("Set citus.stat_tenants_track to 'none' to use "
+						 "prepared statement caching.")));
+	}
+
+	return true;
+}
+
+
+/*
  * NoticeIfSubqueryPushdownEnabled prints a notice when a user sets
  * citus.subquery_pushdown to ON. It doesn't print the notice if the
  * value is already true.
@@ -3020,6 +3296,31 @@ NoticeIfSubqueryPushdownEnabled(bool *newval, void **extra, GucSource source)
 							 "compatibility, no new users are supposed to use it. The planner "
 							 "is capable of pushing down as much computation as possible to the "
 							 "shards depending on the query.")));
+	}
+
+	return true;
+}
+
+
+/*
+ * WarnIfDeprecatedPseudoconstantQualsGucIsSet emits a deprecation warning when
+ * citus.enable_outer_joins_with_pseudoconstant_quals_pre_pg17 is set explicitly.
+ * The GUC only ever applied to PG16, which Citus no longer supports.
+ */
+static bool
+WarnIfDeprecatedPseudoconstantQualsGucIsSet(bool *newval, void **extra,
+											GucSource source)
+{
+	/* warn whenever the value comes from anywhere other than the built-in default */
+	if (source != PGC_S_DEFAULT)
+	{
+		ereport(WARNING, (errcode(ERRCODE_WARNING_DEPRECATED_FEATURE),
+						  errmsg("citus.enable_outer_joins_with_pseudoconstant_"
+								 "quals_pre_pg17 has no effect and is deprecated"),
+						  errdetail("This setting only applied to PostgreSQL 16, "
+									"which Citus no longer supports."),
+						  errhint("Remove it from your configuration. It will be "
+								  "removed in a future Citus release.")));
 	}
 
 	return true;
@@ -3189,9 +3490,7 @@ NodeConninfoGucCheckHook(char **newval, void **extra, GucSource source)
 		"sslkeylogfile",
 #endif
 		"sslmode",
-#if PG_VERSION_NUM >= PG_VERSION_17
 		"sslnegotiation",
-#endif
 		"sslrootcert",
 		"tcp_user_timeout",
 	};

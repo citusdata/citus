@@ -341,7 +341,10 @@ ExecuteLocalTaskListExtended(List *taskList,
 			continue;
 		}
 
-		PlannedStmt *localPlan = GetCachedLocalPlan(task, distributedPlan);
+		LocalPlannedStatement *localPlannedStatement =
+			GetCachedLocalPlan(task, distributedPlan);
+		PlannedStmt *localPlan = localPlannedStatement ?
+								 localPlannedStatement->localPlan : NULL;
 
 		/*
 		 * If the plan is already cached, don't need to re-plan, just
@@ -392,7 +395,23 @@ ExecuteLocalTaskListExtended(List *taskList,
 				continue;
 			}
 
-			if (taskType != TASK_QUERY_LOCAL_PLAN)
+			if (taskType == TASK_QUERY_NULL && task->jobQueryForPrepare != NULL)
+			{
+				/*
+				 * Fast-path task from prepared statement caching: the task
+				 * was built without a query string to avoid expensive
+				 * deparsing.  Deparse from the saved job query template now
+				 * so we can plan locally.
+				 */
+				char *queryString = DeparseTaskQueryTemplate(task);
+				Query *shardQuery = ParseQueryString(queryString,
+													 taskParameterTypes,
+													 taskNumParams);
+				localPlan = planner(shardQuery, NULL, CURSOR_OPT_PARALLEL_OK,
+									paramListInfo);
+				pfree(queryString);
+			}
+			else if (taskType != TASK_QUERY_LOCAL_PLAN)
 			{
 				Query *shardQuery = ParseQueryString(TaskQueryString(task),
 													 taskParameterTypes,

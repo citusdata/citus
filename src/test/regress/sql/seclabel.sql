@@ -10,6 +10,10 @@
 -- citus_add_node later
 SELECT citus_remove_node('localhost', :worker_2_port);
 
+-- the colocation ids show up in the metadata sync commands logged below,
+-- so make them independent of the tests that run before this one
+ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 1453000;
+
 -- create two roles, one with characters that need escaping
 CREATE ROLE user1;
 CREATE ROLE "user 2";

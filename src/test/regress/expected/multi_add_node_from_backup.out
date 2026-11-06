@@ -243,6 +243,7 @@ NOTICE:  Clone localhost:xxxxx is now caught up with primary localhost:xxxxx.
 NOTICE:  Attempting to promote clone localhost:xxxxx via pg_promote().
 NOTICE:  Clone node localhost:xxxxx (ID 3) has been successfully promoted.
 NOTICE:  Updating metadata for promoted clone localhost:xxxxx (ID 3)
+NOTICE:  re-ranged 6 sequence(s) on promoted clone localhost:xxxxx (ID 3) for new group 3
 NOTICE:  adjusting shard placements for primary localhost:xxxxx and clone localhost:xxxxx
 NOTICE:  processing 4 shards for primary node GroupID 1
 LOG:  inserting DELETE shard record for shard public.table1_colg2_102020 from clone node GroupID 3

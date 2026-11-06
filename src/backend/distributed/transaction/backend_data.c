@@ -18,12 +18,11 @@
 #include "unistd.h"
 
 #include "access/htup_details.h"
+#include "access/twophase.h"
 #include "catalog/pg_authid.h"
 #include "catalog/pg_type.h"
 #include "datatype/timestamp.h"
 #include "nodes/execnodes.h"
-#include "postmaster/autovacuum.h" /* to access autovacuum_max_workers */
-#include "replication/walsender.h"
 #include "storage/ipc.h"
 #include "storage/lmgr.h"
 #include "storage/lwlock.h"
@@ -554,9 +553,7 @@ BackendManagementShmemInit(void)
 		memset(backendManagementShmemData, 0,
 			   BackendManagementShmemSize());
 
-		namedLockTranche->trancheId = LWLockNewTrancheId();
-
-		LWLockRegisterTranche(namedLockTranche->trancheId, trancheName);
+		namedLockTranche->trancheId = LWLockNewTrancheIdCompat(trancheName);
 		LWLockInitialize(&backendManagementShmemData->lock,
 						 namedLockTranche->trancheId);
 
@@ -611,51 +608,25 @@ BackendManagementShmemSize(void)
 
 
 /*
- * TotalProcCount returns the total processes that could run via the current
- * postgres server. See the details in the function comments.
+ * TotalProcCount returns the number of PGPROC slots in ProcGlobal->allProcs,
+ * mirroring the TotalProcs computation in Postgres' InitProcGlobal(). Since
+ * getProcNo_compat() returns the PGPROC slot index, arrays indexed by it must
+ * have this many entries.
  *
- * There is one thing we should warn the readers. Citus enforces to be loaded
- * as the first extension in shared_preload_libraries. However, if any other
- * extension overrides MaxConnections, autovacuum_max_workers or
- * max_worker_processes, our reasoning in this function may not work as expected.
- * Given that it is not a usual pattern for extension, we consider Citus' behaviour
- * good enough for now.
+ * We prefer to maintain space for auxiliary procs or prepared transactions in
+ * the backend space because they could be blocking processes and our current
+ * implementation of distributed deadlock detection could process them
+ * as a regular backend.
+ *
+ * MaxBackends is set by InitializeMaxBackends() before shmem_request_hook is
+ * called, so it is safe to use here.
  */
 int
 TotalProcCount(void)
 {
-	int maxBackends = 0;
-	int totalProcs = 0;
+	Assert(MaxBackends > 0);
 
-#ifdef WIN32
-
-	/* autovacuum_max_workers is not PGDLLIMPORT, so use a high estimate for windows */
-	int estimatedMaxAutovacuumWorkers = 30;
-	maxBackends =
-		MaxConnections + estimatedMaxAutovacuumWorkers + 1 + max_worker_processes;
-#else
-
-	/*
-	 * We're simply imitating Postgrsql's InitializeMaxBackends(). Given that all
-	 * the items used here PGC_POSTMASTER, should be safe to access them
-	 * anytime during the execution even before InitializeMaxBackends() is called.
-	 */
-	maxBackends = MaxConnections + autovacuum_max_workers + 1 + max_worker_processes;
-#endif
-
-	/*
-	 * We prefer to maintain space for auxiliary procs or preperad transactions in
-	 * the backend space because they could be blocking processes and our current
-	 * implementation of distributed deadlock detection could process them
-	 * as a regular backend. In the future, we could consider changing deadlock
-	 * detection algorithm to ignore auxiliary procs or prepared transactions and
-	 * save some space.
-	 */
-	totalProcs = maxBackends + NUM_AUXILIARY_PROCS + max_prepared_xacts;
-
-	totalProcs += max_wal_senders;
-
-	return totalProcs;
+	return MaxBackends + NUM_AUXILIARY_PROCS + max_prepared_xacts;
 }
 
 
@@ -1199,6 +1170,8 @@ GetBackendDataForProc(PGPROC *proc, BackendData *result)
 		pgprocno = getProcNo_compat(proc->lockGroupLeader);
 	}
 
+	Assert(pgprocno >= 0 && pgprocno < TotalProcCount());
+
 	BackendData *backendData = &backendManagementShmemData->backends[pgprocno];
 
 	SpinLockAcquire(&backendData->mutex);
@@ -1211,24 +1184,47 @@ GetBackendDataForProc(PGPROC *proc, BackendData *result)
 
 /*
  * CancelTransactionDueToDeadlock cancels the input proc and also marks the backend
- * data with this information.
+ * data with this information, provided that the proc is still running the given
+ * distributed transaction. Returns false if the proc is no longer running it, in
+ * which case no cancellation is attempted.
  */
-void
-CancelTransactionDueToDeadlock(PGPROC *proc)
+bool
+CancelTransactionDueToDeadlock(PGPROC *proc,
+							   const DistributedTransactionId *transactionId)
 {
+	bool cancelled = false;
 	BackendData *backendData = &backendManagementShmemData->backends[getProcNo_compat(
 																		 proc)];
 
 	/* backend might not have used citus yet and thus not initialized backend data */
 	if (!backendData)
 	{
-		return;
+		return false;
 	}
 
 	SpinLockAcquire(&backendData->mutex);
 
-	/* send a SIGINT only if the process is still in a distributed transaction */
-	if (backendData->transactionId.transactionNumber != 0)
+	DistributedTransactionId *backendXactId = &backendData->transactionId;
+
+	/*
+	 * Send a SIGINT only if the backend is still running the very distributed
+	 * transaction that we found to be part of the deadlock. The caller walks the
+	 * whole deadlock cycle to pick a victim after it looks the backend up, so the
+	 * backend may have finished that transaction and started an unrelated one in
+	 * between, and cancelling that one would be wrong.
+	 *
+	 * Transaction numbers are only unique per initiator node, so the initiator
+	 * has to match as well.
+	 *
+	 * The timestamp is not compared, even though DistributedTransactionIdCompare()
+	 * does consider it. That comparison sorts ids gathered from all nodes, whereas
+	 * we only compare against a single live backend: its transaction numbers come
+	 * from a monotonic counter, so a new transaction on it necessarily has a
+	 * different number, and reusing one requires a restart, which invalidates
+	 * this proc.
+	 */
+	if (backendXactId->transactionNumber == transactionId->transactionNumber &&
+		backendXactId->initiatorNodeIdentifier == transactionId->initiatorNodeIdentifier)
 	{
 		backendData->cancelledDueToDeadlock = true;
 		SpinLockRelease(&backendData->mutex);
@@ -1240,11 +1236,15 @@ CancelTransactionDueToDeadlock(PGPROC *proc)
 							"distributed deadlock but the backend could not "
 							"be cancelled", proc->pid)));
 		}
+
+		cancelled = true;
 	}
 	else
 	{
 		SpinLockRelease(&backendData->mutex);
 	}
+
+	return cancelled;
 }
 
 

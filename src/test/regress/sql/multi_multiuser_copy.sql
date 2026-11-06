@@ -2,6 +2,11 @@
 -- MULTI_MULTIUSER_COPY
 --
 
+-- Make this test re-runnable within the same cluster.
+SET client_min_messages TO WARNING;
+DROP TABLE IF EXISTS customer_copy_hash;
+RESET client_min_messages;
+
 -- Create a new hash-partitioned table into which to COPY
 CREATE TABLE customer_copy_hash (
         c_custkey integer,
@@ -27,23 +32,16 @@ SET ROLE full_access;
 COPY customer_copy_hash (c_custkey,c_name) FROM STDIN;
 2	customer2
 \.
-;
 RESET ROLE;
 
 -- COPY FROM as user with SELECT access, should fail
 SET ROLE read_access;
-COPY customer_copy_hash (c_custkey,c_name) FROM STDIN;
-3	customer3
-\.
-;
+\copy customer_copy_hash (c_custkey,c_name) FROM PROGRAM 'true'
 RESET ROLE;
 
 -- COPY FROM as user with no access, should fail
 SET ROLE no_access;
-COPY customer_copy_hash (c_custkey,c_name) FROM STDIN;
-4	customer4
-\.
-;
+\copy customer_copy_hash (c_custkey,c_name) FROM PROGRAM 'true'
 RESET ROLE;
 
 

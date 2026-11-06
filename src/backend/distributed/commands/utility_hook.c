@@ -72,12 +72,14 @@
 #include "distributed/local_executor.h"
 #include "distributed/maintenanced.h"
 #include "distributed/metadata/distobject.h"
+#include "distributed/metadata_replay_security.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_explain.h"
 #include "distributed/multi_logical_replication.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/multi_physical_planner.h"
+#include "distributed/procedure_body_analysis.h"
 #include "distributed/reference_table_utils.h"
 #include "distributed/remote_commands.h"
 #include "distributed/resource_lock.h"
@@ -136,6 +138,68 @@ ProcessUtilityParseTree(Node *node, const char *queryString, ProcessUtilityConte
 
 
 /*
+ * RunUtilityAsMetadataReplayOwner runs a single replayed statement as the owner of
+ * the object being replayed, with security restrictions in place. Entering the
+ * context consumes the marker, so the recursive call proceeds normally.
+ */
+static void
+RunUtilityAsMetadataReplayOwner(PlannedStmt *pstmt,
+								const char *queryString,
+								ProcessUtilityContext context,
+								ParamListInfo params,
+								struct QueryEnvironment *queryEnv,
+								DestReceiver *dest,
+								QueryCompletion *completionTag)
+{
+	MetadataReplayOwnerContext ownerContext;
+	MemoryContext callerContext = CurrentMemoryContext;
+
+	EnterMetadataReplayOwnerContext(&ownerContext);
+
+	PG_TRY();
+	{
+		bool readOnlyTree = false;
+
+		citus_ProcessUtility(pstmt, queryString, readOnlyTree, context, params,
+							 queryEnv, dest, completionTag);
+	}
+	PG_CATCH();
+	{
+		MemoryContextSwitchTo(callerContext);
+		ErrorData *errorData = CopyErrorData();
+		int sqlErrorCode = errorData->sqlerrcode;
+		char *errorMessage = pstrdup(errorData->message);
+		FreeErrorData(errorData);
+
+		ExitMetadataReplayOwnerContext(&ownerContext);
+
+		if (sqlErrorCode != ERRCODE_INSUFFICIENT_PRIVILEGE)
+		{
+			PG_RE_THROW();
+		}
+
+		/* say which role the command ran as, since it is not the connected one */
+		FlushErrorState();
+
+		char *ownerName = GetUserNameFromId(ownerContext.ownerId, false);
+
+		ereport(ERROR, (errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+						errmsg("%s", errorMessage),
+						errdetail("Citus replayed this command as \"%s\", the owner of "
+								  "the object, so that expressions it carries are not "
+								  "evaluated with the rights of the replaying superuser.",
+								  ownerName),
+						errhint("Grant \"%s\" the missing privilege, or set "
+								"citus.metadata_replay_protection to off to replay "
+								"without it.", ownerName)));
+	}
+	PG_END_TRY();
+
+	ExitMetadataReplayOwnerContext(&ownerContext);
+}
+
+
+/*
  * citus_ProcessUtility is the main entry hook for implementing Citus-specific
  * utility behavior. Its primary responsibilities are intercepting COPY and DDL
  * commands and augmenting the coordinator's command with corresponding tasks
@@ -160,6 +224,24 @@ citus_ProcessUtility(PlannedStmt *pstmt,
 	}
 
 	Node *parsetree = pstmt->utilityStmt;
+
+	/*
+	 * A replayed command that can carry tenant-authored expressions runs as the
+	 * object owner, so that evaluating them cannot use the rights of the
+	 * superuser connection that replay uses.
+	 *
+	 * The blocks that set and clear the marker are themselves excluded, since
+	 * clearing it requires the rights the marked statement gives up.
+	 */
+	if (MetadataReplayStatementIsMarked() &&
+		!IsA(parsetree, DoStmt) &&
+		!IsA(parsetree, TransactionStmt))
+	{
+		RunUtilityAsMetadataReplayOwner(pstmt, queryString, context, params,
+										queryEnv, dest, completionTag);
+
+		return;
+	}
 
 	if (IsA(parsetree, TransactionStmt))
 	{
@@ -293,7 +375,6 @@ citus_ProcessUtility(PlannedStmt *pstmt,
 		 * stored procedures.
 		 */
 		StoredProcedureLevel += 1;
-		ProcedureNonCoordinatedExecutionCount = 0;
 
 		PG_TRY();
 		{
@@ -301,7 +382,6 @@ citus_ProcessUtility(PlannedStmt *pstmt,
 							   params, queryEnv, dest, completionTag);
 
 			StoredProcedureLevel -= 1;
-			ProcedureNonCoordinatedExecutionCount = 0;
 
 			if (InDelegatedProcedureCall && StoredProcedureLevel == 0)
 			{
@@ -311,7 +391,16 @@ citus_ProcessUtility(PlannedStmt *pstmt,
 		PG_CATCH();
 		{
 			StoredProcedureLevel -= 1;
-			ProcedureNonCoordinatedExecutionCount = 0;
+
+			/*
+			 * Defensively reset the single-statement flag on the error path.
+			 * The normal-path reset lives in the PLpgSQL plugin's
+			 * citus_func_end callback, which is not guaranteed to run when a
+			 * procedure errors mid-body. Clearing it here keeps the invariant
+			 * obvious: ProcedureBodyIsSingleStatement is never left true once
+			 * no procedure is executing, independent of func_end ordering.
+			 */
+			ProcedureBodyIsSingleStatement = false;
 
 			if (InDelegatedProcedureCall && StoredProcedureLevel == 0)
 			{
@@ -1445,7 +1534,7 @@ DecrementUtilityHookCountersIfNecessary(Node *parsetree)
  * invalidated due to a DDL.
  */
 void
-MarkInvalidateForeignKeyGraph()
+MarkInvalidateForeignKeyGraph(void)
 {
 	shouldInvalidateForeignKeyGraph = true;
 }

@@ -35,7 +35,7 @@ typedef struct DistributedResultFragment
 	uint32 nodeId;
 
 	/* number of rows in the result file */
-	int rowCount;
+	int64 rowCount;
 
 	/*
 	 * The fragment contains the rows which match the partitioning method

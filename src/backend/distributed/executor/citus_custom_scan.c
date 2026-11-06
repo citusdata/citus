@@ -43,10 +43,13 @@
 #include "distributed/local_plan_cache.h"
 #include "distributed/merge_executor.h"
 #include "distributed/merge_planner.h"
+#include "distributed/metadata_cache.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_router_planner.h"
 #include "distributed/multi_server_executor.h"
+#include "distributed/prepared_statement_cache.h"
 #include "distributed/shard_utils.h"
+#include "distributed/shardinterval_utils.h"
 #include "distributed/sorted_merge.h"
 #include "distributed/stats/query_stats.h"
 #include "distributed/stats/stat_counters.h"
@@ -82,7 +85,7 @@ static void SortedMergeReScan(CustomScanState *node);
 static void CitusEndScanCommon(CitusScanState *scanState);
 static void CitusReScanCommon(CustomScanState *node);
 static void EnsureForceDelegationDistributionKey(Job *job);
-static void EnsureAnchorShardsInJobExist(Job *job);
+
 static bool AnchorShardsInTaskListExist(List *taskList);
 static void TryToRerouteFastPathModifyQuery(Job *job);
 static void CheckQueryDeparseSafety(Query *query);
@@ -356,6 +359,15 @@ CitusBeginReadOnlyScan(CustomScanState *node, EState *estate, int eflags)
 	}
 
 	/*
+	 * A cached plan can build its task straight from the bound parameters,
+	 * skipping the plan copy, coordinator evaluation and task regeneration.
+	 */
+	if (PreparedStatementCacheTryFastPath(scanState, estate, false))
+	{
+		return;
+	}
+
+	/*
 	 * Create a copy of the generic plan for the current execution, but make a shallow
 	 * copy of the plan cache. That means we'll be able to access the plan cache via
 	 * currentPlan->workerJob->localPlannedStatements, but it will be preserved across
@@ -365,8 +377,8 @@ CitusBeginReadOnlyScan(CustomScanState *node, EState *estate, int eflags)
 		CopyDistributedPlanWithoutCache(originalDistributedPlan);
 	scanState->distributedPlan = currentPlan;
 
-	Job *workerJob = currentPlan->workerJob;
-	Query *jobQuery = workerJob->jobQuery;
+	Job *currentJob = currentPlan->workerJob;
+	Query *jobQuery = currentJob->jobQuery;
 	PlanState *planState = &(scanState->customScanState.ss.ps);
 
 	/*
@@ -374,6 +386,8 @@ CitusBeginReadOnlyScan(CustomScanState *node, EState *estate, int eflags)
 	 * partition column value.
 	 */
 	Assert(currentPlan->fastPathRouterPlan || !EnableFastPathRouterPlanner);
+
+	Query *savedJobQuery = PreparedStatementCacheSaveTemplate(originalDistributedPlan);
 
 	/*
 	 * Evaluate parameters, because the parameters are only available on the
@@ -388,25 +402,22 @@ CitusBeginReadOnlyScan(CustomScanState *node, EState *estate, int eflags)
 	ExecuteCoordinatorEvaluableExpressions(jobQuery, planState);
 
 	/* job query no longer has parameters, so we should not send any */
-	workerJob->parametersInJobQueryResolved = true;
+	currentJob->parametersInJobQueryResolved = true;
 
 	/* parameters are filled in, so we can generate a task for this execution */
-	RegenerateTaskForFasthPathQuery(workerJob);
+	RegenerateTaskForFasthPathQuery(currentJob);
 
-	if (IsLocalPlanCachingSupported(workerJob, originalDistributedPlan))
+	PreparedStatementCacheAttachToTasks(currentPlan, currentJob, savedJobQuery);
+
+	bool planAddedToCache = false;
+	CacheLocalPlanForShardQuery(currentJob, originalDistributedPlan,
+								estate->es_param_list_info, &planAddedToCache);
+
+	/* Use a newly cached plan for the current execution as well. */
+	if (planAddedToCache)
 	{
-		Task *task = linitial(workerJob->taskList);
-
-		/*
-		 * We are going to execute this task locally. If it's not already in
-		 * the cache, create a local plan now and add it to the cache. During
-		 * execution, we will get the plan from the cache.
-		 *
-		 * The plan will be cached across executions when originalDistributedPlan
-		 * represents a prepared statement.
-		 */
-		CacheLocalPlanForShardQuery(task, originalDistributedPlan,
-									estate->es_param_list_info);
+		currentPlan->workerJob->localPlannedStatements =
+			originalDistributedPlan->workerJob->localPlannedStatements;
 	}
 }
 
@@ -427,6 +438,15 @@ CitusBeginModifyScan(CustomScanState *node, EState *estate, int eflags)
 	PlanState *planState = &(scanState->customScanState.ss.ps);
 	DistributedPlan *originalDistributedPlan = scanState->distributedPlan;
 
+	/*
+	 * A cached plan can build its task straight from the bound parameters,
+	 * skipping the plan copy, coordinator evaluation and task regeneration.
+	 */
+	if (PreparedStatementCacheTryFastPath(scanState, estate, true))
+	{
+		return;
+	}
+
 	MemoryContext localContext = AllocSetContextCreate(CurrentMemoryContext,
 													   "CitusBeginModifyScan",
 													   ALLOCSET_DEFAULT_SIZES);
@@ -439,6 +459,8 @@ CitusBeginModifyScan(CustomScanState *node, EState *estate, int eflags)
 	Job *workerJob = currentPlan->workerJob;
 
 	Query *jobQuery = workerJob->jobQuery;
+
+	Query *savedJobQuery = PreparedStatementCacheSaveTemplate(originalDistributedPlan);
 
 	if (ModifyJobNeedsEvaluation(workerJob))
 	{
@@ -472,6 +494,8 @@ CitusBeginModifyScan(CustomScanState *node, EState *estate, int eflags)
 		{
 			RegenerateTaskForFasthPathQuery(workerJob);
 		}
+
+		PreparedStatementCacheAttachToTasks(currentPlan, workerJob, savedJobQuery);
 	}
 	else if (workerJob->requiresCoordinatorEvaluation)
 	{
@@ -520,29 +544,15 @@ CitusBeginModifyScan(CustomScanState *node, EState *estate, int eflags)
 	}
 
 
-	/*
-	 * Now that we have populated the task placements we can determine whether
-	 * any of them are local to this node and cache a plan if needed.
-	 */
-	if (IsLocalPlanCachingSupported(workerJob, originalDistributedPlan))
-	{
-		Task *task = linitial(workerJob->taskList);
+	bool planAddedToCache = false;
+	CacheLocalPlanForShardQuery(workerJob, originalDistributedPlan,
+								estate->es_param_list_info, &planAddedToCache);
 
-		/*
-		 * We are going to execute this task locally. If it's not already in
-		 * the cache, create a local plan now and add it to the cache. During
-		 * execution, we will get the plan from the cache.
-		 *
-		 * WARNING: In this function we'll use the original plan with the original
-		 * query tree, meaning parameters and function calls are back and we'll
-		 * redo evaluation in the local (Postgres) executor. The reason we do this
-		 * is that we only need to cache one generic plan per shard.
-		 *
-		 * The plan will be cached across executions when originalDistributedPlan
-		 * represents a prepared statement.
-		 */
-		CacheLocalPlanForShardQuery(task, originalDistributedPlan,
-									estate->es_param_list_info);
+	/* Use a newly cached plan for the current execution as well. */
+	if (planAddedToCache)
+	{
+		currentPlan->workerJob->localPlannedStatements =
+			originalDistributedPlan->workerJob->localPlannedStatements;
 	}
 
 	MemoryContextSwitchTo(oldContext);
@@ -574,7 +584,7 @@ TryToRerouteFastPathModifyQuery(Job *job)
  * EnsureAnchorShardsInJobExist ensures all shards are valid in job.
  * If it finds a non-existent shard in given job, it throws an error.
  */
-static void
+void
 EnsureAnchorShardsInJobExist(Job *job)
 {
 	if (!AnchorShardsInTaskListExist(job->taskList))
@@ -648,13 +658,17 @@ CopyDistributedPlanWithoutCache(DistributedPlan *originalDistributedPlan)
 {
 	List *localPlannedStatements =
 		originalDistributedPlan->workerJob->localPlannedStatements;
+	Query *savedJobQueryForCaching =
+		originalDistributedPlan->workerJob->savedJobQueryForCaching;
 	originalDistributedPlan->workerJob->localPlannedStatements = NIL;
+	originalDistributedPlan->workerJob->savedJobQueryForCaching = NULL;
 
 	DistributedPlan *distributedPlan = copyObject(originalDistributedPlan);
 
-	/* set back the immutable field */
+	/* set back the immutable/cached fields */
 	originalDistributedPlan->workerJob->localPlannedStatements = localPlannedStatements;
 	distributedPlan->workerJob->localPlannedStatements = localPlannedStatements;
+	originalDistributedPlan->workerJob->savedJobQueryForCaching = savedJobQueryForCaching;
 
 	return distributedPlan;
 }

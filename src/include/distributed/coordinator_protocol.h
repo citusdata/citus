@@ -53,6 +53,7 @@
 #define TRANSFER_MODE_AUTOMATIC 'a'
 #define TRANSFER_MODE_FORCE_LOGICAL 'l'
 #define TRANSFER_MODE_BLOCK_WRITES 'b'
+#define TRANSFER_MODE_FORCE_LOGICAL_AUTO_IDENTITY 'A'
 
 #define SHARDID_SEQUENCE_NAME "pg_dist_shardid_seq"
 #define PLACEMENTID_SEQUENCE_NAME "pg_dist_placement_placementid_seq"
@@ -241,6 +242,13 @@ extern List * GetTableRowLevelSecurityCommands(Oid relationId);
 extern List * GetTableIndexAndConstraintCommands(Oid relationId, int indexFlags);
 extern List * GetTableIndexAndConstraintCommandsExcludingReplicaIdentity(Oid relationId,
 																		 int indexFlags);
+extern List *
+GetTableIndexAndConstraintCommandsExcludingReplicaIdentityAndReplicationHelperIndex(Oid
+																					relationId,
+																					int
+																					indexFlags);
+extern Oid ChooseReplicationHelperIndexToBuildEarly(Oid relationId);
+extern List * GetReplicationHelperIndexCommandList(Oid relationId);
 extern Oid GetRelationIdentityOrPK(Relation rel);
 extern void GatherIndexAndConstraintDefinitionList(Form_pg_index indexForm,
 												   List **indexDDLEventList,

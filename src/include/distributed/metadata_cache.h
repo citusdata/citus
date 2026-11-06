@@ -170,6 +170,7 @@ extern List * CitusTableList(void);
 extern ShardInterval * LoadShardInterval(uint64 shardId);
 extern bool ShardExists(uint64 shardId);
 extern Oid RelationIdForShard(uint64 shardId);
+extern Oid RelationIdAndColocationIdForShard(uint64 shardId, uint32 *colocationId);
 extern bool ReferenceTableShardId(uint64 shardId);
 extern bool DistributedTableShardId(uint64 shardId);
 extern ShardPlacement * ShardPlacementOnGroupIncludingOrphanedPlacements(int32 groupId,
@@ -182,6 +183,7 @@ extern CitusTableCacheEntry * LookupCitusTableCacheEntry(Oid relationId);
 extern DistObjectCacheEntry * LookupDistObjectCacheEntry(Oid classid, Oid objid, int32
 														 objsubid);
 extern int32 GetLocalGroupId(void);
+extern int32 ReadLocalGroupId(Snapshot snapshot);
 extern int32 GetLocalNodeId(void);
 extern void CitusTableCacheFlushInvalidatedEntries(void);
 extern Oid LookupShardRelationFromCatalog(int64 shardId, bool missing_ok);
@@ -190,6 +192,7 @@ extern void CitusInvalidateRelcacheByRelid(Oid relationId);
 extern void CitusInvalidateRelcacheByShardId(int64 shardId);
 extern void InvalidateForeignKeyGraph(void);
 extern void FlushDistTableCache(void);
+extern void FlushDistObjectCache(void);
 extern void InvalidateMetadataSystemCache(void);
 extern List * CitusTableTypeIdList(CitusTableType citusTableType);
 extern Datum DistNodeMetadata(void);

@@ -50,6 +50,7 @@
 #include "distributed/metadata/pg_dist_object.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
+#include "distributed/namespace_utils.h"
 #include "distributed/remote_commands.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_transaction.h"
@@ -120,6 +121,7 @@ citus_unmark_object_distributed(PG_FUNCTION_ARGS)
 	bool checkObjectExistence = true;
 	if (PG_NARGS() == 4)
 	{
+		EnsureSuperUser();
 		checkObjectExistence = PG_GETARG_BOOL(3);
 	}
 
@@ -333,26 +335,24 @@ ShouldMarkRelationDistributed(Oid relationId)
 	ObjectAddress *relationAddress = palloc0(sizeof(ObjectAddress));
 	ObjectAddressSet(*relationAddress, RelationRelationId, relationId);
 
-	bool pgObject = (relationId < FirstNormalObjectId);
-	bool isObjectSupported = SupportedDependencyByCitus(relationAddress);
-	bool ownedByExtension = IsTableOwnedByExtension(relationId);
-	bool alreadyDistributed = IsObjectDistributed(relationAddress);
-	bool hasUnsupportedDependency =
-		DeferErrorIfAnyObjectHasUnsupportedDependency(
-			list_make1(relationAddress)) != NULL;
-	bool hasCircularDependency =
-		DeferErrorIfCircularDependencyExists(relationAddress) != NULL;
-
 	/*
-	 * pgObject: Citus never marks pg objects as distributed
-	 * isObjectSupported: Citus does not support propagation of some objects
-	 * ownedByExtension: let extensions manage its own objects
-	 * alreadyDistributed: most likely via earlier versions
-	 * hasUnsupportedDependency: Citus doesn't know how to distribute its dependencies
-	 * hasCircularDependency: Citus cannot handle circular dependencies
+	 * In order:
+	 * - Citus never marks pg objects as distributed
+	 * - Citus does not support propagation of some objects
+	 * - let extensions manage its own objects
+	 * - already distributed, most likely via earlier versions
+	 * - Citus doesn't know how to distribute its dependencies
+	 * - Citus cannot handle circular dependencies
+	 *
+	 * The last two traverse the dependency graph, so they are evaluated last.
 	 */
-	if (pgObject || !isObjectSupported || ownedByExtension || alreadyDistributed ||
-		hasUnsupportedDependency || hasCircularDependency)
+	if (relationId < FirstNormalObjectId ||
+		!SupportedDependencyByCitus(relationAddress) ||
+		IsTableOwnedByExtension(relationId) ||
+		IsObjectDistributed(relationAddress) ||
+		DeferErrorIfAnyObjectHasUnsupportedDependency(
+			list_make1(relationAddress)) != NULL ||
+		DeferErrorIfCircularDependencyExists(relationAddress) != NULL)
 	{
 		return false;
 	}
@@ -431,6 +431,9 @@ ExecuteCommandAsSuperuser(char *query, int paramCount, Oid *paramTypes,
 		ereport(ERROR, (errmsg("could not connect to SPI manager")));
 	}
 
+	/* Do not resolve operators through the caller's search path as extension owner. */
+	int searchPathNestLevel = PushEmptySearchPath();
+
 	/* make sure we have write access */
 	GetUserIdAndSecContext(&savedUserId, &savedSecurityContext);
 	SetUserIdAndSecContext(CitusExtensionOwner(), SECURITY_LOCAL_USERID_CHANGE);
@@ -439,6 +442,8 @@ ExecuteCommandAsSuperuser(char *query, int paramCount, Oid *paramTypes,
 										  NULL, false, 0);
 
 	SetUserIdAndSecContext(savedUserId, savedSecurityContext);
+
+	PopEmptySearchPath(searchPathNestLevel);
 
 	int spiFinished = SPI_finish();
 	if (spiFinished != SPI_OK_FINISH)

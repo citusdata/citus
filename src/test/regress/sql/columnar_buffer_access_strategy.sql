@@ -1,0 +1,90 @@
+--
+-- Test that scans of large columnar tables read through a BAS_BULKREAD
+-- buffer ring, as heap does, instead of filling shared_buffers with the
+-- whole table. Tables up to a quarter of shared_buffers are read normally.
+--
+
+CREATE SCHEMA columnar_buffer_access_strategy;
+SET search_path TO columnar_buffer_access_strategy;
+
+CREATE EXTENSION pg_buffercache;
+
+-- evict all buffers of the given relation from shared_buffers
+CREATE PROCEDURE evict_relation(rel regclass) AS $$
+BEGIN
+	PERFORM pg_buffercache_evict(bufferid)
+	FROM pg_buffercache
+	WHERE relfilenode = pg_relation_filenode(rel) AND
+		  reldatabase = (SELECT oid FROM pg_database WHERE datname = current_database());
+END;
+$$ LANGUAGE plpgsql;
+
+-- number of blocks of the given relation that are in shared_buffers
+CREATE FUNCTION cached_blocks(rel regclass) RETURNS bigint AS $$
+	SELECT count(*)
+	FROM pg_buffercache
+	WHERE relfilenode = pg_relation_filenode(rel) AND
+		  reldatabase = (SELECT oid FROM pg_database WHERE datname = current_database());
+$$ LANGUAGE sql;
+
+-- relations bigger than this many blocks are scanned with a strategy
+SELECT setting::bigint / 4 AS threshold_blocks
+FROM pg_settings WHERE name = 'shared_buffers' \gset
+
+SET columnar.compression TO 'none';
+
+-- ~6000 blocks, which is above the threshold with the default shared_buffers
+CREATE TABLE big (a int, b text) USING columnar;
+INSERT INTO big SELECT i, repeat('x', 1000) FROM generate_series(1, 50000) i;
+
+CREATE TABLE small (a int, b text) USING columnar;
+INSERT INTO small SELECT i, repeat('x', 1000) FROM generate_series(1, 1000) i;
+
+RESET columnar.compression;
+
+SELECT pg_relation_size('big') / 8192 > :threshold_blocks AS big_is_large,
+	   pg_relation_size('small') / 8192 <= :threshold_blocks AS small_is_small;
+
+SELECT pg_relation_size('big') / 8192 AS big_blocks \gset
+
+-- columnar custom scan
+SET columnar.enable_custom_scan TO on;
+CALL evict_relation('big');
+SELECT count(*), sum(length(b)) FROM big;
+SELECT cached_blocks('big') < :big_blocks / 4 AS uses_ring;
+
+-- column pruning still applies, only the blocks of "a" are read
+CALL evict_relation('big');
+SELECT sum(a) FROM big;
+SELECT cached_blocks('big') < 100 AS only_a_read;
+
+-- plain sequential scan through the table access method
+SET columnar.enable_custom_scan TO off;
+CALL evict_relation('big');
+SELECT count(*), sum(length(b)) FROM big;
+SELECT cached_blocks('big') < :big_blocks / 4 AS uses_ring;
+RESET columnar.enable_custom_scan;
+
+-- ANALYZE reads the whole columnar table
+CALL evict_relation('big');
+ANALYZE big;
+SELECT cached_blocks('big') < :big_blocks / 4 AS uses_ring;
+
+-- index scans don't use a strategy, results are not affected
+CREATE INDEX big_a_idx ON big (a);
+SET enable_seqscan TO off;
+SELECT a, length(b) FROM big WHERE a IN (1, 1000, 30000) ORDER BY a;
+RESET enable_seqscan;
+DROP INDEX big_a_idx;
+
+-- VACUUM FULL reads the old table with a strategy, data stays the same
+VACUUM FULL big;
+SELECT count(*), sum(length(b)) FROM big;
+
+-- small tables are cached as usual
+CALL evict_relation('small');
+SELECT count(*), sum(length(b)) FROM small;
+SELECT cached_blocks('small') >= pg_relation_size('small') / 8192 - 1 AS fully_cached;
+
+SET client_min_messages TO WARNING;
+DROP SCHEMA columnar_buffer_access_strategy CASCADE;

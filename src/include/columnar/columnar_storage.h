@@ -14,6 +14,7 @@
 
 #include "postgres.h"
 
+#include "storage/bufmgr.h"
 #include "storage/smgr.h"
 #include "utils/rel.h"
 
@@ -56,7 +57,8 @@ extern uint64 ColumnarStorageReserveRowNumber(Relation rel, uint64 nrows);
 extern uint64 ColumnarStorageReserveStripeId(Relation rel);
 
 extern void ColumnarStorageRead(Relation rel, uint64 logicalOffset,
-								char *data, uint32 amount);
+								char *data, uint32 amount,
+								BufferAccessStrategy strategy);
 extern void ColumnarStorageWrite(Relation rel, uint64 logicalOffset,
 								 char *data, uint32 amount);
 extern bool ColumnarStorageTruncate(Relation rel, uint64 newDataReservation);

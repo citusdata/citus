@@ -1,0 +1,80 @@
+Parsed test spec with 2 sessions
+
+starting permutation: s1-begin s1-recover s2-remove-coordinator s1-commit
+step s1-begin:
+    BEGIN;
+
+step s1-recover:
+    SELECT recover_prepared_transactions();
+
+recover_prepared_transactions
+---------------------------------------------------------------------
+                            0
+(1 row)
+
+step s2-remove-coordinator:
+    SELECT citus_remove_node('localhost', 57636);
+ <waiting ...>
+step s1-commit: 
+    COMMIT;
+
+step s2-remove-coordinator: <... completed>
+citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+
+starting permutation: s2-begin s2-remove-coordinator s1-recover s2-commit
+step s2-begin:
+    BEGIN;
+
+step s2-remove-coordinator:
+    SELECT citus_remove_node('localhost', 57636);
+
+citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-recover:
+    SELECT recover_prepared_transactions();
+ <waiting ...>
+step s2-commit: 
+    COMMIT;
+
+step s1-recover: <... completed>
+recover_prepared_transactions
+---------------------------------------------------------------------
+                            0
+(1 row)
+
+
+starting permutation: s2-begin s2-set-coordinator-property s1-remove-coordinator s2-remove-coordinator s2-commit
+step s2-begin:
+    BEGIN;
+
+step s2-set-coordinator-property:
+    SELECT citus_set_node_property('localhost', 57636, 'shouldhaveshards', false);
+
+citus_set_node_property
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-remove-coordinator:
+    SELECT citus_remove_node('localhost', 57636);
+ <waiting ...>
+step s2-remove-coordinator: 
+    SELECT citus_remove_node('localhost', 57636);
+
+citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-commit:
+    COMMIT;
+
+step s1-remove-coordinator: <... completed>
+ERROR:  node at "localhost:xxxxx" does not exist

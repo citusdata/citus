@@ -19,6 +19,7 @@ test: multi_behavioral_analytics_basics multi_behavioral_analytics_single_shard_
 # We don't parallelize the following test with the ones above because they're
 # not idempotent and hence causing flaky test detection check to fail.
 test: multi_insert_select_non_pushable_queries multi_insert_select
+test: allow_unsafe_insert_select_pushdown
 
 test: multi_shard_update_delete recursive_dml_with_different_planners_executors
 test: insert_select_repartition window_functions dml_recursive multi_insert_select_window
@@ -60,6 +61,7 @@ test: set_operation_and_local_tables
 test: subqueries_deep subquery_view subquery_partitioning subqueries_not_supported
 test: subquery_in_targetlist subquery_in_where subquery_complex_target_list subquery_append
 test: subquery_prepared_statements
+test: prepared_statement_caching
 test: non_colocated_leaf_subquery_joins non_colocated_subquery_joins
 test: cte_inline recursive_view_local_table values sequences_with_different_types multi_level_recursive_queries
 test: pg13 pg12

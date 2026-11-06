@@ -56,6 +56,7 @@ extern List * CreateTaskPlacementListForShardIntervals(List *shardIntervalList,
 													   bool hasLocalRelation);
 extern List * RouterInsertTaskList(Query *query, bool parametersInQueryResolved,
 								   DeferredErrorMessage **planningError);
+extern List * RelationRowLockListForQuery(Query *query);
 extern Const * ExtractInsertPartitionKeyValue(Query *query);
 extern List * TargetShardIntervalsForRestrictInfo(RelationRestrictionContext *
 												  restrictionContext,
@@ -79,7 +80,9 @@ extern RangeTblEntry * ExtractResultRelationRTE(Query *query);
 extern RangeTblEntry * ExtractResultRelationRTEOrError(Query *query);
 extern RangeTblEntry * ExtractDistributedInsertValuesRTE(Query *query);
 extern bool IsMultiRowInsert(Query *query);
-extern void AddPartitionKeyNotNullFilterToSelect(Query *subqery);
+extern void AddPartitionKeyNotNullFilterToSelect(Query *subqery,
+												 bool distributionColumnIsShardKeyIdentity
+												 );
 extern bool UpdateOrDeleteOrMergeQuery(Query *query);
 extern bool IsMergeQuery(Query *query);
 

@@ -80,6 +80,7 @@
 #include "distributed/multi_executor.h"
 #include "distributed/multi_logical_planner.h"
 #include "distributed/multi_partitioning_utils.h"
+#include "distributed/namespace_utils.h"
 #include "distributed/pg_dist_colocation.h"
 #include "distributed/pg_dist_partition.h"
 #include "distributed/reference_table_utils.h"
@@ -535,7 +536,7 @@ CreateDistributedTableConcurrently(Oid relationId, char *distributionColumnName,
 	 */
 	Var *distributionColumn = BuildDistributionKeyFromColumnName(relationId,
 																 distributionColumnName,
-																 NoLock);
+																 NoLock, false);
 
 	/* get an advisory lock to serialize concurrent default group creations */
 	if (IsColocateWithDefault(colocateWithTableName))
@@ -704,7 +705,7 @@ EnsureColocateWithTableIsValid(Oid relationId, char distributionMethod,
 
 	Var *distributionColumn = BuildDistributionKeyFromColumnName(relationId,
 																 distributionColumnName,
-																 NoLock);
+																 AccessShareLock, true);
 	EnsureTableCanBeColocatedWith(relationId, replicationModel,
 								  distributionColumn, colocateWithTableId);
 }
@@ -1221,7 +1222,7 @@ CreateCitusTable(Oid relationId, CitusTableType tableType,
 		distributionColumn = BuildDistributionKeyFromColumnName(relationId,
 																distributedTableParams->
 																distributionColumnName,
-																NoLock);
+																NoLock, false);
 	}
 
 	CitusTableParams citusTableParams = DecideCitusTableParams(tableType,
@@ -2578,6 +2579,9 @@ TableEmpty(Oid tableId)
 		ereport(ERROR, (errmsg("could not connect to SPI manager")));
 	}
 
+	/* Do not resolve operators through the caller's search path. */
+	int searchPathNestLevel = PushEmptySearchPath();
+
 	appendStringInfo(selectTrueQueryString, SELECT_TRUE_QUERY, tableQualifiedName);
 
 	int spiQueryResult = SPI_execute(selectTrueQueryString->data, readOnly, 0);
@@ -2591,6 +2595,8 @@ TableEmpty(Oid tableId)
 	Assert(SPI_processed == 1 || SPI_processed == 0);
 
 	bool localTableEmpty = !SPI_processed;
+
+	PopEmptySearchPath(searchPathNestLevel);
 
 	SPI_finish();
 

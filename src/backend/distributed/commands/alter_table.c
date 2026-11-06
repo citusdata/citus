@@ -1358,7 +1358,7 @@ CreateTableConversion(TableConversionParameters *params)
 	relation_close(relation, NoLock);
 	con->distributionKey =
 		BuildDistributionKeyFromColumnName(con->relationId, con->distributionColumn,
-										   NoLock);
+										   NoLock, false);
 
 	con->originalAccessMethod = NULL;
 	if (!PartitionedTable(con->relationId) && !IsForeignTable(con->relationId))
@@ -1371,7 +1371,7 @@ CreateTableConversion(TableConversionParameters *params)
 								   relam)));
 		}
 		Form_pg_am amForm = (Form_pg_am) GETSTRUCT(amTuple);
-		con->originalAccessMethod = NameStr(amForm->amname);
+		con->originalAccessMethod = pstrdup(NameStr(amForm->amname));
 		ReleaseSysCache(amTuple);
 	}
 
@@ -2280,11 +2280,16 @@ ExecuteQueryViaSPI(char *query, int SPIOK)
 		ereport(ERROR, (errmsg("could not connect to SPI manager")));
 	}
 
+	/* Do not resolve operators through the caller's search path. */
+	int searchPathNestLevel = PushEmptySearchPath();
+
 	spiResult = SPI_execute(query, false, 0);
 	if (spiResult != SPIOK)
 	{
 		ereport(ERROR, (errmsg("could not run SPI query")));
 	}
+
+	PopEmptySearchPath(searchPathNestLevel);
 
 	spiResult = SPI_finish();
 	if (spiResult != SPI_OK_FINISH)

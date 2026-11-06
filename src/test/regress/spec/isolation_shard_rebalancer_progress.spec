@@ -128,10 +128,12 @@ step "s6-release-advisory-lock"
 
 session "s7"
 
+// Keep the upper size bucket far enough from 200000 to absorb one-block
+// storage layout differences across PostgreSQL versions.
 step "s7-get-progress"
 {
 	set LOCAL client_min_messages=NOTICE;
-	WITH possible_sizes(size) as (VALUES (0), (8000), (40000), (200000), (480000))
+	WITH possible_sizes(size) as (VALUES (0), (8000), (40000), (200000), (520000))
 	SELECT
 		table_name,
 		shardid,
@@ -157,7 +159,7 @@ step "s7-get-progress"
 step "s7-get-progress-ordered"
 {
 	set LOCAL client_min_messages=NOTICE;
-	WITH possible_sizes(size) as (VALUES (0), (8000), (40000), (200000), (480000))
+	WITH possible_sizes(size) as (VALUES (0), (8000), (40000), (200000), (520000))
 	SELECT
 		table_name,
 		shardid,
