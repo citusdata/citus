@@ -37,6 +37,7 @@
 #include "distributed/citus_acquire_lock.h"
 #include "distributed/citus_safe_lib.h"
 #include "distributed/connection_management.h"
+#include "distributed/namespace_utils.h"
 #include "distributed/version_compat.h"
 
 /* forward declaration of background worker entrypoint */
@@ -237,6 +238,10 @@ LockAcquireHelperMain(Datum main_arg)
 		SetCurrentStatementStartTimestamp();
 		StartTransactionCommand();
 		SPI_connect();
+
+		/* Do not resolve operators through the caller's search path. */
+		int searchPathNestLevel = PushEmptySearchPath();
+
 		PushActiveSnapshot(GetTransactionSnapshot());
 		pgstat_report_activity(STATE_RUNNING, sql.data);
 
@@ -274,6 +279,8 @@ LockAcquireHelperMain(Datum main_arg)
 		{
 			elog(FATAL, "cannot cancel competing backends for backend %d", backendPid);
 		}
+
+		PopEmptySearchPath(searchPathNestLevel);
 
 		/*
 		 * And finish our transaction.
