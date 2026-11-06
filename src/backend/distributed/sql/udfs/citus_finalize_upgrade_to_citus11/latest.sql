@@ -206,15 +206,24 @@ END;
   -- sync the objects & metadata, but there is no harm to do it anyway
   -- it'll only cost some execution time but makes sure that we have a
   -- a consistent metadata & objects across all the nodes
+  -- It first checks the current metadata sync mode, and if it is transactional, it starts
+  -- the metadata sync in a transaction block. If the metadata sync mode is nontransactional,
+  -- it starts the metadata sync directly due to this mode splits metadata sync into smaller
+  -- transactions, and it is not possible to start the metadata sync in a transaction block.
+  -- If the metadata sync mode is unexpected, it raises an exception.
   ------------------------------------------------------------------------------------------
-  DECLARE
-  BEGIN
-
-    -- this might take long depending on the number of tables & objects ...
-    RAISE NOTICE 'Preparing to sync the metadata to all nodes';
-
-    PERFORM start_metadata_sync_to_all_nodes();
-  END;
+  RAISE NOTICE 'Preparing to sync the metadata to all nodes %', current_setting('citus.metadata_sync_mode');
+  IF current_setting('citus.metadata_sync_mode') = 'transactional' THEN
+      DECLARE
+      BEGIN
+          PERFORM start_metadata_sync_to_all_nodes();
+      END;
+  ELSIF current_setting('citus.metadata_sync_mode') = 'nontransactional' THEN
+      RAISE NOTICE 'Preparing to sync the metadata to all nodes';
+      PERFORM start_metadata_sync_to_all_nodes();
+  ELSE
+      RAISE EXCEPTION 'Unexpected citus.metadata_sync_mode: %', current_setting('citus.metadata_sync_mode');
+  END IF;
 
   RETURN true;
 END;
