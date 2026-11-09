@@ -50,6 +50,7 @@
 #include "distributed/metadata/pg_dist_object.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
+#include "distributed/namespace_utils.h"
 #include "distributed/remote_commands.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_transaction.h"
@@ -120,6 +121,7 @@ citus_unmark_object_distributed(PG_FUNCTION_ARGS)
 	bool checkObjectExistence = true;
 	if (PG_NARGS() == 4)
 	{
+		EnsureSuperUser();
 		checkObjectExistence = PG_GETARG_BOOL(3);
 	}
 
@@ -429,6 +431,9 @@ ExecuteCommandAsSuperuser(char *query, int paramCount, Oid *paramTypes,
 		ereport(ERROR, (errmsg("could not connect to SPI manager")));
 	}
 
+	/* Do not resolve operators through the caller's search path as extension owner. */
+	int searchPathNestLevel = PushEmptySearchPath();
+
 	/* make sure we have write access */
 	GetUserIdAndSecContext(&savedUserId, &savedSecurityContext);
 	SetUserIdAndSecContext(CitusExtensionOwner(), SECURITY_LOCAL_USERID_CHANGE);
@@ -437,6 +442,8 @@ ExecuteCommandAsSuperuser(char *query, int paramCount, Oid *paramTypes,
 										  NULL, false, 0);
 
 	SetUserIdAndSecContext(savedUserId, savedSecurityContext);
+
+	PopEmptySearchPath(searchPathNestLevel);
 
 	int spiFinished = SPI_finish();
 	if (spiFinished != SPI_OK_FINISH)
