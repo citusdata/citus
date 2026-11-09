@@ -1,0 +1,16 @@
+2025-08-02 06:34:55.234 UTC [41803] LOG:  starting PostgreSQL 18beta2 on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 11.4.0-1ubuntu1~22.04) 11.4.0, 64-bit
+2025-08-02 06:34:55.235 UTC [41803] LOG:  could not bind IPv6 address "::1": Address already in use
+2025-08-02 06:34:55.235 UTC [41803] HINT:  Is another postmaster already running on port 9700? If not, wait a few seconds and retry.
+2025-08-02 06:34:55.235 UTC [41803] LOG:  could not bind IPv4 address "127.0.0.1": Address already in use
+2025-08-02 06:34:55.235 UTC [41803] HINT:  Is another postmaster already running on port 9700? If not, wait a few seconds and retry.
+2025-08-02 06:34:55.235 UTC [41803] WARNING:  could not create listen socket for "localhost"
+2025-08-02 06:34:55.235 UTC [41803] FATAL:  could not create any TCP/IP sockets
+2025-08-02 06:34:55.240 UTC [41803] LOG:  database system is shut down
+2025-08-02 06:35:12.489 UTC [42020] LOG:  starting PostgreSQL 18beta2 on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 11.4.0-1ubuntu1~22.04) 11.4.0, 64-bit
+2025-08-02 06:35:12.490 UTC [42020] LOG:  could not bind IPv6 address "::1": Address already in use
+2025-08-02 06:35:12.490 UTC [42020] HINT:  Is another postmaster already running on port 9700? If not, wait a few seconds and retry.
+2025-08-02 06:35:12.490 UTC [42020] LOG:  could not bind IPv4 address "127.0.0.1": Address already in use
+2025-08-02 06:35:12.490 UTC [42020] HINT:  Is another postmaster already running on port 9700? If not, wait a few seconds and retry.
+2025-08-02 06:35:12.490 UTC [42020] WARNING:  could not create listen socket for "localhost"
+2025-08-02 06:35:12.490 UTC [42020] FATAL:  could not create any TCP/IP sockets
+2025-08-02 06:35:12.494 UTC [42020] LOG:  database system is shut down
