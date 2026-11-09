@@ -401,8 +401,13 @@ AddPartitionKeyNotNullFilterToSelect(Query *subqery, bool
 		return;
 	}
 
-	/* we should have found target partition column */
-	Assert(targetPartitionColumnVar != NULL);
+	/* Caller must gate on HasDistributionKey(); surface stray callers (#8959). */
+	if (targetPartitionColumnVar == NULL)
+	{
+		ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
+						errmsg("AddPartitionKeyNotNullFilterToSelect called "
+							   "without a partition-key Var in the target list")));
+	}
 
 #if PG_VERSION_NUM >= PG_VERSION_18
 	if (subqery->hasGroupRTE)
