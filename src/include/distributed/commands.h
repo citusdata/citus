@@ -521,6 +521,7 @@ extern List * AlterRoleSetStmtObjectAddress(Node *node,
 											bool missing_ok, bool isPostprocess);
 extern List * PreprocessCreateRoleStmt(Node *stmt, const char *queryString,
 									   ProcessUtilityContext processUtilityContext);
+extern List * PostprocessCreateRoleStmt(Node *stmt, const char *queryString);
 extern List * PreprocessDropRoleStmt(Node *stmt, const char *queryString,
 									 ProcessUtilityContext processUtilityContext);
 extern List * PreprocessGrantRoleStmt(Node *stmt, const char *queryString,
