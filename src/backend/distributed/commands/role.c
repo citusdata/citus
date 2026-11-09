@@ -56,6 +56,7 @@
 #include "distributed/version_compat.h"
 #include "distributed/worker_transaction.h"
 
+static void ReplacePasswordOptionWithEncryptedPassword(List *roleOptions, Oid roleOid);
 static const char * ExtractEncryptedPassword(Oid roleOid);
 static const char * CreateAlterRoleIfExistsCommand(AlterRoleStmt *stmt);
 static const char * CreateAlterRoleSetIfExistsCommand(AlterRoleSetStmt *stmt);
@@ -161,27 +162,9 @@ PostprocessAlterRoleStmt(Node *node, const char *queryString)
 
 	AlterRoleStmt *stmt = castNode(AlterRoleStmt, node);
 
-	DefElem *option = NULL;
-	foreach_declared_ptr(option, stmt->options)
-	{
-		if (strcasecmp(option->defname, "password") == 0)
-		{
-			Oid roleOid = get_rolespec_oid(stmt->role, true);
-			const char *encryptedPassword = ExtractEncryptedPassword(roleOid);
+	Oid roleOid = get_rolespec_oid(stmt->role, true);
+	ReplacePasswordOptionWithEncryptedPassword(stmt->options, roleOid);
 
-			if (encryptedPassword != NULL)
-			{
-				String *encryptedPasswordValue = makeString((char *) encryptedPassword);
-				option->arg = (Node *) encryptedPasswordValue;
-			}
-			else
-			{
-				option->arg = NULL;
-			}
-
-			break;
-		}
-	}
 	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
 								(void *) CreateAlterRoleIfExistsCommand(stmt),
 								ENABLE_DDL_PROPAGATION);
@@ -338,6 +321,47 @@ CreateCreateOrAlterRoleCommand(const char *roleName,
 
 
 /*
+ * ReplacePasswordOptionWithEncryptedPassword replaces the value of the
+ * "password" option in the given role options, if any, with the encrypted
+ * password that is stored in pg_authid for the given role. If the role has no
+ * stored password, the option value is set to NULL, so it gets deparsed as
+ * PASSWORD NULL.
+ *
+ * We send the encrypted password to the other nodes, rather than the password
+ * given by the user, so that all nodes store the same password verifier. If we
+ * sent the plain text password instead, each node would encrypt it with its
+ * own password_encryption setting and, for SCRAM-SHA-256, its own random salt.
+ *
+ * This must be called after the local command has stored the password in
+ * pg_authid.
+ */
+static void
+ReplacePasswordOptionWithEncryptedPassword(List *roleOptions, Oid roleOid)
+{
+	DefElem *option = NULL;
+	foreach_declared_ptr(option, roleOptions)
+	{
+		if (strcmp(option->defname, "password") == 0)
+		{
+			const char *encryptedPassword = ExtractEncryptedPassword(roleOid);
+
+			if (encryptedPassword != NULL)
+			{
+				String *encryptedPasswordValue = makeString((char *) encryptedPassword);
+				option->arg = (Node *) encryptedPasswordValue;
+			}
+			else
+			{
+				option->arg = NULL;
+			}
+
+			break;
+		}
+	}
+}
+
+
+/*
  * ExtractEncryptedPassword extracts the encrypted password of a role. The function
  * gets the password from the pg_authid table.
  */
@@ -351,6 +375,7 @@ ExtractEncryptedPassword(Oid roleOid)
 
 	if (!HeapTupleIsValid(tuple))
 	{
+		table_close(pgAuthId, AccessShareLock);
 		return NULL;
 	}
 
@@ -994,10 +1019,11 @@ GenerateSecLabelOnRoleStmts(Oid roleid, char *rolename)
 
 
 /*
- * PreprocessCreateRoleStmt creates a worker_create_or_alter_role query for the
- * role that is being created. With that query we can create the role in the
- * workers or if they exist we alter them to the way they are being created
- * right now.
+ * PreprocessCreateRoleStmt performs the checks and acquires the locks that need
+ * to happen before the role is created locally. The commands to create the role
+ * on the other nodes are built in PostprocessCreateRoleStmt, because they need
+ * the encrypted password, which is only available after the role is created
+ * locally.
  */
 List *
 PreprocessCreateRoleStmt(Node *node, const char *queryString,
@@ -1024,7 +1050,28 @@ PreprocessCreateRoleStmt(Node *node, const char *queryString,
 
 	LockRelationOid(DistNodeRelationId(), RowShareLock);
 
+	return NIL;
+}
+
+
+/*
+ * PostprocessCreateRoleStmt creates a worker_create_or_alter_role query for the
+ * role that has just been created. With that query we can create the role in the
+ * workers or if they exist we alter them to the way they are being created
+ * right now.
+ */
+List *
+PostprocessCreateRoleStmt(Node *node, const char *queryString)
+{
+	if (!EnableCreateRolePropagation || !ShouldPropagate())
+	{
+		return NIL;
+	}
+
 	CreateRoleStmt *createRoleStmt = castNode(CreateRoleStmt, node);
+
+	Oid roleOid = get_role_oid(createRoleStmt->role, false);
+	ReplacePasswordOptionWithEncryptedPassword(createRoleStmt->options, roleOid);
 
 	AlterRoleStmt *alterRoleStmt = makeNode(AlterRoleStmt);
 	alterRoleStmt->role = makeNode(RoleSpec);
