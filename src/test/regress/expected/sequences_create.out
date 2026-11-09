@@ -1,5 +1,6 @@
 CREATE SCHEMA sequences_schema;
 SET search_path TO sequences_schema;
+GRANT ALL ON SCHEMA sequences_schema TO regularuser;
 CREATE SEQUENCE seq_0;
 ALTER SEQUENCE seq_0 AS smallint;
 CREATE SEQUENCE seq_1;

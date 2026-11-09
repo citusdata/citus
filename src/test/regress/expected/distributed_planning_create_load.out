@@ -1,5 +1,6 @@
 CREATE SCHEMA "distributed planning";
 SET search_path TO "distributed planning";
+GRANT ALL ON SCHEMA "distributed planning" TO regularuser;
 CREATE TABLE
 date_part_table (event_time timestamp, event int, user_id int)
 partition by range (event_time);
