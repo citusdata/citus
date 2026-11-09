@@ -1631,8 +1631,8 @@ ActiveShardPlacementWorkerNode(uint64 shardId)
  * system catalogs, converts these placements to their in-memory
  * representation, and returns the converted shard placements in a new list.
  *
- * This probably only should be called from metadata_cache.c.  Resides here
- * because it shares code with other routines in this file.
+ * Callers can use this directly when loading the full table metadata cache
+ * would retain substantially more metadata than the placement list itself.
  */
 List *
 BuildShardPlacementList(int64 shardId)
