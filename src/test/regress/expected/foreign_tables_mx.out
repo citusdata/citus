@@ -38,9 +38,16 @@ SELECT partmethod, repmodel FROM pg_dist_partition WHERE logicalrelid = 'foreign
  n          | s
 (1 row)
 
--- COPY FROM doesn't work for Citus foreign tables
+-- COPY FROM for Citus foreign tables
 COPY foreign_table FROM stdin;
-ERROR:  cannot PREPARE a transaction that has operated on postgres_fdw foreign tables
+SELECT * FROM foreign_table ORDER BY a;
+ id |   data    | a
+---------------------------------------------------------------------
+  1 | text_test | 1
+  1 | 1foo      | 2
+(2 rows)
+
+DELETE FROM foreign_table WHERE a = 2;
 CREATE TABLE parent_for_foreign_tables (
     project_id integer
 ) PARTITION BY HASH (project_id);
