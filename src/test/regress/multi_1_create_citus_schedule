@@ -135,3 +135,11 @@ test: extract_deparse
 # they remain part of multi_having_pushdown on main.
 # ----------
 test: multi_having_var_remapping
+
+# ----------
+# create_role_propagation covers CREATE ROLE sending the stored password verifier,
+# which is not present in the N-1 (13.4.0) Citus binary; under N-1 each node derives
+# its own verifier. Run it only under check-multi-1-create-citus, which is not
+# part of the N-1 test matrix.
+# ----------
+test: create_role_propagation
