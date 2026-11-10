@@ -16,6 +16,12 @@
 test: multi_extension
 test: multi_test_helpers multi_test_helpers_superuser
 test: multi_cluster_management
+
+# create_role_propagation expects the default password_encryption (scram-sha-256), so it runs
+# before multi_metadata_sync, which sets password_encryption to md5 cluster-wide. It is kept in
+# this schedule because the N-1 (previous minor) binary does not propagate the stored password
+# verifier and N-1 targets skip check-multi-1-create-citus.
+test: create_role_propagation
 test: multi_create_fdw
 
 # ---
@@ -183,11 +189,3 @@ test: multi_having_var_remapping
 # check-multi-1-create-citus, which is not part of the N-1 test matrix.
 # ----------
 test: node_removal_transaction_recovery
-
-# ----------
-# create_role_propagation covers CREATE ROLE sending the stored password verifier,
-# which is not present in the N-1 (14.2.0) Citus binary; under N-1 each node derives
-# its own verifier. Run it only under check-multi-1-create-citus, which is not
-# part of the N-1 test matrix.
-# ----------
-test: create_role_propagation
