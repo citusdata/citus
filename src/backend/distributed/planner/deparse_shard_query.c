@@ -15,6 +15,7 @@
 
 #include "access/heapam.h"
 #include "access/htup_details.h"
+#include "access/sysattr.h"
 #include "catalog/pg_constraint.h"
 #include "catalog/pg_namespace.h"
 #include "catalog/pg_operator.h"
@@ -24,6 +25,7 @@
 #include "nodes/nodes.h"
 #include "nodes/parsenodes.h"
 #include "nodes/pg_list.h"
+#include "optimizer/optimizer.h"
 #include "parser/parsetree.h"
 #include "storage/lock.h"
 #include "utils/lsyscache.h"
@@ -177,17 +179,26 @@ RebuildQueryStrings(Job *workerJob)
 
 
 /*
- * AddInsertAliasIfNeeded adds an alias in UPSERTs and multi-row INSERTs to avoid
- * deparsing issues (e.g. RETURNING might reference the original table name,
- * which has been replaced by a shard name).
+ * AddInsertAliasIfNeeded adds an alias in UPSERTs, multi-row INSERTs and
+ * INSERTs that return the whole target row, to avoid deparsing issues (e.g.
+ * RETURNING might reference the original table name, which has been replaced
+ * by a shard name).
  */
 void
 AddInsertAliasIfNeeded(Query *query)
 {
 	Assert(query->commandType == CMD_INSERT);
 
+	Bitmapset *returningAttrs = NULL;
+	pull_varattnos((Node *) query->returningList, query->resultRelation,
+				   &returningAttrs);
+	bool returnsWholeRow = bms_is_member(InvalidAttrNumber -
+										 FirstLowInvalidHeapAttributeNumber,
+										 returningAttrs);
+
 	if (query->onConflict == NULL &&
-		ExtractDistributedInsertValuesRTE(query) == NULL)
+		ExtractDistributedInsertValuesRTE(query) == NULL &&
+		!returnsWholeRow)
 	{
 		/* simple single-row insert does not need an alias */
 		return;

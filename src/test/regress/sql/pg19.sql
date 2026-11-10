@@ -843,9 +843,7 @@ DROP SCHEMA pg19_explain_io CASCADE;
 RESET client_min_messages;
 RESET search_path;
 
--- ON CONFLICT DO SELECT with whole-row RETURNING of the target alias, old and
--- new (#8762): the worker must cast them to the shard's row type, not to the
--- distributed table's row type.
+-- ON CONFLICT DO SELECT returning the whole target row, old and new (#8762)
 CREATE SCHEMA pg19_do_select;
 SET search_path TO pg19_do_select;
 SET citus.next_shard_id TO 1102000;
