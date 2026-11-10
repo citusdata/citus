@@ -365,3 +365,82 @@ ORDER BY role, member;
 DROP ROLE interdep_role2, interdep_role1, read_only_role;
 
 DROP ROLE nondist_cascade_1, nondist_cascade_2, nondist_cascade_3, dist_cascade;
+
+-- Test that CREATE ROLE propagates the encrypted password that is stored on the
+-- node where the command is run, so that all nodes store the same password
+-- verifier. If the plain text password were propagated, each node would encrypt
+-- it with its own random salt (for scram-sha-256) and its own password_encryption
+-- setting.
+
+-- default password_encryption (scram-sha-256)
+CREATE ROLE create_role_pass_scram LOGIN PASSWORD 'pass_scram';
+SELECT workers.nodeport,
+       CASE WHEN pg_authid.rolpassword LIKE 'SCRAM-SHA-256$%' THEN 'scram-sha-256'
+            WHEN pg_authid.rolpassword LIKE 'md5%' THEN 'md5' END AS password_type,
+       workers.result = pg_authid.rolpassword AS password_is_same
+FROM run_command_on_workers($$SELECT rolpassword FROM pg_authid WHERE rolname = 'create_role_pass_scram'$$) workers, pg_authid
+WHERE pg_authid.rolname = 'create_role_pass_scram' ORDER BY 1;
+
+-- password_encryption is only set in the coordinator session, workers still
+-- default to scram-sha-256
+SET password_encryption TO md5;
+SET client_min_messages TO ERROR;
+CREATE ROLE create_role_pass_md5 LOGIN PASSWORD 'pass_md5';
+RESET client_min_messages;
+RESET password_encryption;
+SELECT workers.nodeport,
+       CASE WHEN pg_authid.rolpassword LIKE 'SCRAM-SHA-256$%' THEN 'scram-sha-256'
+            WHEN pg_authid.rolpassword LIKE 'md5%' THEN 'md5' END AS password_type,
+       workers.result = pg_authid.rolpassword AS password_is_same
+FROM run_command_on_workers($$SELECT rolpassword FROM pg_authid WHERE rolname = 'create_role_pass_md5'$$) workers, pg_authid
+WHERE pg_authid.rolname = 'create_role_pass_md5' ORDER BY 1;
+
+-- in a transaction block
+BEGIN;
+CREATE ROLE create_role_pass_xact LOGIN PASSWORD 'pass_xact';
+COMMIT;
+SELECT workers.nodeport,
+       CASE WHEN pg_authid.rolpassword LIKE 'SCRAM-SHA-256$%' THEN 'scram-sha-256'
+            WHEN pg_authid.rolpassword LIKE 'md5%' THEN 'md5' END AS password_type,
+       workers.result = pg_authid.rolpassword AS password_is_same
+FROM run_command_on_workers($$SELECT rolpassword FROM pg_authid WHERE rolname = 'create_role_pass_xact'$$) workers, pg_authid
+WHERE pg_authid.rolname = 'create_role_pass_xact' ORDER BY 1;
+
+-- role already exists on a worker, so the worker alters it instead
+\c - - - :worker_1_port
+SET citus.enable_ddl_propagation TO off;
+CREATE ROLE create_role_pass_exists LOGIN PASSWORD 'pass_old';
+RESET citus.enable_ddl_propagation;
+\c - - - :master_port
+CREATE ROLE create_role_pass_exists LOGIN PASSWORD 'pass_exists';
+SELECT workers.nodeport,
+       CASE WHEN pg_authid.rolpassword LIKE 'SCRAM-SHA-256$%' THEN 'scram-sha-256'
+            WHEN pg_authid.rolpassword LIKE 'md5%' THEN 'md5' END AS password_type,
+       workers.result = pg_authid.rolpassword AS password_is_same
+FROM run_command_on_workers($$SELECT rolpassword FROM pg_authid WHERE rolname = 'create_role_pass_exists'$$) workers, pg_authid
+WHERE pg_authid.rolname = 'create_role_pass_exists' ORDER BY 1;
+
+-- from a worker
+\c - - - :worker_1_port
+CREATE ROLE create_role_pass_from_worker LOGIN PASSWORD 'pass_from_worker';
+\c - - - :master_port
+SELECT workers.nodeport,
+       CASE WHEN pg_authid.rolpassword LIKE 'SCRAM-SHA-256$%' THEN 'scram-sha-256'
+            WHEN pg_authid.rolpassword LIKE 'md5%' THEN 'md5' END AS password_type,
+       workers.result = pg_authid.rolpassword AS password_is_same
+FROM run_command_on_workers($$SELECT rolpassword FROM pg_authid WHERE rolname = 'create_role_pass_from_worker'$$) workers, pg_authid
+WHERE pg_authid.rolname = 'create_role_pass_from_worker' ORDER BY 1;
+
+-- empty and NULL passwords are propagated as NULL
+CREATE ROLE create_role_pass_empty LOGIN PASSWORD '';
+CREATE ROLE create_role_pass_null LOGIN PASSWORD NULL;
+SELECT rolname, rolpassword IS NULL AS password_is_null FROM pg_authid
+WHERE rolname IN ('create_role_pass_empty', 'create_role_pass_null') ORDER BY 1;
+SELECT result FROM run_command_on_workers($$
+    SELECT json_agg(json_build_array(rolname, rolpassword IS NULL) ORDER BY rolname) FROM pg_authid
+    WHERE rolname IN ('create_role_pass_empty', 'create_role_pass_null')
+$$) ORDER BY nodeport;
+
+DROP ROLE create_role_pass_scram, create_role_pass_md5, create_role_pass_xact,
+          create_role_pass_exists, create_role_pass_from_worker,
+          create_role_pass_empty, create_role_pass_null;
