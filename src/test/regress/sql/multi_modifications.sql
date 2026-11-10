@@ -1459,4 +1459,57 @@ SELECT (SELECT count(*) FROM u1) AS n1, (SELECT count(*) FROM u2) AS n2;
 SET client_min_messages TO WARNING;
 SELECT dist_key, val FROM zero_shard_cte ORDER BY dist_key;
 
+-- INSERT .. RETURNING the whole inserted row (#8762)
+CREATE TABLE whole_row_target (tid int PRIMARY KEY, balance int);
+SELECT create_distributed_table('whole_row_target', 'tid');
+
+-- single row, through an alias and through the table's own name
+INSERT INTO whole_row_target AS t VALUES (1, 100) RETURNING t;
+INSERT INTO whole_row_target VALUES (20, 2000) RETURNING whole_row_target;
+-- multiple rows; the returned rows have the table's row type
+WITH ins AS (
+    INSERT INTO whole_row_target AS t VALUES (2, 200), (3, 300) RETURNING t
+)
+SELECT t, pg_typeof(t), (t).balance FROM ins ORDER BY (t).tid;
+-- t.* still returns the columns separately
+INSERT INTO whole_row_target AS t VALUES (4, 400) RETURNING t.*;
+-- ON CONFLICT DO UPDATE, through an alias and through the table's own name
+INSERT INTO whole_row_target AS t VALUES (1, 150)
+    ON CONFLICT (tid) DO UPDATE SET balance = excluded.balance RETURNING t;
+INSERT INTO whole_row_target VALUES (1, 160)
+    ON CONFLICT (tid) DO UPDATE SET balance = excluded.balance RETURNING whole_row_target;
+-- INSERT .. SELECT, pushed down and via the coordinator
+INSERT INTO whole_row_target AS t SELECT tid, balance + 1 FROM whole_row_target WHERE tid = 1
+    ON CONFLICT (tid) DO UPDATE SET balance = excluded.balance RETURNING t;
+INSERT INTO whole_row_target AS t SELECT tid + 10, balance FROM whole_row_target WHERE tid = 1
+    RETURNING t;
+-- a prepared statement, executed often enough to switch to a generic plan
+PREPARE whole_row_insert(int) AS
+    INSERT INTO whole_row_target AS t VALUES ($1, $1 * 100) RETURNING t;
+EXECUTE whole_row_insert(30);
+EXECUTE whole_row_insert(31);
+EXECUTE whole_row_insert(32);
+EXECUTE whole_row_insert(33);
+EXECUTE whole_row_insert(34);
+EXECUTE whole_row_insert(35);
+EXECUTE whole_row_insert(36);
+DEALLOCATE whole_row_insert;
+-- a reference table
+CREATE TABLE whole_row_reference (tid int PRIMARY KEY, balance int);
+SELECT create_reference_table('whole_row_reference');
+INSERT INTO whole_row_reference AS t VALUES (1, 100) RETURNING t;
+-- a table with a dropped column, with and without the binary protocol
+CREATE TABLE whole_row_dropped (tid int PRIMARY KEY, dropped int, balance int);
+ALTER TABLE whole_row_dropped DROP COLUMN dropped;
+SELECT create_distributed_table('whole_row_dropped', 'tid');
+WITH ins AS (INSERT INTO whole_row_dropped AS t VALUES (1, 100) RETURNING t)
+SELECT t, (t).balance FROM ins;
+SET citus.enable_binary_protocol TO off;
+WITH ins AS (INSERT INTO whole_row_dropped AS t VALUES (2, 200) RETURNING t)
+SELECT t, (t).balance FROM ins;
+RESET citus.enable_binary_protocol;
+-- UPDATE and DELETE return the whole row too
+UPDATE whole_row_target t SET balance = balance + 1 WHERE tid = 1 RETURNING t;
+DELETE FROM whole_row_target t WHERE tid = 1 RETURNING t;
+
 DROP SCHEMA multi_modifications CASCADE;
