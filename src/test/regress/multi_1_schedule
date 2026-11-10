@@ -286,6 +286,7 @@ test: multi_reference_table
 test: citus_local_tables_queries
 test: citus_local_table_triggers
 test: local_shard_utility_command_execution
+test: local_execution_whole_row
 test: create_ref_dist_from_citus_local
 test: undistribute_table_cascade
 test: create_citus_local_table_cascade
