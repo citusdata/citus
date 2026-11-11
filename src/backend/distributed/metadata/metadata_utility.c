@@ -1959,7 +1959,8 @@ InsertShardPlacementRow(uint64 shardId, uint64 placementId,
 void
 InsertIntoPgDistPartition(Oid relationId, char distributionMethod,
 						  Var *distributionColumn, uint32 colocationId,
-						  char replicationModel, bool autoConverted)
+						  char replicationModel, bool autoConverted,
+						  bool coordinatorUsesFullSequenceRange)
 {
 	char *distributionColumnString = NULL;
 
@@ -1979,6 +1980,8 @@ InsertIntoPgDistPartition(Oid relationId, char distributionMethod,
 	newValues[Anum_pg_dist_partition_repmodel - 1] = CharGetDatum(replicationModel);
 	newValues[GetAutoConvertedAttrIndexInPgDistPartition(tupleDescriptor)] =
 		BoolGetDatum(autoConverted);
+	newValues[GetCoordUsesFullSeqRangeAttrIndexInPgDistPartition(tupleDescriptor)] =
+		BoolGetDatum(coordinatorUsesFullSequenceRange);
 
 	/* set partkey column to NULL for reference tables */
 	if (distributionMethod != DISTRIBUTE_BY_NONE)
@@ -4528,8 +4531,41 @@ UnblockDependingBackgroundTasks(BackgroundTask *task)
 int
 GetAutoConvertedAttrIndexInPgDistPartition(TupleDesc tupleDesc)
 {
+	/*
+	 * coordinator_uses_full_sequence_range was added via ALTER TABLE in 15.1-1,
+	 * right after autoconverted. When that column is present the position of
+	 * autoconverted is still the compiled-in Anum. When only autoconverted was
+	 * ever added (pre-15.1-1 tuple shape), it sits at tupleDesc->natts - 1.
+	 * Mixed downgrade/upgrade shapes fall through to the trailing slot.
+	 */
+	if (tupleDesc->natts == Natts_pg_dist_partition)
+	{
+		return Anum_pg_dist_partition_autoconverted - 1;
+	}
+	else if (tupleDesc->natts == Natts_pg_dist_partition - 1)
+	{
+		return tupleDesc->natts - 1;
+	}
+	else
+	{
+		return tupleDesc->natts - 2;
+	}
+}
+
+
+/*
+ * GetCoordUsesFullSeqRangeAttrIndexInPgDistPartition returns attrnum for
+ * coordinator_uses_full_sequence_range attr.
+ *
+ * This column was added to pg_dist_partition via ALTER TABLE in 15.1-1. We
+ * compute the index defensively against downgrade/upgrade transitions, the
+ * same way GetAutoConvertedAttrIndexInPgDistPartition does.
+ */
+int
+GetCoordUsesFullSeqRangeAttrIndexInPgDistPartition(TupleDesc tupleDesc)
+{
 	return tupleDesc->natts == Natts_pg_dist_partition
-		   ? (Anum_pg_dist_partition_autoconverted - 1)
+		   ? (Anum_pg_dist_partition_coordinator_uses_full_sequence_range - 1)
 		   : tupleDesc->natts - 1;
 }
 
