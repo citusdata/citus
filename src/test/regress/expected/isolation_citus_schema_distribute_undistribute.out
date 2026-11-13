@@ -104,10 +104,11 @@ citus_schema_distribute
 
 step s2-rename-schema:
     ALTER SCHEMA tenant1 RENAME TO tenant2;
-
+ <waiting ...>
 step s1-commit:
     COMMIT;
 
+step s2-rename-schema: <... completed>
 step s1-verify-distributed-schema:
     SELECT logicalrelid, partmethod, partkey, (colocationid = (SELECT colocationid AS tenant_colocid FROM pg_dist_schema)) AS is_correct_colocid, repmodel, autoconverted FROM pg_dist_partition WHERE logicalrelid::text LIKE 'tenant%' ORDER BY logicalrelid;
 
@@ -152,10 +153,11 @@ citus_schema_undistribute
 
 step s2-rename-schema:
     ALTER SCHEMA tenant1 RENAME TO tenant2;
-
+ <waiting ...>
 step s1-commit:
     COMMIT;
 
+step s2-rename-schema: <... completed>
 step s1-verify-distributed-schema:
     SELECT logicalrelid, partmethod, partkey, (colocationid = (SELECT colocationid AS tenant_colocid FROM pg_dist_schema)) AS is_correct_colocid, repmodel, autoconverted FROM pg_dist_partition WHERE logicalrelid::text LIKE 'tenant%' ORDER BY logicalrelid;
 
