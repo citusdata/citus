@@ -15,6 +15,7 @@
 #include "catalog/pg_class.h"
 #include "nodes/nodeFuncs.h"
 #include "nodes/primnodes.h"
+#include "rewrite/rewriteManip.h"
 
 #include "distributed/listutils.h"
 #include "distributed/query_utils.h"
@@ -22,6 +23,11 @@
 
 
 static bool CitusQueryableRangeTableRelation(RangeTblEntry *rangeTableEntry);
+
+#if PG_VERSION_NUM >= PG_VERSION_16
+static bool FindRangeTableEntryNullingRelids(Node *node, Index rangeTableIndex,
+											 Bitmapset **nullingRelids);
+#endif
 
 /*
  * ExtractRangeTableList walks over a tree to gather entries.
@@ -178,3 +184,73 @@ ExtractRangeTableIndexWalker(Node *node, List **rangeTableIndexList)
 
 	return walkerResult;
 }
+
+
+/*
+ * Vars added above an outer join need the same nulling relids as Vars produced
+ * by the parser, including when the referenced relation is otherwise unused.
+ */
+Node *
+AddRangeTableEntryNullingRelids(Query *query, Index rangeTableIndex, Node *expression)
+{
+#if PG_VERSION_NUM >= PG_VERSION_16
+	Bitmapset *nullingRelids = NULL;
+	FindRangeTableEntryNullingRelids((Node *) query->jointree, rangeTableIndex,
+									 &nullingRelids);
+	if (nullingRelids != NULL)
+	{
+		return add_nulling_relids(expression, bms_make_singleton(rangeTableIndex),
+								  nullingRelids);
+	}
+#endif
+
+	return expression;
+}
+
+
+#if PG_VERSION_NUM >= PG_VERSION_16
+static bool
+FindRangeTableEntryNullingRelids(Node *node, Index rangeTableIndex,
+								 Bitmapset **nullingRelids)
+{
+	if (IsA(node, RangeTblRef))
+	{
+		return ((RangeTblRef *) node)->rtindex == rangeTableIndex;
+	}
+	else if (IsA(node, FromExpr))
+	{
+		Node *fromNode = NULL;
+		foreach_ptr(fromNode, ((FromExpr *) node)->fromlist)
+		{
+			if (FindRangeTableEntryNullingRelids(fromNode, rangeTableIndex,
+												 nullingRelids))
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+	else if (IsA(node, JoinExpr))
+	{
+		JoinExpr *join = (JoinExpr *) node;
+		bool inLeft = FindRangeTableEntryNullingRelids(join->larg, rangeTableIndex,
+													   nullingRelids);
+		bool inRight = FindRangeTableEntryNullingRelids(join->rarg, rangeTableIndex,
+														nullingRelids);
+
+		if ((inLeft && (join->jointype == JOIN_RIGHT || join->jointype == JOIN_FULL)) ||
+			(inRight && (join->jointype == JOIN_LEFT || join->jointype == JOIN_FULL)))
+		{
+			*nullingRelids = bms_add_member(*nullingRelids, join->rtindex);
+		}
+
+		return inLeft || inRight;
+	}
+
+	elog(ERROR, "unrecognized join tree node type: %d", (int) nodeTag(node));
+	return false;
+}
+
+
+#endif
