@@ -50,6 +50,7 @@
 #include "distributed/listutils.h"
 #include "distributed/log_utils.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/query_utils.h"
 #include "distributed/shared_library_init.h"
 
 /*
@@ -265,6 +266,8 @@ HideCitusDependentObjectsOnQueriesOfPgMetaTables(Node *node, void *context)
 
 					Node *citusDependentObjExpr =
 						CreateCitusDependentObjectExpr(varno, metaTableOid);
+					citusDependentObjExpr = AddRangeTableEntryNullingRelids(query, varno,
+																			citusDependentObjExpr);
 
 					/*
 					 * We do not use security quals because a postgres vanilla test fails
