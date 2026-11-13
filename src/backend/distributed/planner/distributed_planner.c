@@ -50,6 +50,7 @@
 #include "distributed/commands.h"
 #include "distributed/coordinator_protocol.h"
 #include "distributed/cte_inline.h"
+#include "distributed/deparse_shard_query.h"
 #include "distributed/distributed_planner.h"
 #include "distributed/function_call_delegation.h"
 #include "distributed/insert_select_planner.h"
@@ -64,6 +65,7 @@
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_router_planner.h"
+#include "distributed/query_colocation_checker.h"
 #include "distributed/query_pushdown_planning.h"
 #include "distributed/query_utils.h"
 #include "distributed/recursive_planning.h"
@@ -80,6 +82,22 @@ static uint64 NextPlanId = 1;
 
 /* keep track of planner call stack levels */
 int PlannerLevel = 0;
+
+#if PG_VERSION_NUM >= PG_VERSION_16
+typedef struct RemovedOuterJoinContext
+{
+	Bitmapset *referencedIdentities;
+	List *rangeTableList;
+} RemovedOuterJoinContext;
+
+static bool CollectReferencedRelationIdentities(Node *node, Bitmapset **identities);
+static bool ReplaceRemovedOuterJoinRelations(Node *node,
+											 RemovedOuterJoinContext *context);
+static void ReplaceRemovedOuterJoinRelationsInJointree(Node *node, Query *query,
+													   RemovedOuterJoinContext *context,
+													   bool nullable);
+static void ConvertRemovedOuterJoinRelation(RangeTblEntry *rte);
+#endif
 
 static bool ListContainsDistributedTableRTE(List *rangeTableList,
 											bool *maybeHasForeignDistributedTable);
@@ -1067,6 +1085,33 @@ CreateDistributedPlan(uint64 planId, bool allowRecursivePlanning, Query *origina
 	DistributedPlan *distributedPlan = NULL;
 	bool hasCtes = originalQuery->cteList != NIL;
 
+#if PG_VERSION_NUM >= PG_VERSION_16
+	if (originalQuery->commandType == CMD_SELECT && !originalQuery->hasModifyingCTE)
+	{
+		RemovedOuterJoinContext context = { 0 };
+		context.rangeTableList = ExtractRangeTableEntryList(query);
+		CollectReferencedRelationIdentities((Node *) query,
+											&context.referencedIdentities);
+		bool hasDistributedTable = false;
+		RangeTblEntry *rte = NULL;
+		foreach_declared_ptr(rte, context.rangeTableList)
+		{
+			if (rte->rtekind == RTE_RELATION &&
+				bms_is_member(GetRTEIdentity(rte), context.referencedIdentities) &&
+				IsCitusTableType(rte->relid, DISTRIBUTED_TABLE))
+			{
+				hasDistributedTable = true;
+				break;
+			}
+		}
+
+		if (!hasDistributedTable)
+		{
+			ReplaceRemovedOuterJoinRelations((Node *) originalQuery, &context);
+		}
+	}
+#endif
+
 	/* Step 1: Try router planner */
 
 	RouterPlanType routerPlan = GetRouterPlanType(query, originalQuery,
@@ -1882,7 +1927,6 @@ BlessRecordExpression(Expr *expr)
 
 		typeMod = rowTupleDesc->tdtypmod;
 	}
-
 	/*
 	 * Record aggregates need blessed typmods to parse worker results.
 	 * For PG18, AGG_MATCH_RECORD allows MIN/MAX on composite types.
@@ -3106,6 +3150,134 @@ DisableSelfJoinElimination(void)
 					  (superuser() ? PGC_SUSET : PGC_USERSET), PGC_S_SESSION,
 					  GUC_ACTION_LOCAL, true, 0, false);
 	return NestLevel;
+}
+
+
+#endif
+
+
+#if PG_VERSION_NUM >= PG_VERSION_16
+static bool
+CollectReferencedRelationIdentities(Node *node, Bitmapset **identities)
+{
+	if (node == NULL)
+	{
+		return false;
+	}
+
+	if (IsA(node, Query))
+	{
+		Query *query = (Query *) node;
+		List *indexes = NIL;
+		ExtractRangeTableIndexWalker((Node *) query->jointree, &indexes);
+
+		ListCell *cell = NULL;
+		foreach(cell, indexes)
+		{
+			RangeTblEntry *rte = rt_fetch(lfirst_int(cell), query->rtable);
+			if (rte->rtekind == RTE_RELATION)
+			{
+				*identities = bms_add_member(*identities, GetRTEIdentity(rte));
+			}
+		}
+
+		return query_tree_walker(query, CollectReferencedRelationIdentities,
+								 identities, 0);
+	}
+
+	return expression_tree_walker(node, CollectReferencedRelationIdentities, identities);
+}
+
+
+static bool
+ReplaceRemovedOuterJoinRelations(Node *node, RemovedOuterJoinContext *context)
+{
+	if (node == NULL)
+	{
+		return false;
+	}
+
+	if (IsA(node, Query))
+	{
+		Query *query = (Query *) node;
+		ReplaceRemovedOuterJoinRelationsInJointree((Node *) query->jointree, query,
+												   context, false);
+		return query_tree_walker(query, ReplaceRemovedOuterJoinRelations, context, 0);
+	}
+
+	return expression_tree_walker(node, ReplaceRemovedOuterJoinRelations, context);
+}
+
+
+/*
+ * PostgreSQL 16.16 can remove outer joins from the transformed jointree.
+ * The original tree is still used for deparsing and recursive planning. Keep
+ * its join structure and aliases, but do not reintroduce an eliminated distributed
+ * relation when the remaining relations can be routed without sharded tables.
+ */
+static void
+ReplaceRemovedOuterJoinRelationsInJointree(Node *node, Query *query,
+										   RemovedOuterJoinContext *context, bool
+										   nullable)
+{
+	if (IsA(node, RangeTblRef) && nullable)
+	{
+		RangeTblEntry *rte = rt_fetch(((RangeTblRef *) node)->rtindex, query->rtable);
+		if (rte->rtekind == RTE_RELATION &&
+			IsCitusTableType(rte->relid, DISTRIBUTED_TABLE) &&
+			!bms_is_member(GetRTEIdentity(rte), context->referencedIdentities))
+		{
+			int identity = GetRTEIdentity(rte);
+			RangeTblEntry *transformedRte = NULL;
+			bool foundTransformedRelation = false;
+			foreach_declared_ptr(transformedRte, context->rangeTableList)
+			{
+				if (transformedRte->rtekind == RTE_RELATION &&
+					GetRTEIdentity(transformedRte) == identity)
+				{
+					ConvertRemovedOuterJoinRelation(transformedRte);
+					foundTransformedRelation = true;
+				}
+			}
+
+			/* Missing subqueries may already have been planned, not eliminated. */
+			if (foundTransformedRelation)
+			{
+				ConvertRemovedOuterJoinRelation(rte);
+			}
+		}
+	}
+	else if (IsA(node, FromExpr))
+	{
+		Node *child = NULL;
+		foreach_declared_ptr(child, ((FromExpr *) node)->fromlist)
+		{
+			ReplaceRemovedOuterJoinRelationsInJointree(child, query, context, nullable);
+		}
+	}
+	else if (IsA(node, JoinExpr))
+	{
+		JoinExpr *join = (JoinExpr *) node;
+
+		/* A whole joined subtree can be on the nullable side of an outer join. */
+		ReplaceRemovedOuterJoinRelationsInJointree(join->larg, query, context,
+												   nullable || join->jointype ==
+												   JOIN_RIGHT);
+		ReplaceRemovedOuterJoinRelationsInJointree(join->rarg, query, context,
+												   nullable || join->jointype == JOIN_LEFT
+												   );
+	}
+}
+
+
+static void
+ConvertRemovedOuterJoinRelation(RangeTblEntry *rte)
+{
+	Oid relationId = rte->relid;
+	ConvertRteToSubqueryWithEmptyResult(rte);
+
+	/* Preserve attribute numbers, including dropped columns, for replanning. */
+	rte->subquery->targetList = CreateAllTargetListForRelation(relationId, NIL);
 }
 
 

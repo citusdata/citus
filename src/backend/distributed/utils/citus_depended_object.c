@@ -50,6 +50,7 @@
 #include "distributed/listutils.h"
 #include "distributed/log_utils.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/query_utils.h"
 #include "distributed/shared_library_init.h"
 
 /*
@@ -273,6 +274,8 @@ HideCitusDependentObjectsOnQueriesOfPgMetaTables(Node *node, void *context)
 					rangeTableEntry->securityQuals =
 						lappend(rangeTableEntry->securityQuals, citusDependentObjExpr);
 #else
+					citusDependentObjExpr = AddRangeTableEntryNullingRelids(query, varno,
+																			citusDependentObjExpr);
 					if (!mergeJoinCondition)
 					{
 						query->jointree->quals = make_and_qual(
