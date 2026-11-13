@@ -600,6 +600,8 @@ object_aclcheck(Oid classid, Oid objectid, Oid roleid, AclMode mode)
 }
 
 
+/* PostgreSQL 15.20 backported have_createdb_privilege. */
+#if PG_VERSION_NUM < 150020
 static inline bool
 have_createdb_privilege(void)
 {
@@ -620,6 +622,7 @@ have_createdb_privilege(void)
 	}
 	return result;
 }
+#endif
 
 
 typedef bool TU_UpdateIndexes;
