@@ -222,6 +222,32 @@ SELECT count(*) FROM local LEFT JOIN distributed USING (id);
 SELECT count(*) FROM distributed RIGHT JOIN local USING (id);
 RESET citus.enable_local_execution;
 
+-- A planned subquery is not an eliminated nullable relation.
+SET citus.enable_sorted_merge TO on;
+CREATE TABLE outer_join_ref (id int);
+SELECT create_reference_table('outer_join_ref');
+CREATE TABLE outer_join_dist (id int);
+SELECT create_distributed_table('outer_join_dist', 'id');
+INSERT INTO outer_join_ref SELECT generate_series(0, 10);
+INSERT INTO outer_join_ref SELECT generate_series(50, 70);
+INSERT INTO outer_join_ref VALUES (NULL), (NULL), (0);
+INSERT INTO outer_join_dist SELECT generate_series(0, 10);
+INSERT INTO outer_join_dist SELECT generate_series(70, 90);
+INSERT INTO outer_join_dist VALUES (0);
+WITH joined AS (
+    SELECT r.id FROM outer_join_ref r
+    WHERE r.id NOT IN (
+        SELECT r2.id FROM outer_join_ref r2 LEFT JOIN outer_join_dist d USING (id)
+        WHERE d.id IN (SELECT id FROM outer_join_dist)
+        ORDER BY id
+    )
+    ORDER BY id
+)
+SELECT count(*), avg(result.id)
+FROM (SELECT a.id FROM joined a FULL JOIN joined b USING (id) WHERE b.id > 3) result;
+DROP TABLE outer_join_ref, outer_join_dist;
+RESET citus.enable_sorted_merge;
+
 SELECT id, name FROM distributed LEFT JOIN local USING (id) ORDER BY 1 LIMIT 1;
 
  SELECT
