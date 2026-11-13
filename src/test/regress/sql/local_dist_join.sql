@@ -210,6 +210,18 @@ SELECT count(*) FROM distributed CROSS JOIN local WHERE distributed.id = 1;
 SELECT count(*) FROM distributed LEFT JOIN local USING (id);
 SELECT count(*) FROM local LEFT JOIN distributed USING (id);
 
+SELECT count(*) FROM distributed RIGHT JOIN local USING (id);
+SELECT count(*) FROM (distributed d1 LEFT JOIN distributed d2 ON d1.id = d2.id)
+RIGHT JOIN local l ON d1.id = l.id;
+SELECT joined.id FROM (local LEFT JOIN distributed USING (id)) AS joined ORDER BY 1 LIMIT 1;
+WITH joined AS MATERIALIZED (SELECT count(*) AS n FROM local LEFT JOIN distributed USING (id))
+SELECT n FROM joined;
+
+SET citus.enable_local_execution TO off;
+SELECT count(*) FROM local LEFT JOIN distributed USING (id);
+SELECT count(*) FROM distributed RIGHT JOIN local USING (id);
+RESET citus.enable_local_execution;
+
 SELECT id, name FROM distributed LEFT JOIN local USING (id) ORDER BY 1 LIMIT 1;
 
  SELECT
