@@ -264,8 +264,6 @@ HideCitusDependentObjectsOnQueriesOfPgMetaTables(Node *node, void *context)
 
 					Node *citusDependentObjExpr =
 						CreateCitusDependentObjectExpr(varno, metaTableOid);
-					citusDependentObjExpr = AddRangeTableEntryNullingRelids(query, varno,
-																			citusDependentObjExpr);
 
 					/*
 					 * PG19 join removal rewrites removed relation Vars to INVALID_VAR.
@@ -276,6 +274,8 @@ HideCitusDependentObjectsOnQueriesOfPgMetaTables(Node *node, void *context)
 					rangeTableEntry->securityQuals =
 						lappend(rangeTableEntry->securityQuals, citusDependentObjExpr);
 #else
+					citusDependentObjExpr = AddRangeTableEntryNullingRelids(query, varno,
+																			citusDependentObjExpr);
 					if (!mergeJoinCondition)
 					{
 						query->jointree->quals = make_and_qual(
