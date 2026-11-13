@@ -1927,7 +1927,6 @@ BlessRecordExpression(Expr *expr)
 
 		typeMod = rowTupleDesc->tdtypmod;
 	}
-
 	/*
 	 * Record aggregates need blessed typmods to parse worker results.
 	 * For PG18, AGG_MATCH_RECORD allows MIN/MAX on composite types.
@@ -3258,8 +3257,8 @@ ReplaceRemovedOuterJoinRelationsInJointree(Node *node, Query *query,
 												   nullable || join->jointype ==
 												   JOIN_RIGHT);
 		ReplaceRemovedOuterJoinRelationsInJointree(join->rarg, query, context,
-												   nullable || join->jointype ==
-												   JOIN_LEFT);
+												   nullable || join->jointype == JOIN_LEFT
+												   );
 	}
 }
 
