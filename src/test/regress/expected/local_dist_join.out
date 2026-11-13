@@ -533,7 +533,6 @@ SELECT count(d2.id) FROM local l LEFT JOIN
 (1 row)
 
 -- A planned subquery is not an eliminated nullable relation.
-SET citus.enable_sorted_merge TO on;
 CREATE TABLE outer_join_ref (id int);
 SELECT create_reference_table('outer_join_ref');
  create_reference_table
@@ -571,7 +570,6 @@ FROM (SELECT a.id FROM joined a FULL JOIN joined b USING (id) WHERE b.id > 3) re
 (1 row)
 
 DROP TABLE outer_join_ref, outer_join_dist;
-RESET citus.enable_sorted_merge;
 SELECT id, name FROM distributed LEFT JOIN local USING (id) ORDER BY 1 LIMIT 1;
  id | name
 ---------------------------------------------------------------------

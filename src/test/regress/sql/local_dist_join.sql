@@ -224,7 +224,6 @@ SELECT count(d2.id) FROM local l LEFT JOIN
 	(distributed d1 JOIN distributed d2 ON d1.id = d2.id) ON l.id = d2.id;
 
 -- A planned subquery is not an eliminated nullable relation.
-SET citus.enable_sorted_merge TO on;
 CREATE TABLE outer_join_ref (id int);
 SELECT create_reference_table('outer_join_ref');
 CREATE TABLE outer_join_dist (id int);
@@ -247,7 +246,6 @@ WITH joined AS (
 SELECT count(*), avg(result.id)
 FROM (SELECT a.id FROM joined a FULL JOIN joined b USING (id) WHERE b.id > 3) result;
 DROP TABLE outer_join_ref, outer_join_dist;
-RESET citus.enable_sorted_merge;
 
 SELECT id, name FROM distributed LEFT JOIN local USING (id) ORDER BY 1 LIMIT 1;
 
