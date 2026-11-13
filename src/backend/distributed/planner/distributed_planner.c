@@ -1051,7 +1051,7 @@ CreateDistributedPlan(uint64 planId, bool allowRecursivePlanning, Query *origina
 											&context.referencedIdentities);
 		bool hasDistributedTable = false;
 		RangeTblEntry *rte = NULL;
-		foreach_ptr(rte, context.rangeTableList)
+		foreach_declared_ptr(rte, context.rangeTableList)
 		{
 			if (rte->rtekind == RTE_RELATION &&
 				bms_is_member(GetRTEIdentity(rte), context.referencedIdentities) &&
@@ -3034,7 +3034,7 @@ ReplaceRemovedOuterJoinRelationsInJointree(Node *node, Query *query,
 	if (IsA(node, FromExpr))
 	{
 		Node *child = NULL;
-		foreach_ptr(child, ((FromExpr *) node)->fromlist)
+		foreach_declared_ptr(child, ((FromExpr *) node)->fromlist)
 		{
 			ReplaceRemovedOuterJoinRelationsInJointree(child, query, context);
 		}
@@ -3062,7 +3062,7 @@ ReplaceRemovedOuterJoinRelationsInJointree(Node *node, Query *query,
 			{
 				int identity = GetRTEIdentity(rte);
 				RangeTblEntry *transformedRte = NULL;
-				foreach_ptr(transformedRte, context->rangeTableList)
+				foreach_declared_ptr(transformedRte, context->rangeTableList)
 				{
 					if (transformedRte->rtekind == RTE_RELATION &&
 						GetRTEIdentity(transformedRte) == identity)
