@@ -1,3 +1,6 @@
+-- Alternative output preserves the Citus circular-dependency error before
+-- PostgreSQL 16.16/17.12/18.7 added row-type dependency checks (CVE-2026-6460).
+-- Remove it when those older minor versions no longer need test coverage.
 CREATE SCHEMA function_propagation_schema;
 SET search_path TO 'function_propagation_schema';
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 10000;

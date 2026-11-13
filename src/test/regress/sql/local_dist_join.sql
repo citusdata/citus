@@ -210,6 +210,31 @@ SELECT count(*) FROM distributed CROSS JOIN local WHERE distributed.id = 1;
 SELECT count(*) FROM distributed LEFT JOIN local USING (id);
 SELECT count(*) FROM local LEFT JOIN distributed USING (id);
 
+SELECT count(*) FROM distributed RIGHT JOIN local USING (id);
+SELECT count(*) FROM (distributed d1 LEFT JOIN distributed d2 ON d1.id = d2.id)
+RIGHT JOIN local l ON d1.id = l.id;
+SELECT joined.id FROM (local LEFT JOIN distributed USING (id)) AS joined ORDER BY 1 LIMIT 1;
+WITH joined AS MATERIALIZED (SELECT count(*) AS n FROM local LEFT JOIN distributed USING (id))
+SELECT n FROM joined;
+
+SET citus.enable_local_execution TO off;
+SELECT count(*) FROM local LEFT JOIN distributed USING (id);
+SELECT count(*) FROM distributed RIGHT JOIN local USING (id);
+RESET citus.enable_local_execution;
+
+-- A planned subquery is not an eliminated nullable relation.
+WITH joined AS (
+    SELECT r.id FROM outer_join_ref r
+    WHERE r.id NOT IN (
+        SELECT r2.id FROM outer_join_ref r2 LEFT JOIN outer_join_dist d USING (id)
+        WHERE d.id IN (SELECT id FROM outer_join_dist)
+        ORDER BY id
+    )
+    ORDER BY id
+)
+SELECT count(*), avg(result.id)
+FROM (SELECT a.id FROM joined a FULL JOIN joined b USING (id) WHERE b.id > 3) result;
+
 SELECT id, name FROM distributed LEFT JOIN local USING (id) ORDER BY 1 LIMIT 1;
 
  SELECT

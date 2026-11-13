@@ -1,0 +1,1614 @@
+CREATE SCHEMA local_dist_join_mixed;
+SET search_path TO local_dist_join_mixed;
+CREATE TABLE distributed (key int, id bigserial PRIMARY KEY,
+                    	  name text,
+                    	  created_at timestamptz DEFAULT now());
+CREATE TABLE reference (id bigserial PRIMARY KEY,
+                    	title text);
+CREATE TABLE local (key int, id bigserial PRIMARY KEY, key2 int,
+                    title text, key3 int);
+-- drop columns so that we test the correctness in different scenarios.
+ALTER TABLE local DROP column key;
+ALTER TABLE local DROP column key2;
+ALTER TABLE local DROP column key3;
+ALTER TABLE distributed DROP column key;
+-- these above restrictions brought us to the following schema
+SELECT create_reference_table('reference');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_table('distributed', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO distributed SELECT i,  i::text, now() FROM generate_series(0,100)i;
+INSERT INTO reference SELECT i,  i::text FROM generate_series(0,100)i;
+INSERT INTO local SELECT i,  i::text FROM generate_series(0,100)i;
+SET client_min_messages to DEBUG1;
+-- very simple 1-1 Joins
+SELECT count(*) FROM distributed JOIN local USING (id);
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT id FROM local_dist_join_mixed.local WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (local_dist_join_mixed.distributed JOIN (SELECT NULL::integer AS "dummy-1", local_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) local_1) local USING (id))
+ count
+---------------------------------------------------------------------
+   101
+(1 row)
+
+SELECT count(*) FROM distributed JOIN local ON (name = title);
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT title FROM local_dist_join_mixed.local WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (local_dist_join_mixed.distributed JOIN (SELECT NULL::integer AS "dummy-1", NULL::bigint AS id, NULL::integer AS "dummy-3", local_1.title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.title FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(title text)) local_1) local ON ((distributed.name OPERATOR(pg_catalog.=) local.title)))
+ count
+---------------------------------------------------------------------
+   101
+(1 row)
+
+SELECT count(*) FROM distributed d1 JOIN local ON (name = d1.id::text);
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS "dummy-1" FROM local_dist_join_mixed.local WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (local_dist_join_mixed.distributed d1 JOIN (SELECT NULL::integer AS "dummy-1", NULL::bigint AS id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result."dummy-1" FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result("dummy-1" integer)) local_1) local ON ((d1.name OPERATOR(pg_catalog.=) (d1.id)::text)))
+ count
+---------------------------------------------------------------------
+ 10201
+(1 row)
+
+SELECT count(*) FROM distributed d1 JOIN local ON (name = d1.id::text AND d1.id < local.title::int);
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT title FROM local_dist_join_mixed.local WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (local_dist_join_mixed.distributed d1 JOIN (SELECT NULL::integer AS "dummy-1", NULL::bigint AS id, NULL::integer AS "dummy-3", local_1.title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.title FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(title text)) local_1) local ON (((d1.name OPERATOR(pg_catalog.=) (d1.id)::text) AND (d1.id OPERATOR(pg_catalog.<) (local.title)::integer))))
+ count
+---------------------------------------------------------------------
+  5050
+(1 row)
+
+SELECT count(*) FROM distributed d1 JOIN local ON (name = d1.id::text AND d1.id < local.title::int) WHERE d1.id = 1;
+DEBUG:  Wrapping relation "distributed" "d1" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT id, name FROM local_dist_join_mixed.distributed d1 WHERE ((name OPERATOR(pg_catalog.=) (id)::text) AND (id OPERATOR(pg_catalog.=) 1))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT NULL::integer AS "dummy-1", d1_1.id, d1_1.name, NULL::timestamp with time zone AS created_at FROM (SELECT intermediate_result.id, intermediate_result.name FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, name text)) d1_1) d1 JOIN local_dist_join_mixed.local ON (((d1.name OPERATOR(pg_catalog.=) (d1.id)::text) AND (d1.id OPERATOR(pg_catalog.<) (local.title)::integer)))) WHERE (d1.id OPERATOR(pg_catalog.=) 1)
+ count
+---------------------------------------------------------------------
+    99
+(1 row)
+
+SELECT count(*) FROM distributed JOIN local USING (id) WHERE false;
+DEBUG:  Wrapping relation "distributed" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT id FROM local_dist_join_mixed.distributed WHERE false
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT NULL::integer AS "dummy-1", distributed_1.id, NULL::text AS name, NULL::timestamp with time zone AS created_at FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) distributed_1) distributed JOIN local_dist_join_mixed.local USING (id)) WHERE false
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+SELECT count(*) FROM distributed d1 JOIN local ON (name = d1.id::text AND d1.id < local.title::int) WHERE d1.id = 1 OR True;
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT title FROM local_dist_join_mixed.local WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (local_dist_join_mixed.distributed d1 JOIN (SELECT NULL::integer AS "dummy-1", NULL::bigint AS id, NULL::integer AS "dummy-3", local_1.title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.title FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(title text)) local_1) local ON (((d1.name OPERATOR(pg_catalog.=) (d1.id)::text) AND (d1.id OPERATOR(pg_catalog.<) (local.title)::integer)))) WHERE ((d1.id OPERATOR(pg_catalog.=) 1) OR true)
+ count
+---------------------------------------------------------------------
+  5050
+(1 row)
+
+SELECT count(*) FROM distributed d1 JOIN local ON (name::int + local.id > d1.id AND d1.id < local.title::int) WHERE d1.id = 1;
+DEBUG:  Wrapping relation "distributed" "d1" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT id, name FROM local_dist_join_mixed.distributed d1 WHERE (id OPERATOR(pg_catalog.=) 1)
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT NULL::integer AS "dummy-1", d1_1.id, d1_1.name, NULL::timestamp with time zone AS created_at FROM (SELECT intermediate_result.id, intermediate_result.name FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, name text)) d1_1) d1 JOIN local_dist_join_mixed.local ON (((((d1.name)::integer OPERATOR(pg_catalog.+) local.id) OPERATOR(pg_catalog.>) d1.id) AND (d1.id OPERATOR(pg_catalog.<) (local.title)::integer)))) WHERE (d1.id OPERATOR(pg_catalog.=) 1)
+ count
+---------------------------------------------------------------------
+    99
+(1 row)
+
+SELECT count(*) FROM distributed JOIN local ON (hashtext(name) = hashtext(title));
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT title FROM local_dist_join_mixed.local WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (local_dist_join_mixed.distributed JOIN (SELECT NULL::integer AS "dummy-1", NULL::bigint AS id, NULL::integer AS "dummy-3", local_1.title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.title FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(title text)) local_1) local ON ((hashtext(distributed.name) OPERATOR(pg_catalog.=) hashtext(local.title))))
+ count
+---------------------------------------------------------------------
+   101
+(1 row)
+
+SELECT hashtext(local.id::text) FROM distributed JOIN local ON (hashtext(name) = hashtext(title)) ORDER BY 1 LIMIT 4;
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT id, title FROM local_dist_join_mixed.local WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT hashtext((local.id)::text) AS hashtext FROM (local_dist_join_mixed.distributed JOIN (SELECT NULL::integer AS "dummy-1", local_1.id, NULL::integer AS "dummy-3", local_1.title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id, intermediate_result.title FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, title text)) local_1) local ON ((hashtext(distributed.name) OPERATOR(pg_catalog.=) hashtext(local.title)))) ORDER BY (hashtext((local.id)::text)) LIMIT 4
+DEBUG:  push down of limit count: 4
+  hashtext
+---------------------------------------------------------------------
+ -2114455578
+ -2097988278
+ -1997006946
+ -1985772843
+(4 rows)
+
+SELECT '' as "xxx", local.*, 'xxx' as "test" FROM distributed JOIN local ON (hashtext(name) = hashtext(title)) ORDER BY 1,2,3 LIMIT 4;
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT id, title FROM local_dist_join_mixed.local WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT ''::text AS xxx, local.id, local.title, 'xxx'::text AS test FROM (local_dist_join_mixed.distributed JOIN (SELECT NULL::integer AS "dummy-1", local_1.id, NULL::integer AS "dummy-3", local_1.title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id, intermediate_result.title FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, title text)) local_1) local ON ((hashtext(distributed.name) OPERATOR(pg_catalog.=) hashtext(local.title)))) ORDER BY ''::text, local.id, local.title LIMIT 4
+DEBUG:  push down of limit count: 4
+ xxx | id | title | test
+---------------------------------------------------------------------
+     |  0 | 0     | xxx
+     |  1 | 1     | xxx
+     |  2 | 2     | xxx
+     |  3 | 3     | xxx
+(4 rows)
+
+SELECT local.title, count(*) FROM distributed JOIN local USING (id) GROUP BY 1 ORDER BY 1, 2 DESC LIMIT 5;
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT id, title FROM local_dist_join_mixed.local WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT local.title, count(*) AS count FROM (local_dist_join_mixed.distributed JOIN (SELECT NULL::integer AS "dummy-1", local_1.id, NULL::integer AS "dummy-3", local_1.title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id, intermediate_result.title FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, title text)) local_1) local USING (id)) GROUP BY local.title ORDER BY local.title, (count(*)) DESC LIMIT 5
+ title | count
+---------------------------------------------------------------------
+ 0     |     1
+ 1     |     1
+ 10    |     1
+ 100   |     1
+ 11    |     1
+(5 rows)
+
+SELECT distributed.id as id1, local.id  as id2 FROM distributed JOIN local USING(id) ORDER BY distributed.id + local.id LIMIT 5;
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT id FROM local_dist_join_mixed.local WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT distributed.id AS id1, local.id AS id2 FROM (local_dist_join_mixed.distributed JOIN (SELECT NULL::integer AS "dummy-1", local_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) local_1) local USING (id)) ORDER BY (distributed.id OPERATOR(pg_catalog.+) local.id) LIMIT 5
+DEBUG:  push down of limit count: 5
+ id1 | id2
+---------------------------------------------------------------------
+   0 |   0
+   1 |   1
+   2 |   2
+   3 |   3
+   4 |   4
+(5 rows)
+
+SELECT distributed.id as id1, local.id  as id2, count(*) FROM distributed JOIN local USING(id) GROUP BY distributed.id, local.id ORDER BY 1,2 LIMIT 5;
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT id FROM local_dist_join_mixed.local WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT distributed.id AS id1, local.id AS id2, count(*) AS count FROM (local_dist_join_mixed.distributed JOIN (SELECT NULL::integer AS "dummy-1", local_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) local_1) local USING (id)) GROUP BY distributed.id, local.id ORDER BY distributed.id, local.id LIMIT 5
+DEBUG:  push down of limit count: 5
+ id1 | id2 | count
+---------------------------------------------------------------------
+   0 |   0 |     1
+   1 |   1 |     1
+   2 |   2 |     1
+   3 |   3 |     1
+   4 |   4 |     1
+(5 rows)
+
+-- basic subqueries that cannot be pulled up
+SELECT count(*) FROM (SELECT *, random() FROM distributed) as d1 JOIN local USING (id);
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT id FROM local_dist_join_mixed.local WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT distributed.id, distributed.name, distributed.created_at, random() AS random FROM local_dist_join_mixed.distributed) d1 JOIN (SELECT NULL::integer AS "dummy-1", local_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) local_1) local USING (id))
+ count
+---------------------------------------------------------------------
+   101
+(1 row)
+
+SELECT count(*) FROM (SELECT *, random() FROM distributed) as d1  JOIN local ON (name = title);
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT title FROM local_dist_join_mixed.local WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT distributed.id, distributed.name, distributed.created_at, random() AS random FROM local_dist_join_mixed.distributed) d1 JOIN (SELECT NULL::integer AS "dummy-1", NULL::bigint AS id, NULL::integer AS "dummy-3", local_1.title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.title FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(title text)) local_1) local ON ((d1.name OPERATOR(pg_catalog.=) local.title)))
+ count
+---------------------------------------------------------------------
+   101
+(1 row)
+
+SELECT count(*) FROM (SELECT *, random() FROM distributed) as d1  JOIN local ON (name = d1.id::text);
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS "dummy-1" FROM local_dist_join_mixed.local WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT distributed.id, distributed.name, distributed.created_at, random() AS random FROM local_dist_join_mixed.distributed) d1 JOIN (SELECT NULL::integer AS "dummy-1", NULL::bigint AS id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result."dummy-1" FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result("dummy-1" integer)) local_1) local ON ((d1.name OPERATOR(pg_catalog.=) (d1.id)::text)))
+ count
+---------------------------------------------------------------------
+ 10201
+(1 row)
+
+SELECT count(*) FROM (SELECT *, random() FROM distributed) as d1  JOIN local ON (name = d1.id::text AND d1.id < local.title::int);
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT title FROM local_dist_join_mixed.local WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT distributed.id, distributed.name, distributed.created_at, random() AS random FROM local_dist_join_mixed.distributed) d1 JOIN (SELECT NULL::integer AS "dummy-1", NULL::bigint AS id, NULL::integer AS "dummy-3", local_1.title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.title FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(title text)) local_1) local ON (((d1.name OPERATOR(pg_catalog.=) (d1.id)::text) AND (d1.id OPERATOR(pg_catalog.<) (local.title)::integer))))
+ count
+---------------------------------------------------------------------
+  5050
+(1 row)
+
+SELECT count(*) FROM (SELECT *, random() FROM distributed) as d1  JOIN local ON (name = d1.id::text AND d1.id < local.title::int) WHERE d1.id = 1;
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT title FROM local_dist_join_mixed.local WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT distributed.id, distributed.name, distributed.created_at, random() AS random FROM local_dist_join_mixed.distributed) d1 JOIN (SELECT NULL::integer AS "dummy-1", NULL::bigint AS id, NULL::integer AS "dummy-3", local_1.title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.title FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(title text)) local_1) local ON (((d1.name OPERATOR(pg_catalog.=) (d1.id)::text) AND (d1.id OPERATOR(pg_catalog.<) (local.title)::integer)))) WHERE (d1.id OPERATOR(pg_catalog.=) 1)
+ count
+---------------------------------------------------------------------
+    99
+(1 row)
+
+SELECT count(*) FROM (SELECT *, random() FROM distributed) as d1  JOIN local ON (name = d1.id::text AND d1.id < local.title::int) WHERE d1.id = 1 AND false;
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT title FROM local_dist_join_mixed.local WHERE false
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT distributed.id, distributed.name, distributed.created_at, random() AS random FROM local_dist_join_mixed.distributed) d1 JOIN (SELECT NULL::integer AS "dummy-1", NULL::bigint AS id, NULL::integer AS "dummy-3", local_1.title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.title FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(title text)) local_1) local ON (((d1.name OPERATOR(pg_catalog.=) (d1.id)::text) AND (d1.id OPERATOR(pg_catalog.<) (local.title)::integer)))) WHERE ((d1.id OPERATOR(pg_catalog.=) 1) AND false)
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+SELECT count(*) FROM (SELECT *, random() FROM distributed) as d1  JOIN local ON (name = d1.id::text AND d1.id < local.title::int) WHERE d1.id = 1 OR true;
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT title FROM local_dist_join_mixed.local WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT distributed.id, distributed.name, distributed.created_at, random() AS random FROM local_dist_join_mixed.distributed) d1 JOIN (SELECT NULL::integer AS "dummy-1", NULL::bigint AS id, NULL::integer AS "dummy-3", local_1.title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.title FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(title text)) local_1) local ON (((d1.name OPERATOR(pg_catalog.=) (d1.id)::text) AND (d1.id OPERATOR(pg_catalog.<) (local.title)::integer)))) WHERE ((d1.id OPERATOR(pg_catalog.=) 1) OR true)
+ count
+---------------------------------------------------------------------
+  5050
+(1 row)
+
+-- pull up subqueries as they are pretty simple, local table should be recursively planned
+SELECT count(*) FROM (SELECT * FROM distributed) as d1 JOIN local USING (id);
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT id FROM local_dist_join_mixed.local WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT distributed.id, distributed.name, distributed.created_at FROM local_dist_join_mixed.distributed) d1 JOIN (SELECT NULL::integer AS "dummy-1", local_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) local_1) local USING (id))
+ count
+---------------------------------------------------------------------
+   101
+(1 row)
+
+SELECT count(*) FROM (SELECT * FROM distributed) as d1  JOIN local ON (name = title);
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT title FROM local_dist_join_mixed.local WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT distributed.id, distributed.name, distributed.created_at FROM local_dist_join_mixed.distributed) d1 JOIN (SELECT NULL::integer AS "dummy-1", NULL::bigint AS id, NULL::integer AS "dummy-3", local_1.title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.title FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(title text)) local_1) local ON ((d1.name OPERATOR(pg_catalog.=) local.title)))
+ count
+---------------------------------------------------------------------
+   101
+(1 row)
+
+SELECT count(*) FROM (SELECT * FROM distributed) as d1  JOIN local ON (name = d1.id::text);
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS "dummy-1" FROM local_dist_join_mixed.local WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT distributed.id, distributed.name, distributed.created_at FROM local_dist_join_mixed.distributed) d1 JOIN (SELECT NULL::integer AS "dummy-1", NULL::bigint AS id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result."dummy-1" FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result("dummy-1" integer)) local_1) local ON ((d1.name OPERATOR(pg_catalog.=) (d1.id)::text)))
+ count
+---------------------------------------------------------------------
+ 10201
+(1 row)
+
+SELECT count(*) FROM (SELECT * FROM distributed) as d1  JOIN local ON (name = d1.id::text AND d1.id < local.title::int);
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT title FROM local_dist_join_mixed.local WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT distributed.id, distributed.name, distributed.created_at FROM local_dist_join_mixed.distributed) d1 JOIN (SELECT NULL::integer AS "dummy-1", NULL::bigint AS id, NULL::integer AS "dummy-3", local_1.title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.title FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(title text)) local_1) local ON (((d1.name OPERATOR(pg_catalog.=) (d1.id)::text) AND (d1.id OPERATOR(pg_catalog.<) (local.title)::integer))))
+ count
+---------------------------------------------------------------------
+  5050
+(1 row)
+
+SELECT count(*) FROM (SELECT * FROM distributed) as d1  JOIN local ON (name = d1.id::text AND d1.id < local.title::int) WHERE d1.id = 1;
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT title FROM local_dist_join_mixed.local WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT distributed.id, distributed.name, distributed.created_at FROM local_dist_join_mixed.distributed) d1 JOIN (SELECT NULL::integer AS "dummy-1", NULL::bigint AS id, NULL::integer AS "dummy-3", local_1.title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.title FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(title text)) local_1) local ON (((d1.name OPERATOR(pg_catalog.=) (d1.id)::text) AND (d1.id OPERATOR(pg_catalog.<) (local.title)::integer)))) WHERE (d1.id OPERATOR(pg_catalog.=) 1)
+ count
+---------------------------------------------------------------------
+    99
+(1 row)
+
+SELECT count(*) FROM (SELECT * FROM distributed) as d1  JOIN local ON (name = d1.id::text AND d1.id < local.title::int) WHERE d1.id = 1 AND false;
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT title FROM local_dist_join_mixed.local WHERE false
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT distributed.id, distributed.name, distributed.created_at FROM local_dist_join_mixed.distributed) d1 JOIN (SELECT NULL::integer AS "dummy-1", NULL::bigint AS id, NULL::integer AS "dummy-3", local_1.title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.title FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(title text)) local_1) local ON (((d1.name OPERATOR(pg_catalog.=) (d1.id)::text) AND (d1.id OPERATOR(pg_catalog.<) (local.title)::integer)))) WHERE ((d1.id OPERATOR(pg_catalog.=) 1) AND false)
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+SELECT count(*) FROM (SELECT * FROM distributed) as d1  JOIN local ON (name = d1.id::text AND d1.id < local.title::int) WHERE d1.id = 1 OR true;
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT title FROM local_dist_join_mixed.local WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT distributed.id, distributed.name, distributed.created_at FROM local_dist_join_mixed.distributed) d1 JOIN (SELECT NULL::integer AS "dummy-1", NULL::bigint AS id, NULL::integer AS "dummy-3", local_1.title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.title FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(title text)) local_1) local ON (((d1.name OPERATOR(pg_catalog.=) (d1.id)::text) AND (d1.id OPERATOR(pg_catalog.<) (local.title)::integer)))) WHERE ((d1.id OPERATOR(pg_catalog.=) 1) OR true)
+ count
+---------------------------------------------------------------------
+  5050
+(1 row)
+
+SELECT count(*) FROM (SELECT * FROM distributed WHERE id = 2) as d1  JOIN local ON (name = d1.id::text AND d1.id < local.title::int) WHERE d1.id = 1;
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT title FROM local_dist_join_mixed.local WHERE false
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT distributed.id, distributed.name, distributed.created_at FROM local_dist_join_mixed.distributed WHERE (distributed.id OPERATOR(pg_catalog.=) 2)) d1 JOIN (SELECT NULL::integer AS "dummy-1", NULL::bigint AS id, NULL::integer AS "dummy-3", local_1.title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.title FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(title text)) local_1) local ON (((d1.name OPERATOR(pg_catalog.=) (d1.id)::text) AND (d1.id OPERATOR(pg_catalog.<) (local.title)::integer)))) WHERE (d1.id OPERATOR(pg_catalog.=) 1)
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+SELECT count(*) FROM (SELECT * FROM distributed WHERE false) as d1  JOIN local ON (name = d1.id::text AND d1.id < local.title::int) WHERE d1.id = 1;
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT title FROM local_dist_join_mixed.local WHERE false
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT distributed.id, distributed.name, distributed.created_at FROM local_dist_join_mixed.distributed WHERE false) d1 JOIN (SELECT NULL::integer AS "dummy-1", NULL::bigint AS id, NULL::integer AS "dummy-3", local_1.title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.title FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(title text)) local_1) local ON (((d1.name OPERATOR(pg_catalog.=) (d1.id)::text) AND (d1.id OPERATOR(pg_catalog.<) (local.title)::integer)))) WHERE (d1.id OPERATOR(pg_catalog.=) 1)
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+-- TEMPORARY table
+CREATE TEMPORARY TABLE temp_local AS SELECT * FROM local;
+SELECT count(*) FROM distributed JOIN temp_local USING (id);
+DEBUG:  Wrapping relation "temp_local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT id FROM temp_local WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (local_dist_join_mixed.distributed JOIN (SELECT temp_local_1.id, NULL::text AS title FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) temp_local_1) temp_local USING (id))
+ count
+---------------------------------------------------------------------
+   101
+(1 row)
+
+-- UNLOGGED table
+CREATE UNLOGGED TABLE unlogged_local AS SELECT * FROM local;
+SELECT count(*) FROM distributed JOIN unlogged_local USING (id);
+DEBUG:  Wrapping relation "unlogged_local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT id FROM local_dist_join_mixed.unlogged_local WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (local_dist_join_mixed.distributed JOIN (SELECT unlogged_local_1.id, NULL::text AS title FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) unlogged_local_1) unlogged_local USING (id))
+ count
+---------------------------------------------------------------------
+   101
+(1 row)
+
+-- mat view
+CREATE MATERIALIZED VIEW mat_view AS SELECT * FROM local;
+SELECT count(*) FROM distributed JOIN mat_view USING (id);
+DEBUG:  Wrapping relation "mat_view" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT id FROM local_dist_join_mixed.mat_view WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (local_dist_join_mixed.distributed JOIN (SELECT mat_view_1.id, NULL::text AS title FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) mat_view_1) mat_view USING (id))
+ count
+---------------------------------------------------------------------
+   101
+(1 row)
+
+CREATE VIEW local_regular_view AS SELECT * FROM local table_name_for_view;
+WARNING:  "view local_regular_view" has dependency to "table local" that is not in Citus' metadata
+DETAIL:  "view local_regular_view" will be created only locally
+HINT:  Distribute "table local" first to distribute "view local_regular_view"
+CREATE VIEW dist_regular_view AS SELECT * FROM distributed;
+SELECT count(*) FROM distributed JOIN local_regular_view USING (id);
+DEBUG:  generating subplan XXX_1 for subquery SELECT id, title FROM local_dist_join_mixed.local table_name_for_view
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (local_dist_join_mixed.distributed JOIN (SELECT intermediate_result.id, intermediate_result.title FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, title text)) local_regular_view USING (id))
+ count
+---------------------------------------------------------------------
+   101
+(1 row)
+
+SELECT count(*) FROM local JOIN dist_regular_view USING (id);
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT id FROM local_dist_join_mixed.local WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT NULL::integer AS "dummy-1", local_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) local_1) local JOIN (SELECT distributed.id, distributed.name, distributed.created_at FROM local_dist_join_mixed.distributed) dist_regular_view USING (id))
+ count
+---------------------------------------------------------------------
+   101
+(1 row)
+
+SELECT count(*) FROM dist_regular_view JOIN local_regular_view USING (id);
+DEBUG:  generating subplan XXX_1 for subquery SELECT id, title FROM local_dist_join_mixed.local table_name_for_view
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT distributed.id, distributed.name, distributed.created_at FROM local_dist_join_mixed.distributed) dist_regular_view JOIN (SELECT intermediate_result.id, intermediate_result.title FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, title text)) local_regular_view USING (id))
+ count
+---------------------------------------------------------------------
+   101
+(1 row)
+
+-- join alias/table alias
+SELECT COUNT(*) FROM (distributed JOIN local USING (id)) AS t(a,b,c,d) ORDER BY d,c,a,b LIMIT 3;
+ERROR:  column "local.title" must appear in the GROUP BY clause or be used in an aggregate function
+SELECT COUNT(*) FROM (distributed d1(x,y,y1) JOIN local l1(x,t) USING (x)) AS t(a,b,c,d) ORDER BY d,c,a,b LIMIT 3;
+ERROR:  column "l1.t" must appear in the GROUP BY clause or be used in an aggregate function
+-- final queries are pushdown queries
+SELECT sum(d1.id + local.id) FROM distributed d1 JOIN local USING (id);
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT id FROM local_dist_join_mixed.local WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT sum((d1.id OPERATOR(pg_catalog.+) local.id)) AS sum FROM (local_dist_join_mixed.distributed d1 JOIN (SELECT NULL::integer AS "dummy-1", local_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) local_1) local USING (id))
+  sum
+---------------------------------------------------------------------
+ 10100
+(1 row)
+
+SELECT sum(d1.id + local.id) OVER (PARTITION BY d1.id) FROM distributed d1 JOIN local USING (id) ORDER BY 1 DESC LIMIT 4;
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT id FROM local_dist_join_mixed.local WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT sum((d1.id OPERATOR(pg_catalog.+) local.id)) OVER (PARTITION BY d1.id) AS sum FROM (local_dist_join_mixed.distributed d1 JOIN (SELECT NULL::integer AS "dummy-1", local_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) local_1) local USING (id)) ORDER BY (sum((d1.id OPERATOR(pg_catalog.+) local.id)) OVER (PARTITION BY d1.id)) DESC LIMIT 4
+DEBUG:  push down of limit count: 4
+ sum
+---------------------------------------------------------------------
+ 200
+ 198
+ 196
+ 194
+(4 rows)
+
+SELECT count(*) FROM distributed d1 JOIN local USING (id) LEFT JOIN distributed d2 USING (id) ORDER BY 1 DESC LIMIT 4;
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT id FROM local_dist_join_mixed.local WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((local_dist_join_mixed.distributed d1 JOIN (SELECT NULL::integer AS "dummy-1", local_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) local_1) local USING (id)) LEFT JOIN local_dist_join_mixed.distributed d2 USING (id)) ORDER BY (count(*)) DESC LIMIT 4
+DEBUG:  push down of limit count: 4
+ count
+---------------------------------------------------------------------
+   101
+(1 row)
+
+SELECT count(DISTINCT d1.name::int * local.id) FROM distributed d1 JOIN local USING (id);
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT id FROM local_dist_join_mixed.local WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(DISTINCT ((d1.name)::integer OPERATOR(pg_catalog.*) local.id)) AS count FROM (local_dist_join_mixed.distributed d1 JOIN (SELECT NULL::integer AS "dummy-1", local_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) local_1) local USING (id))
+ count
+---------------------------------------------------------------------
+   101
+(1 row)
+
+-- final queries are router queries
+SELECT sum(d1.id + local.id) FROM distributed d1 JOIN local USING (id) WHERE d1.id = 1;
+DEBUG:  Wrapping relation "distributed" "d1" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT id FROM local_dist_join_mixed.distributed d1 WHERE (id OPERATOR(pg_catalog.=) 1)
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT sum((d1.id OPERATOR(pg_catalog.+) local.id)) AS sum FROM ((SELECT NULL::integer AS "dummy-1", d1_1.id, NULL::text AS name, NULL::timestamp with time zone AS created_at FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) d1_1) d1 JOIN local_dist_join_mixed.local USING (id)) WHERE (d1.id OPERATOR(pg_catalog.=) 1)
+ sum
+---------------------------------------------------------------------
+   2
+(1 row)
+
+SELECT sum(d1.id + local.id) OVER (PARTITION BY d1.id) FROM distributed d1 JOIN local USING (id) WHERE d1.id = 1 ORDER BY 1 DESC LIMIT 4;
+DEBUG:  Wrapping relation "distributed" "d1" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT id FROM local_dist_join_mixed.distributed d1 WHERE (id OPERATOR(pg_catalog.=) 1)
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT sum((d1.id OPERATOR(pg_catalog.+) local.id)) OVER (PARTITION BY d1.id) AS sum FROM ((SELECT NULL::integer AS "dummy-1", d1_1.id, NULL::text AS name, NULL::timestamp with time zone AS created_at FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) d1_1) d1 JOIN local_dist_join_mixed.local USING (id)) WHERE (d1.id OPERATOR(pg_catalog.=) 1) ORDER BY (sum((d1.id OPERATOR(pg_catalog.+) local.id)) OVER (PARTITION BY d1.id)) DESC LIMIT 4
+ sum
+---------------------------------------------------------------------
+   2
+(1 row)
+
+SELECT count(*) FROM distributed d1 JOIN local USING (id) LEFT JOIN distributed d2 USING (id) WHERE d2.id = 1 ORDER BY 1 DESC LIMIT 4;
+DEBUG:  Wrapping relation "distributed" "d1" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT id FROM local_dist_join_mixed.distributed d1 WHERE (id OPERATOR(pg_catalog.=) 1)
+DEBUG:  Wrapping relation "distributed" "d2" to a subquery
+DEBUG:  generating subplan XXX_2 for subquery SELECT id FROM local_dist_join_mixed.distributed d2 WHERE (id OPERATOR(pg_catalog.=) 1)
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (((SELECT NULL::integer AS "dummy-1", d1_1.id, NULL::text AS name, NULL::timestamp with time zone AS created_at FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) d1_1) d1 JOIN local_dist_join_mixed.local USING (id)) LEFT JOIN (SELECT NULL::integer AS "dummy-1", d2_1.id, NULL::text AS name, NULL::timestamp with time zone AS created_at FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) d2_1) d2 USING (id)) WHERE (d2.id OPERATOR(pg_catalog.=) 1) ORDER BY (count(*)) DESC LIMIT 4
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+-- final queries are pull to coordinator queries
+SELECT sum(d1.id + local.id) OVER (PARTITION BY d1.id + local.id) FROM distributed d1 JOIN local USING (id) ORDER BY 1 DESC LIMIT 4;
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT id FROM local_dist_join_mixed.local WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT sum((d1.id OPERATOR(pg_catalog.+) local.id)) OVER (PARTITION BY (d1.id OPERATOR(pg_catalog.+) local.id)) AS sum FROM (local_dist_join_mixed.distributed d1 JOIN (SELECT NULL::integer AS "dummy-1", local_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) local_1) local USING (id)) ORDER BY (sum((d1.id OPERATOR(pg_catalog.+) local.id)) OVER (PARTITION BY (d1.id OPERATOR(pg_catalog.+) local.id))) DESC LIMIT 4
+ sum
+---------------------------------------------------------------------
+ 200
+ 198
+ 196
+ 194
+(4 rows)
+
+-- nested subqueries
+SELECT
+	count(*)
+FROM
+	(SELECT * FROM (SELECT * FROM distributed) as foo) as bar
+		JOIN
+	local
+		USING(id);
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT id FROM local_dist_join_mixed.local WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT foo.id, foo.name, foo.created_at FROM (SELECT distributed.id, distributed.name, distributed.created_at FROM local_dist_join_mixed.distributed) foo) bar JOIN (SELECT NULL::integer AS "dummy-1", local_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) local_1) local USING (id))
+ count
+---------------------------------------------------------------------
+   101
+(1 row)
+
+SELECT
+	count(*)
+FROM
+	(SELECT *, random() FROM (SELECT *, random() FROM distributed) as foo) as bar
+		JOIN
+	local
+		USING(id);
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT id FROM local_dist_join_mixed.local WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT foo.id, foo.name, foo.created_at, foo.random, random() AS random FROM (SELECT distributed.id, distributed.name, distributed.created_at, random() AS random FROM local_dist_join_mixed.distributed) foo) bar(id, name, created_at, random, random_1) JOIN (SELECT NULL::integer AS "dummy-1", local_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) local_1) local USING (id))
+ count
+---------------------------------------------------------------------
+   101
+(1 row)
+
+SELECT
+	count(*)
+FROM
+	(SELECT *, random() FROM (SELECT *, random() FROM distributed) as foo) as bar
+		JOIN
+	local
+		USING(id);
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT id FROM local_dist_join_mixed.local WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT foo.id, foo.name, foo.created_at, foo.random, random() AS random FROM (SELECT distributed.id, distributed.name, distributed.created_at, random() AS random FROM local_dist_join_mixed.distributed) foo) bar(id, name, created_at, random, random_1) JOIN (SELECT NULL::integer AS "dummy-1", local_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) local_1) local USING (id))
+ count
+---------------------------------------------------------------------
+   101
+(1 row)
+
+SELECT
+	count(*)
+FROM
+	(SELECT *, random() FROM (SELECT *, random() FROM distributed) as foo) as bar
+		JOIN
+	(SELECT *, random() FROM (SELECT *,random() FROM local) as foo2) as bar2
+		USING(id);
+DEBUG:  generating subplan XXX_1 for subquery SELECT id, title, random() AS random FROM local_dist_join_mixed.local
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT foo.id, foo.name, foo.created_at, foo.random, random() AS random FROM (SELECT distributed.id, distributed.name, distributed.created_at, random() AS random FROM local_dist_join_mixed.distributed) foo) bar(id, name, created_at, random, random_1) JOIN (SELECT foo2.id, foo2.title, foo2.random, random() AS random FROM (SELECT intermediate_result.id, intermediate_result.title, intermediate_result.random FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, title text, random double precision)) foo2) bar2(id, title, random, random_1) USING (id))
+ count
+---------------------------------------------------------------------
+   101
+(1 row)
+
+-- TODO: Unnecessary recursive planning for local
+SELECT
+	count(*)
+FROM
+	(SELECT *, random() FROM (SELECT *, random() FROM distributed LIMIT 1) as foo) as bar
+		JOIN
+	(SELECT *, random() FROM (SELECT *,random() FROM local) as foo2) as bar2
+		USING(id);
+DEBUG:  push down of limit count: 1
+DEBUG:  generating subplan XXX_1 for subquery SELECT id, name, created_at, random() AS random FROM local_dist_join_mixed.distributed LIMIT 1
+DEBUG:  generating subplan XXX_2 for subquery SELECT id, title, random() AS random FROM local_dist_join_mixed.local
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT foo.id, foo.name, foo.created_at, foo.random, random() AS random FROM (SELECT intermediate_result.id, intermediate_result.name, intermediate_result.created_at, intermediate_result.random FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, name text, created_at timestamp with time zone, random double precision)) foo) bar(id, name, created_at, random, random_1) JOIN (SELECT foo2.id, foo2.title, foo2.random, random() AS random FROM (SELECT intermediate_result.id, intermediate_result.title, intermediate_result.random FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, title text, random double precision)) foo2) bar2(id, title, random, random_1) USING (id))
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+-- subqueries in WHERE clause
+-- is not colocated, and the JOIN inside as well.
+-- so should be recursively planned twice
+SELECT
+	count(*)
+FROM
+	distributed
+WHERE
+	id  > (SELECT
+				count(*)
+			FROM
+				(SELECT *, random() FROM (SELECT *, random() FROM distributed) as foo) as bar
+					JOIN
+				(SELECT *, random() FROM (SELECT *,random() FROM local) as foo2) as bar2
+					USING(id)
+			);
+DEBUG:  generating subplan XXX_1 for subquery SELECT id, title, random() AS random FROM local_dist_join_mixed.local
+DEBUG:  generating subplan XXX_2 for subquery SELECT count(*) AS count FROM ((SELECT foo.id, foo.name, foo.created_at, foo.random, random() AS random FROM (SELECT distributed.id, distributed.name, distributed.created_at, random() AS random FROM local_dist_join_mixed.distributed) foo) bar(id, name, created_at, random, random_1) JOIN (SELECT foo2.id, foo2.title, foo2.random, random() AS random FROM (SELECT intermediate_result.id, intermediate_result.title, intermediate_result.random FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, title text, random double precision)) foo2) bar2(id, title, random, random_1) USING (id))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM local_dist_join_mixed.distributed WHERE (id OPERATOR(pg_catalog.>) (SELECT intermediate_result.count FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(count bigint)))
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+-- two distributed tables are co-located and JOINed on distribution
+-- key, so should be fine to pushdown
+SELECT
+	count(*)
+FROM
+	distributed d_upper
+WHERE
+	(SELECT
+				bar.id
+			FROM
+				(SELECT *, random() FROM (SELECT *, random() FROM distributed WHERE distributed.id = d_upper.id) as foo) as bar
+					JOIN
+				(SELECT *, random() FROM (SELECT *,random() FROM local) as foo2) as bar2
+					USING(id)
+			) IS NOT NULL;
+DEBUG:  generating subplan XXX_1 for subquery SELECT id, title, random() AS random FROM local_dist_join_mixed.local
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM local_dist_join_mixed.distributed d_upper WHERE ((SELECT bar.id FROM ((SELECT foo.id, foo.name, foo.created_at, foo.random, random() AS random FROM (SELECT distributed.id, distributed.name, distributed.created_at, random() AS random FROM local_dist_join_mixed.distributed WHERE (distributed.id OPERATOR(pg_catalog.=) d_upper.id)) foo) bar(id, name, created_at, random, random_1) JOIN (SELECT foo2.id, foo2.title, foo2.random, random() AS random FROM (SELECT intermediate_result.id, intermediate_result.title, intermediate_result.random FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, title text, random double precision)) foo2) bar2(id, title, random, random_1) USING (id))) IS NOT NULL)
+ count
+---------------------------------------------------------------------
+   101
+(1 row)
+
+SELECT
+	count(*)
+FROM
+	distributed d_upper
+WHERE
+	(SELECT
+				bar.id
+			FROM
+				(SELECT *, random() FROM (SELECT *, random() FROM distributed WHERE distributed.id = d_upper.id) as foo) as bar
+					JOIN
+				  local as foo
+					USING(id)
+			) IS NOT NULL;
+DEBUG:  Wrapping relation "local" "foo" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT id FROM local_dist_join_mixed.local foo WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM local_dist_join_mixed.distributed d_upper WHERE ((SELECT bar.id FROM ((SELECT foo_1.id, foo_1.name, foo_1.created_at, foo_1.random, random() AS random FROM (SELECT distributed.id, distributed.name, distributed.created_at, random() AS random FROM local_dist_join_mixed.distributed WHERE (distributed.id OPERATOR(pg_catalog.=) d_upper.id)) foo_1) bar(id, name, created_at, random, random_1) JOIN (SELECT NULL::integer AS "dummy-1", foo_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) foo_1) foo USING (id))) IS NOT NULL)
+ count
+---------------------------------------------------------------------
+   101
+(1 row)
+
+SELECT
+	count(*)
+FROM
+	distributed d_upper
+WHERE d_upper.id >
+	(SELECT
+				bar.id
+			FROM
+				(SELECT *, random() FROM (SELECT *, random() FROM distributed WHERE distributed.id = d_upper.id) as foo) as bar
+					JOIN
+				  local as foo
+					USING(id)
+			);
+DEBUG:  Wrapping relation "local" "foo" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT id FROM local_dist_join_mixed.local foo WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM local_dist_join_mixed.distributed d_upper WHERE (id OPERATOR(pg_catalog.>) (SELECT bar.id FROM ((SELECT foo_1.id, foo_1.name, foo_1.created_at, foo_1.random, random() AS random FROM (SELECT distributed.id, distributed.name, distributed.created_at, random() AS random FROM local_dist_join_mixed.distributed WHERE (distributed.id OPERATOR(pg_catalog.=) d_upper.id)) foo_1) bar(id, name, created_at, random, random_1) JOIN (SELECT NULL::integer AS "dummy-1", foo_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) foo_1) foo USING (id))))
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+SELECT
+	count(*)
+FROM
+	distributed d_upper
+WHERE
+	(SELECT
+				bar.id
+			FROM
+				(SELECT *, random() FROM (SELECT *, random() FROM distributed WHERE distributed.id = d_upper.id) as foo) as bar
+					JOIN
+				(SELECT *, random() FROM (SELECT *,random() FROM local WHERE d_upper.id = id) as foo2) as bar2
+					USING(id)
+			) IS NOT NULL;
+ERROR:  direct joins between distributed and local tables are not supported
+HINT:  Use CTE's or subqueries to select from local tables and use them in joins
+-- subqueries in the target list
+-- router, should work
+select (SELECT local.id) FROM local, distributed WHERE distributed.id = 1 LIMIT 1;
+DEBUG:  Wrapping relation "distributed" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT id FROM local_dist_join_mixed.distributed WHERE (id OPERATOR(pg_catalog.=) 1)
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT (SELECT local.id) AS id FROM local_dist_join_mixed.local, (SELECT NULL::integer AS "dummy-1", distributed_1.id, NULL::text AS name, NULL::timestamp with time zone AS created_at FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) distributed_1) distributed WHERE (distributed.id OPERATOR(pg_catalog.=) 1) LIMIT 1
+ id
+---------------------------------------------------------------------
+  0
+(1 row)
+
+-- should fail
+select (SELECT local.id) FROM local, distributed WHERE distributed.id != 1 LIMIT 1;
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT id FROM local_dist_join_mixed.local WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT (SELECT local.id) AS id FROM (SELECT NULL::integer AS "dummy-1", local_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) local_1) local, local_dist_join_mixed.distributed WHERE (distributed.id OPERATOR(pg_catalog.<>) 1) LIMIT 1
+DEBUG:  push down of limit count: 1
+ id
+---------------------------------------------------------------------
+  0
+(1 row)
+
+-- currently not supported, but should work with https://github.com/citusdata/citus/pull/4360/files
+SELECT
+	name, (SELECT id FROM local WHERE id = e.id)
+FROM
+	distributed e
+ORDER BY 1,2 LIMIT 1;
+ERROR:  direct joins between distributed and local tables are not supported
+HINT:  Use CTE's or subqueries to select from local tables and use them in joins
+-- set operations
+SELECT local.* FROM distributed JOIN local USING (id)
+	EXCEPT
+SELECT local.* FROM distributed JOIN local USING (id);
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT id, title FROM local_dist_join_mixed.local WHERE true
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_2 for subquery SELECT id, title FROM local_dist_join_mixed.local WHERE true
+DEBUG:  generating subplan XXX_3 for subquery SELECT local.id, local.title FROM (local_dist_join_mixed.distributed JOIN (SELECT NULL::integer AS "dummy-1", local_1.id, NULL::integer AS "dummy-3", local_1.title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id, intermediate_result.title FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, title text)) local_1) local USING (id))
+DEBUG:  generating subplan XXX_4 for subquery SELECT local.id, local.title FROM (local_dist_join_mixed.distributed JOIN (SELECT NULL::integer AS "dummy-1", local_1.id, NULL::integer AS "dummy-3", local_1.title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id, intermediate_result.title FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, title text)) local_1) local USING (id))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT intermediate_result.id, intermediate_result.title FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, title text) EXCEPT SELECT intermediate_result.id, intermediate_result.title FROM read_intermediate_result('XXX_4'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, title text)
+ id | title
+---------------------------------------------------------------------
+(0 rows)
+
+SELECT distributed.* FROM distributed JOIN local USING (id)
+	EXCEPT
+SELECT distributed.* FROM distributed JOIN local USING (id);
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT id FROM local_dist_join_mixed.local WHERE true
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_2 for subquery SELECT id FROM local_dist_join_mixed.local WHERE true
+DEBUG:  generating subplan XXX_3 for subquery SELECT distributed.id, distributed.name, distributed.created_at FROM (local_dist_join_mixed.distributed JOIN (SELECT NULL::integer AS "dummy-1", local_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) local_1) local USING (id))
+DEBUG:  generating subplan XXX_4 for subquery SELECT distributed.id, distributed.name, distributed.created_at FROM (local_dist_join_mixed.distributed JOIN (SELECT NULL::integer AS "dummy-1", local_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) local_1) local USING (id))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT intermediate_result.id, intermediate_result.name, intermediate_result.created_at FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, name text, created_at timestamp with time zone) EXCEPT SELECT intermediate_result.id, intermediate_result.name, intermediate_result.created_at FROM read_intermediate_result('XXX_4'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, name text, created_at timestamp with time zone)
+ id | name | created_at
+---------------------------------------------------------------------
+(0 rows)
+
+SELECT count(*) FROM
+(
+	(SELECT * FROM (SELECT * FROM local) as f JOIN distributed USING (id))
+		UNION ALL
+	(SELECT * FROM (SELECT * FROM local) as f2 JOIN distributed USING (id))
+) bar;
+DEBUG:  generating subplan XXX_1 for subquery SELECT id, title FROM local_dist_join_mixed.local
+DEBUG:  generating subplan XXX_2 for subquery SELECT id, title FROM local_dist_join_mixed.local
+DEBUG:  generating subplan XXX_3 for subquery SELECT f.id, f.title, distributed.name, distributed.created_at FROM ((SELECT intermediate_result.id, intermediate_result.title FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, title text)) f JOIN local_dist_join_mixed.distributed USING (id))
+DEBUG:  generating subplan XXX_4 for subquery SELECT f2.id, f2.title, distributed.name, distributed.created_at FROM ((SELECT intermediate_result.id, intermediate_result.title FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, title text)) f2 JOIN local_dist_join_mixed.distributed USING (id))
+DEBUG:  generating subplan XXX_5 for subquery SELECT intermediate_result.id, intermediate_result.title, intermediate_result.name, intermediate_result.created_at FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, title text, name text, created_at timestamp with time zone) UNION ALL SELECT intermediate_result.id, intermediate_result.title, intermediate_result.name, intermediate_result.created_at FROM read_intermediate_result('XXX_4'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, title text, name text, created_at timestamp with time zone)
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.id, intermediate_result.title, intermediate_result.name, intermediate_result.created_at FROM read_intermediate_result('XXX_5'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, title text, name text, created_at timestamp with time zone)) bar
+ count
+---------------------------------------------------------------------
+   202
+(1 row)
+
+SELECT count(*) FROM
+(
+	(SELECT * FROM (SELECT distributed.* FROM local JOIN distributed USING (id)) as fo)
+		UNION ALL
+	(SELECT * FROM (SELECT distributed.* FROM local JOIN distributed USING (id)) as ba)
+) bar;
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT id FROM local_dist_join_mixed.local WHERE true
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_2 for subquery SELECT id FROM local_dist_join_mixed.local WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT fo.id, fo.name, fo.created_at FROM (SELECT distributed.id, distributed.name, distributed.created_at FROM ((SELECT NULL::integer AS "dummy-1", local_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) local_1) local JOIN local_dist_join_mixed.distributed USING (id))) fo UNION ALL SELECT ba.id, ba.name, ba.created_at FROM (SELECT distributed.id, distributed.name, distributed.created_at FROM ((SELECT NULL::integer AS "dummy-1", local_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) local_1) local JOIN local_dist_join_mixed.distributed USING (id))) ba) bar
+ count
+---------------------------------------------------------------------
+   202
+(1 row)
+
+select count(DISTINCT id)
+FROM
+(
+	(SELECT * FROM (SELECT distributed.* FROM local JOIN distributed USING (id)) as fo)
+		UNION ALL
+	(SELECT * FROM (SELECT distributed.* FROM local JOIN distributed USING (id)) as ba)
+) bar;
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT id FROM local_dist_join_mixed.local WHERE true
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_2 for subquery SELECT id FROM local_dist_join_mixed.local WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(DISTINCT id) AS count FROM (SELECT fo.id, fo.name, fo.created_at FROM (SELECT distributed.id, distributed.name, distributed.created_at FROM ((SELECT NULL::integer AS "dummy-1", local_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) local_1) local JOIN local_dist_join_mixed.distributed USING (id))) fo UNION ALL SELECT ba.id, ba.name, ba.created_at FROM (SELECT distributed.id, distributed.name, distributed.created_at FROM ((SELECT NULL::integer AS "dummy-1", local_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) local_1) local JOIN local_dist_join_mixed.distributed USING (id))) ba) bar
+ count
+---------------------------------------------------------------------
+   101
+(1 row)
+
+-- 25 Joins
+select ' select count(*) from distributed ' || string_Agg('INNER
+JOIN local u'|| x::text || ' USING (id)',' ') from
+generate_Series(1,25)x;
+                ?column?
+---------------------------------------------------------------------
+  select count(*) from distributed INNER+
+ JOIN local u1 USING (id) INNER         +
+ JOIN local u2 USING (id) INNER         +
+ JOIN local u3 USING (id) INNER         +
+ JOIN local u4 USING (id) INNER         +
+ JOIN local u5 USING (id) INNER         +
+ JOIN local u6 USING (id) INNER         +
+ JOIN local u7 USING (id) INNER         +
+ JOIN local u8 USING (id) INNER         +
+ JOIN local u9 USING (id) INNER         +
+ JOIN local u10 USING (id) INNER        +
+ JOIN local u11 USING (id) INNER        +
+ JOIN local u12 USING (id) INNER        +
+ JOIN local u13 USING (id) INNER        +
+ JOIN local u14 USING (id) INNER        +
+ JOIN local u15 USING (id) INNER        +
+ JOIN local u16 USING (id) INNER        +
+ JOIN local u17 USING (id) INNER        +
+ JOIN local u18 USING (id) INNER        +
+ JOIN local u19 USING (id) INNER        +
+ JOIN local u20 USING (id) INNER        +
+ JOIN local u21 USING (id) INNER        +
+ JOIN local u22 USING (id) INNER        +
+ JOIN local u23 USING (id) INNER        +
+ JOIN local u24 USING (id) INNER        +
+ JOIN local u25 USING (id)
+(1 row)
+
+\gexec
+ select count(*) from distributed INNER
+JOIN local u1 USING (id) INNER
+JOIN local u2 USING (id) INNER
+JOIN local u3 USING (id) INNER
+JOIN local u4 USING (id) INNER
+JOIN local u5 USING (id) INNER
+JOIN local u6 USING (id) INNER
+JOIN local u7 USING (id) INNER
+JOIN local u8 USING (id) INNER
+JOIN local u9 USING (id) INNER
+JOIN local u10 USING (id) INNER
+JOIN local u11 USING (id) INNER
+JOIN local u12 USING (id) INNER
+JOIN local u13 USING (id) INNER
+JOIN local u14 USING (id) INNER
+JOIN local u15 USING (id) INNER
+JOIN local u16 USING (id) INNER
+JOIN local u17 USING (id) INNER
+JOIN local u18 USING (id) INNER
+JOIN local u19 USING (id) INNER
+JOIN local u20 USING (id) INNER
+JOIN local u21 USING (id) INNER
+JOIN local u22 USING (id) INNER
+JOIN local u23 USING (id) INNER
+JOIN local u24 USING (id) INNER
+JOIN local u25 USING (id)
+DEBUG:  Wrapping relation "local" "u1" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT id FROM local_dist_join_mixed.local u1 WHERE true
+DEBUG:  Wrapping relation "local" "u2" to a subquery
+DEBUG:  generating subplan XXX_2 for subquery SELECT id FROM local_dist_join_mixed.local u2 WHERE true
+DEBUG:  Wrapping relation "local" "u3" to a subquery
+DEBUG:  generating subplan XXX_3 for subquery SELECT id FROM local_dist_join_mixed.local u3 WHERE true
+DEBUG:  Wrapping relation "local" "u4" to a subquery
+DEBUG:  generating subplan XXX_4 for subquery SELECT id FROM local_dist_join_mixed.local u4 WHERE true
+DEBUG:  Wrapping relation "local" "u5" to a subquery
+DEBUG:  generating subplan XXX_5 for subquery SELECT id FROM local_dist_join_mixed.local u5 WHERE true
+DEBUG:  Wrapping relation "local" "u6" to a subquery
+DEBUG:  generating subplan XXX_6 for subquery SELECT id FROM local_dist_join_mixed.local u6 WHERE true
+DEBUG:  Wrapping relation "local" "u7" to a subquery
+DEBUG:  generating subplan XXX_7 for subquery SELECT id FROM local_dist_join_mixed.local u7 WHERE true
+DEBUG:  Wrapping relation "local" "u8" to a subquery
+DEBUG:  generating subplan XXX_8 for subquery SELECT id FROM local_dist_join_mixed.local u8 WHERE true
+DEBUG:  Wrapping relation "local" "u9" to a subquery
+DEBUG:  generating subplan XXX_9 for subquery SELECT id FROM local_dist_join_mixed.local u9 WHERE true
+DEBUG:  Wrapping relation "local" "u10" to a subquery
+DEBUG:  generating subplan XXX_10 for subquery SELECT id FROM local_dist_join_mixed.local u10 WHERE true
+DEBUG:  Wrapping relation "local" "u11" to a subquery
+DEBUG:  generating subplan XXX_11 for subquery SELECT id FROM local_dist_join_mixed.local u11 WHERE true
+DEBUG:  Wrapping relation "local" "u12" to a subquery
+DEBUG:  generating subplan XXX_12 for subquery SELECT id FROM local_dist_join_mixed.local u12 WHERE true
+DEBUG:  Wrapping relation "local" "u13" to a subquery
+DEBUG:  generating subplan XXX_13 for subquery SELECT id FROM local_dist_join_mixed.local u13 WHERE true
+DEBUG:  Wrapping relation "local" "u14" to a subquery
+DEBUG:  generating subplan XXX_14 for subquery SELECT id FROM local_dist_join_mixed.local u14 WHERE true
+DEBUG:  Wrapping relation "local" "u15" to a subquery
+DEBUG:  generating subplan XXX_15 for subquery SELECT id FROM local_dist_join_mixed.local u15 WHERE true
+DEBUG:  Wrapping relation "local" "u16" to a subquery
+DEBUG:  generating subplan XXX_16 for subquery SELECT id FROM local_dist_join_mixed.local u16 WHERE true
+DEBUG:  Wrapping relation "local" "u17" to a subquery
+DEBUG:  generating subplan XXX_17 for subquery SELECT id FROM local_dist_join_mixed.local u17 WHERE true
+DEBUG:  Wrapping relation "local" "u18" to a subquery
+DEBUG:  generating subplan XXX_18 for subquery SELECT id FROM local_dist_join_mixed.local u18 WHERE true
+DEBUG:  Wrapping relation "local" "u19" to a subquery
+DEBUG:  generating subplan XXX_19 for subquery SELECT id FROM local_dist_join_mixed.local u19 WHERE true
+DEBUG:  Wrapping relation "local" "u20" to a subquery
+DEBUG:  generating subplan XXX_20 for subquery SELECT id FROM local_dist_join_mixed.local u20 WHERE true
+DEBUG:  Wrapping relation "local" "u21" to a subquery
+DEBUG:  generating subplan XXX_21 for subquery SELECT id FROM local_dist_join_mixed.local u21 WHERE true
+DEBUG:  Wrapping relation "local" "u22" to a subquery
+DEBUG:  generating subplan XXX_22 for subquery SELECT id FROM local_dist_join_mixed.local u22 WHERE true
+DEBUG:  Wrapping relation "local" "u23" to a subquery
+DEBUG:  generating subplan XXX_23 for subquery SELECT id FROM local_dist_join_mixed.local u23 WHERE true
+DEBUG:  Wrapping relation "local" "u24" to a subquery
+DEBUG:  generating subplan XXX_24 for subquery SELECT id FROM local_dist_join_mixed.local u24 WHERE true
+DEBUG:  Wrapping relation "local" "u25" to a subquery
+DEBUG:  generating subplan XXX_25 for subquery SELECT id FROM local_dist_join_mixed.local u25 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (((((((((((((((((((((((((local_dist_join_mixed.distributed JOIN (SELECT NULL::integer AS "dummy-1", u1_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) u1_1) u1 USING (id)) JOIN (SELECT NULL::integer AS "dummy-1", u2_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) u2_1) u2 USING (id)) JOIN (SELECT NULL::integer AS "dummy-1", u3_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) u3_1) u3 USING (id)) JOIN (SELECT NULL::integer AS "dummy-1", u4_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_4'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) u4_1) u4 USING (id)) JOIN (SELECT NULL::integer AS "dummy-1", u5_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_5'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) u5_1) u5 USING (id)) JOIN (SELECT NULL::integer AS "dummy-1", u6_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_6'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) u6_1) u6 USING (id)) JOIN (SELECT NULL::integer AS "dummy-1", u7_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_7'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) u7_1) u7 USING (id)) JOIN (SELECT NULL::integer AS "dummy-1", u8_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_8'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) u8_1) u8 USING (id)) JOIN (SELECT NULL::integer AS "dummy-1", u9_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_9'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) u9_1) u9 USING (id)) JOIN (SELECT NULL::integer AS "dummy-1", u10_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_10'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) u10_1) u10 USING (id)) JOIN (SELECT NULL::integer AS "dummy-1", u11_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_11'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) u11_1) u11 USING (id)) JOIN (SELECT NULL::integer AS "dummy-1", u12_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_12'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) u12_1) u12 USING (id)) JOIN (SELECT NULL::integer AS "dummy-1", u13_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_13'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) u13_1) u13 USING (id)) JOIN (SELECT NULL::integer AS "dummy-1", u14_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_14'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) u14_1) u14 USING (id)) JOIN (SELECT NULL::integer AS "dummy-1", u15_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_15'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) u15_1) u15 USING (id)) JOIN (SELECT NULL::integer AS "dummy-1", u16_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_16'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) u16_1) u16 USING (id)) JOIN (SELECT NULL::integer AS "dummy-1", u17_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_17'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) u17_1) u17 USING (id)) JOIN (SELECT NULL::integer AS "dummy-1", u18_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_18'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) u18_1) u18 USING (id)) JOIN (SELECT NULL::integer AS "dummy-1", u19_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_19'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) u19_1) u19 USING (id)) JOIN (SELECT NULL::integer AS "dummy-1", u20_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_20'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) u20_1) u20 USING (id)) JOIN (SELECT NULL::integer AS "dummy-1", u21_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_21'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) u21_1) u21 USING (id)) JOIN (SELECT NULL::integer AS "dummy-1", u22_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_22'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) u22_1) u22 USING (id)) JOIN (SELECT NULL::integer AS "dummy-1", u23_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_23'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) u23_1) u23 USING (id)) JOIN (SELECT NULL::integer AS "dummy-1", u24_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_24'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) u24_1) u24 USING (id)) JOIN (SELECT NULL::integer AS "dummy-1", u25_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_25'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) u25_1) u25 USING (id))
+ count
+---------------------------------------------------------------------
+   101
+(1 row)
+
+select ' select count(*) from distributed ' || string_Agg('INNER
+JOIN local u'|| x::text || ' ON (false)',' ') from
+generate_Series(1,25)x;
+                ?column?
+---------------------------------------------------------------------
+  select count(*) from distributed INNER+
+ JOIN local u1 ON (false) INNER         +
+ JOIN local u2 ON (false) INNER         +
+ JOIN local u3 ON (false) INNER         +
+ JOIN local u4 ON (false) INNER         +
+ JOIN local u5 ON (false) INNER         +
+ JOIN local u6 ON (false) INNER         +
+ JOIN local u7 ON (false) INNER         +
+ JOIN local u8 ON (false) INNER         +
+ JOIN local u9 ON (false) INNER         +
+ JOIN local u10 ON (false) INNER        +
+ JOIN local u11 ON (false) INNER        +
+ JOIN local u12 ON (false) INNER        +
+ JOIN local u13 ON (false) INNER        +
+ JOIN local u14 ON (false) INNER        +
+ JOIN local u15 ON (false) INNER        +
+ JOIN local u16 ON (false) INNER        +
+ JOIN local u17 ON (false) INNER        +
+ JOIN local u18 ON (false) INNER        +
+ JOIN local u19 ON (false) INNER        +
+ JOIN local u20 ON (false) INNER        +
+ JOIN local u21 ON (false) INNER        +
+ JOIN local u22 ON (false) INNER        +
+ JOIN local u23 ON (false) INNER        +
+ JOIN local u24 ON (false) INNER        +
+ JOIN local u25 ON (false)
+(1 row)
+
+\gexec
+ select count(*) from distributed INNER
+JOIN local u1 ON (false) INNER
+JOIN local u2 ON (false) INNER
+JOIN local u3 ON (false) INNER
+JOIN local u4 ON (false) INNER
+JOIN local u5 ON (false) INNER
+JOIN local u6 ON (false) INNER
+JOIN local u7 ON (false) INNER
+JOIN local u8 ON (false) INNER
+JOIN local u9 ON (false) INNER
+JOIN local u10 ON (false) INNER
+JOIN local u11 ON (false) INNER
+JOIN local u12 ON (false) INNER
+JOIN local u13 ON (false) INNER
+JOIN local u14 ON (false) INNER
+JOIN local u15 ON (false) INNER
+JOIN local u16 ON (false) INNER
+JOIN local u17 ON (false) INNER
+JOIN local u18 ON (false) INNER
+JOIN local u19 ON (false) INNER
+JOIN local u20 ON (false) INNER
+JOIN local u21 ON (false) INNER
+JOIN local u22 ON (false) INNER
+JOIN local u23 ON (false) INNER
+JOIN local u24 ON (false) INNER
+JOIN local u25 ON (false)
+DEBUG:  Wrapping relation "distributed" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS "dummy-1" FROM local_dist_join_mixed.distributed WHERE false
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((((((((((((((((((((((((((SELECT NULL::integer AS "dummy-1", NULL::bigint AS id, NULL::text AS name, NULL::timestamp with time zone AS created_at FROM (SELECT intermediate_result."dummy-1" FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result("dummy-1" integer)) distributed_1) distributed JOIN local_dist_join_mixed.local u1 ON (false)) JOIN local_dist_join_mixed.local u2 ON (false)) JOIN local_dist_join_mixed.local u3 ON (false)) JOIN local_dist_join_mixed.local u4 ON (false)) JOIN local_dist_join_mixed.local u5 ON (false)) JOIN local_dist_join_mixed.local u6 ON (false)) JOIN local_dist_join_mixed.local u7 ON (false)) JOIN local_dist_join_mixed.local u8 ON (false)) JOIN local_dist_join_mixed.local u9 ON (false)) JOIN local_dist_join_mixed.local u10 ON (false)) JOIN local_dist_join_mixed.local u11 ON (false)) JOIN local_dist_join_mixed.local u12 ON (false)) JOIN local_dist_join_mixed.local u13 ON (false)) JOIN local_dist_join_mixed.local u14 ON (false)) JOIN local_dist_join_mixed.local u15 ON (false)) JOIN local_dist_join_mixed.local u16 ON (false)) JOIN local_dist_join_mixed.local u17 ON (false)) JOIN local_dist_join_mixed.local u18 ON (false)) JOIN local_dist_join_mixed.local u19 ON (false)) JOIN local_dist_join_mixed.local u20 ON (false)) JOIN local_dist_join_mixed.local u21 ON (false)) JOIN local_dist_join_mixed.local u22 ON (false)) JOIN local_dist_join_mixed.local u23 ON (false)) JOIN local_dist_join_mixed.local u24 ON (false)) JOIN local_dist_join_mixed.local u25 ON (false))
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+select ' select count(*) from local ' || string_Agg('INNER
+JOIN distributed u'|| x::text || ' USING (id)',' ') from
+generate_Series(1,25)x;
+               ?column?
+---------------------------------------------------------------------
+  select count(*) from local INNER    +
+ JOIN distributed u1 USING (id) INNER +
+ JOIN distributed u2 USING (id) INNER +
+ JOIN distributed u3 USING (id) INNER +
+ JOIN distributed u4 USING (id) INNER +
+ JOIN distributed u5 USING (id) INNER +
+ JOIN distributed u6 USING (id) INNER +
+ JOIN distributed u7 USING (id) INNER +
+ JOIN distributed u8 USING (id) INNER +
+ JOIN distributed u9 USING (id) INNER +
+ JOIN distributed u10 USING (id) INNER+
+ JOIN distributed u11 USING (id) INNER+
+ JOIN distributed u12 USING (id) INNER+
+ JOIN distributed u13 USING (id) INNER+
+ JOIN distributed u14 USING (id) INNER+
+ JOIN distributed u15 USING (id) INNER+
+ JOIN distributed u16 USING (id) INNER+
+ JOIN distributed u17 USING (id) INNER+
+ JOIN distributed u18 USING (id) INNER+
+ JOIN distributed u19 USING (id) INNER+
+ JOIN distributed u20 USING (id) INNER+
+ JOIN distributed u21 USING (id) INNER+
+ JOIN distributed u22 USING (id) INNER+
+ JOIN distributed u23 USING (id) INNER+
+ JOIN distributed u24 USING (id) INNER+
+ JOIN distributed u25 USING (id)
+(1 row)
+
+\gexec
+ select count(*) from local INNER
+JOIN distributed u1 USING (id) INNER
+JOIN distributed u2 USING (id) INNER
+JOIN distributed u3 USING (id) INNER
+JOIN distributed u4 USING (id) INNER
+JOIN distributed u5 USING (id) INNER
+JOIN distributed u6 USING (id) INNER
+JOIN distributed u7 USING (id) INNER
+JOIN distributed u8 USING (id) INNER
+JOIN distributed u9 USING (id) INNER
+JOIN distributed u10 USING (id) INNER
+JOIN distributed u11 USING (id) INNER
+JOIN distributed u12 USING (id) INNER
+JOIN distributed u13 USING (id) INNER
+JOIN distributed u14 USING (id) INNER
+JOIN distributed u15 USING (id) INNER
+JOIN distributed u16 USING (id) INNER
+JOIN distributed u17 USING (id) INNER
+JOIN distributed u18 USING (id) INNER
+JOIN distributed u19 USING (id) INNER
+JOIN distributed u20 USING (id) INNER
+JOIN distributed u21 USING (id) INNER
+JOIN distributed u22 USING (id) INNER
+JOIN distributed u23 USING (id) INNER
+JOIN distributed u24 USING (id) INNER
+JOIN distributed u25 USING (id)
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT id FROM local_dist_join_mixed.local WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((((((((((((((((((((((((((SELECT NULL::integer AS "dummy-1", local_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) local_1) local JOIN local_dist_join_mixed.distributed u1 USING (id)) JOIN local_dist_join_mixed.distributed u2 USING (id)) JOIN local_dist_join_mixed.distributed u3 USING (id)) JOIN local_dist_join_mixed.distributed u4 USING (id)) JOIN local_dist_join_mixed.distributed u5 USING (id)) JOIN local_dist_join_mixed.distributed u6 USING (id)) JOIN local_dist_join_mixed.distributed u7 USING (id)) JOIN local_dist_join_mixed.distributed u8 USING (id)) JOIN local_dist_join_mixed.distributed u9 USING (id)) JOIN local_dist_join_mixed.distributed u10 USING (id)) JOIN local_dist_join_mixed.distributed u11 USING (id)) JOIN local_dist_join_mixed.distributed u12 USING (id)) JOIN local_dist_join_mixed.distributed u13 USING (id)) JOIN local_dist_join_mixed.distributed u14 USING (id)) JOIN local_dist_join_mixed.distributed u15 USING (id)) JOIN local_dist_join_mixed.distributed u16 USING (id)) JOIN local_dist_join_mixed.distributed u17 USING (id)) JOIN local_dist_join_mixed.distributed u18 USING (id)) JOIN local_dist_join_mixed.distributed u19 USING (id)) JOIN local_dist_join_mixed.distributed u20 USING (id)) JOIN local_dist_join_mixed.distributed u21 USING (id)) JOIN local_dist_join_mixed.distributed u22 USING (id)) JOIN local_dist_join_mixed.distributed u23 USING (id)) JOIN local_dist_join_mixed.distributed u24 USING (id)) JOIN local_dist_join_mixed.distributed u25 USING (id))
+ count
+---------------------------------------------------------------------
+   101
+(1 row)
+
+select ' select count(*) from local ' || string_Agg('INNER
+JOIN distributed u'|| x::text || ' ON (false)',' ') from
+generate_Series(1,25)x;
+               ?column?
+---------------------------------------------------------------------
+  select count(*) from local INNER    +
+ JOIN distributed u1 ON (false) INNER +
+ JOIN distributed u2 ON (false) INNER +
+ JOIN distributed u3 ON (false) INNER +
+ JOIN distributed u4 ON (false) INNER +
+ JOIN distributed u5 ON (false) INNER +
+ JOIN distributed u6 ON (false) INNER +
+ JOIN distributed u7 ON (false) INNER +
+ JOIN distributed u8 ON (false) INNER +
+ JOIN distributed u9 ON (false) INNER +
+ JOIN distributed u10 ON (false) INNER+
+ JOIN distributed u11 ON (false) INNER+
+ JOIN distributed u12 ON (false) INNER+
+ JOIN distributed u13 ON (false) INNER+
+ JOIN distributed u14 ON (false) INNER+
+ JOIN distributed u15 ON (false) INNER+
+ JOIN distributed u16 ON (false) INNER+
+ JOIN distributed u17 ON (false) INNER+
+ JOIN distributed u18 ON (false) INNER+
+ JOIN distributed u19 ON (false) INNER+
+ JOIN distributed u20 ON (false) INNER+
+ JOIN distributed u21 ON (false) INNER+
+ JOIN distributed u22 ON (false) INNER+
+ JOIN distributed u23 ON (false) INNER+
+ JOIN distributed u24 ON (false) INNER+
+ JOIN distributed u25 ON (false)
+(1 row)
+
+\gexec
+ select count(*) from local INNER
+JOIN distributed u1 ON (false) INNER
+JOIN distributed u2 ON (false) INNER
+JOIN distributed u3 ON (false) INNER
+JOIN distributed u4 ON (false) INNER
+JOIN distributed u5 ON (false) INNER
+JOIN distributed u6 ON (false) INNER
+JOIN distributed u7 ON (false) INNER
+JOIN distributed u8 ON (false) INNER
+JOIN distributed u9 ON (false) INNER
+JOIN distributed u10 ON (false) INNER
+JOIN distributed u11 ON (false) INNER
+JOIN distributed u12 ON (false) INNER
+JOIN distributed u13 ON (false) INNER
+JOIN distributed u14 ON (false) INNER
+JOIN distributed u15 ON (false) INNER
+JOIN distributed u16 ON (false) INNER
+JOIN distributed u17 ON (false) INNER
+JOIN distributed u18 ON (false) INNER
+JOIN distributed u19 ON (false) INNER
+JOIN distributed u20 ON (false) INNER
+JOIN distributed u21 ON (false) INNER
+JOIN distributed u22 ON (false) INNER
+JOIN distributed u23 ON (false) INNER
+JOIN distributed u24 ON (false) INNER
+JOIN distributed u25 ON (false)
+DEBUG:  Wrapping relation "distributed" "u1" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS "dummy-1" FROM local_dist_join_mixed.distributed u1 WHERE false
+DEBUG:  Wrapping relation "distributed" "u2" to a subquery
+DEBUG:  generating subplan XXX_2 for subquery SELECT NULL::integer AS "dummy-1" FROM local_dist_join_mixed.distributed u2 WHERE false
+DEBUG:  Wrapping relation "distributed" "u3" to a subquery
+DEBUG:  generating subplan XXX_3 for subquery SELECT NULL::integer AS "dummy-1" FROM local_dist_join_mixed.distributed u3 WHERE false
+DEBUG:  Wrapping relation "distributed" "u4" to a subquery
+DEBUG:  generating subplan XXX_4 for subquery SELECT NULL::integer AS "dummy-1" FROM local_dist_join_mixed.distributed u4 WHERE false
+DEBUG:  Wrapping relation "distributed" "u5" to a subquery
+DEBUG:  generating subplan XXX_5 for subquery SELECT NULL::integer AS "dummy-1" FROM local_dist_join_mixed.distributed u5 WHERE false
+DEBUG:  Wrapping relation "distributed" "u6" to a subquery
+DEBUG:  generating subplan XXX_6 for subquery SELECT NULL::integer AS "dummy-1" FROM local_dist_join_mixed.distributed u6 WHERE false
+DEBUG:  Wrapping relation "distributed" "u7" to a subquery
+DEBUG:  generating subplan XXX_7 for subquery SELECT NULL::integer AS "dummy-1" FROM local_dist_join_mixed.distributed u7 WHERE false
+DEBUG:  Wrapping relation "distributed" "u8" to a subquery
+DEBUG:  generating subplan XXX_8 for subquery SELECT NULL::integer AS "dummy-1" FROM local_dist_join_mixed.distributed u8 WHERE false
+DEBUG:  Wrapping relation "distributed" "u9" to a subquery
+DEBUG:  generating subplan XXX_9 for subquery SELECT NULL::integer AS "dummy-1" FROM local_dist_join_mixed.distributed u9 WHERE false
+DEBUG:  Wrapping relation "distributed" "u10" to a subquery
+DEBUG:  generating subplan XXX_10 for subquery SELECT NULL::integer AS "dummy-1" FROM local_dist_join_mixed.distributed u10 WHERE false
+DEBUG:  Wrapping relation "distributed" "u11" to a subquery
+DEBUG:  generating subplan XXX_11 for subquery SELECT NULL::integer AS "dummy-1" FROM local_dist_join_mixed.distributed u11 WHERE false
+DEBUG:  Wrapping relation "distributed" "u12" to a subquery
+DEBUG:  generating subplan XXX_12 for subquery SELECT NULL::integer AS "dummy-1" FROM local_dist_join_mixed.distributed u12 WHERE false
+DEBUG:  Wrapping relation "distributed" "u13" to a subquery
+DEBUG:  generating subplan XXX_13 for subquery SELECT NULL::integer AS "dummy-1" FROM local_dist_join_mixed.distributed u13 WHERE false
+DEBUG:  Wrapping relation "distributed" "u14" to a subquery
+DEBUG:  generating subplan XXX_14 for subquery SELECT NULL::integer AS "dummy-1" FROM local_dist_join_mixed.distributed u14 WHERE false
+DEBUG:  Wrapping relation "distributed" "u15" to a subquery
+DEBUG:  generating subplan XXX_15 for subquery SELECT NULL::integer AS "dummy-1" FROM local_dist_join_mixed.distributed u15 WHERE false
+DEBUG:  Wrapping relation "distributed" "u16" to a subquery
+DEBUG:  generating subplan XXX_16 for subquery SELECT NULL::integer AS "dummy-1" FROM local_dist_join_mixed.distributed u16 WHERE false
+DEBUG:  Wrapping relation "distributed" "u17" to a subquery
+DEBUG:  generating subplan XXX_17 for subquery SELECT NULL::integer AS "dummy-1" FROM local_dist_join_mixed.distributed u17 WHERE false
+DEBUG:  Wrapping relation "distributed" "u18" to a subquery
+DEBUG:  generating subplan XXX_18 for subquery SELECT NULL::integer AS "dummy-1" FROM local_dist_join_mixed.distributed u18 WHERE false
+DEBUG:  Wrapping relation "distributed" "u19" to a subquery
+DEBUG:  generating subplan XXX_19 for subquery SELECT NULL::integer AS "dummy-1" FROM local_dist_join_mixed.distributed u19 WHERE false
+DEBUG:  Wrapping relation "distributed" "u20" to a subquery
+DEBUG:  generating subplan XXX_20 for subquery SELECT NULL::integer AS "dummy-1" FROM local_dist_join_mixed.distributed u20 WHERE false
+DEBUG:  Wrapping relation "distributed" "u21" to a subquery
+DEBUG:  generating subplan XXX_21 for subquery SELECT NULL::integer AS "dummy-1" FROM local_dist_join_mixed.distributed u21 WHERE false
+DEBUG:  Wrapping relation "distributed" "u22" to a subquery
+DEBUG:  generating subplan XXX_22 for subquery SELECT NULL::integer AS "dummy-1" FROM local_dist_join_mixed.distributed u22 WHERE false
+DEBUG:  Wrapping relation "distributed" "u23" to a subquery
+DEBUG:  generating subplan XXX_23 for subquery SELECT NULL::integer AS "dummy-1" FROM local_dist_join_mixed.distributed u23 WHERE false
+DEBUG:  Wrapping relation "distributed" "u24" to a subquery
+DEBUG:  generating subplan XXX_24 for subquery SELECT NULL::integer AS "dummy-1" FROM local_dist_join_mixed.distributed u24 WHERE false
+DEBUG:  Wrapping relation "distributed" "u25" to a subquery
+DEBUG:  generating subplan XXX_25 for subquery SELECT NULL::integer AS "dummy-1" FROM local_dist_join_mixed.distributed u25 WHERE false
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (((((((((((((((((((((((((local_dist_join_mixed.local JOIN (SELECT NULL::integer AS "dummy-1", NULL::bigint AS id, NULL::text AS name, NULL::timestamp with time zone AS created_at FROM (SELECT intermediate_result."dummy-1" FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result("dummy-1" integer)) u1_1) u1 ON (false)) JOIN (SELECT NULL::integer AS "dummy-1", NULL::bigint AS id, NULL::text AS name, NULL::timestamp with time zone AS created_at FROM (SELECT intermediate_result."dummy-1" FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result("dummy-1" integer)) u2_1) u2 ON (false)) JOIN (SELECT NULL::integer AS "dummy-1", NULL::bigint AS id, NULL::text AS name, NULL::timestamp with time zone AS created_at FROM (SELECT intermediate_result."dummy-1" FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result("dummy-1" integer)) u3_1) u3 ON (false)) JOIN (SELECT NULL::integer AS "dummy-1", NULL::bigint AS id, NULL::text AS name, NULL::timestamp with time zone AS created_at FROM (SELECT intermediate_result."dummy-1" FROM read_intermediate_result('XXX_4'::text, 'binary'::citus_copy_format) intermediate_result("dummy-1" integer)) u4_1) u4 ON (false)) JOIN (SELECT NULL::integer AS "dummy-1", NULL::bigint AS id, NULL::text AS name, NULL::timestamp with time zone AS created_at FROM (SELECT intermediate_result."dummy-1" FROM read_intermediate_result('XXX_5'::text, 'binary'::citus_copy_format) intermediate_result("dummy-1" integer)) u5_1) u5 ON (false)) JOIN (SELECT NULL::integer AS "dummy-1", NULL::bigint AS id, NULL::text AS name, NULL::timestamp with time zone AS created_at FROM (SELECT intermediate_result."dummy-1" FROM read_intermediate_result('XXX_6'::text, 'binary'::citus_copy_format) intermediate_result("dummy-1" integer)) u6_1) u6 ON (false)) JOIN (SELECT NULL::integer AS "dummy-1", NULL::bigint AS id, NULL::text AS name, NULL::timestamp with time zone AS created_at FROM (SELECT intermediate_result."dummy-1" FROM read_intermediate_result('XXX_7'::text, 'binary'::citus_copy_format) intermediate_result("dummy-1" integer)) u7_1) u7 ON (false)) JOIN (SELECT NULL::integer AS "dummy-1", NULL::bigint AS id, NULL::text AS name, NULL::timestamp with time zone AS created_at FROM (SELECT intermediate_result."dummy-1" FROM read_intermediate_result('XXX_8'::text, 'binary'::citus_copy_format) intermediate_result("dummy-1" integer)) u8_1) u8 ON (false)) JOIN (SELECT NULL::integer AS "dummy-1", NULL::bigint AS id, NULL::text AS name, NULL::timestamp with time zone AS created_at FROM (SELECT intermediate_result."dummy-1" FROM read_intermediate_result('XXX_9'::text, 'binary'::citus_copy_format) intermediate_result("dummy-1" integer)) u9_1) u9 ON (false)) JOIN (SELECT NULL::integer AS "dummy-1", NULL::bigint AS id, NULL::text AS name, NULL::timestamp with time zone AS created_at FROM (SELECT intermediate_result."dummy-1" FROM read_intermediate_result('XXX_10'::text, 'binary'::citus_copy_format) intermediate_result("dummy-1" integer)) u10_1) u10 ON (false)) JOIN (SELECT NULL::integer AS "dummy-1", NULL::bigint AS id, NULL::text AS name, NULL::timestamp with time zone AS created_at FROM (SELECT intermediate_result."dummy-1" FROM read_intermediate_result('XXX_11'::text, 'binary'::citus_copy_format) intermediate_result("dummy-1" integer)) u11_1) u11 ON (false)) JOIN (SELECT NULL::integer AS "dummy-1", NULL::bigint AS id, NULL::text AS name, NULL::timestamp with time zone AS created_at FROM (SELECT intermediate_result."dummy-1" FROM read_intermediate_result('XXX_12'::text, 'binary'::citus_copy_format) intermediate_result("dummy-1" integer)) u12_1) u12 ON (false)) JOIN (SELECT NULL::integer AS "dummy-1", NULL::bigint AS id, NULL::text AS name, NULL::timestamp with time zone AS created_at FROM (SELECT intermediate_result."dummy-1" FROM read_intermediate_result('XXX_13'::text, 'binary'::citus_copy_format) intermediate_result("dummy-1" integer)) u13_1) u13 ON (false)) JOIN (SELECT NULL::integer AS "dummy-1", NULL::bigint AS id, NULL::text AS name, NULL::timestamp with time zone AS created_at FROM (SELECT intermediate_result."dummy-1" FROM read_intermediate_result('XXX_14'::text, 'binary'::citus_copy_format) intermediate_result("dummy-1" integer)) u14_1) u14 ON (false)) JOIN (SELECT NULL::integer AS "dummy-1", NULL::bigint AS id, NULL::text AS name, NULL::timestamp with time zone AS created_at FROM (SELECT intermediate_result."dummy-1" FROM read_intermediate_result('XXX_15'::text, 'binary'::citus_copy_format) intermediate_result("dummy-1" integer)) u15_1) u15 ON (false)) JOIN (SELECT NULL::integer AS "dummy-1", NULL::bigint AS id, NULL::text AS name, NULL::timestamp with time zone AS created_at FROM (SELECT intermediate_result."dummy-1" FROM read_intermediate_result('XXX_16'::text, 'binary'::citus_copy_format) intermediate_result("dummy-1" integer)) u16_1) u16 ON (false)) JOIN (SELECT NULL::integer AS "dummy-1", NULL::bigint AS id, NULL::text AS name, NULL::timestamp with time zone AS created_at FROM (SELECT intermediate_result."dummy-1" FROM read_intermediate_result('XXX_17'::text, 'binary'::citus_copy_format) intermediate_result("dummy-1" integer)) u17_1) u17 ON (false)) JOIN (SELECT NULL::integer AS "dummy-1", NULL::bigint AS id, NULL::text AS name, NULL::timestamp with time zone AS created_at FROM (SELECT intermediate_result."dummy-1" FROM read_intermediate_result('XXX_18'::text, 'binary'::citus_copy_format) intermediate_result("dummy-1" integer)) u18_1) u18 ON (false)) JOIN (SELECT NULL::integer AS "dummy-1", NULL::bigint AS id, NULL::text AS name, NULL::timestamp with time zone AS created_at FROM (SELECT intermediate_result."dummy-1" FROM read_intermediate_result('XXX_19'::text, 'binary'::citus_copy_format) intermediate_result("dummy-1" integer)) u19_1) u19 ON (false)) JOIN (SELECT NULL::integer AS "dummy-1", NULL::bigint AS id, NULL::text AS name, NULL::timestamp with time zone AS created_at FROM (SELECT intermediate_result."dummy-1" FROM read_intermediate_result('XXX_20'::text, 'binary'::citus_copy_format) intermediate_result("dummy-1" integer)) u20_1) u20 ON (false)) JOIN (SELECT NULL::integer AS "dummy-1", NULL::bigint AS id, NULL::text AS name, NULL::timestamp with time zone AS created_at FROM (SELECT intermediate_result."dummy-1" FROM read_intermediate_result('XXX_21'::text, 'binary'::citus_copy_format) intermediate_result("dummy-1" integer)) u21_1) u21 ON (false)) JOIN (SELECT NULL::integer AS "dummy-1", NULL::bigint AS id, NULL::text AS name, NULL::timestamp with time zone AS created_at FROM (SELECT intermediate_result."dummy-1" FROM read_intermediate_result('XXX_22'::text, 'binary'::citus_copy_format) intermediate_result("dummy-1" integer)) u22_1) u22 ON (false)) JOIN (SELECT NULL::integer AS "dummy-1", NULL::bigint AS id, NULL::text AS name, NULL::timestamp with time zone AS created_at FROM (SELECT intermediate_result."dummy-1" FROM read_intermediate_result('XXX_23'::text, 'binary'::citus_copy_format) intermediate_result("dummy-1" integer)) u23_1) u23 ON (false)) JOIN (SELECT NULL::integer AS "dummy-1", NULL::bigint AS id, NULL::text AS name, NULL::timestamp with time zone AS created_at FROM (SELECT intermediate_result."dummy-1" FROM read_intermediate_result('XXX_24'::text, 'binary'::citus_copy_format) intermediate_result("dummy-1" integer)) u24_1) u24 ON (false)) JOIN (SELECT NULL::integer AS "dummy-1", NULL::bigint AS id, NULL::text AS name, NULL::timestamp with time zone AS created_at FROM (SELECT intermediate_result."dummy-1" FROM read_intermediate_result('XXX_25'::text, 'binary'::citus_copy_format) intermediate_result("dummy-1" integer)) u25_1) u25 ON (false))
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+-- lateral joins
+SELECT COUNT(*) FROM (VALUES (1), (2), (3))  as f(x) LATERAL JOIN (SELECT * FROM local WHERE id  =  x) as bar;
+ERROR:  syntax error at or near "LATERAL"
+SELECT COUNT(*) FROM local JOIN LATERAL (SELECT * FROM distributed WHERE local.id = distributed.id) as foo ON (true);
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT id FROM local_dist_join_mixed.local WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT NULL::integer AS "dummy-1", local_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) local_1) local JOIN LATERAL (SELECT distributed.id, distributed.name, distributed.created_at FROM local_dist_join_mixed.distributed WHERE (local.id OPERATOR(pg_catalog.=) distributed.id)) foo ON (true))
+ count
+---------------------------------------------------------------------
+   101
+(1 row)
+
+SELECT COUNT(*) FROM local JOIN LATERAL (SELECT * FROM distributed WHERE local.id > distributed.id) as foo ON (true);
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT id FROM local_dist_join_mixed.local WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT NULL::integer AS "dummy-1", local_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) local_1) local JOIN LATERAL (SELECT distributed.id, distributed.name, distributed.created_at FROM local_dist_join_mixed.distributed WHERE (local.id OPERATOR(pg_catalog.>) distributed.id)) foo ON (true))
+ count
+---------------------------------------------------------------------
+  5050
+(1 row)
+
+SELECT COUNT(*) FROM distributed JOIN LATERAL (SELECT * FROM local WHERE local.id = distributed.id) as foo ON (true);
+ERROR:  direct joins between distributed and local tables are not supported
+HINT:  Use CTE's or subqueries to select from local tables and use them in joins
+SELECT COUNT(*) FROM distributed JOIN LATERAL (SELECT * FROM local WHERE local.id > distributed.id) as foo ON (true);
+ERROR:  direct joins between distributed and local tables are not supported
+HINT:  Use CTE's or subqueries to select from local tables and use them in joins
+SELECT count(*) FROM distributed CROSS JOIN local;
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS "dummy-1" FROM local_dist_join_mixed.local WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (local_dist_join_mixed.distributed CROSS JOIN (SELECT NULL::integer AS "dummy-1", NULL::bigint AS id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result."dummy-1" FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result("dummy-1" integer)) local_1) local)
+ count
+---------------------------------------------------------------------
+ 10201
+(1 row)
+
+SELECT count(*) FROM distributed CROSS JOIN local WHERE distributed.id = 1;
+DEBUG:  Wrapping relation "distributed" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT id FROM local_dist_join_mixed.distributed WHERE (id OPERATOR(pg_catalog.=) 1)
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT NULL::integer AS "dummy-1", distributed_1.id, NULL::text AS name, NULL::timestamp with time zone AS created_at FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) distributed_1) distributed CROSS JOIN local_dist_join_mixed.local) WHERE (distributed.id OPERATOR(pg_catalog.=) 1)
+ count
+---------------------------------------------------------------------
+   101
+(1 row)
+
+-- w count(*) it works fine as PG ignores the  inner tables
+SELECT count(*) FROM distributed LEFT JOIN local USING (id);
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS "dummy-1" FROM local_dist_join_mixed.local WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (local_dist_join_mixed.distributed LEFT JOIN (SELECT NULL::integer AS "dummy-1", NULL::bigint AS id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result."dummy-1" FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result("dummy-1" integer)) local_1) local USING (id))
+ count
+---------------------------------------------------------------------
+   101
+(1 row)
+
+SELECT count(*) FROM local LEFT JOIN distributed USING (id);
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT id FROM local_dist_join_mixed.local WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT NULL::integer AS "dummy-1", local_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) local_1) local LEFT JOIN local_dist_join_mixed.distributed USING (id))
+ count
+---------------------------------------------------------------------
+   101
+(1 row)
+
+SELECT id, name FROM distributed LEFT JOIN local USING (id) ORDER BY 1 LIMIT 1;
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS "dummy-1" FROM local_dist_join_mixed.local WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT distributed.id, distributed.name FROM (local_dist_join_mixed.distributed LEFT JOIN (SELECT NULL::integer AS "dummy-1", NULL::bigint AS id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result."dummy-1" FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result("dummy-1" integer)) local_1) local USING (id)) ORDER BY distributed.id LIMIT 1
+DEBUG:  push down of limit count: 1
+ id | name
+---------------------------------------------------------------------
+  0 | 0
+(1 row)
+
+SELECT id, name FROM local LEFT JOIN distributed USING (id) ORDER BY 1 LIMIT 1;
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT id FROM local_dist_join_mixed.local WHERE true
+DEBUG:  recursively planning right side of the left join since the outer side is a recurring rel
+DEBUG:  recursively planning distributed relation "distributed" since it is part of a distributed join node that is outer joined with a recurring rel
+DEBUG:  Wrapping relation "distributed" to a subquery
+DEBUG:  generating subplan XXX_2 for subquery SELECT id, name FROM local_dist_join_mixed.distributed WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT local.id, distributed.name FROM ((SELECT NULL::integer AS "dummy-1", local_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) local_1) local LEFT JOIN (SELECT NULL::integer AS "dummy-1", distributed_1.id, distributed_1.name, NULL::timestamp with time zone AS created_at FROM (SELECT intermediate_result.id, intermediate_result.name FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, name text)) distributed_1) distributed USING (id)) ORDER BY local.id LIMIT 1
+ id | name
+---------------------------------------------------------------------
+  0 | 0
+(1 row)
+
+ SELECT
+        foo1.id
+    FROM
+ (SELECT local.id, local.title FROM local, distributed WHERE local.id = distributed.id ) as foo9,
+ (SELECT local.id, local.title FROM local, distributed WHERE local.id = distributed.id ) as foo8,
+ (SELECT local.id, local.title FROM local, distributed WHERE local.id = distributed.id ) as foo7,
+ (SELECT local.id, local.title FROM local, distributed WHERE local.id = distributed.id ) as foo6,
+ (SELECT local.id, local.title FROM local, distributed WHERE local.id = distributed.id ) as foo5,
+ (SELECT local.id, local.title FROM local, distributed WHERE local.id = distributed.id ) as foo4,
+ (SELECT local.id, local.title FROM local, distributed WHERE local.id = distributed.id ) as foo3,
+ (SELECT local.id, local.title FROM local, distributed WHERE local.id = distributed.id ) as foo2,
+ (SELECT local.id, local.title FROM local, distributed WHERE local.id = distributed.id ) as foo10,
+ (SELECT local.id, local.title FROM local, distributed WHERE local.id = distributed.id ) as foo1
+ WHERE
+  foo1.id =  foo9.id AND
+  foo1.id =  foo8.id AND
+  foo1.id =  foo7.id AND
+  foo1.id =  foo6.id AND
+  foo1.id =  foo5.id AND
+  foo1.id =  foo4.id AND
+  foo1.id =  foo3.id AND
+  foo1.id =  foo2.id AND
+  foo1.id =  foo10.id
+ORDER BY 1;
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT id FROM local_dist_join_mixed.local WHERE true
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_2 for subquery SELECT id FROM local_dist_join_mixed.local WHERE true
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_3 for subquery SELECT id FROM local_dist_join_mixed.local WHERE true
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_4 for subquery SELECT id FROM local_dist_join_mixed.local WHERE true
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_5 for subquery SELECT id FROM local_dist_join_mixed.local WHERE true
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_6 for subquery SELECT id FROM local_dist_join_mixed.local WHERE true
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_7 for subquery SELECT id FROM local_dist_join_mixed.local WHERE true
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_8 for subquery SELECT id FROM local_dist_join_mixed.local WHERE true
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_9 for subquery SELECT id FROM local_dist_join_mixed.local WHERE true
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_10 for subquery SELECT id FROM local_dist_join_mixed.local WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT foo1.id FROM (SELECT local.id, local.title FROM (SELECT NULL::integer AS "dummy-1", local_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) local_1) local, local_dist_join_mixed.distributed WHERE (local.id OPERATOR(pg_catalog.=) distributed.id)) foo9, (SELECT local.id, local.title FROM (SELECT NULL::integer AS "dummy-1", local_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) local_1) local, local_dist_join_mixed.distributed WHERE (local.id OPERATOR(pg_catalog.=) distributed.id)) foo8, (SELECT local.id, local.title FROM (SELECT NULL::integer AS "dummy-1", local_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) local_1) local, local_dist_join_mixed.distributed WHERE (local.id OPERATOR(pg_catalog.=) distributed.id)) foo7, (SELECT local.id, local.title FROM (SELECT NULL::integer AS "dummy-1", local_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_4'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) local_1) local, local_dist_join_mixed.distributed WHERE (local.id OPERATOR(pg_catalog.=) distributed.id)) foo6, (SELECT local.id, local.title FROM (SELECT NULL::integer AS "dummy-1", local_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_5'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) local_1) local, local_dist_join_mixed.distributed WHERE (local.id OPERATOR(pg_catalog.=) distributed.id)) foo5, (SELECT local.id, local.title FROM (SELECT NULL::integer AS "dummy-1", local_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_6'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) local_1) local, local_dist_join_mixed.distributed WHERE (local.id OPERATOR(pg_catalog.=) distributed.id)) foo4, (SELECT local.id, local.title FROM (SELECT NULL::integer AS "dummy-1", local_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_7'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) local_1) local, local_dist_join_mixed.distributed WHERE (local.id OPERATOR(pg_catalog.=) distributed.id)) foo3, (SELECT local.id, local.title FROM (SELECT NULL::integer AS "dummy-1", local_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_8'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) local_1) local, local_dist_join_mixed.distributed WHERE (local.id OPERATOR(pg_catalog.=) distributed.id)) foo2, (SELECT local.id, local.title FROM (SELECT NULL::integer AS "dummy-1", local_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_9'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) local_1) local, local_dist_join_mixed.distributed WHERE (local.id OPERATOR(pg_catalog.=) distributed.id)) foo10, (SELECT local.id, local.title FROM (SELECT NULL::integer AS "dummy-1", local_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_10'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) local_1) local, local_dist_join_mixed.distributed WHERE (local.id OPERATOR(pg_catalog.=) distributed.id)) foo1 WHERE ((foo1.id OPERATOR(pg_catalog.=) foo9.id) AND (foo1.id OPERATOR(pg_catalog.=) foo8.id) AND (foo1.id OPERATOR(pg_catalog.=) foo7.id) AND (foo1.id OPERATOR(pg_catalog.=) foo6.id) AND (foo1.id OPERATOR(pg_catalog.=) foo5.id) AND (foo1.id OPERATOR(pg_catalog.=) foo4.id) AND (foo1.id OPERATOR(pg_catalog.=) foo3.id) AND (foo1.id OPERATOR(pg_catalog.=) foo2.id) AND (foo1.id OPERATOR(pg_catalog.=) foo10.id)) ORDER BY foo1.id
+ id
+---------------------------------------------------------------------
+   0
+   1
+   2
+   3
+   4
+   5
+   6
+   7
+   8
+   9
+  10
+  11
+  12
+  13
+  14
+  15
+  16
+  17
+  18
+  19
+  20
+  21
+  22
+  23
+  24
+  25
+  26
+  27
+  28
+  29
+  30
+  31
+  32
+  33
+  34
+  35
+  36
+  37
+  38
+  39
+  40
+  41
+  42
+  43
+  44
+  45
+  46
+  47
+  48
+  49
+  50
+  51
+  52
+  53
+  54
+  55
+  56
+  57
+  58
+  59
+  60
+  61
+  62
+  63
+  64
+  65
+  66
+  67
+  68
+  69
+  70
+  71
+  72
+  73
+  74
+  75
+  76
+  77
+  78
+  79
+  80
+  81
+  82
+  83
+  84
+  85
+  86
+  87
+  88
+  89
+  90
+  91
+  92
+  93
+  94
+  95
+  96
+  97
+  98
+  99
+ 100
+(101 rows)
+
+SELECT
+	foo1.id
+FROM
+	(SELECT local.id FROM distributed, local WHERE local.id = distributed.id ) as foo1,
+	(SELECT local.id FROM distributed, local WHERE local.id = distributed.id ) as foo2,
+	(SELECT local.id FROM distributed, local WHERE local.id = distributed.id ) as foo3,
+	(SELECT local.id FROM distributed, local WHERE local.id = distributed.id ) as foo4,
+	(SELECT local.id FROM distributed, local WHERE local.id = distributed.id ) as foo5
+WHERE
+	foo1.id = foo4.id AND
+	foo1.id = foo2.id AND
+	foo1.id = foo3.id AND
+	foo1.id = foo4.id AND
+	foo1.id = foo5.id
+ORDER BY 1;
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT id FROM local_dist_join_mixed.local WHERE true
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_2 for subquery SELECT id FROM local_dist_join_mixed.local WHERE true
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_3 for subquery SELECT id FROM local_dist_join_mixed.local WHERE true
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_4 for subquery SELECT id FROM local_dist_join_mixed.local WHERE true
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_5 for subquery SELECT id FROM local_dist_join_mixed.local WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT foo1.id FROM (SELECT local.id FROM local_dist_join_mixed.distributed, (SELECT NULL::integer AS "dummy-1", local_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) local_1) local WHERE (local.id OPERATOR(pg_catalog.=) distributed.id)) foo1, (SELECT local.id FROM local_dist_join_mixed.distributed, (SELECT NULL::integer AS "dummy-1", local_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) local_1) local WHERE (local.id OPERATOR(pg_catalog.=) distributed.id)) foo2, (SELECT local.id FROM local_dist_join_mixed.distributed, (SELECT NULL::integer AS "dummy-1", local_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) local_1) local WHERE (local.id OPERATOR(pg_catalog.=) distributed.id)) foo3, (SELECT local.id FROM local_dist_join_mixed.distributed, (SELECT NULL::integer AS "dummy-1", local_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_4'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) local_1) local WHERE (local.id OPERATOR(pg_catalog.=) distributed.id)) foo4, (SELECT local.id FROM local_dist_join_mixed.distributed, (SELECT NULL::integer AS "dummy-1", local_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_5'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) local_1) local WHERE (local.id OPERATOR(pg_catalog.=) distributed.id)) foo5 WHERE ((foo1.id OPERATOR(pg_catalog.=) foo4.id) AND (foo1.id OPERATOR(pg_catalog.=) foo2.id) AND (foo1.id OPERATOR(pg_catalog.=) foo3.id) AND (foo1.id OPERATOR(pg_catalog.=) foo4.id) AND (foo1.id OPERATOR(pg_catalog.=) foo5.id)) ORDER BY foo1.id
+ id
+---------------------------------------------------------------------
+   0
+   1
+   2
+   3
+   4
+   5
+   6
+   7
+   8
+   9
+  10
+  11
+  12
+  13
+  14
+  15
+  16
+  17
+  18
+  19
+  20
+  21
+  22
+  23
+  24
+  25
+  26
+  27
+  28
+  29
+  30
+  31
+  32
+  33
+  34
+  35
+  36
+  37
+  38
+  39
+  40
+  41
+  42
+  43
+  44
+  45
+  46
+  47
+  48
+  49
+  50
+  51
+  52
+  53
+  54
+  55
+  56
+  57
+  58
+  59
+  60
+  61
+  62
+  63
+  64
+  65
+  66
+  67
+  68
+  69
+  70
+  71
+  72
+  73
+  74
+  75
+  76
+  77
+  78
+  79
+  80
+  81
+  82
+  83
+  84
+  85
+  86
+  87
+  88
+  89
+  90
+  91
+  92
+  93
+  94
+  95
+  96
+  97
+  98
+  99
+ 100
+(101 rows)
+
+SELECT
+	foo1.id
+FROM
+	(SELECT local.id FROM distributed, local WHERE local.id = distributed.id  AND distributed.id = 1) as foo1,
+	(SELECT local.id FROM distributed, local WHERE local.id = distributed.id  AND distributed.id = 2) as foo2,
+	(SELECT local.id FROM distributed, local WHERE local.id = distributed.id  AND distributed.id = 3) as foo3,
+	(SELECT local.id FROM distributed, local WHERE local.id = distributed.id  AND distributed.id = 4) as foo4,
+	(SELECT local.id FROM distributed, local WHERE local.id = distributed.id  AND distributed.id = 5) as foo5
+WHERE
+	foo1.id = foo4.id AND
+	foo1.id = foo2.id AND
+	foo1.id = foo3.id AND
+	foo1.id = foo4.id AND
+	foo1.id = foo5.id
+ORDER BY 1;
+DEBUG:  Wrapping relation "distributed" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT id FROM local_dist_join_mixed.distributed WHERE false
+DEBUG:  generating subplan XXX_2 for subquery SELECT local.id FROM (SELECT NULL::integer AS "dummy-1", distributed_1.id, NULL::text AS name, NULL::timestamp with time zone AS created_at FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) distributed_1) distributed, local_dist_join_mixed.local WHERE ((local.id OPERATOR(pg_catalog.=) distributed.id) AND (distributed.id OPERATOR(pg_catalog.=) 1))
+DEBUG:  Wrapping relation "distributed" to a subquery
+DEBUG:  generating subplan XXX_3 for subquery SELECT id FROM local_dist_join_mixed.distributed WHERE false
+DEBUG:  generating subplan XXX_4 for subquery SELECT local.id FROM (SELECT NULL::integer AS "dummy-1", distributed_1.id, NULL::text AS name, NULL::timestamp with time zone AS created_at FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) distributed_1) distributed, local_dist_join_mixed.local WHERE ((local.id OPERATOR(pg_catalog.=) distributed.id) AND (distributed.id OPERATOR(pg_catalog.=) 2))
+DEBUG:  Wrapping relation "distributed" to a subquery
+DEBUG:  generating subplan XXX_5 for subquery SELECT id FROM local_dist_join_mixed.distributed WHERE false
+DEBUG:  generating subplan XXX_6 for subquery SELECT local.id FROM (SELECT NULL::integer AS "dummy-1", distributed_1.id, NULL::text AS name, NULL::timestamp with time zone AS created_at FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_5'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) distributed_1) distributed, local_dist_join_mixed.local WHERE ((local.id OPERATOR(pg_catalog.=) distributed.id) AND (distributed.id OPERATOR(pg_catalog.=) 3))
+DEBUG:  Wrapping relation "distributed" to a subquery
+DEBUG:  generating subplan XXX_7 for subquery SELECT id FROM local_dist_join_mixed.distributed WHERE false
+DEBUG:  generating subplan XXX_8 for subquery SELECT local.id FROM (SELECT NULL::integer AS "dummy-1", distributed_1.id, NULL::text AS name, NULL::timestamp with time zone AS created_at FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_7'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) distributed_1) distributed, local_dist_join_mixed.local WHERE ((local.id OPERATOR(pg_catalog.=) distributed.id) AND (distributed.id OPERATOR(pg_catalog.=) 4))
+DEBUG:  Wrapping relation "distributed" to a subquery
+DEBUG:  generating subplan XXX_9 for subquery SELECT id FROM local_dist_join_mixed.distributed WHERE false
+DEBUG:  generating subplan XXX_10 for subquery SELECT local.id FROM (SELECT NULL::integer AS "dummy-1", distributed_1.id, NULL::text AS name, NULL::timestamp with time zone AS created_at FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_9'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) distributed_1) distributed, local_dist_join_mixed.local WHERE ((local.id OPERATOR(pg_catalog.=) distributed.id) AND (distributed.id OPERATOR(pg_catalog.=) 5))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT foo1.id FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) foo1, (SELECT intermediate_result.id FROM read_intermediate_result('XXX_4'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) foo2, (SELECT intermediate_result.id FROM read_intermediate_result('XXX_6'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) foo3, (SELECT intermediate_result.id FROM read_intermediate_result('XXX_8'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) foo4, (SELECT intermediate_result.id FROM read_intermediate_result('XXX_10'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) foo5 WHERE ((foo1.id OPERATOR(pg_catalog.=) foo4.id) AND (foo1.id OPERATOR(pg_catalog.=) foo2.id) AND (foo1.id OPERATOR(pg_catalog.=) foo3.id) AND (foo1.id OPERATOR(pg_catalog.=) foo4.id) AND (foo1.id OPERATOR(pg_catalog.=) foo5.id)) ORDER BY foo1.id
+ id
+---------------------------------------------------------------------
+(0 rows)
+
+SELECT
+	count(*)
+FROM
+ distributed
+JOIN LATERAL
+	(SELECT
+		*
+	FROM
+		local
+	JOIN
+		distributed d2
+	ON(true)
+		WHERE local.id = distributed.id AND d2.id = local.id) as foo
+ON (true);
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT id FROM local_dist_join_mixed.local WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (local_dist_join_mixed.distributed JOIN LATERAL (SELECT local.id, local.title, d2.id, d2.name, d2.created_at FROM ((SELECT NULL::integer AS "dummy-1", local_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) local_1) local JOIN local_dist_join_mixed.distributed d2 ON (true)) WHERE ((local.id OPERATOR(pg_catalog.=) distributed.id) AND (d2.id OPERATOR(pg_catalog.=) local.id))) foo(id, title, id_1, name, created_at) ON (true))
+ count
+---------------------------------------------------------------------
+   101
+(1 row)
+
+SELECT local.title, local.title FROM local JOIN distributed USING(id) ORDER BY 1,2 LIMIt 1;
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT id, title FROM local_dist_join_mixed.local WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT local.title, local.title FROM ((SELECT NULL::integer AS "dummy-1", local_1.id, NULL::integer AS "dummy-3", local_1.title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id, intermediate_result.title FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, title text)) local_1) local JOIN local_dist_join_mixed.distributed USING (id)) ORDER BY local.title, local.title LIMIT 1
+DEBUG:  push down of limit count: 1
+ title | title
+---------------------------------------------------------------------
+ 0     | 0
+(1 row)
+
+SELECT NULL FROM local JOIN distributed USING(id) ORDER BY 1 LIMIt 1;
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT id FROM local_dist_join_mixed.local WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT NULL::text FROM ((SELECT NULL::integer AS "dummy-1", local_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) local_1) local JOIN local_dist_join_mixed.distributed USING (id)) ORDER BY NULL::text LIMIT 1
+DEBUG:  push down of limit count: 1
+ ?column?
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT distributed.name, distributed.name,  local.title, local.title FROM local JOIN distributed USING(id) ORDER BY 1,2,3,4 LIMIT 1;
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT id, title FROM local_dist_join_mixed.local WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT distributed.name, distributed.name, local.title, local.title FROM ((SELECT NULL::integer AS "dummy-1", local_1.id, NULL::integer AS "dummy-3", local_1.title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id, intermediate_result.title FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, title text)) local_1) local JOIN local_dist_join_mixed.distributed USING (id)) ORDER BY distributed.name, distributed.name, local.title, local.title LIMIT 1
+DEBUG:  push down of limit count: 1
+ name | name | title | title
+---------------------------------------------------------------------
+ 0    | 0    | 0     | 0
+(1 row)
+
+SELECT
+	COUNT(*)
+FROM
+	local
+JOIN
+	distributed
+USING
+	(id)
+JOIN
+	(SELECT  id, NULL, NULL FROM distributed) foo
+USING
+	(id);
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT id FROM local_dist_join_mixed.local WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (((SELECT NULL::integer AS "dummy-1", local_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) local_1) local JOIN local_dist_join_mixed.distributed USING (id)) JOIN (SELECT distributed_1.id, NULL::text, NULL::text FROM local_dist_join_mixed.distributed distributed_1) foo(id, "?column?", "?column?_1") USING (id))
+ count
+---------------------------------------------------------------------
+   101
+(1 row)
+
+SET client_min_messages TO ERROR;
+DROP SCHEMA local_dist_join_mixed CASCADE;
