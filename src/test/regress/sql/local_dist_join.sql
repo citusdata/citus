@@ -217,6 +217,19 @@ SELECT joined.id FROM (local LEFT JOIN distributed USING (id)) AS joined ORDER B
 WITH joined AS MATERIALIZED (SELECT count(*) AS n FROM local LEFT JOIN distributed USING (id))
 SELECT n FROM joined;
 
+-- A planned subquery is not an eliminated nullable relation.
+WITH joined AS (
+    SELECT r.id FROM outer_join_ref r
+    WHERE r.id NOT IN (
+        SELECT r2.id FROM outer_join_ref r2 LEFT JOIN outer_join_dist d USING (id)
+        WHERE d.id IN (SELECT id FROM outer_join_dist)
+        ORDER BY id
+    )
+    ORDER BY id
+)
+SELECT count(*), avg(result.id)
+FROM (SELECT a.id FROM joined a FULL JOIN joined b USING (id) WHERE b.id > 3) result;
+
 SELECT id, name FROM distributed LEFT JOIN local USING (id) ORDER BY 1 LIMIT 1;
 
  SELECT
