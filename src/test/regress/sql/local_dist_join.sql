@@ -211,6 +211,8 @@ SELECT count(*) FROM distributed LEFT JOIN local USING (id);
 SELECT count(*) FROM local LEFT JOIN distributed USING (id);
 
 SELECT count(*) FROM distributed RIGHT JOIN local USING (id);
+SELECT count(*) FROM (distributed d1 LEFT JOIN distributed d2 ON d1.id = d2.id)
+RIGHT JOIN local l ON d1.id = l.id;
 SELECT joined.id FROM (local LEFT JOIN distributed USING (id)) AS joined ORDER BY 1 LIMIT 1;
 WITH joined AS MATERIALIZED (SELECT count(*) AS n FROM local LEFT JOIN distributed USING (id))
 SELECT n FROM joined;
