@@ -96,7 +96,8 @@ static bool CollectReferencedRelationIdentities(Node *node, Bitmapset **identiti
 static bool ReplaceRemovedOuterJoinRelations(Node *node,
 											 RemovedOuterJoinContext *context);
 static void ReplaceRemovedOuterJoinRelationsInJointree(Node *node, Query *query,
-													   RemovedOuterJoinContext *context);
+													   RemovedOuterJoinContext *context,
+													   bool nullable);
 static void ConvertRemovedOuterJoinRelation(RangeTblEntry *rte);
 #endif
 
@@ -3013,7 +3014,7 @@ ReplaceRemovedOuterJoinRelations(Node *node, RemovedOuterJoinContext *context)
 	{
 		Query *query = (Query *) node;
 		ReplaceRemovedOuterJoinRelationsInJointree((Node *) query->jointree, query,
-												   context);
+												   context, false);
 		return query_tree_walker(query, ReplaceRemovedOuterJoinRelations, context, 0);
 	}
 
@@ -3029,53 +3030,48 @@ ReplaceRemovedOuterJoinRelations(Node *node, RemovedOuterJoinContext *context)
  */
 static void
 ReplaceRemovedOuterJoinRelationsInJointree(Node *node, Query *query,
-										   RemovedOuterJoinContext *context)
+										   RemovedOuterJoinContext *context, bool
+										   nullable)
 {
-	if (IsA(node, FromExpr))
+	if (IsA(node, RangeTblRef) && nullable)
+	{
+		RangeTblEntry *rte = rt_fetch(((RangeTblRef *) node)->rtindex, query->rtable);
+		if (rte->rtekind == RTE_RELATION &&
+			IsCitusTableType(rte->relid, DISTRIBUTED_TABLE) &&
+			!bms_is_member(GetRTEIdentity(rte), context->referencedIdentities))
+		{
+			int identity = GetRTEIdentity(rte);
+			RangeTblEntry *transformedRte = NULL;
+			foreach_declared_ptr(transformedRte, context->rangeTableList)
+			{
+				if (transformedRte->rtekind == RTE_RELATION &&
+					GetRTEIdentity(transformedRte) == identity)
+				{
+					ConvertRemovedOuterJoinRelation(transformedRte);
+				}
+			}
+			ConvertRemovedOuterJoinRelation(rte);
+		}
+	}
+	else if (IsA(node, FromExpr))
 	{
 		Node *child = NULL;
 		foreach_declared_ptr(child, ((FromExpr *) node)->fromlist)
 		{
-			ReplaceRemovedOuterJoinRelationsInJointree(child, query, context);
+			ReplaceRemovedOuterJoinRelationsInJointree(child, query, context, nullable);
 		}
 	}
 	else if (IsA(node, JoinExpr))
 	{
 		JoinExpr *join = (JoinExpr *) node;
-		Node *nullableSide = NULL;
-		if (join->jointype == JOIN_LEFT)
-		{
-			nullableSide = join->rarg;
-		}
-		else if (join->jointype == JOIN_RIGHT)
-		{
-			nullableSide = join->larg;
-		}
 
-		if (nullableSide != NULL && IsA(nullableSide, RangeTblRef))
-		{
-			RangeTblEntry *rte = rt_fetch(((RangeTblRef *) nullableSide)->rtindex,
-										  query->rtable);
-			if (rte->rtekind == RTE_RELATION &&
-				IsCitusTableType(rte->relid, DISTRIBUTED_TABLE) &&
-				!bms_is_member(GetRTEIdentity(rte), context->referencedIdentities))
-			{
-				int identity = GetRTEIdentity(rte);
-				RangeTblEntry *transformedRte = NULL;
-				foreach_declared_ptr(transformedRte, context->rangeTableList)
-				{
-					if (transformedRte->rtekind == RTE_RELATION &&
-						GetRTEIdentity(transformedRte) == identity)
-					{
-						ConvertRemovedOuterJoinRelation(transformedRte);
-					}
-				}
-				ConvertRemovedOuterJoinRelation(rte);
-			}
-		}
-
-		ReplaceRemovedOuterJoinRelationsInJointree(join->larg, query, context);
-		ReplaceRemovedOuterJoinRelationsInJointree(join->rarg, query, context);
+		/* A whole joined subtree can be on the nullable side of an outer join. */
+		ReplaceRemovedOuterJoinRelationsInJointree(join->larg, query, context,
+												   nullable || join->jointype ==
+												   JOIN_RIGHT);
+		ReplaceRemovedOuterJoinRelationsInJointree(join->rarg, query, context,
+												   nullable || join->jointype ==
+												   JOIN_LEFT);
 	}
 }
 
