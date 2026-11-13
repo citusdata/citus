@@ -220,7 +220,7 @@ FindRangeTableEntryNullingRelids(Node *node, Index rangeTableIndex,
 	else if (IsA(node, FromExpr))
 	{
 		Node *fromNode = NULL;
-		foreach_ptr(fromNode, ((FromExpr *) node)->fromlist)
+		foreach_declared_ptr(fromNode, ((FromExpr *) node)->fromlist)
 		{
 			if (FindRangeTableEntryNullingRelids(fromNode, rangeTableIndex,
 												 nullingRelids))
