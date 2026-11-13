@@ -2986,15 +2986,22 @@ ReplaceRemovedOuterJoinRelationsInJointree(Node *node, Query *query,
 		{
 			int identity = GetRTEIdentity(rte);
 			RangeTblEntry *transformedRte = NULL;
+			bool foundTransformedRelation = false;
 			foreach_ptr(transformedRte, context->rangeTableList)
 			{
 				if (transformedRte->rtekind == RTE_RELATION &&
 					GetRTEIdentity(transformedRte) == identity)
 				{
 					ConvertRemovedOuterJoinRelation(transformedRte);
+					foundTransformedRelation = true;
 				}
 			}
-			ConvertRemovedOuterJoinRelation(rte);
+
+			/* Missing subqueries may already have been planned, not eliminated. */
+			if (foundTransformedRelation)
+			{
+				ConvertRemovedOuterJoinRelation(rte);
+			}
 		}
 	}
 	else if (IsA(node, FromExpr))
