@@ -622,6 +622,8 @@ have_createdb_privilege(void)
 	}
 	return result;
 }
+
+
 #endif
 
 

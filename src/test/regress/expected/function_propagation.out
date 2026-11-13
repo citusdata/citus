@@ -1,3 +1,6 @@
+-- Alternative output preserves the Citus circular-dependency error before
+-- PostgreSQL 15.20/16.16/17.12 added row-type dependency checks (CVE-2026-6460).
+-- Remove it when those older minor versions no longer need test coverage.
 CREATE SCHEMA function_propagation_schema;
 SET search_path TO 'function_propagation_schema';
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 10000;
@@ -1246,8 +1249,7 @@ END;
 $$;
 -- It should error out due to circular dependency
 ALTER TABLE table_1_for_circ_dep ADD COLUMN col_2 int default func_2_for_circ_dep(NULL::table_2_for_circ_dep);
-ERROR:  Citus can not handle circular dependencies between distributed objects
-DETAIL:  "table table_1_for_circ_dep" circularly depends itself, resolve circular dependency first
+ERROR:  cannot alter table "table_1_for_circ_dep" because default value for column col_2 of table table_2_for_circ_dep uses its row type
 -- Show that causing circular dependency via functions and constraints are not allowed
 CREATE TABLE table_1_for_circ_dep_2(id int, col_1 int);
 select create_distributed_table('table_1_for_circ_dep_2','id');

@@ -1,3 +1,8 @@
+/*
+ * Alternative output preserves nonblocking schema rename before PostgreSQL
+ * 15.20/16.16/17.12 added schema locks (CVE-2026-6467). Remove it when those
+ * older minor versions no longer need test coverage.
+ */
 setup
 {
     SELECT citus_set_coordinator_host('localhost', 57636);
