@@ -1,0 +1,331 @@
+name: ASAN
+run-name: ASAN (${{ github.ref_name }})
+
+on:
+  workflow_dispatch:
+    inputs:
+      cold_cache:
+        description: "Build every PostgreSQL prefix cold (do not download caches)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  params:
+    name: Initialize parameters
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+      citus_old_version: v14.0.1
+    steps:
+      - name: Set up parameters
+        id: matrix
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+
+          # Keep pins and coverage aligned with nightly_cassert.yml.
+          versions = {"17": "17.11", "18": "18.6", "19": "19rc1"}
+          jobs = []
+          for major, full in versions.items():
+              for group in ("regress", "isolation", "columnar", "failure", "tap", "generator"):
+                  jobs.append(dict(name=f"PG{major} - {group}", full=full,
+                                   group=group, timeout=180))
+              for shard in range(6):
+                  jobs.append(dict(name=f"PG{major} - arbitrary-configs-{shard}",
+                                   full=full, group="arbitrary-configs",
+                                   shard=shard, timeout=240))
+          for old, new in (("17", "18"), ("18", "19"), ("17", "19")):
+              jobs.append(dict(name=f"PG{old}-PG{new} - pg-upgrade",
+                               old_full=versions[old], full=versions[new],
+                               group="pg-upgrade", timeout=180))
+          for major in ("17", "18"):
+              jobs.append(dict(name=f"PG{major} - citus-upgrade", full=versions[major],
+                               group="citus-upgrade", timeout=180))
+          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+              print("matrix=" + json.dumps(jobs), file=output)
+          PY
+
+  test:
+    needs: params
+    name: ASAN ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ matrix.timeout }}
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        include: ${{ fromJson(needs.params.outputs.matrix) }}
+    env:
+      citus_old_version: ${{ needs.params.outputs.citus_old_version }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: Initialize ASAN evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          ASAN_DIR="$RUNNER_TEMP/asan"
+          mkdir -p "$ASAN_DIR/reports" "$ASAN_DIR/canary"
+          echo "ASAN_DIR=$ASAN_DIR" >> "$GITHUB_ENV"
+          echo "ASAN_OPTIONS=detect_leaks=0:abort_on_error=1:symbolize=1:log_path=$ASAN_DIR/reports/asan" >> "$GITHUB_ENV"
+          git rev-parse HEAD > "$ASAN_DIR/citus-revision.txt"
+          date -u +%FT%TZ > "$ASAN_DIR/start.txt"
+      - uses: ./.github/actions/setup_cassert_pg
+        if: matrix.group == 'pg-upgrade'
+        with:
+          pg_full: ${{ matrix.old_full }}
+          sanitizer: address
+          cold_cache: ${{ inputs.cold_cache }}
+      - uses: ./.github/actions/setup_cassert_pg
+        with:
+          pg_full: ${{ matrix.full }}
+          sanitizer: address
+          cold_cache: ${{ inputs.cold_cache }}
+      - name: Verify runtime and symbolized error reporting
+        shell: bash
+        run: |
+          set -euo pipefail
+          runtime="$("$CC" -print-file-name=libasan.so)"
+          test -f "$runtime"
+          echo "ASAN_RUNTIME=$runtime" >> "$GITHUB_ENV"
+          readlink -f "$runtime" > "$ASAN_DIR/runtime.txt"
+          # Do not preload JavaScript Actions, pipenv installation, or compiler processes.
+          cat > "$ASAN_DIR/canary/canary.c" <<'C'
+          #include <stdlib.h>
+          int main(int argc, char **argv)
+          {
+              volatile char *p = malloc(1);
+              p[argc] = 1;
+              free((void *) p);
+              return 0;
+          }
+          C
+          "$CC" $CFLAGS "$ASAN_DIR/canary/canary.c" $LDFLAGS -o "$ASAN_DIR/canary/canary"
+          ulimit -c 0
+          status=0
+          ASAN_OPTIONS="detect_leaks=0:abort_on_error=1:symbolize=1:log_path=$ASAN_DIR/canary/asan" \
+            "$ASAN_DIR/canary/canary" > "$ASAN_DIR/canary/output.txt" 2>&1 || status=$?
+          test "$status" -ne 0
+          grep -E 'ERROR: AddressSanitizer: heap-buffer-overflow' "$ASAN_DIR"/canary/asan.*
+          grep -E 'canary.c:[0-9]+' "$ASAN_DIR"/canary/asan.*
+          # Python loads instrumented libpq; prove that the matching runtime comes first.
+          LD_PRELOAD="$runtime" python3 -c \
+            'import ctypes, os, subprocess; ctypes.CDLL(subprocess.check_output([os.environ["PG_CONFIG"], "--libdir"], text=True).strip() + "/libpq.so")'
+          touch "$ASAN_DIR/runtime-verified"
+      - name: Install python test env
+        if: contains(fromJson('["failure","generator","pg-upgrade","citus-upgrade","arbitrary-configs"]'), matrix.group)
+        shell: bash
+        run: ( cd src/test/regress && pipenv install --deploy )
+      - name: Build and verify old Citus
+        if: matrix.group == 'citus-upgrade'
+        shell: bash
+        run: |
+          set -euo pipefail
+          major="$("$PG_CONFIG" --version | sed -E 's/PostgreSQL ([0-9]+).*/\1/')"
+          mkdir -p src/test/regress/tmp_citus_tarballs
+          cd src/test/regress/tmp_citus_tarballs
+          # The existing helper's configure/make subprocesses inherit CC/CFLAGS/LDFLAGS/PG_CONFIG.
+          /usr/bin/time -v -o "$ASAN_DIR/old-citus-build.time" \
+            ../citus_tests/upgrade/generate_citus_tarballs.sh "$major" "$citus_old_version"
+          mkdir -p "$ASAN_DIR/old-citus"
+          tar -xf "install-pg${major}-citus${citus_old_version}.tar" -C "$ASAN_DIR/old-citus"
+          {
+            git -C "$citus_old_version/citus_$citus_old_version" rev-parse HEAD
+            for library in citus.so citus_columnar.so; do
+              binary="$ASAN_DIR/old-citus$("$PG_CONFIG" --pkglibdir)/$library"
+              readelf -d "$binary" | grep 'NEEDED.*libasan'
+              nm -D "$binary" | grep '__asan_init'
+              ldd "$binary"
+              if ldd "$binary" | grep 'not found'; then
+                echo "::error::Unresolved old Citus runtime library: $binary"
+                exit 1
+              fi
+            done
+          } > "$ASAN_DIR/old-citus-verification.txt"
+          touch "$ASAN_DIR/old-citus-verified"
+      - name: Run ${{ matrix.name }}
+        shell: bash
+        timeout-minutes: ${{ matrix.group == 'arbitrary-configs' && 120 || 90 }}
+        env:
+          GROUP: ${{ matrix.group }}
+          SHARD: ${{ matrix.shard }}
+          OLD_FULL: ${{ matrix.old_full }}
+        run: |
+          set -euo pipefail
+          # Restrict preloading to native test commands and their Python/libpq subprocesses.
+          run_test() {
+            /usr/bin/time -v -a -o "$ASAN_DIR/tests.time" \
+              env LD_PRELOAD="$ASAN_RUNTIME" "$@"
+          }
+          case "$GROUP" in
+            regress)
+              run_test make -C src/test/regress \
+                check-multi check-multi-1 check-multi-1-create-citus check-multi-mx \
+                check-split check-operations check-follower-cluster \
+                check-vanilla check-enterprise check-add-backup-node ;;
+            isolation)
+              run_test make -C src/test/regress \
+                check-isolation check-enterprise-isolation check-columnar-isolation \
+                check-enterprise-isolation-logicalrep-1 \
+                check-enterprise-isolation-logicalrep-2 \
+                check-enterprise-isolation-logicalrep-3 ;;
+            columnar)
+              run_test make -C src/test/regress check-columnar ;;
+            tap)
+              run_test make -C src/test/regress check-tap ;;
+            failure)
+              ( cd src/test/regress && run_test pipenv run make check-failure check-enterprise-failure ) ;;
+            generator)
+              ( cd src/test/regress && run_test pipenv run make check-query-generator check-pytest ) ;;
+            pg-upgrade)
+              OLD="$HOME/.pgenv/pgsql-$OLD_FULL/bin"
+              NEW="$("$PG_CONFIG" --bindir)"
+              cd src/test/regress
+              run_test pipenv run make check-pg-upgrade \
+                old-bindir="$OLD" new-bindir="$NEW" test-with-columnar=false
+              run_test pipenv run make check-pg-upgrade \
+                old-bindir="$OLD" new-bindir="$NEW" test-with-columnar=true ;;
+            citus-upgrade)
+              # Local harness builds the old tag instead of requiring CI tarballs.
+              export CI=""
+              BIN="$("$PG_CONFIG" --bindir)"
+              cd src/test/regress
+              run_test pipenv run make check-citus-upgrade-local \
+                bindir="$BIN" citus-old-version="$citus_old_version"
+              run_test pipenv run make check-citus-upgrade-mixed-local \
+                bindir="$BIN" citus-old-version="$citus_old_version" ;;
+            arbitrary-configs)
+              cd src/test/regress
+              N=6
+              X="$SHARD"
+              TESTS=$(run_test pipenv run python3 citus_tests/print_test_names.py |
+                tr '\n' ',' | awk -v N="$N" -v X="$X" -F, '{
+                  split("", parts)
+                  for (i = 1; i <= NF; i++) {
+                      parts[i % N] = parts[i % N] $i ","
+                  }
+                  print substr(parts[X], 1, length(parts[X])-1)
+              }')
+              echo "$TESTS"
+              test -n "$TESTS"
+              run_test pipenv run make check-arbitrary-configs parallel=4 CONFIGS="$TESTS" ;;
+            *) echo "::error::Unknown suite: $GROUP"; exit 1 ;;
+          esac
+          touch "$ASAN_DIR/tests-completed"
+      - name: Check ASAN diagnostics and mandatory evidence
+        if: always()
+        shell: bash
+        env:
+          GROUP: ${{ matrix.group }}
+          PG_FULL: ${{ matrix.full }}
+          OLD_FULL: ${{ matrix.old_full }}
+        run: |
+          set -euo pipefail
+          test -n "${ASAN_DIR:-}"
+          date -u +%FT%TZ > "$ASAN_DIR/end.txt"
+          failed=0
+          for marker in runtime-verified "pg-$PG_FULL-verified" tests-completed; do
+            if [ ! -f "$ASAN_DIR/$marker" ]; then
+              echo "::error::Missing mandatory evidence: $marker"
+              failed=1
+            fi
+          done
+          if [ "$GROUP" = "pg-upgrade" ] && [ ! -f "$ASAN_DIR/pg-$OLD_FULL-verified" ]; then
+            echo "::error::Old PostgreSQL instrumentation was not verified"
+            failed=1
+          fi
+          if [ "$GROUP" = "citus-upgrade" ] && [ ! -f "$ASAN_DIR/old-citus-verified" ]; then
+            echo "::error::Old Citus instrumentation was not verified"
+            failed=1
+          fi
+          # Even a harness that swallows a backend's failure must not hide an ASAN report.
+          # Expected canary reports live outside this directory.
+          test -d "$ASAN_DIR/reports"
+          while IFS= read -r -d '' report; do
+            echo "::error::Sanitizer diagnostic: $report"
+            cat "$report"
+            failed=1
+          done < <(find "$ASAN_DIR/reports" -type f -size +0c -print0)
+          exit "$failed"
+      - name: Copy pg_upgrade logs
+        if: always() && matrix.group == 'pg-upgrade'
+        shell: bash
+        run: |
+          mkdir -p /tmp/pg_upgrade_newData_logs
+          find src/test/regress -path '*/newData/*.log' \
+            -exec cp {} /tmp/pg_upgrade_newData_logs/ \;
+      - uses: ./.github/actions/save_logs_and_results
+        if: always()
+        with:
+          folder: logs-${{ matrix.name }}
+      - uses: actions/upload-artifact@v5
+        if: always()
+        with:
+          name: asan-${{ matrix.name }}
+          if-no-files-found: error
+          path: |
+            ${{ runner.temp }}/asan/*.txt
+            ${{ runner.temp }}/asan/*.time
+            ${{ runner.temp }}/asan/*-verified
+            ${{ runner.temp }}/asan/tests-completed
+            ${{ runner.temp }}/asan/reports/
+            ${{ runner.temp }}/asan/canary/
+
+  result:
+    name: ASAN result
+    needs: [params, test]
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/github-script@v7
+        env:
+          REQUIRED_RESULTS: ${{ toJson(needs) }}
+          MATRIX: ${{ needs.params.outputs.matrix }}
+        with:
+          script: |
+            const required = JSON.parse(process.env.REQUIRED_RESULTS);
+            for (const [name, job] of Object.entries(required)) {
+              if (job.result !== 'success') core.setFailed(`${name}: ${job.result}`);
+            }
+            const expected = JSON.parse(process.env.MATRIX || '[]').map(j => `ASAN ${j.name}`);
+            const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, {
+              ...context.repo, run_id: context.runId, filter: 'latest', per_page: 100,
+            });
+            const suites = jobs.filter(j => expected.includes(j.name));
+            if (expected.length !== 41 || suites.length !== 41 ||
+                suites.some(j => j.conclusion !== 'success')) {
+              core.setFailed('All 41 selected ASAN suite jobs must succeed.');
+            }
+            const completed = jobs.filter(j => j.started_at && j.completed_at);
+            const minutes = completed.reduce((sum, j) =>
+              sum + (Date.parse(j.completed_at) - Date.parse(j.started_at)) / 60000, 0);
+            const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, {
+              ...context.repo, run_id: context.runId, per_page: 100,
+            });
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            await core.summary
+              .addHeading('ASAN coverage and measurements')
+              .addRaw(`${suites.filter(j => j.conclusion === 'success').length}/41 suite jobs succeeded.\n\n`)
+              .addRaw(`Completed job runtime (excluding this running result job): ${minutes.toFixed(2)} runner-minutes. ` +
+                'This is elapsed job time, not billed minutes or aggregate peak memory.\n\n')
+              .addTable([
+                [{data: 'Job', header: true}, {data: 'Result', header: true}, {data: 'Minutes', header: true}],
+                ...suites.map(j => [j.name, j.conclusion || j.status,
+                  j.completed_at ? ((Date.parse(j.completed_at) - Date.parse(j.started_at)) / 60000).toFixed(2) : 'pending']),
+              ])
+              .addList(artifacts.map(a => `<a href="${runUrl}/artifacts/${a.id}">${a.name}</a>`))
+              .write();
