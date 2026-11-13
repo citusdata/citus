@@ -215,6 +215,14 @@ SELECT joined.id FROM (local LEFT JOIN distributed USING (id)) AS joined ORDER B
 WITH joined AS MATERIALIZED (SELECT count(*) AS n FROM local LEFT JOIN distributed USING (id))
 SELECT n FROM joined;
 
+-- PG17 can eliminate a self-join and remap its Vars before outer-join removal.
+SELECT count(*) FROM local l LEFT JOIN
+	(distributed d1 JOIN distributed d2 ON d1.id = d2.id) ON l.id = d2.id;
+SELECT count(*) FROM
+	(distributed d1 JOIN distributed d2 ON d1.id = d2.id) RIGHT JOIN local l ON d2.id = l.id;
+SELECT count(d2.id) FROM local l LEFT JOIN
+	(distributed d1 JOIN distributed d2 ON d1.id = d2.id) ON l.id = d2.id;
+
 SELECT id, name FROM distributed LEFT JOIN local USING (id) ORDER BY 1 LIMIT 1;
 
  SELECT
