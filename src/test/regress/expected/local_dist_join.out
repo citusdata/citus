@@ -491,6 +491,25 @@ SELECT count(*) FROM local LEFT JOIN distributed USING (id);
    101
 (1 row)
 
+SELECT count(*) FROM distributed RIGHT JOIN local USING (id);
+ count
+---------------------------------------------------------------------
+   101
+(1 row)
+
+SELECT joined.id FROM (local LEFT JOIN distributed USING (id)) AS joined ORDER BY 1 LIMIT 1;
+ id
+---------------------------------------------------------------------
+  0
+(1 row)
+
+WITH joined AS MATERIALIZED (SELECT count(*) AS n FROM local LEFT JOIN distributed USING (id))
+SELECT n FROM joined;
+  n
+---------------------------------------------------------------------
+ 101
+(1 row)
+
 SELECT id, name FROM distributed LEFT JOIN local USING (id) ORDER BY 1 LIMIT 1;
  id | name
 ---------------------------------------------------------------------
