@@ -274,9 +274,21 @@ HideCitusDependentObjectsOnQueriesOfPgMetaTables(Node *node, void *context)
 					rangeTableEntry->securityQuals =
 						lappend(rangeTableEntry->securityQuals, citusDependentObjExpr);
 #else
-					citusDependentObjExpr = AddRangeTableEntryNullingRelids(query, varno,
-																			citusDependentObjExpr);
-					if (!mergeJoinCondition)
+
+					/*
+					 * A meta table on the nullable side of an outer join can be
+					 * removed by join removal, and the filter must run when scanning
+					 * it, so that the outer join null-extends a row whose only match
+					 * is a hidden object instead of removing the row. Use security
+					 * quals there, as PG19 does. Elsewhere keep the WHERE clause.
+					 */
+					if (RangeTableEntryIsOnNullableSideOfOuterJoin(query, varno))
+					{
+						rangeTableEntry->securityQuals =
+							lappend(rangeTableEntry->securityQuals,
+									citusDependentObjExpr);
+					}
+					else if (!mergeJoinCondition)
 					{
 						query->jointree->quals = make_and_qual(
 							query->jointree->quals, citusDependentObjExpr);
