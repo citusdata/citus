@@ -41,10 +41,32 @@ INSERT INTO coord_clone_local (payload) SELECT 'seed' FROM generate_series(1, 10
 SELECT shardid AS local_shardid
 FROM pg_dist_shard WHERE logicalrelid = 'coord_clone_local'::regclass \gset
 
+-- The clone also copies coordinator-only state that it must not act on as a
+-- worker, e.g. cleanup records and background jobs, and the server id.
+INSERT INTO pg_dist_cleanup
+VALUES (nextval('pg_dist_cleanup_recordid_seq'), 8983000, 1,
+        'public.coord_clone_no_such_shard', 0, 2);
+INSERT INTO pg_dist_background_job (job_type, description, state)
+VALUES ('test_job', 'copied to the clone', 'finished') RETURNING job_id AS copied_job_id \gset
+SELECT metadata->>'server_id' AS coordinator_server_id FROM pg_dist_node_metadata \gset
+
 -- Clone the coordinator (master-follower streams from it) and promote it. Force
 -- the deferred cleanup so the orphaned-copy drop is observable deterministically.
 SET client_min_messages TO WARNING;
 SELECT citus_add_clone_node('localhost', :follower_master_port, 'localhost', :master_port) AS clone_node_id \gset
+
+-- A write to a shard on the coordinator runs locally, without a remote
+-- transaction. If it preceded the promotion in the same transaction, it would
+-- only commit after it, and its shard could move to the clone without it.
+SELECT min(g) AS coordinator_key
+FROM generate_series(1000, 2000) g
+JOIN pg_dist_shard_placement p ON p.shardid = get_shard_id_for_distribution_column('coord_clone_dist', g)
+WHERE p.nodeport = :master_port \gset
+BEGIN;
+INSERT INTO coord_clone_dist VALUES (:coordinator_key, 'before the promotion');
+SELECT citus_promote_clone_and_rebalance(:clone_node_id);
+ROLLBACK;
+
 SELECT citus_promote_clone_and_rebalance(:clone_node_id);
 CALL citus_cleanup_orphaned_resources();
 SET client_min_messages TO DEFAULT;
@@ -65,6 +87,12 @@ SELECT
 -- The clone is a worker now, not the coordinator.
 SELECT citus_is_coordinator() AS clone_is_coordinator;
 
+-- ... without the coordinator's cleanup records, background jobs and server id.
+SELECT (SELECT count(*) FROM pg_dist_cleanup) AS clone_cleanup_records,
+       (SELECT count(*) FROM pg_dist_background_job) AS clone_background_jobs,
+       metadata->>'server_id' <> :'coordinator_server_id' AS clone_has_own_server_id
+FROM pg_dist_node_metadata;
+
 -- The Citus local table is still fully queryable from the promoted clone: the
 -- shell routes to the coordinator placement, so despite the orphaned shard copy
 -- being dropped, reads return the correct rows.
@@ -78,6 +106,7 @@ FROM coord_clone_local;
 SELECT count(*) AS local_rows FROM coord_clone_local;
 
 -- cleanup
+DELETE FROM pg_dist_background_job WHERE job_id = :copied_job_id;
 DROP TABLE coord_clone_dist;
 DROP TABLE coord_clone_ref;
 DROP TABLE coord_clone_local;
