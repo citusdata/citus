@@ -475,18 +475,31 @@ FilterShardsFromPgclass(Node *node, void *context)
 
 			/* add relation_is_a_known_shard(oid) IS NOT TRUE to the quals of the query */
 			Node *newQual = CreateRelationIsAKnownShardFilter(varno);
-			newQual = AddRangeTableEntryNullingRelids(query, varno, newQual);
-			Node *oldQuals = query->jointree->quals;
-			if (oldQuals)
+
+			if (RangeTableEntryIsOnNullableSideOfOuterJoin(query, varno))
 			{
-				query->jointree->quals = (Node *) makeBoolExpr(
-					AND_EXPR,
-					list_make2(oldQuals, newQual),
-					-1);
+				/*
+				 * Filter shards when scanning pg_class, so that the outer join
+				 * null-extends a row whose only match is a shard instead of
+				 * removing the row.
+				 */
+				rangeTableEntry->securityQuals =
+					lappend(rangeTableEntry->securityQuals, newQual);
 			}
 			else
 			{
-				query->jointree->quals = newQual;
+				Node *oldQuals = query->jointree->quals;
+				if (oldQuals)
+				{
+					query->jointree->quals = (Node *) makeBoolExpr(
+						AND_EXPR,
+						list_make2(oldQuals, newQual),
+						-1);
+				}
+				else
+				{
+					query->jointree->quals = newQual;
+				}
 			}
 
 			MemoryContextSwitchTo(originalContext);

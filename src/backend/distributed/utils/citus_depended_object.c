@@ -253,15 +253,28 @@ HideCitusDependentObjectsOnQueriesOfPgMetaTables(Node *node, void *context)
 
 					Node *citusDependentObjExpr =
 						CreateCitusDependentObjectExpr(varno, metaTableOid);
-					citusDependentObjExpr = AddRangeTableEntryNullingRelids(query, varno,
-																			citusDependentObjExpr);
 
 					/*
 					 * We do not use security quals because a postgres vanilla test fails
 					 * with a change of order for its result.
 					 */
-					query->jointree->quals = make_and_qual(
-						query->jointree->quals, citusDependentObjExpr);
+					if (RangeTableEntryIsOnNullableSideOfOuterJoin(query, varno))
+					{
+						/*
+						 * Except on the nullable side of an outer join: there the filter
+						 * must run when scanning the meta table, so that the outer join
+						 * null-extends a row whose only match is a hidden object instead
+						 * of removing the row.
+						 */
+						rangeTableEntry->securityQuals =
+							lappend(rangeTableEntry->securityQuals,
+									citusDependentObjExpr);
+					}
+					else
+					{
+						query->jointree->quals = make_and_qual(
+							query->jointree->quals, citusDependentObjExpr);
+					}
 				}
 
 				MemoryContextSwitchTo(originalContext);
