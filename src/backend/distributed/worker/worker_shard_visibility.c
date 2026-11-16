@@ -474,7 +474,17 @@ FilterShardsFromPgclass(Node *node, void *context)
 
 			/* add relation_is_a_known_shard(oid) IS NOT TRUE to the quals of the query */
 			Node *newQual = CreateRelationIsAKnownShardFilter(varno);
-			newQual = AddRangeTableEntryNullingRelids(query, varno, newQual);
+
+			if (RangeTableEntryIsOnNullableSideOfOuterJoin(query, varno))
+			{
+				/*
+				 * Filter shards when scanning pg_class, so that the outer join
+				 * null-extends a row whose only match is a shard instead of
+				 * removing the row.
+				 */
+				rangeTableEntry->securityQuals =
+					lappend(rangeTableEntry->securityQuals, newQual);
+			}
 
 #if PG_VERSION_NUM >= PG_VERSION_17
 
@@ -482,7 +492,7 @@ FilterShardsFromPgclass(Node *node, void *context)
 			 * In PG17, MERGE queries introduce a new struct `mergeJoinCondition`.
 			 * We need to handle this condition safely.
 			 */
-			if (query->mergeJoinCondition != NULL)
+			else if (query->mergeJoinCondition != NULL)
 			{
 				/* Add the filter to mergeJoinCondition */
 				query->mergeJoinCondition = (Node *) makeBoolExpr(
@@ -490,8 +500,8 @@ FilterShardsFromPgclass(Node *node, void *context)
 					list_make2(query->mergeJoinCondition, newQual),
 					-1);
 			}
-			else
 #endif
+			else
 			{
 				/* Handle older versions or queries without mergeJoinCondition */
 				Node *oldQuals = query->jointree->quals;
