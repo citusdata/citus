@@ -15,7 +15,6 @@
 #include "catalog/pg_class.h"
 #include "nodes/nodeFuncs.h"
 #include "nodes/primnodes.h"
-#include "rewrite/rewriteManip.h"
 
 #include "distributed/listutils.h"
 #include "distributed/query_utils.h"
@@ -23,11 +22,8 @@
 
 
 static bool CitusQueryableRangeTableRelation(RangeTblEntry *rangeTableEntry);
-
-#if PG_VERSION_NUM >= PG_VERSION_16
-static bool FindRangeTableEntryNullingRelids(Node *node, Index rangeTableIndex,
-											 Bitmapset **nullingRelids);
-#endif
+static bool FindRangeTableEntryInJoinTree(Node *node, Index rangeTableIndex,
+										  bool *isNullable);
 
 /*
  * ExtractRangeTableList walks over a tree to gather entries.
@@ -187,31 +183,25 @@ ExtractRangeTableIndexWalker(Node *node, List **rangeTableIndexList)
 
 
 /*
- * Vars added above an outer join need the same nulling relids as Vars produced
- * by the parser, including when the referenced relation is otherwise unused.
+ * RangeTableEntryIsOnNullableSideOfOuterJoin returns true if an outer join in
+ * the query's jointree can null-extend the relation at rangeTableIndex.
+ *
+ * A filter that hides rows of such a relation must be applied when scanning
+ * the relation. If it is added to the WHERE clause instead, it removes the
+ * joined row rather than null-extending it, which changes the query result.
  */
-Node *
-AddRangeTableEntryNullingRelids(Query *query, Index rangeTableIndex, Node *expression)
+bool
+RangeTableEntryIsOnNullableSideOfOuterJoin(Query *query, Index rangeTableIndex)
 {
-#if PG_VERSION_NUM >= PG_VERSION_16
-	Bitmapset *nullingRelids = NULL;
-	FindRangeTableEntryNullingRelids((Node *) query->jointree, rangeTableIndex,
-									 &nullingRelids);
-	if (nullingRelids != NULL)
-	{
-		return add_nulling_relids(expression, bms_make_singleton(rangeTableIndex),
-								  nullingRelids);
-	}
-#endif
-
-	return expression;
+	bool isNullable = false;
+	FindRangeTableEntryInJoinTree((Node *) query->jointree, rangeTableIndex,
+								  &isNullable);
+	return isNullable;
 }
 
 
-#if PG_VERSION_NUM >= PG_VERSION_16
 static bool
-FindRangeTableEntryNullingRelids(Node *node, Index rangeTableIndex,
-								 Bitmapset **nullingRelids)
+FindRangeTableEntryInJoinTree(Node *node, Index rangeTableIndex, bool *isNullable)
 {
 	if (IsA(node, RangeTblRef))
 	{
@@ -222,8 +212,7 @@ FindRangeTableEntryNullingRelids(Node *node, Index rangeTableIndex,
 		Node *fromNode = NULL;
 		foreach_declared_ptr(fromNode, ((FromExpr *) node)->fromlist)
 		{
-			if (FindRangeTableEntryNullingRelids(fromNode, rangeTableIndex,
-												 nullingRelids))
+			if (FindRangeTableEntryInJoinTree(fromNode, rangeTableIndex, isNullable))
 			{
 				return true;
 			}
@@ -234,15 +223,16 @@ FindRangeTableEntryNullingRelids(Node *node, Index rangeTableIndex,
 	else if (IsA(node, JoinExpr))
 	{
 		JoinExpr *join = (JoinExpr *) node;
-		bool inLeft = FindRangeTableEntryNullingRelids(join->larg, rangeTableIndex,
-													   nullingRelids);
-		bool inRight = FindRangeTableEntryNullingRelids(join->rarg, rangeTableIndex,
-														nullingRelids);
+		bool inLeft = FindRangeTableEntryInJoinTree(join->larg, rangeTableIndex,
+													isNullable);
+		bool inRight = !inLeft &&
+					   FindRangeTableEntryInJoinTree(join->rarg, rangeTableIndex,
+													 isNullable);
 
 		if ((inLeft && (join->jointype == JOIN_RIGHT || join->jointype == JOIN_FULL)) ||
 			(inRight && (join->jointype == JOIN_LEFT || join->jointype == JOIN_FULL)))
 		{
-			*nullingRelids = bms_add_member(*nullingRelids, join->rtindex);
+			*isNullable = true;
 		}
 
 		return inLeft || inRight;
@@ -251,6 +241,3 @@ FindRangeTableEntryNullingRelids(Node *node, Index rangeTableIndex,
 	elog(ERROR, "unrecognized join tree node type: %d", (int) nodeTag(node));
 	return false;
 }
-
-
-#endif
