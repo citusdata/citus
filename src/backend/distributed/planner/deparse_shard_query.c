@@ -106,8 +106,7 @@ RebuildQueryStrings(Job *workerJob)
 			RangeTblEntry *copiedSubqueryRte = ExtractSelectRangeTableEntry(query);
 			Query *copiedSubquery = copiedSubqueryRte->subquery;
 
-			if (IsCitusTableType(shardInterval->relationId, DISTRIBUTED_TABLE) &&
-				HasDistributionKey(shardInterval->relationId))
+			if (HasDistributionKey(shardInterval->relationId))
 			{
 				bool distributionColumnIsShardKeyIdentity =
 					InsertPartitionColumnIsShardKeyIdentity(query, copiedInsertRte,
