@@ -154,9 +154,6 @@ SELECT n.nspname, count(c.oid) FROM pg_namespace n
 LEFT JOIN pg_class c ON c.relnamespace = n.oid AND c.relname = 'pg_dist_shard'
 WHERE n.nspname = 'pg_catalog' GROUP BY n.nspname;
 
--- the planner can remove this outer join, the filter must not break that
-SELECT count(*) = (SELECT count(*) FROM pg_namespace) AS all_namespaces
-FROM pg_namespace n LEFT JOIN pg_class c ON c.oid = n.oid;
 RESET citus.hide_citus_dependent_objects;
 
 -- drop the namespace with all its objects

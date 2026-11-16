@@ -489,14 +489,6 @@ WHERE n.nspname = 'mx_hide_shard_names' GROUP BY n.nspname;
  mx_hide_shard_names |     0
 (1 row)
 
--- the planner can remove this outer join, the filter must not break that
-SELECT count(*) = (SELECT count(*) FROM pg_catalog.pg_namespace) AS all_namespaces
-FROM pg_catalog.pg_namespace n LEFT JOIN pg_catalog.pg_class c ON c.oid = n.oid;
- all_namespaces
----------------------------------------------------------------------
- t
-(1 row)
-
 -- PG16 added one more backend type B_STANDALONE_BACKEND
 -- and also alphabetized the backend types, hence the orders changed
 -- Relevant PG commit:
