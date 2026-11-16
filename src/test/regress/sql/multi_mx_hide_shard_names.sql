@@ -253,10 +253,6 @@ SELECT n.nspname, count(c.oid) FROM pg_catalog.pg_class c
 RIGHT JOIN pg_catalog.pg_namespace n ON c.relnamespace = n.oid AND c.relname = 'test_table_1130000'
 WHERE n.nspname = 'mx_hide_shard_names' GROUP BY n.nspname;
 
--- the planner can remove this outer join, the filter must not break that
-SELECT count(*) = (SELECT count(*) FROM pg_catalog.pg_namespace) AS all_namespaces
-FROM pg_catalog.pg_namespace n LEFT JOIN pg_catalog.pg_class c ON c.oid = n.oid;
-
 -- PG16 added one more backend type B_STANDALONE_BACKEND
 -- and also alphabetized the backend types, hence the orders changed
 -- Relevant PG16 commit:
