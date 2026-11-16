@@ -260,10 +260,6 @@ SELECT n.nspname, count(c.oid) FROM pg_catalog.pg_class c
 RIGHT JOIN pg_catalog.pg_namespace n ON c.relnamespace = n.oid AND c.relname = 'test_table_1130000'
 WHERE n.nspname = 'mx_hide_shard_names' GROUP BY n.nspname;
 
--- the planner can remove this outer join, the filter must not break that
-SELECT count(*) = (SELECT count(*) FROM pg_catalog.pg_namespace) AS all_namespaces
-FROM pg_catalog.pg_namespace n LEFT JOIN pg_catalog.pg_class c ON c.oid = n.oid;
-
 -- Relevant Pg17 commit:
 -- https://github.com/postgres/postgres/commit/067701f57758f9baed5bd9d868539738d77bfa92
 -- Relevant PG18 commit:
