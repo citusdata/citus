@@ -224,6 +224,7 @@ DEPS = {
     ),
     "grant_on_schema_propagation": TestDeps("minimal_schedule"),
     "propagate_extension_commands": TestDeps("minimal_schedule"),
+    "metadata_replay_security": TestDeps("minimal_schedule"),
     "multi_size_queries": TestDeps("base_schedule", ["multi_copy"]),
     "multi_mx_node_metadata": TestDeps(
         None, ["multi_extension", "multi_test_helpers", "multi_test_helpers_superuser"]
@@ -347,6 +348,9 @@ DEPS = {
         "minimal_schedule", ["multi_behavioral_analytics_create_table"]
     ),
     "multi_subquery_window_functions": TestDeps(
+        "minimal_schedule", ["multi_behavioral_analytics_create_table"]
+    ),
+    "subquery_prepared_statements": TestDeps(
         "minimal_schedule", ["multi_behavioral_analytics_create_table"]
     ),
 }

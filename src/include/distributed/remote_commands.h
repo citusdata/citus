@@ -68,6 +68,11 @@ extern bool PutRemoteCopyEnd(MultiConnection *connection, const char *errormsg);
 /* waiting for multiple command results */
 extern void WaitForAllConnections(List *connectionList, bool raiseInterrupts);
 
+extern int SendRemotePrepare(MultiConnection *connection, const char *stmtName,
+							 const char *query, int nParams, const Oid *paramTypes);
+extern int SendRemotePreparedQuery(MultiConnection *connection, const char *stmtName,
+								   int nParams, const char *const *paramValues,
+								   bool binaryResults);
 extern bool SendCancelationRequest(MultiConnection *connection);
 
 extern bool EvaluateSingleQueryResult(MultiConnection *connection, PGresult *queryResult,

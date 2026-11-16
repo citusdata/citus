@@ -556,7 +556,7 @@ SELECT alter_table_set_access_method('mat_view_test','columnar');
 NOTICE:  creating a new table for alter_table_set_access_method.mat_view_test
 NOTICE:  moving the data of alter_table_set_access_method.mat_view_test
 NOTICE:  dropping the old alter_table_set_access_method.mat_view_test
-NOTICE:  drop cascades to materialized view mat_view
+NOTICE:  drop cascades to materialized view alter_table_set_access_method.mat_view
 CONTEXT:  SQL statement "DROP TABLE alter_table_set_access_method.mat_view_test CASCADE"
 NOTICE:  renaming the new table to alter_table_set_access_method.mat_view_test
  alter_table_set_access_method
