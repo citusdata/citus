@@ -84,7 +84,7 @@ citus_remove_node
 (1 row)
 
 
-starting permutation: s1-begin s1-schema-distribute s2-rename-schema s1-commit s1-verify-distributed-schema
+starting permutation: s1-begin s1-schema-distribute s1-lock-schema-row s2-rename-schema s1-commit s1-verify-distributed-schema
 citus_add_local_table_to_metadata
 ---------------------------------------------------------------------
 
@@ -100,6 +100,14 @@ step s1-schema-distribute:
 citus_schema_distribute
 ---------------------------------------------------------------------
 
+(1 row)
+
+step s1-lock-schema-row:
+    SELECT nspname FROM pg_namespace WHERE nspname = 'tenant1' FOR UPDATE;
+
+nspname
+---------------------------------------------------------------------
+tenant1
 (1 row)
 
 step s2-rename-schema:
@@ -125,7 +133,7 @@ citus_remove_node
 (1 row)
 
 
-starting permutation: s1-schema-distribute s1-begin s1-schema-undistribute s2-rename-schema s1-commit s1-verify-distributed-schema
+starting permutation: s1-schema-distribute s1-begin s1-schema-undistribute s1-lock-schema-row s2-rename-schema s1-commit s1-verify-distributed-schema
 citus_add_local_table_to_metadata
 ---------------------------------------------------------------------
 
@@ -149,6 +157,14 @@ step s1-schema-undistribute:
 citus_schema_undistribute
 ---------------------------------------------------------------------
 
+(1 row)
+
+step s1-lock-schema-row:
+    SELECT nspname FROM pg_namespace WHERE nspname = 'tenant1' FOR UPDATE;
+
+nspname
+---------------------------------------------------------------------
+tenant1
 (1 row)
 
 step s2-rename-schema:
