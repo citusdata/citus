@@ -278,6 +278,20 @@ distributed_planner(Query *parse,
 			planContext.plan = standard_planner(planContext.query, NULL,
 												planContext.cursorOptions,
 												planContext.boundParams);
+
+			/*
+			 * PostgreSQL 16.16, 17.12, 18.7 and later minors remove useless outer
+			 * joins by editing the jointree that Citus plans below. Restore it when
+			 * relations were removed. This is not guarded by the PostgreSQL minor
+			 * version because a build against an older minor can run on a newer one.
+			 */
+			if (needsDistributedPlanning &&
+				list_length(UsedTableEntryList(planContext.query)) < list_length(
+					UsedTableEntryList(planContext.originalQuery)))
+			{
+				planContext.query->jointree =
+					copyObject(planContext.originalQuery->jointree);
+			}
 #if PG_VERSION_NUM >= PG_VERSION_18
 			if (needsDistributedPlanning)
 			{
