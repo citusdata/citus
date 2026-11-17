@@ -151,6 +151,7 @@ DEPS = {
     "multi_explain": TestDeps(
         "base_schedule", ["multi_insert_select_non_pushable_queries"]
     ),
+    "explain_execute": TestDeps(None, ["minimal_cluster_management"]),
     "multi_extension": TestDeps(None, repeatable=False),
     "multi_test_helpers": TestDeps(None),
     "multi_test_catalog_views": TestDeps(None),

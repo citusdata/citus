@@ -16,6 +16,7 @@ The purpose of this document is to provide comprehensive technical documentation
   - [Recurring Tuples](#recurring-tuples)
 - [Executor](#executor)
   - [Custom scan](#custom-scan)
+  - [EXPLAIN](#explain)
   - [Function evaluation](#function-evaluation)
   - [Prepared statements](#prepared-statements)
   - [Adaptive executor](#adaptive-executor)
@@ -1584,6 +1585,30 @@ We also use top-level executor hooks, but primarily to capture some execution ti
 We use a separate custom scans for insert..select and merge commands due to the specialized nature of these commands (multiple phases).
 
 ![Diagram of CustomScan APIs](https://wiki.postgresql.org/images/0/05/CustomScan_Fig01.png)
+
+## EXPLAIN
+
+For distributed `EXPLAIN ANALYZE`, worker tasks call
+`worker_save_query_explain_analyze` to return the query's rows while saving its
+plan output. A second call retrieves the saved output. The worker's effective
+EXPLAIN options must therefore be available before task execution, not only
+when the coordinator renders its plan.
+
+PostgreSQL does not call `ExplainOneQuery_hook` for `EXPLAIN EXECUTE`. Citus
+scopes an `ExplainOptionsContext` around the outer utility statement to cover
+both ordinary and prepared queries. On PostgreSQL 18 and newer, the option
+validation hook retains the statement's `ExplainState`; task construction
+copies its flags after the complete hook chain has returned, including any
+changes made by later extensions. On PostgreSQL 17, the prepared-statement path
+extracts the forwarded options from the already-validated `ExplainStmt`, using
+that version's defaults.
+
+The context is restored on both normal and error exits; nested explanations
+also restore their parent's option snapshot. Executor-only instrumentation,
+such as `auto_explain`, keeps its existing last-top-level-snapshot behavior.
+Each explicit EXPLAIN constructs its own complete snapshot rather than storing
+options in the reusable prepared plan. The live remote-EXPLAIN path continues
+to construct its command directly from the supplied `ExplainState`.
 
 ## Function evaluation
 

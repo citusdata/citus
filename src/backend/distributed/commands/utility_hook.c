@@ -879,8 +879,16 @@ citus_ProcessUtilityInternal(PlannedStmt *pstmt,
 			PreprocessAlterExtensionCitusStmtForCitusColumnar(parsetree);
 		}
 
-		PrevProcessUtility(pstmt, queryString, false, context,
-						   params, queryEnv, dest, completionTag);
+		if (IsA(parsetree, ExplainStmt))
+		{
+			ExplainStatementWithDistributedOptions(pstmt, queryString, context,
+												   params, queryEnv, dest, completionTag);
+		}
+		else
+		{
+			PrevProcessUtility(pstmt, queryString, false, context,
+							   params, queryEnv, dest, completionTag);
+		}
 
 		if (isAlterExtensionUpdateCitusStmt)
 		{

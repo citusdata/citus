@@ -48,6 +48,9 @@
 #if PG_VERSION_NUM >= PG_VERSION_18
 #include "commands/explain_dr.h"   /* CreateExplainSerializeDestReceiver() */
 #include "commands/explain_format.h"
+#include "commands/explain_state.h"
+#else
+#include "commands/defrem.h"
 #endif
 
 
@@ -117,10 +120,23 @@ typedef struct
 } ExplainOptions;
 
 
+typedef struct
+{
+	ExplainStmt *stmt;
+	ExplainState *explainState;
+	bool optionsCopied;
+} ExplainOptionsContext;
+
+
 /* EXPLAIN flags of current distributed explain */
 static ExplainOptions CurrentDistributedQueryExplainOptions = {
 	0, 0, 0, 0, 0, 0, 0, EXPLAIN_SERIALIZE_NONE, EXPLAIN_FORMAT_TEXT
 };
+static ExplainOptionsContext *CurrentExplainContext = NULL;
+
+#if PG_VERSION_NUM >= PG_VERSION_18
+static explain_validate_options_hook_type PreviousExplainValidateOptions = NULL;
+#endif
 
 /* Result for a single remote EXPLAIN command */
 typedef struct RemoteExplainPlan
@@ -198,6 +214,12 @@ static void ExplainPrintSerialize(ExplainState *es,
 								  SerializeMetrics *metrics);
 
 /* Explain functions for distributed queries */
+static void CopyDistributedExplainOptions(ExplainState *es);
+static void CapturePendingExplainOptions(void);
+#if PG_VERSION_NUM >= PG_VERSION_18
+static void CitusValidateExplainOptions(ExplainState *es, List *options,
+										ParseState *pstate);
+#endif
 static void ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es);
 static void ExplainJob(CitusScanState *scanState, Job *job, ExplainState *es,
 					   ParamListInfo params);
@@ -1580,15 +1602,213 @@ ExtractFieldExplainSerialize(Datum jsonbDoc, const char *fieldName, ExplainSeria
 
 
 /*
- * CitusExplainOneQuery is the executor hook that is called when
- * postgres wants to explain a query.
+ * InitializeExplainOptionsHook registers the option hook shared by ordinary
+ * EXPLAIN and EXPLAIN EXECUTE.
  */
 void
-CitusExplainOneQuery(Query *query, int cursorOptions, IntoClause *into,
-					 ExplainState *es, const char *queryString, ParamListInfo params,
-					 QueryEnvironment *queryEnv)
+InitializeExplainOptionsHook(void)
 {
-	/* save the flags of current EXPLAIN command */
+#if PG_VERSION_NUM >= PG_VERSION_18
+	PreviousExplainValidateOptions = explain_validate_options_hook;
+	explain_validate_options_hook = CitusValidateExplainOptions;
+#endif
+}
+
+
+/*
+ * ExplainStatementWithDistributedOptions scopes option capture to one EXPLAIN,
+ * restoring an outer EXPLAIN's state even when the inner command raises an error.
+ */
+void
+ExplainStatementWithDistributedOptions(PlannedStmt *pstmt,
+									   const char *queryString,
+									   ProcessUtilityContext context,
+									   ParamListInfo params,
+									   QueryEnvironment *queryEnv,
+									   DestReceiver *dest,
+									   QueryCompletion *completionTag)
+{
+	ExplainOptions savedOptions = CurrentDistributedQueryExplainOptions;
+	ExplainOptionsContext *savedContext = CurrentExplainContext;
+	ExplainOptionsContext explainContext = { 0 };
+	explainContext.stmt = castNode(ExplainStmt, pstmt->utilityStmt);
+	CurrentExplainContext = &explainContext;
+
+	PG_TRY();
+	{
+		PrevProcessUtility(pstmt, queryString, false, context,
+						   params, queryEnv, dest, completionTag);
+	}
+	PG_FINALLY();
+	{
+		/*
+		 * Executor-only instrumentation such as auto_explain still uses the
+		 * last top-level snapshot. Nested EXPLAIN must preserve its parent.
+		 */
+		if (savedContext != NULL)
+		{
+			CurrentDistributedQueryExplainOptions = savedOptions;
+		}
+		CurrentExplainContext = savedContext;
+	}
+	PG_END_TRY();
+}
+
+
+#if PG_VERSION_NUM >= PG_VERSION_18
+
+/*
+ * CitusValidateExplainOptions retains the current statement's ExplainState.
+ * Hooks above us can still modify it after chaining, so copy it at execution.
+ */
+static void
+CitusValidateExplainOptions(ExplainState *es, List *options, ParseState *pstate)
+{
+	if (PreviousExplainValidateOptions != NULL)
+	{
+		PreviousExplainValidateOptions(es, options, pstate);
+	}
+
+	if (CurrentExplainContext != NULL &&
+		options == CurrentExplainContext->stmt->options)
+	{
+		CurrentExplainContext->explainState = es;
+	}
+}
+
+
+#endif
+
+
+/*
+ * CapturePendingExplainOptions fills the worker options when EXPLAIN EXECUTE
+ * bypasses CitusExplainOneQuery. PostgreSQL has already validated the statement
+ * and finished the option-hook chain by the time worker tasks are constructed.
+ */
+static void
+CapturePendingExplainOptions(void)
+{
+	if (CurrentExplainContext == NULL || CurrentExplainContext->optionsCopied)
+	{
+		return;
+	}
+
+#if PG_VERSION_NUM >= PG_VERSION_18
+	if (CurrentExplainContext->explainState == NULL)
+	{
+		elog(ERROR, "EXPLAIN options were not captured before distributed execution");
+	}
+
+	CopyDistributedExplainOptions(CurrentExplainContext->explainState);
+#else
+
+	/* PG17 has no option hook; extract only the options forwarded to workers. */
+	ExplainState es = { 0 };
+	es.costs = true;
+	es.format = EXPLAIN_FORMAT_TEXT;
+	es.serialize = EXPLAIN_SERIALIZE_NONE;
+
+	bool timingSet = false;
+	bool summarySet = false;
+	DefElem *option = NULL;
+
+	foreach_declared_ptr(option, CurrentExplainContext->stmt->options)
+	{
+		if (strcmp(option->defname, "analyze") == 0)
+		{
+			es.analyze = defGetBoolean(option);
+		}
+		else if (strcmp(option->defname, "verbose") == 0)
+		{
+			es.verbose = defGetBoolean(option);
+		}
+		else if (strcmp(option->defname, "costs") == 0)
+		{
+			es.costs = defGetBoolean(option);
+		}
+		else if (strcmp(option->defname, "buffers") == 0)
+		{
+			es.buffers = defGetBoolean(option);
+		}
+		else if (strcmp(option->defname, "wal") == 0)
+		{
+			es.wal = defGetBoolean(option);
+		}
+		else if (strcmp(option->defname, "timing") == 0)
+		{
+			timingSet = true;
+			es.timing = defGetBoolean(option);
+		}
+		else if (strcmp(option->defname, "summary") == 0)
+		{
+			summarySet = true;
+			es.summary = defGetBoolean(option);
+		}
+		else if (strcmp(option->defname, "memory") == 0)
+		{
+			es.memory = defGetBoolean(option);
+		}
+		else if (strcmp(option->defname, "serialize") == 0)
+		{
+			char *serialize = option->arg ? defGetString(option) : "text";
+			if (strcmp(serialize, "text") == 0)
+			{
+				es.serialize = EXPLAIN_SERIALIZE_TEXT;
+			}
+			else if (strcmp(serialize, "binary") == 0)
+			{
+				es.serialize = EXPLAIN_SERIALIZE_BINARY;
+			}
+			else if (strcmp(serialize, "none") == 0 || strcmp(serialize, "off") == 0)
+			{
+				es.serialize = EXPLAIN_SERIALIZE_NONE;
+			}
+			else
+			{
+				elog(ERROR, "unexpected validated EXPLAIN SERIALIZE value: %s",
+					 serialize);
+			}
+		}
+		else if (strcmp(option->defname, "format") == 0)
+		{
+			char *format = defGetString(option);
+			if (strcmp(format, "text") == 0)
+			{
+				es.format = EXPLAIN_FORMAT_TEXT;
+			}
+			else if (strcmp(format, "json") == 0)
+			{
+				es.format = EXPLAIN_FORMAT_JSON;
+			}
+			else if (strcmp(format, "xml") == 0)
+			{
+				es.format = EXPLAIN_FORMAT_XML;
+			}
+			else if (strcmp(format, "yaml") == 0)
+			{
+				es.format = EXPLAIN_FORMAT_YAML;
+			}
+			else
+			{
+				elog(ERROR, "unexpected validated EXPLAIN FORMAT value: %s", format);
+			}
+		}
+	}
+
+	es.timing = timingSet ? es.timing : es.analyze;
+	es.summary = summarySet ? es.summary : es.analyze;
+
+	CopyDistributedExplainOptions(&es);
+#endif
+}
+
+
+/*
+ * CopyDistributedExplainOptions saves the effective flags for worker requests.
+ */
+static void
+CopyDistributedExplainOptions(ExplainState *es)
+{
 	CurrentDistributedQueryExplainOptions.costs = es->costs;
 	CurrentDistributedQueryExplainOptions.buffers = es->buffers;
 	CurrentDistributedQueryExplainOptions.wal = es->wal;
@@ -1601,6 +1821,24 @@ CitusExplainOneQuery(Query *query, int cursorOptions, IntoClause *into,
 #if PG_VERSION_NUM >= PG_VERSION_19
 	CurrentDistributedQueryExplainOptions.io = es->io;
 #endif
+
+	if (CurrentExplainContext != NULL)
+	{
+		CurrentExplainContext->optionsCopied = true;
+	}
+}
+
+
+/*
+ * CitusExplainOneQuery handles PostgreSQL's EXPLAIN hook for ordinary queries.
+ * EXPLAIN EXECUTE bypasses this hook.
+ */
+void
+CitusExplainOneQuery(Query *query, int cursorOptions, IntoClause *into,
+					 ExplainState *es, const char *queryString, ParamListInfo params,
+					 QueryEnvironment *queryEnv)
+{
+	CopyDistributedExplainOptions(es);
 
 	/* rest is copied from ExplainOneQuery() */
 	instr_time planstart,
@@ -1980,6 +2218,8 @@ static char *
 WrapQueryForExplainAnalyze(const char *queryString, TupleDesc tupleDesc,
 						   ParamListInfo params)
 {
+	CapturePendingExplainOptions();
+
 	StringInfo columnDef = makeStringInfo();
 	for (int columnIndex = 0; columnIndex < tupleDesc->natts; columnIndex++)
 	{

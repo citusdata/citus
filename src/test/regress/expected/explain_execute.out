@@ -1,0 +1,308 @@
+CREATE SCHEMA explain_execute;
+SET search_path TO explain_execute, public;
+SET client_min_messages TO WARNING;
+SET citus.shard_count TO 4;
+SET citus.explain_all_tasks TO on;
+CREATE TABLE test_table(a int, b int);
+SELECT create_distributed_table('test_table', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO test_table SELECT i, i FROM generate_series(1, 10) i;
+CREATE FUNCTION explain_output(command text)
+RETURNS text LANGUAGE plpgsql AS $$
+DECLARE
+    line text;
+    result text := '';
+BEGIN
+    FOR line IN EXECUTE command LOOP
+        result := result || line || E'\n';
+    END LOOP;
+    RETURN result;
+END;
+$$;
+-- Inspect only worker plans: the coordinator can have the correct options
+-- while the worker request still contains stale values.
+CREATE FUNCTION worker_options(command text)
+RETURNS SETOF jsonb LANGUAGE plpgsql AS $$
+DECLARE
+    result jsonb := explain_output(command)::jsonb;
+BEGIN
+    IF NOT jsonb_path_exists(result, '$.**."Remote Plan"') THEN
+        RAISE EXCEPTION 'expected a distributed worker plan';
+    END IF;
+
+    RETURN QUERY
+    SELECT jsonb_build_object(
+        'verbose', jsonb_path_exists(worker.plan, '$.**."Output"'),
+        'costs', jsonb_path_exists(worker.plan, '$.**."Startup Cost"'),
+        'buffers', jsonb_path_exists(worker.plan, '$.**."Shared Hit Blocks"'),
+        'wal', jsonb_path_exists(worker.plan, '$.**."WAL Records"'),
+        'timing', jsonb_path_exists(worker.plan, '$.**."Actual Startup Time"'),
+        'summary', jsonb_path_exists(worker.plan, '$.**."Execution Time"'),
+        'memory', jsonb_path_exists(worker.plan, '$.**."Memory Used"'),
+        'serialize', COALESCE(
+            jsonb_path_query_first(worker.plan, '$.**.Serialization.Format') #>> '{}',
+            'none'))
+    FROM jsonb_path_query(result, '$.**."Remote Plan"') AS worker(plan);
+END;
+$$;
+\set options_on '{"verbose":true,"costs":true,"buffers":true,"wal":true,"timing":true,"summary":true,"memory":true,"serialize":"text"}'
+\set options_off '{"verbose":false,"costs":false,"buffers":false,"wal":false,"timing":false,"summary":false,"memory":false,"serialize":"none"}'
+PREPARE ps(int) AS SELECT count(*) FROM test_table WHERE b > $1;
+PREPARE router(int) AS SELECT a, b FROM test_table WHERE a = 1 AND b > $1;
+PREPARE update_ps(int) AS
+UPDATE test_table SET b = b + 1 WHERE a = $1 RETURNING a, b;
+-- Keep this the first EXPLAIN in the session: requested options must not
+-- depend on a preceding ordinary EXPLAIN initializing the worker settings.
+SELECT bool_and(options = :'options_on'::jsonb) AS fresh_prepared_options
+FROM worker_options($$
+    EXPLAIN (ANALYZE, VERBOSE, COSTS, BUFFERS, WAL, TIMING, SUMMARY,
+             MEMORY, SERIALIZE TEXT, FORMAT JSON) EXECUTE ps(0)
+$$) AS worker(options);
+ fresh_prepared_options
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT bool_and(options = :'options_on'::jsonb) AS ordinary_options
+FROM worker_options($$
+    EXPLAIN (ANALYZE, VERBOSE, COSTS, BUFFERS, WAL, TIMING, SUMMARY,
+             MEMORY, SERIALIZE TEXT, FORMAT JSON)
+    SELECT count(*) FROM test_table WHERE b > 0
+$$) AS worker(options);
+ ordinary_options
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT bool_and(options = :'options_off'::jsonb) AS prepared_options_off
+FROM worker_options($$
+    EXPLAIN (ANALYZE, VERBOSE OFF, COSTS OFF, BUFFERS OFF, WAL OFF,
+             TIMING OFF, SUMMARY OFF, MEMORY OFF, SERIALIZE OFF, FORMAT JSON)
+    EXECUTE ps(0)
+$$) AS worker(options);
+ prepared_options_off
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT bool_and(options = :'options_on'::jsonb) AS prepared_options_on
+FROM worker_options($$
+    EXPLAIN (ANALYZE, VERBOSE, COSTS, BUFFERS, WAL, TIMING, SUMMARY,
+             MEMORY, SERIALIZE TEXT, FORMAT JSON) EXECUTE ps(0)
+$$) AS worker(options);
+ prepared_options_on
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- Omitted options use PostgreSQL defaults, not the previous statement's flags.
+-- BUFFERS became enabled by default with ANALYZE in PostgreSQL 18.
+SELECT bool_and(options = (:'options_off'::jsonb ||
+    jsonb_build_object('costs', true, 'timing', true, 'summary', true,
+        'buffers', current_setting('server_version_num')::int >= 180000)))
+    AS prepared_defaults
+FROM worker_options($$
+    EXPLAIN (ANALYZE, FORMAT JSON) EXECUTE ps(0)
+$$) AS worker(options);
+ prepared_defaults
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT bool_and(options = (:'options_on'::jsonb || '{"serialize":"binary"}'))
+    AS prepared_binary_serialization
+FROM worker_options($$
+    EXPLAIN (ANALYZE, VERBOSE, COSTS, BUFFERS, WAL, TIMING, SUMMARY,
+             MEMORY, SERIALIZE BINARY, FORMAT JSON) EXECUTE ps(0)
+$$) AS worker(options);
+ prepared_binary_serialization
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- Collecting all requested instrumentation must not execute a prepared write twice.
+BEGIN;
+SELECT bool_and(options = :'options_on'::jsonb) AS prepared_write_options
+FROM worker_options($$
+    EXPLAIN (ANALYZE, VERBOSE, COSTS, BUFFERS, WAL, TIMING, SUMMARY,
+             MEMORY, SERIALIZE TEXT, FORMAT JSON) EXECUTE update_ps(1)
+$$) AS worker(options);
+ prepared_write_options
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT b = 2 AS write_executed_once FROM test_table WHERE a = 1;
+ write_executed_once
+---------------------------------------------------------------------
+ t
+(1 row)
+
+ROLLBACK;
+SELECT b = 1 AS write_rolled_back FROM test_table WHERE a = 1;
+ write_rolled_back
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- Repeated options follow PostgreSQL's last-value-wins rule.
+SELECT bool_and(options = (:'options_off'::jsonb ||
+    jsonb_build_object('costs', true, 'timing', true, 'summary', true,
+        'buffers', current_setting('server_version_num')::int >= 180000)))
+    AS repeated_options
+FROM worker_options($$
+    EXPLAIN (ANALYZE, VERBOSE ON, VERBOSE OFF, COSTS OFF, COSTS ON,
+             TIMING OFF, TIMING ON, FORMAT JSON) EXECUTE ps(0)
+$$) AS worker(options);
+ repeated_options
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SET plan_cache_mode TO force_generic_plan;
+SELECT bool_and(options = :'options_on'::jsonb) AS generic_plan_options
+FROM worker_options($$
+    EXPLAIN (ANALYZE, VERBOSE, COSTS, BUFFERS, WAL, TIMING, SUMMARY,
+             MEMORY, SERIALIZE TEXT, FORMAT JSON) EXECUTE router(0)
+$$) AS worker(options);
+ generic_plan_options
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT generic_plans > 0 AS used_generic_plan
+FROM pg_prepared_statements WHERE name = 'router';
+ used_generic_plan
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SET plan_cache_mode TO force_custom_plan;
+SELECT bool_and(options = :'options_off'::jsonb) AS custom_plan_options
+FROM worker_options($$
+    EXPLAIN (ANALYZE, VERBOSE OFF, COSTS OFF, BUFFERS OFF, WAL OFF,
+             TIMING OFF, SUMMARY OFF, MEMORY OFF, SERIALIZE OFF, FORMAT JSON)
+    EXECUTE router(0)
+$$) AS worker(options);
+ custom_plan_options
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT custom_plans > 0 AS used_custom_plan
+FROM pg_prepared_statements WHERE name = 'router';
+ used_custom_plan
+---------------------------------------------------------------------
+ t
+(1 row)
+
+RESET plan_cache_mode;
+CREATE FUNCTION nested_explain(value int, fail boolean)
+RETURNS int LANGUAGE plpgsql AS $$
+BEGIN
+    BEGIN
+        EXECUTE 'EXPLAIN (ANALYZE, COSTS OFF, VERBOSE OFF, BUFFERS OFF,
+                          TIMING OFF, SUMMARY OFF) SELECT 1 / ' ||
+                CASE WHEN fail THEN '0' ELSE '1' END;
+    EXCEPTION WHEN division_by_zero THEN
+        NULL;
+    END;
+    RETURN value;
+END;
+$$;
+SELECT bool_and(options = :'options_on'::jsonb) AS nested_options
+FROM worker_options($$
+    EXPLAIN (ANALYZE, VERBOSE, COSTS, BUFFERS, WAL, TIMING, SUMMARY,
+             MEMORY, SERIALIZE TEXT, FORMAT JSON)
+    EXECUTE ps(nested_explain(0, false))
+$$) AS worker(options);
+ nested_options
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT bool_and(options = :'options_on'::jsonb) AS nested_error_options
+FROM worker_options($$
+    EXPLAIN (ANALYZE, VERBOSE, COSTS, BUFFERS, WAL, TIMING, SUMMARY,
+             MEMORY, SERIALIZE TEXT, FORMAT JSON)
+    EXECUTE ps(nested_explain(0, true))
+$$) AS worker(options);
+ nested_error_options
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- Switching formats must not embed an old-format worker plan in the new output.
+WITH document AS MATERIALIZED (
+    SELECT explain_output($$
+        EXPLAIN (ANALYZE, COSTS OFF, TIMING OFF, SUMMARY OFF, FORMAT XML)
+        EXECUTE ps(0)
+    $$)::xml AS plan
+)
+SELECT xpath_exists('//*[local-name()="Remote-Plan"]', plan)
+   AND NOT xpath_exists(
+       '//*[local-name()="Remote-Plan"][not(.//*[local-name()="Plan"])]', plan)
+    AS xml_worker_plans
+FROM document;
+ xml_worker_plans
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT explain_output($$
+    EXPLAIN (ANALYZE, COSTS OFF, TIMING OFF, SUMMARY OFF, FORMAT YAML)
+    EXECUTE ps(0)
+$$) ~ 'Remote Plan:[[:space:]]+- Plan:' AS yaml_worker_plans;
+ yaml_worker_plans
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT explain_output($$
+    EXPLAIN (ANALYZE, COSTS OFF, TIMING OFF, SUMMARY OFF, FORMAT TEXT)
+    EXECUTE ps(0)
+$$) ~ 'Node: [^\n]+\n[[:space:]]+->[[:space:]]+Aggregate' AS text_worker_plans;
+ text_worker_plans
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- The live remote-EXPLAIN path must still use the current ExplainState.
+SELECT bool_and(options = (:'options_off'::jsonb || '{"verbose":true}'))
+    AS non_analyze_options
+FROM worker_options($$
+    EXPLAIN (VERBOSE, COSTS OFF, FORMAT JSON) EXECUTE ps(0)
+$$) AS worker(options);
+ non_analyze_options
+---------------------------------------------------------------------
+ t
+(1 row)
+
+\set VERBOSITY terse
+EXPLAIN (ANALYZE, unknown_option) EXECUTE ps(0);
+ERROR:  unrecognized EXPLAIN option "unknown_option" at character 19
+EXPLAIN (TIMING ON) EXECUTE ps(0);
+ERROR:  EXPLAIN option TIMING requires ANALYZE
+SELECT bool_and(options = :'options_off'::jsonb) AS options_after_error
+FROM worker_options($$
+    EXPLAIN (ANALYZE, VERBOSE OFF, COSTS OFF, BUFFERS OFF, WAL OFF,
+             TIMING OFF, SUMMARY OFF, MEMORY OFF, SERIALIZE OFF, FORMAT JSON)
+    EXECUTE ps(0)
+$$) AS worker(options);
+ options_after_error
+---------------------------------------------------------------------
+ t
+(1 row)
+
+DEALLOCATE ps;
+DEALLOCATE router;
+DEALLOCATE update_ps;
+RESET search_path;
+DROP SCHEMA explain_execute CASCADE;
+RESET citus.explain_all_tasks;
+RESET citus.shard_count;
+RESET client_min_messages;

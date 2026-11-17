@@ -13,6 +13,7 @@
 #include "tuple_destination.h"
 
 #include "executor/executor.h"
+#include "tcop/utility.h"
 
 typedef enum
 {
@@ -26,6 +27,14 @@ extern bool ExplainAllTasks;
 extern int ExplainAnalyzeSortMethod;
 
 extern void FreeSavedExplainPlan(void);
+extern void InitializeExplainOptionsHook(void);
+extern void ExplainStatementWithDistributedOptions(PlannedStmt *pstmt,
+												   const char *queryString,
+												   ProcessUtilityContext context,
+												   ParamListInfo params,
+												   QueryEnvironment *queryEnv,
+												   DestReceiver *dest,
+												   QueryCompletion *completionTag);
 extern void CitusExplainOneQuery(Query *query, int cursorOptions, IntoClause *into,
 								 ExplainState *es, const char *queryString, ParamListInfo
 								 params,
