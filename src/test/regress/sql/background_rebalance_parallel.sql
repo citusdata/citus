@@ -445,9 +445,14 @@ SELECT citus_rebalance_start AS job_id FROM citus_rebalance_start() \gset
 SELECT citus_rebalance_wait();
 
 -- reference table copy tasks are prefixed with a SET LOCAL application_name that
--- contains the gpid of the backend, which differs between runs, so strip it
+-- contains the gpid of the backend, which differs between runs, so strip it.
+-- Also mask the source node of reference table copies: it is the coordinator when
+-- the coordinator is in the metadata and a worker otherwise, which depends on how
+-- the test is run.
 CREATE FUNCTION task_command(p_task_id bigint) RETURNS text AS $$
-    SELECT regexp_replace(command, '^SET LOCAL application_name TO ''[^'']*'';\s*', '')
+    SELECT regexp_replace(
+               regexp_replace(command, '^SET LOCAL application_name TO ''[^'']*'';\s*', ''),
+               'copy_single_shard_placement\((\d+),\d+,', 'copy_single_shard_placement(\1,<source>,')
     FROM pg_dist_background_task WHERE task_id = p_task_id;
 $$ LANGUAGE sql;
 
@@ -462,7 +467,9 @@ FROM pg_dist_background_task_depend WHERE job_id = :job_id ORDER BY task_id, dep
 -- every task finished and both new nodes got their reference table placement
 SELECT status, count(*) FROM pg_dist_background_task WHERE job_id = :job_id GROUP BY status;
 SELECT nodeport, count(*)
-FROM pg_dist_shard_placement WHERE shardid = (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'ref_table'::regclass)
+FROM pg_dist_shard_placement
+WHERE shardid = (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'ref_table'::regclass) AND
+      nodeport IN (:worker_3_port, :worker_4_port)
 GROUP BY nodeport ORDER BY nodeport;
 
 DROP SCHEMA background_rebalance_parallel CASCADE;

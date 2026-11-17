@@ -933,19 +933,24 @@ SELECT citus_rebalance_wait();
 (1 row)
 
 -- reference table copy tasks are prefixed with a SET LOCAL application_name that
--- contains the gpid of the backend, which differs between runs, so strip it
+-- contains the gpid of the backend, which differs between runs, so strip it.
+-- Also mask the source node of reference table copies: it is the coordinator when
+-- the coordinator is in the metadata and a worker otherwise, which depends on how
+-- the test is run.
 CREATE FUNCTION task_command(p_task_id bigint) RETURNS text AS $$
-    SELECT regexp_replace(command, '^SET LOCAL application_name TO ''[^'']*'';\s*', '')
+    SELECT regexp_replace(
+               regexp_replace(command, '^SET LOCAL application_name TO ''[^'']*'';\s*', ''),
+               'copy_single_shard_placement\((\d+),\d+,', 'copy_single_shard_placement(\1,<source>,')
     FROM pg_dist_background_task WHERE task_id = p_task_id;
 $$ LANGUAGE sql;
 SELECT task_id, task_command(task_id)
 FROM pg_dist_background_task WHERE job_id = :job_id ORDER BY task_id;
- task_id |                                       task_command
+ task_id |                                          task_command
 ---------------------------------------------------------------------
-    2000 | SELECT citus_internal.citus_internal_copy_single_shard_placement(85674116,16,64,3,'auto')
-    2001 | SELECT citus_internal.citus_internal_copy_single_shard_placement(85674116,16,64,4,'auto')
-    2002 | SELECT citus_internal.citus_internal_copy_single_shard_placement(85674116,16,65,3,'auto')
-    2003 | SELECT citus_internal.citus_internal_copy_single_shard_placement(85674116,16,65,4,'auto')
+    2000 | SELECT citus_internal.citus_internal_copy_single_shard_placement(85674116,<source>,64,3,'auto')
+    2001 | SELECT citus_internal.citus_internal_copy_single_shard_placement(85674116,<source>,64,4,'auto')
+    2002 | SELECT citus_internal.citus_internal_copy_single_shard_placement(85674116,<source>,65,3,'auto')
+    2003 | SELECT citus_internal.citus_internal_copy_single_shard_placement(85674116,<source>,65,4,'auto')
     2004 | SELECT pg_catalog.citus_move_shard_placement(85674101,62,64,'auto')
     2005 | SELECT pg_catalog.citus_move_shard_placement(85674100,61,65,'auto')
     2006 | SELECT pg_catalog.citus_move_shard_placement(85674109,62,64,'auto')
@@ -956,18 +961,18 @@ FROM pg_dist_background_task WHERE job_id = :job_id ORDER BY task_id;
 -- same colocation group, yet neither move depends on the other
 SELECT task_id, task_command(task_id), depends_on, task_command(depends_on)
 FROM pg_dist_background_task_depend WHERE job_id = :job_id ORDER BY task_id, depends_on ASC;
- task_id |                                       task_command                                        | depends_on |                                       task_command
+ task_id |                                          task_command                                           | depends_on |                                          task_command
 ---------------------------------------------------------------------
-    2001 | SELECT citus_internal.citus_internal_copy_single_shard_placement(85674116,16,64,4,'auto') |       2000 | SELECT citus_internal.citus_internal_copy_single_shard_placement(85674116,16,64,3,'auto')
-    2003 | SELECT citus_internal.citus_internal_copy_single_shard_placement(85674116,16,65,4,'auto') |       2002 | SELECT citus_internal.citus_internal_copy_single_shard_placement(85674116,16,65,3,'auto')
-    2004 | SELECT pg_catalog.citus_move_shard_placement(85674101,62,64,'auto')                       |       2001 | SELECT citus_internal.citus_internal_copy_single_shard_placement(85674116,16,64,4,'auto')
-    2004 | SELECT pg_catalog.citus_move_shard_placement(85674101,62,64,'auto')                       |       2003 | SELECT citus_internal.citus_internal_copy_single_shard_placement(85674116,16,65,4,'auto')
-    2005 | SELECT pg_catalog.citus_move_shard_placement(85674100,61,65,'auto')                       |       2001 | SELECT citus_internal.citus_internal_copy_single_shard_placement(85674116,16,64,4,'auto')
-    2005 | SELECT pg_catalog.citus_move_shard_placement(85674100,61,65,'auto')                       |       2003 | SELECT citus_internal.citus_internal_copy_single_shard_placement(85674116,16,65,4,'auto')
-    2006 | SELECT pg_catalog.citus_move_shard_placement(85674109,62,64,'auto')                       |       2001 | SELECT citus_internal.citus_internal_copy_single_shard_placement(85674116,16,64,4,'auto')
-    2006 | SELECT pg_catalog.citus_move_shard_placement(85674109,62,64,'auto')                       |       2003 | SELECT citus_internal.citus_internal_copy_single_shard_placement(85674116,16,65,4,'auto')
-    2007 | SELECT pg_catalog.citus_move_shard_placement(85674108,61,65,'auto')                       |       2001 | SELECT citus_internal.citus_internal_copy_single_shard_placement(85674116,16,64,4,'auto')
-    2007 | SELECT pg_catalog.citus_move_shard_placement(85674108,61,65,'auto')                       |       2003 | SELECT citus_internal.citus_internal_copy_single_shard_placement(85674116,16,65,4,'auto')
+    2001 | SELECT citus_internal.citus_internal_copy_single_shard_placement(85674116,<source>,64,4,'auto') |       2000 | SELECT citus_internal.citus_internal_copy_single_shard_placement(85674116,<source>,64,3,'auto')
+    2003 | SELECT citus_internal.citus_internal_copy_single_shard_placement(85674116,<source>,65,4,'auto') |       2002 | SELECT citus_internal.citus_internal_copy_single_shard_placement(85674116,<source>,65,3,'auto')
+    2004 | SELECT pg_catalog.citus_move_shard_placement(85674101,62,64,'auto')                             |       2001 | SELECT citus_internal.citus_internal_copy_single_shard_placement(85674116,<source>,64,4,'auto')
+    2004 | SELECT pg_catalog.citus_move_shard_placement(85674101,62,64,'auto')                             |       2003 | SELECT citus_internal.citus_internal_copy_single_shard_placement(85674116,<source>,65,4,'auto')
+    2005 | SELECT pg_catalog.citus_move_shard_placement(85674100,61,65,'auto')                             |       2001 | SELECT citus_internal.citus_internal_copy_single_shard_placement(85674116,<source>,64,4,'auto')
+    2005 | SELECT pg_catalog.citus_move_shard_placement(85674100,61,65,'auto')                             |       2003 | SELECT citus_internal.citus_internal_copy_single_shard_placement(85674116,<source>,65,4,'auto')
+    2006 | SELECT pg_catalog.citus_move_shard_placement(85674109,62,64,'auto')                             |       2001 | SELECT citus_internal.citus_internal_copy_single_shard_placement(85674116,<source>,64,4,'auto')
+    2006 | SELECT pg_catalog.citus_move_shard_placement(85674109,62,64,'auto')                             |       2003 | SELECT citus_internal.citus_internal_copy_single_shard_placement(85674116,<source>,65,4,'auto')
+    2007 | SELECT pg_catalog.citus_move_shard_placement(85674108,61,65,'auto')                             |       2001 | SELECT citus_internal.citus_internal_copy_single_shard_placement(85674116,<source>,64,4,'auto')
+    2007 | SELECT pg_catalog.citus_move_shard_placement(85674108,61,65,'auto')                             |       2003 | SELECT citus_internal.citus_internal_copy_single_shard_placement(85674116,<source>,65,4,'auto')
 (10 rows)
 
 -- every task finished and both new nodes got their reference table placement
@@ -978,16 +983,15 @@ SELECT status, count(*) FROM pg_dist_background_task WHERE job_id = :job_id GROU
 (1 row)
 
 SELECT nodeport, count(*)
-FROM pg_dist_shard_placement WHERE shardid = (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'ref_table'::regclass)
+FROM pg_dist_shard_placement
+WHERE shardid = (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'ref_table'::regclass) AND
+      nodeport IN (:worker_3_port, :worker_4_port)
 GROUP BY nodeport ORDER BY nodeport;
  nodeport | count
 ---------------------------------------------------------------------
-    57636 |     1
-    57637 |     1
-    57638 |     1
     57639 |     1
     57640 |     1
-(5 rows)
+(2 rows)
 
 DROP SCHEMA background_rebalance_parallel CASCADE;
 TRUNCATE pg_dist_background_job CASCADE;
