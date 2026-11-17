@@ -69,7 +69,9 @@ SELECT 1 FROM citus_add_node('localhost', :worker_4_port);
 
 SELECT * FROM get_rebalance_table_shards_plan() ORDER BY shardid;
 
-SELECT * FROM citus_rebalance_start();
+-- pin the non-parallel transfers so that this test keeps covering the classic path
+SELECT * FROM citus_rebalance_start(parallel_transfer_reference_tables := false,
+                                    parallel_transfer_colocated_shards := false);
 
 SELECT citus_rebalance_wait();
 
@@ -126,7 +128,8 @@ SELECT citus_set_node_property('localhost', :worker_4_port, 'shouldhaveshards', 
 SELECT 1 FROM citus_add_node('localhost', :worker_5_port);
 SELECT 1 FROM citus_add_node('localhost', :worker_6_port);
 
-SELECT * FROM citus_rebalance_start();
+SELECT * FROM citus_rebalance_start(parallel_transfer_reference_tables := false,
+                                    parallel_transfer_colocated_shards := false);
 
 SELECT citus_rebalance_wait();
 
@@ -199,7 +202,8 @@ INSERT INTO table2_colg4 SELECT i FROM generate_series(0, 100)i;
 SELECT citus_add_node('localhost', :worker_2_port);
 SELECT citus_add_node('localhost', :worker_3_port);
 
-SELECT citus_rebalance_start AS job_id from citus_rebalance_start() \gset
+SELECT citus_rebalance_start AS job_id from citus_rebalance_start(parallel_transfer_reference_tables := false,
+                                                                 parallel_transfer_colocated_shards := false) \gset
 
 -- see dependent tasks to understand which tasks remain runnable because of
 -- citus.max_background_task_executors_per_node
@@ -379,7 +383,9 @@ INSERT INTO
 
 SELECT * FROM get_rebalance_table_shards_plan(rebalance_strategy := 'test_source_then_target');
 
-SELECT citus_rebalance_start AS job_id from citus_rebalance_start(rebalance_strategy := 'test_source_then_target') \gset
+SELECT citus_rebalance_start AS job_id from citus_rebalance_start(rebalance_strategy := 'test_source_then_target',
+                                                                 parallel_transfer_reference_tables := false,
+                                                                 parallel_transfer_colocated_shards := false) \gset
 
 -- check that the third move is blocked and depends on the first two
 SELECT job_id, task_id, status, nodes_involved

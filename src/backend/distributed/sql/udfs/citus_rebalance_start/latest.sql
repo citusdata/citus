@@ -4,8 +4,8 @@ CREATE OR REPLACE FUNCTION pg_catalog.citus_rebalance_start(
         rebalance_strategy name DEFAULT NULL,
         drain_only boolean DEFAULT false,
         shard_transfer_mode citus.shard_transfer_mode default 'auto',
-        parallel_transfer_reference_tables boolean DEFAULT false,
-        parallel_transfer_colocated_shards boolean DEFAULT false
+        parallel_transfer_reference_tables boolean DEFAULT true,
+        parallel_transfer_colocated_shards boolean DEFAULT true
     )
     RETURNS bigint
     AS 'MODULE_PATHNAME'

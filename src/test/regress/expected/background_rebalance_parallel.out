@@ -130,7 +130,9 @@ SELECT * FROM get_rebalance_table_shards_plan() ORDER BY shardid;
  table2_colg3 | 85674021 |          0 | localhost  |      57638 | localhost  |      57639
 (12 rows)
 
-SELECT * FROM citus_rebalance_start();
+-- pin the non-parallel transfers so that this test keeps covering the classic path
+SELECT * FROM citus_rebalance_start(parallel_transfer_reference_tables := false,
+                                    parallel_transfer_colocated_shards := false);
  citus_rebalance_start
 ---------------------------------------------------------------------
                  17777
@@ -275,7 +277,8 @@ SELECT 1 FROM citus_add_node('localhost', :worker_6_port);
         1
 (1 row)
 
-SELECT * FROM citus_rebalance_start();
+SELECT * FROM citus_rebalance_start(parallel_transfer_reference_tables := false,
+                                    parallel_transfer_colocated_shards := false);
  citus_rebalance_start
 ---------------------------------------------------------------------
                  17778
@@ -462,7 +465,8 @@ SELECT citus_add_node('localhost', :worker_3_port);
              57
 (1 row)
 
-SELECT citus_rebalance_start AS job_id from citus_rebalance_start() \gset
+SELECT citus_rebalance_start AS job_id from citus_rebalance_start(parallel_transfer_reference_tables := false,
+                                                                 parallel_transfer_colocated_shards := false) \gset
 -- see dependent tasks to understand which tasks remain runnable because of
 -- citus.max_background_task_executors_per_node
 -- and which tasks are actually blocked from colocation group dependencies
@@ -810,7 +814,9 @@ SELECT * FROM get_rebalance_table_shards_plan(rebalance_strategy := 'test_source
  table1_colg4 | 85674054 |          0 | localhost  |      57638 | localhost  |      57637
 (3 rows)
 
-SELECT citus_rebalance_start AS job_id from citus_rebalance_start(rebalance_strategy := 'test_source_then_target') \gset
+SELECT citus_rebalance_start AS job_id from citus_rebalance_start(rebalance_strategy := 'test_source_then_target',
+                                                                 parallel_transfer_reference_tables := false,
+                                                                 parallel_transfer_colocated_shards := false) \gset
 -- check that the third move is blocked and depends on the first two
 SELECT job_id, task_id, status, nodes_involved
 FROM pg_dist_background_task WHERE job_id in (:job_id) ORDER BY task_id;
