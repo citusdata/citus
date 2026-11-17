@@ -766,7 +766,7 @@ SELECT distribution_argument_index, colocationid, force_delegation FROM pg_catal
 
 
 -- Show that causing circular dependency via functions and default values are not allowed
-CREATE TABLE table_1_for_circ_dep(id int);
+CREATE TABLE table_1_for_circ_dep(id int, col_2 int);
 select create_distributed_table('table_1_for_circ_dep','id');
 
 CREATE OR REPLACE FUNCTION func_1_for_circ_dep(col_1 table_1_for_circ_dep)
@@ -789,8 +789,11 @@ return 1;
 END;
 $$;
 
--- It should error out due to circular dependency
-ALTER TABLE table_1_for_circ_dep ADD COLUMN col_2 int default func_2_for_circ_dep(NULL::table_2_for_circ_dep);
+-- It should error out due to circular dependency. Set the default on an existing
+-- column: PostgreSQL 16.16/17.12/18.7 reject ADD COLUMN here before Citus can
+-- detect the cycle, because table_2_for_circ_dep's default uses this row type
+-- (CVE-2026-6460).
+ALTER TABLE table_1_for_circ_dep ALTER COLUMN col_2 SET DEFAULT func_2_for_circ_dep(NULL::table_2_for_circ_dep);
 
 
 -- Show that causing circular dependency via functions and constraints are not allowed
