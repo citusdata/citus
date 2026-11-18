@@ -269,7 +269,9 @@ ERROR:  cannot use logical replication to transfer shards of the relation ref_no
 DETAIL:  UPDATE and DELETE commands on the shard will error out during logical replication unless there is a REPLICA IDENTITY or PRIMARY KEY.
 HINT:  If you wish to continue without a replica identity set the shard_transfer_mode to 'force_logical_auto_identity', 'force_logical' or 'block_writes'.
 -- succeeds
-SELECT 1 FROM citus_rebalance_start(shard_transfer_mode := 'force_logical');
+SELECT 1 FROM citus_rebalance_start(shard_transfer_mode := 'force_logical',
+                                    parallel_transfer_reference_tables := false,
+                                    parallel_transfer_colocated_shards := false);
 NOTICE:  Scheduled 1 moves as job xxx
 DETAIL:  Rebalance scheduled as background job
 HINT:  To monitor progress, run: SELECT * FROM citus_rebalance_status();
@@ -326,7 +328,9 @@ SELECT 1 FROM citus_add_node('localhost', :worker_3_port);
 (1 row)
 
 SET ROLE non_super_user_rebalance;
-SELECT 1 FROM citus_rebalance_start(shard_transfer_mode := 'force_logical');
+SELECT 1 FROM citus_rebalance_start(shard_transfer_mode := 'force_logical',
+                                    parallel_transfer_reference_tables := false,
+                                    parallel_transfer_colocated_shards := false);
 NOTICE:  Scheduled 1 moves as job xxx
 DETAIL:  Rebalance scheduled as background job
 HINT:  To monitor progress, run: SELECT * FROM citus_rebalance_status();

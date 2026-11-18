@@ -39,3 +39,7 @@ DROP FUNCTION IF EXISTS pg_catalog.worker_apply_sequence_command(text, regtype);
 ALTER TYPE citus.shard_transfer_mode ADD VALUE IF NOT EXISTS 'force_logical_auto_identity';
 
 #include "udfs/citus_tables/15.0-1.sql"
+
+-- parallel_transfer_reference_tables and parallel_transfer_colocated_shards
+-- now default to true
+#include "udfs/citus_rebalance_start/15.0-1.sql"

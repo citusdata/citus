@@ -45,3 +45,6 @@ DROP FUNCTION IF EXISTS citus_internal.distribute_object(oid, oid, int, boolean)
 -- if a user passes it explicitly. This is a documented no-op.
 
 #include "../udfs/citus_tables/12.0-1.sql"
+
+-- restore the false defaults of the parallel transfer parameters
+#include "../udfs/citus_rebalance_start/13.2-1.sql"
