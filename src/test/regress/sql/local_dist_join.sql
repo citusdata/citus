@@ -217,6 +217,17 @@ SELECT joined.id FROM (local LEFT JOIN distributed USING (id)) AS joined ORDER B
 WITH joined AS MATERIALIZED (SELECT count(*) AS n FROM local LEFT JOIN distributed USING (id))
 SELECT n FROM joined;
 
+-- A surviving distributed subquery must not prevent join normalization.
+SELECT count(*) FROM local l LEFT JOIN distributed d USING (id)
+CROSS JOIN (SELECT count(*) FROM distributed) s;
+
+-- Normalize the SELECT without losing an unreferenced modifying CTE's effects.
+BEGIN;
+WITH m AS (DELETE FROM distributed WHERE id < 2 RETURNING id)
+SELECT count(*) FROM local l LEFT JOIN distributed d USING (id);
+SELECT count(*) FROM distributed;
+ROLLBACK;
+
 -- A planned subquery is not an eliminated nullable relation.
 WITH joined AS (
     SELECT r.id FROM outer_join_ref r
