@@ -22,7 +22,7 @@ env:
 jobs:
   params:
     name: Initialize parameters
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       matrix: ${{ steps.matrix.outputs.matrix }}
       citus_old_version: v14.0.1
@@ -60,7 +60,7 @@ jobs:
   test:
     needs: params
     name: ASAN ${{ matrix.name }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: ${{ matrix.timeout }}
     strategy:
       fail-fast: false
@@ -122,11 +122,22 @@ jobs:
           # Python loads instrumented libpq; prove that the matching runtime comes first.
           LD_PRELOAD="$runtime" python3 -c \
             'import ctypes, os, subprocess; ctypes.CDLL(subprocess.check_output([os.environ["PG_CONFIG"], "--libdir"], text=True).strip() + "/libpq.so")'
+          # initdb must import the libc alias, not merely find OS locale data.
+          bindir="$("$PG_CONFIG" --bindir)"
+          "$bindir/initdb" -D "$ASAN_DIR/locale-check" --no-sync --encoding=UTF8 --locale=C
+          echo "SELECT collname FROM pg_catalog.pg_collation WHERE collname = 'da_DK';" |
+            "$bindir/postgres" --single -D "$ASAN_DIR/locale-check" template1 \
+              > "$ASAN_DIR/locale-verification.txt"
+          grep -F '= "da_DK"' "$ASAN_DIR/locale-verification.txt"
           touch "$ASAN_DIR/runtime-verified"
+      - uses: actions/setup-python@v6
+        if: contains(fromJson('["failure","generator","pg-upgrade","citus-upgrade","arbitrary-configs"]'), matrix.group)
+        with:
+          python-version: "3.12"
       - name: Install python test env
         if: contains(fromJson('["failure","generator","pg-upgrade","citus-upgrade","arbitrary-configs"]'), matrix.group)
         shell: bash
-        run: ( cd src/test/regress && pipenv install --deploy )
+        run: ( cd src/test/regress && pipenv install --deploy --python "$(command -v python)" )
       - name: Build and verify old Citus
         if: matrix.group == 'citus-upgrade'
         shell: bash
@@ -286,7 +297,7 @@ jobs:
     name: ASAN result
     needs: [params, test]
     if: always()
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       actions: read

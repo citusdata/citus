@@ -46,9 +46,11 @@ runs:
         esac
 
     - name: Install build dependencies
+      id: dependencies
       shell: bash
       run: |
         set -euo pipefail
+        echo "os=$(. /etc/os-release; echo "$ID-$VERSION_ID")" >> "$GITHUB_OUTPUT"
         sudo apt-get update
         sudo apt-get install -y --no-install-recommends \
           bison flex gcc make perl pkg-config \
@@ -59,6 +61,7 @@ runs:
           locales
         # da_DK locale required by columnar collation tests
         sudo locale-gen da_DK.UTF-8
+        locale -a | grep -Fx 'da_DK.utf8'
 
     - name: Restore pgenv (cassert PG) cache
       id: cache
@@ -69,7 +72,7 @@ runs:
         # runner.arch keeps amd64 and arm64 prefixes from sharing binaries (runner.os is
         # "Linux" for both); inputs.cassert keeps assert-on/off builds in separate entries
         # (the assert-off edit is applied to the copied config, so it doesn't move hashFiles).
-        key: pgenv-cassert-${{ runner.os }}-${{ runner.arch }}-cassert${{ inputs.cassert }}-${{ inputs.sanitizer }}-${{ inputs.pg_full }}-${{ hashFiles('.devcontainer/pgenv/config/default.conf', '.github/actions/setup_cassert_pg/action.yml') }}
+        key: pgenv-cassert-${{ steps.dependencies.outputs.os }}-${{ runner.arch }}-cassert${{ inputs.cassert }}-${{ inputs.sanitizer }}-${{ inputs.pg_full }}-${{ hashFiles('.devcontainer/pgenv/config/default.conf', '.github/actions/setup_cassert_pg/action.yml') }}
         lookup-only: ${{ inputs.cold_cache == 'true' }}
 
     - name: Build cassert PostgreSQL (USE_VALGRIND dropped)
@@ -101,6 +104,17 @@ runs:
         cat "$HOME/.pgenv/config/default.conf"
         export PATH="$HOME/.pgenv/bin:$PATH"
         if [ "${{ inputs.sanitizer }}" = "address" ]; then
+          # PG19 needs C11, but its typeof_unqual spelling must also work in Citus's GNU99.
+          export pgac_cv_c_typeof_unqual=no
+          for keyword in typeof_unqual __typeof_unqual__; do
+            if printf 'int main(void) { void *p = 0; %s(p) q = p; return q != p; }\n' "$keyword" |
+                gcc -std=gnu99 -Werror -x c -c -o /dev/null - \
+                  2>> "$ASAN_DIR/typeof-unqual-probe.txt"; then
+              export pgac_cv_c_typeof_unqual="$keyword"
+              break
+            fi
+          done
+          echo "pgac_cv_c_typeof_unqual=$pgac_cv_c_typeof_unqual" >> "$ASAN_DIR/typeof-unqual-probe.txt"
           /usr/bin/time -v -o "$ASAN_DIR/pg-${{ inputs.pg_full }}-build.time" \
             env MAKEFLAGS="-j $(nproc)" pgenv build "${{ inputs.pg_full }}"
         else
