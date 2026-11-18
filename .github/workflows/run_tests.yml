@@ -48,7 +48,7 @@ jobs:
       matrix:
         pg_version: ${{ fromJson(inputs.pg_versions) }}
         make: ${{ fromJson(inputs.make_targets) }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     container:
       image: "${{ inputs.image_name }}:${{ matrix.pg_version.full }}${{ inputs.image_suffix }}"
       options: >-
