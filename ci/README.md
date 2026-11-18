@@ -30,8 +30,8 @@ with and without columnar. PG17/18 also run normal and mixed old-Citus upgrades
 from v14.0.1. The single matrix contains 41 suite jobs, limits concurrency to
 two, and does not cancel other shards on failure. `ASAN result` requires every
 selected job to succeed, including instrumentation and diagnostic checks.
-Jobs use Ubuntu 24.04 rather than the moving `ubuntu-latest` alias. Python suites
-explicitly provision Python 3.12 to match the regression Pipfile. Setup verifies
+Jobs use Ubuntu 24.04. Python suites explicitly provision Python 3.12 to match
+the regression Pipfile. Setup verifies
 the Danish UTF-8 OS locale; a fresh-cluster preflight also requires initdb to
 import the native `da_DK` catalog alias used by the collation tests.
 
