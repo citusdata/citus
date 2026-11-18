@@ -25,7 +25,7 @@ jobs:
   # Since GHA does not interpolate env varibles in matrix context, we need to
   # define them in a separate job and use them in other jobs.
   params:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     name: Initialize parameters
     outputs:
       build_image_name: "ghcr.io/citusdata/extbuilder"
@@ -47,7 +47,7 @@ jobs:
         run: echo 'noop'
   check-sql-snapshots:
     needs: params
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     container:
       image: ${{ needs.params.outputs.build_image_name }}:${{ needs.params.outputs.sql_snapshot_pg_version }}${{ needs.params.outputs.image_suffix }}
       options: --user root
@@ -59,7 +59,7 @@ jobs:
         ci/check_sql_snapshots.sh
   check-style:
     needs: params
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     container:
       image: ${{ needs.params.outputs.style_checker_image_name }}:${{ needs.params.outputs.style_checker_tools_version }}${{ needs.params.outputs.image_suffix }}
     steps:
@@ -117,7 +117,7 @@ jobs:
           - ${{ needs.params.outputs.pg17_version }}
           - ${{ needs.params.outputs.pg18_version }}
           - ${{ needs.params.outputs.pg19_version }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     container:
       image: "${{ matrix.image_name }}:${{ fromJson(matrix.pg_version).full }}${{ matrix.image_suffix }}"
       options: --user root
@@ -192,7 +192,7 @@ jobs:
       codecov_token: ${{ secrets.CODECOV_TOKEN }}
   test-arbitrary-configs:
     name: PG${{ fromJson(matrix.pg_version).major }} - check-arbitrary-configs-${{ matrix.parallel }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     container:
       image: "${{ matrix.image_name }}:${{ fromJson(matrix.pg_version).full }}${{ needs.params.outputs.image_suffix }}"
       options: --user root
@@ -241,7 +241,7 @@ jobs:
         codecov_token: ${{ secrets.CODECOV_TOKEN }}
   test-pg-upgrade:
     name: PG${{ matrix.old_pg_major }}-PG${{ matrix.new_pg_major }} - check-pg-upgrade
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     container:
       image: "${{ needs.params.outputs.pgupgrade_image_name }}:${{ needs.params.outputs.upgrade_pg_versions }}${{ needs.params.outputs.image_suffix }}"
       options: --user root
@@ -302,7 +302,7 @@ jobs:
         codecov_token: ${{ secrets.CODECOV_TOKEN }}
   test-citus-upgrade:
     name: PG${{ fromJson(matrix.pg_version).major }} - check-citus-upgrade
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     container:
       image: "${{ needs.params.outputs.citusupgrade_image_name }}:${{ fromJson(matrix.pg_version).full }}${{ needs.params.outputs.image_suffix }}"
       options: --user root
@@ -356,7 +356,7 @@ jobs:
   ch_benchmark:
     name: CH Benchmark
     if: startsWith(github.ref, 'refs/heads/ch_benchmark/')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs:
     - build
     steps:
@@ -374,7 +374,7 @@ jobs:
   tpcc_benchmark:
     name: TPCC Benchmark
     if: startsWith(github.ref, 'refs/heads/tpcc_benchmark/')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs:
     - build
     steps:
@@ -393,7 +393,7 @@ jobs:
     name: Prepare parallelization matrix
     if: ${{ needs.test-flakyness-pre.outputs.tests != ''}}
     needs: test-flakyness-pre
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       json: ${{ steps.parallelization.outputs.json }}
     steps:
@@ -405,7 +405,7 @@ jobs:
   test-flakyness-pre:
     name: Detect regression tests need to be ran
     if: ${{ !inputs.skip_test_flakyness }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: build
     outputs:
       tests: ${{ steps.detect-regression-tests.outputs.tests }}
@@ -457,7 +457,7 @@ jobs:
   test-flakyness:
     if: ${{ needs.test-flakyness-pre.outputs.tests != ''}}
     name: Test flakyness
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     container:
       image: ${{ needs.params.outputs.fail_test_image_name }}:${{ fromJson(needs.params.outputs.pg18_version).full }}${{ needs.params.outputs.image_suffix }}
       options: --user root
@@ -513,7 +513,7 @@ jobs:
     - test-arbitrary-configs
     - test-pg-upgrade
     - test-citus-upgrade
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
     - name: Show results of required jobs
       run: echo '${{ toJSON(needs) }}'

@@ -32,7 +32,7 @@ jobs:
   # restating them. Until then this job is the one place to bump the cassert matrix.
   params:
     name: Initialize parameters
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       pg_versions: '[{ "major": "17", "full": "17.12" }, { "major": "18", "full": "18.7" }, { "major": "19", "full": "19rc2" }]'
       pg_upgrade_pairs: '[{ "old": "17", "old_full": "17.12", "new": "18", "new_full": "18.7" }, { "old": "18", "old_full": "18.7", "new": "19", "new_full": "19rc2" }, { "old": "17", "old_full": "17.12", "new": "19", "new_full": "19rc2" }]'
@@ -46,7 +46,7 @@ jobs:
   test:
     needs: params
     name: cassert PG${{ matrix.pg.major }} - ${{ matrix.group }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -96,7 +96,7 @@ jobs:
   pg-upgrade:
     needs: params
     name: cassert PG${{ matrix.old }}-PG${{ matrix.new }} - pg-upgrade
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -142,7 +142,7 @@ jobs:
   citus-upgrade:
     needs: params
     name: cassert PG${{ matrix.pg.major }} - citus-upgrade
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -180,7 +180,7 @@ jobs:
   arbitrary-configs:
     needs: params
     name: cassert PG${{ matrix.pg.major }} - arbitrary-configs-${{ matrix.parallel }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -223,7 +223,7 @@ jobs:
     name: Open issue on failure
     needs: [ test, pg-upgrade, citus-upgrade, arbitrary-configs ]
     if: failure()
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/github-script@v7
         with:
