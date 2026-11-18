@@ -406,14 +406,15 @@ FROM pg_dist_shard_placement JOIN pg_dist_shard USING (shardid)
 WHERE logicalrelid = 'late'::regclass AND nodeport <> :worker_5_port
 ORDER BY shardid LIMIT 1 \gset
 SELECT CASE WHEN :late_shard_port = :worker_1_port THEN :worker_2_port ELSE :worker_1_port END AS late_target_port \gset
+-- PG19 adds the lock that was waited for, with its OIDs, to the context of
+-- lock timeout errors, so hide the context of the lock timeouts below
+\set SHOW_CONTEXT never
 -- writes to the primary's shards are blocked on all nodes, including the
 -- shards of the new table
 SELECT dblink_exec(:'worker_1_conn', format('SET lock_timeout TO ''1s''; INSERT INTO promotion_concurrency.dist VALUES (%s)', :key_on_primary));
 ERROR:  canceling statement due to lock timeout
-CONTEXT:  while executing command on unnamed dblink connection
 SELECT dblink_exec(:'worker_1_conn', format('SET lock_timeout TO ''1s''; INSERT INTO promotion_concurrency.late VALUES (%s)', :late_key_on_primary));
 ERROR:  canceling statement due to lock timeout
-CONTEXT:  while executing command on unnamed dblink connection
 SET lock_timeout TO '1s';
 INSERT INTO dist VALUES (:key_on_primary);
 ERROR:  canceling statement due to lock timeout
@@ -430,11 +431,9 @@ SELECT dblink_exec(:'worker_1_conn', format('SET lock_timeout TO ''1s''; INSERT 
 -- distributed transactions that the primary starts cannot commit
 SELECT dblink_exec(:'primary_conn', format('SET lock_timeout TO ''1s''; BEGIN; INSERT INTO promotion_concurrency.dist VALUES (%s), (%s); COMMIT', :key_on_worker_1, :key_on_worker_2));
 ERROR:  canceling statement due to lock timeout
-CONTEXT:  while executing command on unnamed dblink connection
 -- DDL is blocked on all nodes, and so are new shards
 SELECT dblink_exec(:'worker_1_conn', 'SET lock_timeout TO ''1s''; CREATE SCHEMA promotion_concurrency_worker_ddl');
 ERROR:  canceling statement due to lock timeout
-CONTEXT:  while executing command on unnamed dblink connection
 SET lock_timeout TO '1s';
 CREATE SCHEMA promotion_concurrency_coordinator_ddl;
 ERROR:  canceling statement due to lock timeout
@@ -473,6 +472,7 @@ HINT:  Make sure that the concurrent operation has finished and re-run the comma
 SELECT citus_move_shard_placement(:moved_shard_id, 'localhost', :moved_shard_port, 'localhost', :moved_target_port, 'block_writes');
 ERROR:  canceling statement due to lock timeout
 RESET lock_timeout;
+\set SHOW_CONTEXT always
 -- The clone gets its own group id only once transaction recovery on it ends,
 -- since a run keeps the group id that it read first, the primary's. To keep
 -- recovery on the clone running, leave a prepared transaction of the primary

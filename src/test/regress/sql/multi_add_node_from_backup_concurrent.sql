@@ -224,6 +224,10 @@ WHERE logicalrelid = 'late'::regclass AND nodeport <> :worker_5_port
 ORDER BY shardid LIMIT 1 \gset
 SELECT CASE WHEN :late_shard_port = :worker_1_port THEN :worker_2_port ELSE :worker_1_port END AS late_target_port \gset
 
+-- PG19 adds the lock that was waited for, with its OIDs, to the context of
+-- lock timeout errors, so hide the context of the lock timeouts below
+\set SHOW_CONTEXT never
+
 -- writes to the primary's shards are blocked on all nodes, including the
 -- shards of the new table
 SELECT dblink_exec(:'worker_1_conn', format('SET lock_timeout TO ''1s''; INSERT INTO promotion_concurrency.dist VALUES (%s)', :key_on_primary));
@@ -261,6 +265,7 @@ SELECT citus_move_shard_placement(:late_shard_id, 'localhost', :late_shard_port,
 -- metadata changes
 SELECT citus_move_shard_placement(:moved_shard_id, 'localhost', :moved_shard_port, 'localhost', :moved_target_port, 'block_writes');
 RESET lock_timeout;
+\set SHOW_CONTEXT always
 
 -- The clone gets its own group id only once transaction recovery on it ends,
 -- since a run keeps the group id that it read first, the primary's. To keep
