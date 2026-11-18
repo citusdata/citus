@@ -106,6 +106,35 @@ def test_follower_schedule_selects_follower_custom_target(monkeypatch):
     assert "SCHEDULE='tmp_schedule'" in commands[0]
 
 
+def test_backup_node_schedule_selects_backup_node_custom_target(monkeypatch):
+    args = {
+        "use_base_schedule": False,
+        "use_whole_schedule_line": False,
+        "valgrind": False,
+    }
+    dependencies = get_test_dependencies(
+        "multi_add_node_from_backup_identity_failure",
+        "multi_add_backup_node_schedule",
+        "test: multi_add_node_from_backup_identity_failure\n",
+        args,
+    )
+    commands = []
+    monkeypatch.setattr("run_test.run", commands.append)
+
+    run_schedule_with_multiregress(
+        "multi_add_node_from_backup_identity_failure",
+        "tmp_schedule",
+        dependencies,
+        args,
+    )
+
+    assert dependencies.backup_node_cluster
+    assert dependencies.schedule is None
+    assert "check-add-backup-node-custom-schedule" in commands[0]
+    assert "WORKERCOUNT=7" in commands[0]
+    assert "SCHEDULE='tmp_schedule'" in commands[0]
+
+
 def test_multiuser_copy_uses_required_enterprise_setup():
     args = {
         "use_base_schedule": False,

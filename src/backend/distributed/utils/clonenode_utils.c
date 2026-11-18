@@ -58,8 +58,12 @@ EnsureValidCloneMode(WorkerNode *primaryWorkerNode,
 						 primaryWorkerNode->workerName, primaryWorkerNode->workerPort,
 						 cloneHostname, clonePort)));
 
-	/* Connect to primary node to check replication status */
-	int connectionFlag = 0;
+	/*
+	 * Connect to primary node to check replication status. Use a connection of
+	 * our own, since closing one that the current transaction already used
+	 * would abort its changes on the primary.
+	 */
+	int connectionFlag = FORCE_NEW_CONNECTION;
 	MultiConnection *primaryConnection = GetNodeConnection(connectionFlag,
 														   primaryWorkerNode->workerName,
 														   primaryWorkerNode->workerPort);
@@ -341,7 +345,8 @@ EnsureValidStreamingReplica(WorkerNode *primaryWorkerNode, char *replicaHostname
 							primaryWorkerNode->workerName,
 							primaryWorkerNode->workerPort)));
 
-	int primaryConnectionFlag = 0;
+	/* use a connection of our own, see EnsureValidCloneMode() */
+	int primaryConnectionFlag = FORCE_NEW_CONNECTION;
 	MultiConnection *primaryConnection = GetNodeConnection(primaryConnectionFlag,
 														   primaryWorkerNode->workerName,
 														   primaryWorkerNode->workerPort);

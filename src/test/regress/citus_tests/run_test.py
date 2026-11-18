@@ -86,6 +86,7 @@ class TestDeps:
         worker_count=2,
         citus_upgrade_infra=False,
         follower_cluster=False,
+        backup_node_cluster=False,
     ):
         self.schedule = schedule
         self.direct_extra_tests = extra_tests or []
@@ -93,6 +94,7 @@ class TestDeps:
         self.worker_count = worker_count
         self.citus_upgrade_infra = citus_upgrade_infra
         self.follower_cluster = follower_cluster
+        self.backup_node_cluster = backup_node_cluster
 
     def extra_tests(self):
         all_deps = OrderedDict()
@@ -140,6 +142,19 @@ DEPS = {
     ),
     "multi_add_node_from_backup_sequences": TestDeps(
         None, ["multi_add_node_from_backup_negative"], worker_count=5, repeatable=False
+    ),
+    "multi_add_node_from_backup_concurrent": TestDeps(
+        None,
+        [
+            "multi_add_node_from_backup_sequences",
+            "multi_add_node_from_backup_coordinator",
+        ],
+        worker_count=6,
+        repeatable=False,
+    ),
+    "multi_add_node_from_backup_fence": TestDeps(None, worker_count=7),
+    "multi_add_node_from_backup_identity_failure": TestDeps(
+        None, worker_count=7, repeatable=False
     ),
     # Prepares coordinator metadata and registers follower workers as secondaries.
     "multi_follower_dml": TestDeps(
@@ -445,7 +460,12 @@ def run_schedule_with_multiregress(test_name, schedule, dependencies, args):
     worker_count = needed_worker_count(test_name, dependencies)
 
     # find suitable make recipe
-    if dependencies.follower_cluster:
+    if dependencies.backup_node_cluster:
+        # Tests that promote clones need asynchronous followers, while
+        # check-follower-custom-schedule sets up synchronous ones, which the
+        # promotion rejects.
+        make_recipe = "check-add-backup-node-custom-schedule"
+    elif dependencies.follower_cluster:
         make_recipe = "check-follower-custom-schedule"
     elif dependencies.schedule == "base_isolation_schedule" or test_name.startswith(
         "isolation"
@@ -480,7 +500,7 @@ def run_schedule_with_multiregress(test_name, schedule, dependencies, args):
 
 
 def default_base_schedule(test_schedule, args):
-    if test_schedule == "multi_follower_schedule":
+    if test_schedule in ("multi_follower_schedule", "multi_add_backup_node_schedule"):
         return None
 
     if "isolation" in test_schedule:
@@ -578,6 +598,9 @@ def test_dependencies(test_name, test_schedule, schedule_line, args):
     if test_schedule == "multi_follower_schedule":
         dependencies.append(TestDeps(None, follower_cluster=True))
 
+    if test_schedule == "multi_add_backup_node_schedule":
+        dependencies.append(TestDeps(None, backup_node_cluster=True))
+
     return merge_test_dependencies(dependencies)
 
 
@@ -654,6 +677,9 @@ def merge_test_dependencies(dependencies):
         ),
         follower_cluster=any(
             dependency.follower_cluster for dependency in dependencies
+        ),
+        backup_node_cluster=any(
+            dependency.backup_node_cluster for dependency in dependencies
         ),
     )
 

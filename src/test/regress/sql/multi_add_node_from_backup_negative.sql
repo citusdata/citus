@@ -159,6 +159,35 @@ SELECT citus_promote_clone_and_rebalance(clone_nodeid => :clone_node_id, rebalan
 
 SELECT * from pg_dist_node ORDER by nodeid;
 
+-- the strategy is checked before pg_promote(), so the clone is still a replica
+\c - - - :follower_worker_2_port
+SELECT pg_is_in_recovery() AS clone_in_recovery;
+\c - - - :master_port
+
+-- The promotion errors out after other commands in its transaction, whose
+-- changes would only commit after it: changes of data, of metadata only, local
+-- ones, and also reads, which open transactions on the other nodes.
+BEGIN;
+INSERT INTO backup_test VALUES (11, 'test11');
+SELECT citus_promote_clone_and_rebalance(clone_nodeid => :clone_node_id);
+ROLLBACK;
+BEGIN;
+SELECT 1 FROM citus_set_node_property('localhost', :worker_1_port, 'shouldhaveshards', false);
+SELECT citus_promote_clone_and_rebalance(clone_nodeid => :clone_node_id);
+ROLLBACK;
+BEGIN;
+CREATE TABLE promotion_local_table (id int);
+SELECT citus_promote_clone_and_rebalance(clone_nodeid => :clone_node_id);
+ROLLBACK;
+BEGIN;
+SELECT COUNT(*) FROM backup_test;
+SELECT citus_promote_clone_and_rebalance(clone_nodeid => :clone_node_id);
+ROLLBACK;
+
+\c - - - :follower_worker_2_port
+SELECT pg_is_in_recovery() AS clone_in_recovery;
+\c - - - :master_port
+
 -- Test 9: Rollback the citus_promote_clone_and_rebalance transaction
 BEGIN;
 SELECT citus_promote_clone_and_rebalance(clone_nodeid => :clone_node_id);
@@ -169,6 +198,16 @@ SELECT COUNT(*) from backup_test;
 SELECT COUNT(*) from ref_table;
 
 SELECT * from pg_dist_node ORDER by nodeid;
+
+-- pg_promote() is not rolled back, but the clone got an identity of its own
+-- right after it, so it does not act as worker_2, e.g. in 2PC recovery
+\c - - - :worker_2_port
+SELECT metadata->>'server_id' AS primary_server_id FROM pg_dist_node_metadata \gset
+\c - - - :follower_worker_2_port
+SELECT pg_is_in_recovery() AS clone_in_recovery, groupid AS clone_group_id,
+       metadata->>'server_id' <> :'primary_server_id' AS clone_has_own_server_id
+FROM pg_dist_local_group, pg_dist_node_metadata;
+\c - - - :master_port
 
 -- Test 5: Try to add and promote a proper replica after rollback
 SELECT master_add_node('localhost', :worker_3_port) AS nodeid_3 \gset
