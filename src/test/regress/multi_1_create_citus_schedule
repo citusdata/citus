@@ -117,6 +117,10 @@ test: multi_transaction_recovery_multiple_databases
 # ----------
 test: non_var_group_by
 
+# EXPLAIN EXECUTE option capture is not present in the N-1 coordinator library.
+# Move back to multi_schedule once the N-1 coordinator includes the fix.
+test: explain_execute
+
 # ----------
 # multi_or_arm_pruning covers planner behavior introduced in 14.3; not present
 # in the N-1 (14.2-1) coordinator library. Run it only under

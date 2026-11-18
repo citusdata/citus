@@ -515,6 +515,7 @@ _PG_init(void)
 	ExecutorStart_hook = CitusExecutorStart;
 	ExecutorRun_hook = citus_executor_run_adapter;
 	ExplainOneQuery_hook = CitusExplainOneQuery;
+	InitializeExplainOptionsHook();
 	prev_ExecutorEnd = ExecutorEnd_hook;
 	ExecutorEnd_hook = CitusAttributeToEnd;
 

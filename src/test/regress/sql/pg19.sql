@@ -817,14 +817,27 @@ CREATE TABLE explain_io(a int, b int);
 SELECT create_distributed_table('explain_io', 'a');
 INSERT INTO explain_io SELECT g, g FROM generate_series(1, 10) g;
 
+PREPARE explain_io_ps(int) AS SELECT count(*) FROM explain_io WHERE b > $1;
+
 SELECT explain_has_prefetch($$
 	EXPLAIN (ANALYZE, IO, COSTS OFF, TIMING OFF, SUMMARY OFF)
 	SELECT count(*) FROM explain_io $$);
+
+-- A prepared statement must not inherit IO from the preceding EXPLAIN.
+SELECT explain_has_prefetch($$
+	EXPLAIN (ANALYZE, IO OFF, COSTS OFF, TIMING OFF, SUMMARY OFF)
+	EXECUTE explain_io_ps(0) $$);
 
 -- without IO the worker plans must not contain the section
 SELECT explain_has_prefetch($$
 	EXPLAIN (ANALYZE, COSTS OFF, TIMING OFF, SUMMARY OFF)
 	SELECT count(*) FROM explain_io $$);
+
+SELECT explain_has_prefetch($$
+	EXPLAIN (ANALYZE, IO, COSTS OFF, TIMING OFF, SUMMARY OFF)
+	EXECUTE explain_io_ps(0) $$);
+
+DEALLOCATE explain_io_ps;
 
 -- IO also has to be preserved in the saved plans for distributed subplans.
 SET citus.explain_all_tasks TO on;
