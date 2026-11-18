@@ -20,6 +20,7 @@
 #include "distributed/metadata_sync.h"
 #include "distributed/remote_commands.h"
 #include "distributed/resource_lock.h"
+#include "distributed/shard_cleaner.h"
 #include "distributed/shard_rebalancer.h"
 #include "distributed/shard_transfer.h"
 #include "distributed/shardinterval_utils.h"
@@ -81,6 +82,12 @@ PG_FUNCTION_INFO_V1(citus_promote_clone_and_rebalance);
  * (see BlockAllWritesToWorkerNode) preventing the changes that the clone would
  * only receive through replication; this wait does not extend the scope of
  * that fence.
+ *
+ * Like shard moves, the promotion first cleans up the resources that earlier
+ * operations left for cleanup, like the old placements of moved shards, so that
+ * the clone does not copy them. It schedules the cleanup of the copies of the
+ * ones that remain on the primary, for example because they are in use, on the
+ * clone too.
  *
  * Only the Citus metadata of the current database is handled. In other
  * databases of the primary that use Citus, writes are not blocked, the clone is
@@ -196,6 +203,14 @@ citus_promote_clone_and_rebalance(PG_FUNCTION_ARGS)
 	EnsureValidCloneMode(primaryNode, cloneNode->workerName, cloneNode->workerPort,
 						 operation);
 
+	/*
+	 * The cleanup records of the resources that the clone copies refer only to
+	 * the primary, so clean up what we can before the clone stops replicating,
+	 * as shard moves do before they copy shards. The locks taken above already
+	 * keep shard transfers from leaving new resources on the primary.
+	 */
+	DropOrphanedResourcesInSeparateTransaction();
+
 	/* Step 1: Block Writes on Original Primary's Shards */
 	ereport(NOTICE, (errmsg(
 						 "Blocking writes on shards of original primary node %s:%d (group %d)",
@@ -221,6 +236,20 @@ citus_promote_clone_and_rebalance(PG_FUNCTION_ARGS)
 	PlanShardSplitBetweenPrimaryAndClone(primaryNode, cloneNode,
 										 PG_GETARG_NAME_OR_NULL(1),
 										 &primaryShardIdList, &cloneShardIdList);
+
+	/*
+	 * The clone also copies the resources that the cleanup above could not
+	 * drop from the primary, for example because they were in use, so list
+	 * them to clean up their copies on the clone as well. With the write fence
+	 * in place, no other operation leaves resources on the primary before the
+	 * clone stops replicating. The regular cleanup might still drop some of
+	 * them before that, but cleaning up a copy that does not exist does nothing.
+	 *
+	 * List them before AdjustShardsForPrimaryCloneNodeSplit() adds the
+	 * promotion's own records for the primary: those are for the shards that
+	 * move to the clone, so copying them would drop these shards from the clone.
+	 */
+	List *primaryCleanupRecordList = ListCleanupRecordsForNodeGroup(primaryNode->groupId);
 
 	/* Step 2: Wait for Clone to Catch Up */
 	if (catchUpTimeoutSeconds == 0)
@@ -378,7 +407,7 @@ citus_promote_clone_and_rebalance(PG_FUNCTION_ARGS)
 
 	/* Step 5: Split Shards Between Primary and Clone */
 	AdjustShardsForPrimaryCloneNodeSplit(primaryNode, cloneNode, primaryShardIdList,
-										 cloneShardIdList);
+										 cloneShardIdList, primaryCleanupRecordList);
 
 
 	TransactionModifiedNodeMetadata = true; /* Inform Citus about metadata change */
