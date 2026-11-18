@@ -78,23 +78,32 @@ SELECT citus_add_clone_node('localhost', :follower_master_port, 'localhost', :ma
 -- A write to a shard on the coordinator runs locally, without a remote
 -- transaction. If it preceded the promotion in the same transaction, it would
 -- only commit after it, and its shard could move to the clone without it.
+-- Transaction blocks are rejected, so the write and the promotion run in a DO
+-- block here.
 SELECT min(g) AS coordinator_key
 FROM generate_series(1000, 2000) g
 JOIN pg_dist_shard_placement p ON p.shardid = get_shard_id_for_distribution_column('coord_clone_dist', g)
 WHERE p.nodeport = :master_port \gset
-BEGIN;
-INSERT INTO coord_clone_dist VALUES (:coordinator_key, 'before the promotion');
-SELECT citus_promote_clone_and_rebalance(:clone_node_id);
-ROLLBACK;
+SELECT set_config('coord_clone.clone_node_id', :'clone_node_id', false) IS NOT NULL AS set,
+       set_config('coord_clone.coordinator_key', :'coordinator_key', false) IS NOT NULL AS set,
+       set_config('coord_clone.in_use_shard', :'in_use_shard', false) IS NOT NULL AS set;
+DO $$
+BEGIN
+    INSERT INTO coord_clone_dist
+    VALUES (current_setting('coord_clone.coordinator_key')::bigint, 'before the promotion');
+    PERFORM citus_promote_clone_and_rebalance(current_setting('coord_clone.clone_node_id')::int);
+END $$;
 
 -- The promotion cleans up the old placements in a separate transaction before
 -- the clone stops replicating, so it cannot drop the one that its own
 -- transaction keeps in use. Unlike the write above, the ACCESS SHARE lock does
 -- not give the transaction a transaction id, so the promotion accepts it.
-BEGIN;
-LOCK TABLE :"in_use_shard" IN ACCESS SHARE MODE;
-SELECT citus_promote_clone_and_rebalance(:clone_node_id);
-COMMIT;
+DO $$
+BEGIN
+    EXECUTE format('LOCK TABLE %I IN ACCESS SHARE MODE',
+                   current_setting('coord_clone.in_use_shard'));
+    PERFORM citus_promote_clone_and_rebalance(current_setting('coord_clone.clone_node_id')::int);
+END $$;
 SET client_min_messages TO DEFAULT;
 
 -- The clone did not copy the old placement that was dropped, and the promotion

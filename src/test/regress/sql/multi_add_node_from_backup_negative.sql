@@ -67,82 +67,20 @@ DROP TABLE promotion_catchup_wal;
 
 \c - - - :master_port
 SET client_min_messages = WARNING;
+-- the promotion waits for the clone, whose replay is paused, until its
+-- catch-up timeout, or until statement_timeout cancels it
 SET statement_timeout = '60s';
-DO $$
-DECLARE
-    cloneId integer := (SELECT nodeid FROM pg_dist_node WHERE nodeisclone);
-    errorDetail text;
-BEGIN
-    BEGIN
-        PERFORM citus_promote_clone_and_rebalance(
-            clone_nodeid => cloneId, catchup_timeout_seconds => 1);
-        RAISE EXCEPTION 'promotion unexpectedly succeeded with paused replay';
-    EXCEPTION WHEN object_not_in_prerequisite_state THEN
-        IF SQLERRM NOT LIKE '%failed to catch up%' THEN
-            RAISE;
-        END IF;
-        GET STACKED DIAGNOSTICS errorDetail = PG_EXCEPTION_DETAIL;
-        IF errorDetail IS NULL OR errorDetail NOT LIKE 'Target WAL position is %' THEN
-            RAISE EXCEPTION 'missing catch-up timeout diagnostics';
-        END IF;
-    END;
-    IF NOT EXISTS (SELECT FROM pg_dist_node
-                   WHERE nodeid = cloneId AND nodeisclone AND NOT isactive) THEN
-        RAISE EXCEPTION 'timeout changed clone metadata';
-    END IF;
-END $$;
-RESET statement_timeout;
+SELECT citus_promote_clone_and_rebalance(clone_nodeid => :clone_node_id, catchup_timeout_seconds => 1);
 SET statement_timeout = '1s';
-DO $$
-DECLARE
-    cloneId integer := (SELECT nodeid FROM pg_dist_node WHERE nodeisclone);
-BEGIN
-    BEGIN
-        PERFORM citus_promote_clone_and_rebalance(
-            clone_nodeid => cloneId, catchup_timeout_seconds => 0);
-        RAISE EXCEPTION 'promotion unexpectedly succeeded with paused replay';
-    EXCEPTION WHEN query_canceled THEN
-        NULL;
-    END;
-    IF NOT EXISTS (SELECT FROM pg_dist_node
-                   WHERE nodeid = cloneId AND nodeisclone AND NOT isactive) THEN
-        RAISE EXCEPTION 'cancellation changed clone metadata';
-    END IF;
-END $$;
-DO $$
-DECLARE
-    cloneId integer := (SELECT nodeid FROM pg_dist_node WHERE nodeisclone);
-BEGIN
-    BEGIN
-        PERFORM citus_promote_clone_and_rebalance(
-            clone_nodeid => cloneId, catchup_timeout_seconds => 30);
-        RAISE EXCEPTION 'promotion unexpectedly succeeded with paused replay';
-    EXCEPTION WHEN query_canceled THEN
-        NULL;
-    END;
-    IF NOT EXISTS (SELECT FROM pg_dist_node
-                   WHERE nodeid = cloneId AND nodeisclone AND NOT isactive) THEN
-        RAISE EXCEPTION 'cancellation changed clone metadata';
-    END IF;
-END $$;
-RESET statement_timeout;
+SELECT citus_promote_clone_and_rebalance(clone_nodeid => :clone_node_id, catchup_timeout_seconds => 0);
+SELECT citus_promote_clone_and_rebalance(clone_nodeid => :clone_node_id, catchup_timeout_seconds => 30);
 SET statement_timeout = '60s';
-DO $$
-DECLARE
-    cloneId integer := (SELECT nodeid FROM pg_dist_node WHERE nodeisclone);
-BEGIN
-    BEGIN
-        PERFORM citus_promote_clone_and_rebalance(
-            clone_nodeid => cloneId, catchup_timeout_seconds => 1);
-        RAISE EXCEPTION 'promotion unexpectedly succeeded with paused replay';
-    EXCEPTION WHEN object_not_in_prerequisite_state THEN
-        IF SQLERRM NOT LIKE '%failed to catch up%' THEN
-            RAISE;
-        END IF;
-    END;
-END $$;
+SELECT citus_promote_clone_and_rebalance(clone_nodeid => :clone_node_id, catchup_timeout_seconds => 1);
 RESET statement_timeout;
 RESET client_min_messages;
+
+-- none of them changed the metadata of the clone
+SELECT nodeisclone AND NOT isactive AS inactive_clone FROM pg_dist_node WHERE nodeid = :clone_node_id;
 
 \c - - - :follower_worker_2_port
 DO $$
@@ -164,52 +102,67 @@ SELECT * from pg_dist_node ORDER by nodeid;
 SELECT pg_is_in_recovery() AS clone_in_recovery;
 \c - - - :master_port
 
--- The promotion errors out after other commands in its transaction, whose
--- changes would only commit after it: changes of data, of metadata only, local
--- ones, and also reads, which open transactions on the other nodes.
-BEGIN;
-INSERT INTO backup_test VALUES (11, 'test11');
-SELECT citus_promote_clone_and_rebalance(clone_nodeid => :clone_node_id);
-ROLLBACK;
-BEGIN;
-SELECT 1 FROM citus_set_node_property('localhost', :worker_1_port, 'shouldhaveshards', false);
-SELECT citus_promote_clone_and_rebalance(clone_nodeid => :clone_node_id);
-ROLLBACK;
-BEGIN;
-CREATE TABLE promotion_local_table (id int);
-SELECT citus_promote_clone_and_rebalance(clone_nodeid => :clone_node_id);
-ROLLBACK;
-BEGIN;
-SELECT COUNT(*) FROM backup_test;
-SELECT citus_promote_clone_and_rebalance(clone_nodeid => :clone_node_id);
-ROLLBACK;
+-- Transaction blocks are rejected, but a function or a DO block can still run
+-- other commands before the promotion in its transaction. The promotion errors
+-- out after them, since their changes would only commit after it: changes of
+-- data, of metadata only, and local ones.
+DO $$
+BEGIN
+    INSERT INTO backup_test VALUES (11, 'test11');
+    PERFORM citus_promote_clone_and_rebalance(nodeid) FROM pg_dist_node WHERE nodeisclone;
+END $$;
+DO $$
+BEGIN
+    PERFORM citus_set_node_property(nodename, nodeport, 'shouldhaveshards', false)
+    FROM pg_dist_node WHERE nodeid = 1;
+    PERFORM citus_promote_clone_and_rebalance(nodeid) FROM pg_dist_node WHERE nodeisclone;
+END $$;
+DO $$
+BEGIN
+    CREATE TABLE promotion_local_table (id int);
+    PERFORM citus_promote_clone_and_rebalance(nodeid) FROM pg_dist_node WHERE nodeisclone;
+END $$;
 
 \c - - - :follower_worker_2_port
 SELECT pg_is_in_recovery() AS clone_in_recovery;
 \c - - - :master_port
 
--- Test 9: Rollback the citus_promote_clone_and_rebalance transaction
+-- Test 9: The promotion cannot run inside a transaction block, where its write
+-- fence would last until the transaction ends, and a rollback could not undo
+-- pg_promote(), so the clone stays a replica
 BEGIN;
 SELECT citus_promote_clone_and_rebalance(clone_nodeid => :clone_node_id);
 ROLLBACK;
 
--- Verify no data is lost after rooling back the transaction
+-- Verify no data is lost
 SELECT COUNT(*) from backup_test;
 SELECT COUNT(*) from ref_table;
 
 SELECT * from pg_dist_node ORDER by nodeid;
 
--- pg_promote() is not rolled back, but the clone got an identity of its own
--- right after it, so it does not act as worker_2, e.g. in 2PC recovery
+\c - - - :follower_worker_2_port
+SELECT pg_is_in_recovery() AS clone_in_recovery;
+\c - - - :master_port
+
+-- A standalone promotion of the same clone succeeds. The clone gets an identity
+-- of its own, so it does not act as worker_2, e.g. in 2PC recovery.
+SET client_min_messages TO WARNING;
+SELECT citus_promote_clone_and_rebalance(clone_nodeid => :clone_node_id);
+RESET client_min_messages;
+SELECT isactive, nodeisclone FROM pg_dist_node WHERE nodeid = :clone_node_id;
+SELECT groupid AS clone_group_id FROM pg_dist_node WHERE nodeid = :clone_node_id \gset
 \c - - - :worker_2_port
 SELECT metadata->>'server_id' AS primary_server_id FROM pg_dist_node_metadata \gset
 \c - - - :follower_worker_2_port
-SELECT pg_is_in_recovery() AS clone_in_recovery, groupid AS clone_group_id,
+SELECT pg_is_in_recovery() AS clone_in_recovery, groupid = :clone_group_id AS clone_has_own_group_id,
        metadata->>'server_id' <> :'primary_server_id' AS clone_has_own_server_id
 FROM pg_dist_local_group, pg_dist_node_metadata;
 \c - - - :master_port
 
--- Test 5: Try to add and promote a proper replica after rollback
+-- place the shards of the tables that the next tests create as before
+SELECT 1 FROM citus_set_node_property('localhost', :follower_worker_2_port, 'shouldhaveshards', false);
+
+-- Test 5: Try to add and promote another proper replica
 SELECT master_add_node('localhost', :worker_3_port) AS nodeid_3 \gset
 SELECT citus_add_clone_node('localhost', :follower_worker_3_port, 'localhost', :worker_3_port) AS clone_node_id_3 \gset
 

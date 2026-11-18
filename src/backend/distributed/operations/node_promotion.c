@@ -94,8 +94,11 @@ PG_FUNCTION_INFO_V1(citus_promote_clone_and_rebalance);
  * not added to the metadata, and it keeps the identity of the primary, so its
  * maintenance daemon acts as the primary there.
  *
- * The promotion errors out if earlier commands of its transaction made changes
- * or ran on other nodes, see ErrorIfCommandsBeforePromotion().
+ * The promotion cannot run inside a transaction block: its write fence would
+ * last until the transaction ends, and a rollback could not undo pg_promote()
+ * or the identity of the clone. Called from a function or a DO block, it errors
+ * out if earlier commands of its transaction made changes or ran on other
+ * nodes, see ErrorIfCommandsBeforePromotion().
  */
 Datum
 citus_promote_clone_and_rebalance(PG_FUNCTION_ARGS)
@@ -105,6 +108,19 @@ citus_promote_clone_and_rebalance(PG_FUNCTION_ARGS)
 	/* Ensure superuser and coordinator */
 	EnsureSuperUser();
 	EnsureCoordinator();
+
+	if (IsTransactionBlock())
+	{
+		ereport(ERROR, (errcode(ERRCODE_ACTIVE_SQL_TRANSACTION),
+						errmsg("citus_promote_clone_and_rebalance cannot run inside a "
+							   "transaction block"),
+						errdetail("Its write fence would last until the transaction "
+								  "ends, and a rollback could not undo the promotion "
+								  "of the clone."),
+						errhint("Run the promotion outside a transaction block, for "
+								"example with autocommit enabled.")));
+	}
+
 	ErrorIfCommandsBeforePromotion();
 
 	/* Get clone_nodeid argument */
@@ -437,10 +453,11 @@ citus_promote_clone_and_rebalance(PG_FUNCTION_ARGS)
  * before it, so it would miss them. The write fence does not stop them either,
  * since they hold locks of the same transaction.
  *
- * Distributed modifications set XactModificationLevel. Local changes, including
- * the metadata changes that are also sent to other nodes, assign a transaction
- * id. Commands on other nodes start a coordinated transaction, which by default
- * also holds for reads in a transaction block, so these are rejected too.
+ * Transaction blocks are rejected before, so such commands can only come from
+ * the same function or DO block. Distributed modifications set
+ * XactModificationLevel. Local changes, including the metadata changes that are
+ * also sent to other nodes, assign a transaction id. Commands that ran on other
+ * nodes in a coordinated transaction are rejected too.
  */
 static void
 ErrorIfCommandsBeforePromotion(void)
