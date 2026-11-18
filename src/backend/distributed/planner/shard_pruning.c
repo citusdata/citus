@@ -71,6 +71,7 @@
 #include "access/nbtree.h"
 #include "catalog/pg_am.h"
 #include "catalog/pg_collation.h"
+#include "catalog/pg_opfamily_d.h"
 #include "catalog/pg_type.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
@@ -157,6 +158,10 @@ typedef struct PruningInstance
 	Const *equalConsts;
 	Const *greaterEqualConsts;
 	Const *greaterConsts;
+
+	/* Inclusive bounds suitable for inferring an integer equality. */
+	bool lessEqualIsIntegerComparison;
+	bool greaterEqualIsIntegerComparison;
 
 	/*
 	 * Constraint using a pre-hashed column value. The constant will store the
@@ -423,6 +428,22 @@ PruneShards(Oid relationId, Index rangeTableId, List *whereClauseList,
 
 		if (context.partitionMethod == DISTRIBUTE_BY_HASH)
 		{
+			/*
+			 * Equal inclusive integer bounds imply equality. Infer it after
+			 * collecting the entire conjunction, before falling back to all
+			 * hash shards. Keep the original query predicates unchanged.
+			 */
+			if (!prune->evaluatesToFalse && !prune->equalConsts &&
+				prune->lessEqualIsIntegerComparison &&
+				prune->greaterEqualIsIntegerComparison &&
+				PerformValueCompare((FunctionCallInfo) &
+									context.compareValueFunctionCall,
+									prune->lessEqualConsts->constvalue,
+									prune->greaterEqualConsts->constvalue) == 0)
+			{
+				prune->equalConsts = prune->greaterEqualConsts;
+			}
+
 			if (!prune->evaluatesToFalse && !prune->equalConsts &&
 				!prune->hashedEqualConsts)
 			{
@@ -1101,7 +1122,7 @@ IsValidPartitionKeyRestriction(OpExpr *opClause)
 
 /*
  * AddPartitionKeyRestrictionToInstance adds information about a PartitionKey
- * $op Const restriction to the current pruning instance.
+ * $op Const or Const $op PartitionKey restriction to the current pruning instance.
  */
 static void
 AddPartitionKeyRestrictionToInstance(ClauseWalkerContext *context, OpExpr *opClause,
@@ -1109,6 +1130,27 @@ AddPartitionKeyRestrictionToInstance(ClauseWalkerContext *context, OpExpr *opCla
 {
 	PruningInstance *prune = context->currentPruningInstance;
 	ListCell *btreeInterpretationCell = NULL;
+	Oid operatorId = opClause->opno;
+	Oid partitionType = partitionColumn->vartype;
+	bool sameIntegerType =
+		constantClause->consttype == partitionType &&
+		(partitionType == INT2OID || partitionType == INT4OID ||
+		 partitionType == INT8OID);
+
+	/*
+	 * Interpret bounds as Var op Const without changing the original clause.
+	 * VarConstOpExprClause extracts the operands but does not commute the operator.
+	 */
+	Node *leftOperand = strip_implicit_coercions(linitial(opClause->args));
+	if (IsA(leftOperand, Const))
+	{
+		operatorId = get_commutator(operatorId);
+		if (!OidIsValid(operatorId))
+		{
+			/* cannot safely interpret a reversed comparison without a commutator */
+			return;
+		}
+	}
 
 	/* only have extra work to do if const isn't same type as partition column */
 	if (constantClause->consttype != partitionColumn->vartype)
@@ -1132,7 +1174,7 @@ AddPartitionKeyRestrictionToInstance(ClauseWalkerContext *context, OpExpr *opCla
 	/* at this point, we'd better be able to pass binary Datums to comparison functions */
 	Assert(IsBinaryCoercible(constantClause->consttype, partitionColumn->vartype));
 
-	List *btreeInterpretationList = get_op_btree_interpretation(opClause->opno);
+	List *btreeInterpretationList = get_op_btree_interpretation(operatorId);
 	foreach(btreeInterpretationCell, btreeInterpretationList)
 	{
 		OpBtreeInterpretation *btreeInterpretation =
@@ -1166,6 +1208,11 @@ AddPartitionKeyRestrictionToInstance(ClauseWalkerContext *context, OpExpr *opCla
 										prune->lessEqualConsts->constvalue) < 0)
 				{
 					prune->lessEqualConsts = constantClause;
+					prune->lessEqualIsIntegerComparison =
+						sameIntegerType &&
+						operatorId == get_opfamily_member(INTEGER_BTREE_FAM_OID,
+														  partitionType, partitionType,
+														  BTLessEqualStrategyNumber);
 				}
 				break;
 			}
@@ -1197,6 +1244,11 @@ AddPartitionKeyRestrictionToInstance(ClauseWalkerContext *context, OpExpr *opCla
 					)
 				{
 					prune->greaterEqualConsts = constantClause;
+					prune->greaterEqualIsIntegerComparison =
+						sameIntegerType &&
+						operatorId == get_opfamily_member(INTEGER_BTREE_FAM_OID,
+														  partitionType, partitionType,
+														  BTGreaterEqualStrategyNumber);
 				}
 				break;
 			}
