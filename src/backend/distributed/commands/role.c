@@ -48,6 +48,7 @@
 #include "distributed/comment.h"
 #include "distributed/coordinator_protocol.h"
 #include "distributed/deparser.h"
+#include "distributed/hash_helpers.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata/distobject.h"
 #include "distributed/metadata_sync.h"
@@ -55,6 +56,23 @@
 #include "distributed/relation_access_tracking.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_transaction.h"
+
+/* a row of pg_auth_members, along with the statement that recreates it */
+typedef struct RoleMembershipGrant
+{
+	Oid roleId;
+	Oid memberId;
+	Oid grantorId;
+	bool adminOption;
+	Node *grantRoleStmt;
+} RoleMembershipGrant;
+
+/* identifies a role that a member has ADMIN OPTION on */
+typedef struct RoleAdminKey
+{
+	Oid roleId;
+	Oid memberId;
+} RoleAdminKey;
 
 static void ReplacePasswordOptionWithEncryptedPassword(List *roleOptions, Oid roleOid);
 static const char * ExtractEncryptedPassword(Oid roleOid);
@@ -67,7 +85,7 @@ static DefElem * makeDefElemInt(char *name, int value);
 static DefElem * makeDefElemBool(char *name, bool value);
 static List * GenerateRoleOptionsList(HeapTuple tuple);
 static List * GenerateGrantRoleStmtsFromOptions(RoleSpec *roleSpec, List *options);
-static List * GenerateGrantRoleStmtsOfRole(Oid roleid);
+static List * GenerateRoleMembershipGrantsOfRole(Oid roleid);
 static List * GenerateSecLabelOnRoleStmts(Oid roleid, char *rolename);
 static void EnsureSequentialModeForRoleDDL(void);
 
@@ -533,10 +551,11 @@ GenerateRoleOptionsList(HeapTuple tuple)
 
 /*
  * GenerateCreateOrAlterRoleCommand generates ALTER ROLE command that copies a role from
- * the pg_authid table.
+ * the pg_authid table. When includeMemberships is false, the commands do not grant
+ * the memberships of the role, see GenerateGrantRoleCommandsOfRoles.
  */
 List *
-GenerateCreateOrAlterRoleCommand(Oid roleOid)
+GenerateCreateOrAlterRoleCommand(Oid roleOid, bool includeMemberships)
 {
 	HeapTuple roleTuple = SearchSysCache1(AUTHOID, ObjectIdGetDatum(roleOid));
 	Form_pg_authid role = ((Form_pg_authid) GETSTRUCT(roleTuple));
@@ -586,11 +605,15 @@ GenerateCreateOrAlterRoleCommand(Oid roleOid)
 
 	if (EnableCreateRolePropagation)
 	{
-		List *grantRoleStmts = GenerateGrantRoleStmtsOfRole(roleOid);
-		Node *stmt = NULL;
-		foreach_declared_ptr(stmt, grantRoleStmts)
+		if (includeMemberships)
 		{
-			completeRoleList = lappend(completeRoleList, DeparseTreeNode(stmt));
+			List *grants = GenerateRoleMembershipGrantsOfRole(roleOid);
+			RoleMembershipGrant *grant = NULL;
+			foreach_declared_ptr(grant, grants)
+			{
+				completeRoleList = lappend(completeRoleList,
+										   DeparseTreeNode(grant->grantRoleStmt));
+			}
 		}
 
 		/*
@@ -601,7 +624,7 @@ GenerateCreateOrAlterRoleCommand(Oid roleOid)
 		 * SecLabel stmts to be run in the new node.
 		 */
 		List *secLabelOnRoleStmts = GenerateSecLabelOnRoleStmts(roleOid, rolename);
-		stmt = NULL;
+		Node *stmt = NULL;
 		foreach_declared_ptr(stmt, secLabelOnRoleStmts)
 		{
 			completeRoleList = lappend(completeRoleList, DeparseTreeNode(stmt));
@@ -884,15 +907,15 @@ GenerateGrantRoleStmtsFromOptions(RoleSpec *roleSpec, List *options)
 
 
 /*
- * GenerateGrantRoleStmtsOfRole generates the GrantRoleStmts for the memberships
- * of the role whose oid is roleid.
+ * GenerateRoleMembershipGrantsOfRole returns a RoleMembershipGrant for each
+ * membership of the role whose oid is roleid.
  */
 static List *
-GenerateGrantRoleStmtsOfRole(Oid roleid)
+GenerateRoleMembershipGrantsOfRole(Oid roleid)
 {
 	Relation pgAuthMembers = table_open(AuthMemRelationId, AccessShareLock);
 	HeapTuple tuple = NULL;
-	List *stmts = NIL;
+	List *grants = NIL;
 
 	ScanKeyData skey[1];
 
@@ -960,13 +983,101 @@ GenerateGrantRoleStmtsOfRole(Oid roleid)
 			grantRoleStmt->opt = lappend(grantRoleStmt->opt, set_opt);
 		}
 
-		stmts = lappend(stmts, grantRoleStmt);
+		RoleMembershipGrant *grant = palloc0(sizeof(RoleMembershipGrant));
+		grant->roleId = membership->roleid;
+		grant->memberId = membership->member;
+		grant->grantorId = membership->grantor;
+		grant->adminOption = membership->admin_option;
+		grant->grantRoleStmt = (Node *) grantRoleStmt;
+		grants = lappend(grants, grant);
 	}
 
 	systable_endscan(scan);
 	table_close(pgAuthMembers, AccessShareLock);
 
-	return stmts;
+	return grants;
+}
+
+
+/*
+ * GenerateGrantRoleCommandsOfRoles returns the commands that grant the
+ * memberships of the given roles, which must all exist by then.
+ *
+ * A grantor other than the bootstrap superuser needs ADMIN OPTION on the
+ * granted role, which it may get from another of these memberships. Hence,
+ * we grant a membership only after the one that gives its grantor ADMIN
+ * OPTION, keeping the given order otherwise.
+ */
+List *
+GenerateGrantRoleCommandsOfRoles(List *roleOids)
+{
+	if (!EnableCreateRolePropagation)
+	{
+		return NIL;
+	}
+
+	List *pendingGrants = NIL;
+	Oid roleOid = InvalidOid;
+	foreach_declared_oid(roleOid, roleOids)
+	{
+		pendingGrants = list_concat(pendingGrants,
+									GenerateRoleMembershipGrantsOfRole(roleOid));
+	}
+
+	assert_valid_hash_key2(RoleAdminKey, roleId, memberId);
+	HTAB *adminGrants = CreateSimpleHashSetWithName(RoleAdminKey, "role admin grants");
+	List *commands = NIL;
+
+	while (pendingGrants != NIL)
+	{
+		List *blockedGrants = NIL;
+		RoleMembershipGrant *grant = NULL;
+		foreach_declared_ptr(grant, pendingGrants)
+		{
+			RoleAdminKey grantorKey = {
+				.roleId = grant->roleId,
+				.memberId = grant->grantorId
+			};
+
+			if (grant->grantorId != BOOTSTRAP_SUPERUSERID &&
+				hash_search(adminGrants, &grantorKey, HASH_FIND, NULL) == NULL)
+			{
+				blockedGrants = lappend(blockedGrants, grant);
+				continue;
+			}
+
+			commands = lappend(commands, DeparseTreeNode(grant->grantRoleStmt));
+
+			if (grant->adminOption)
+			{
+				RoleAdminKey memberKey = {
+					.roleId = grant->roleId,
+					.memberId = grant->memberId
+				};
+				hash_search(adminGrants, &memberKey, HASH_ENTER, NULL);
+			}
+		}
+
+		if (list_length(blockedGrants) == list_length(pendingGrants))
+		{
+			/*
+			 * None of the remaining grantors gets ADMIN OPTION from these
+			 * memberships, e.g. because it got it from a role that is not
+			 * distributed. Grant them in the given order and let the node
+			 * decide, as we did before ordering the memberships.
+			 */
+			foreach_declared_ptr(grant, blockedGrants)
+			{
+				commands = lappend(commands, DeparseTreeNode(grant->grantRoleStmt));
+			}
+
+			break;
+		}
+
+		pendingGrants = blockedGrants;
+	}
+
+	return commands;
 }
 
 
