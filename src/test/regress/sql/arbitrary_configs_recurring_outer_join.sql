@@ -53,6 +53,13 @@ LEFT JOIN
 USING (id);
 
 -- Dropped-column placeholders must not shift aliases or collide with live names.
+-- Older majors do not remove this join and retain the legacy placeholder names.
+SELECT current_setting('server_version_num')::int >= 160000 AS removes_outer_join \gset
+\if :removes_outer_join
+\set removed_join_aliases '(id, "dummy-1", "dummy-5")'
+\else
+\set removed_join_aliases ''
+\endif
 SELECT COUNT(*) FROM
 local t1
 LEFT JOIN
@@ -60,7 +67,7 @@ LEFT JOIN
     SELECT * FROM
     (SELECT * FROM reference t2 JOIN distributed t3 USING (id)) p
     JOIN
-    (SELECT * FROM reference t4 LEFT JOIN distributed t5(id, "dummy-1", "dummy-5") USING (id)) q
+    (SELECT * FROM reference t4 LEFT JOIN distributed t5 :removed_join_aliases USING (id)) q
     USING(id)
 ) t6
 USING (id);
