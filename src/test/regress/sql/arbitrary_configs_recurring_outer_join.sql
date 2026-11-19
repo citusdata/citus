@@ -52,6 +52,43 @@ LEFT JOIN
 ) t6
 USING (id);
 
+-- Dropped-column placeholders must not shift aliases or collide with live names.
+-- Older majors do not remove this join and retain the legacy placeholder names.
+SELECT current_setting('server_version_num')::int >= 160000 AS removes_outer_join \gset
+\if :removes_outer_join
+\set removed_join_aliases '(id, "dummy-1", "dummy-5")'
+\else
+\set removed_join_aliases ''
+\endif
+SELECT COUNT(*) FROM
+local t1
+LEFT JOIN
+(
+    SELECT * FROM
+    (SELECT * FROM reference t2 JOIN distributed t3 USING (id)) p
+    JOIN
+    (SELECT * FROM reference t4 LEFT JOIN distributed t5 :removed_join_aliases USING (id)) q
+    USING(id)
+) t6
+USING (id);
+
+-- Remap multiple replacements, including whole-row and correlated references.
+-- Return a boolean: non-MX workers do not have the table's composite type.
+SELECT COUNT(*) FROM
+local t1
+LEFT JOIN
+(
+    SELECT * FROM
+    (SELECT * FROM reference t2 JOIN distributed t3 USING (id)) p
+    JOIN
+    (SELECT t4.*, (t5 IS NULL) AS nullable_row_is_null, (SELECT t7.id) AS correlated_id
+     FROM reference t4
+     LEFT JOIN distributed t5 USING (id)
+     LEFT JOIN distributed t7 USING (id)) q
+    USING(id)
+) t6
+USING (id);
+
 BEGIN;
   WITH cte AS (
     DELETE FROM distributed

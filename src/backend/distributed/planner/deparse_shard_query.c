@@ -359,6 +359,9 @@ ConvertRteToSubqueryWithEmptyResult(RangeTblEntry *rte)
 	subquery->jointree = joinTree;
 
 	rte->rtekind = RTE_SUBQUERY;
+
+	/* This replacement is an ordinary empty subquery, not an append relation. */
+	rte->inh = false;
 #if PG_VERSION_NUM >= PG_VERSION_16
 
 	/* no permission checking for this RTE */
