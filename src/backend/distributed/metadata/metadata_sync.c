@@ -30,6 +30,7 @@
 #include "catalog/indexing.h"
 #include "catalog/pg_am.h"
 #include "catalog/pg_attrdef.h"
+#include "catalog/pg_authid.h"
 #include "catalog/pg_collation.h"
 #include "catalog/pg_constraint.h"
 #include "catalog/pg_database.h"
@@ -5638,6 +5639,29 @@ SendDependencyCreationCommands(MetadataSyncContext *context)
 	dependencies = OrderObjectAddressListInDependencyOrder(dependencies, flushCaches);
 
 	/*
+	 * Roles only depend on other roles, but possibly circularly, e.g. when two
+	 * roles granted each other a membership. Hence, we create all roles before
+	 * granting any of their memberships, and do both before creating the other
+	 * objects, which may be created as an owner that relies on the memberships.
+	 */
+	List *roleDependencies = NIL;
+	List *roleOids = NIL;
+	List *otherDependencies = NIL;
+	ObjectAddress *dependency = NULL;
+	foreach_declared_ptr(dependency, dependencies)
+	{
+		if (dependency->classId == AuthIdRelationId)
+		{
+			roleDependencies = lappend(roleDependencies, dependency);
+			roleOids = lappend_oid(roleOids, dependency->objectId);
+		}
+		else
+		{
+			otherDependencies = lappend(otherDependencies, dependency);
+		}
+	}
+
+	/*
 	 * We need to create a subcontext as we reset the context after each dependency
 	 * creation but we want to preserve all dependency objects at metadataSyncContext.
 	 */
@@ -5645,10 +5669,31 @@ SendDependencyCreationCommands(MetadataSyncContext *context)
 														  "dependency commands context",
 														  ALLOCSET_DEFAULT_SIZES);
 	MemoryContextSwitchTo(commandsContext);
-	ObjectAddress *dependency = NULL;
+
 	int64 processedCount = 0;
 	int64 totalDependencies = list_length(dependencies);
-	foreach_declared_ptr(dependency, dependencies)
+	foreach_declared_ptr(dependency, roleDependencies)
+	{
+		if (!MetadataSyncCollectsCommands(context))
+		{
+			MemoryContextReset(commandsContext);
+		}
+
+		bool includeMemberships = false;
+		List *roleCommands = GenerateCreateOrAlterRoleCommand(dependency->objectId,
+															  includeMemberships);
+		SendOrCollectCommandListToActivatedNodes(context,
+												 ProtectMetadataReplayCommandList(
+													 roleCommands, dependency));
+
+		FlushMetadataSyncCachesIfNeeded(context, ++processedCount);
+		LogMetadataSyncProgress("dependency objects", processedCount, totalDependencies);
+	}
+
+	SendOrCollectCommandListToActivatedNodes(context,
+											 GenerateGrantRoleCommandsOfRoles(roleOids));
+
+	foreach_declared_ptr(dependency, otherDependencies)
 	{
 		if (!MetadataSyncCollectsCommands(context))
 		{

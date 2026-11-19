@@ -2027,7 +2027,7 @@ However, there's an exception. If the dependency is created within the same tran
 
 There are three main scenarios:
 
-+ When adding a new node—or more precisely, activating it—Citus reads all objects listed in `pg_dist_object`, sorts them by dependency, and then creates those objects on the new node. The core C function for this is `SendDependencyCreationCommands()`, and the sorting is done by `OrderObjectAddressListInDependencyOrder()`.
++ When adding a new node—or more precisely, activating it—Citus reads all objects listed in `pg_dist_object`, sorts them by dependency, and then creates those objects on the new node. The core C function for this is `SendDependencyCreationCommands()`, and the sorting is done by `OrderObjectAddressListInDependencyOrder()`. Roles are created first without their memberships, which may depend on each other circularly through their grantors, and the memberships are granted before the remaining objects are created.
 
 + When Citus creates a new object and processes its dependencies, any dependencies already marked as distributed are skipped. This is handled in `FollowNewSupportedDependencies()`, where dependencies are bypassed if `IsAnyObjectDistributed()` returns true.
 
