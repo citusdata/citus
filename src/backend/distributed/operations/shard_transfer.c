@@ -813,7 +813,8 @@ TransferShards(int64 shardId, char *sourceNodeName,
  *    - Adds cleanup records to remove the shard data from clone node
  *
  * 3. Reference tables:
- *    - Inserts new placement records on the clone node
+ *    - Inserts new placement records on the clone node, for the reference
+ *      tables that the primary has a placement of
  *    - Data is already present on clone, so only metadata update is needed
  *
  * 4. Citus local tables (only when the primary is the coordinator):
@@ -1021,6 +1022,17 @@ AdjustShardsForPrimaryCloneNodeSplit(WorkerNode *primaryNode,
 		foreach_declared_ptr(colocatedShardInterval, colocatedShardList)
 		{
 			uint64 colocatedShardId = colocatedShardInterval->shardId;
+
+			/*
+			 * Reference tables are copied to a node that joins the cluster
+			 * only once a command needs them there, so the primary might not
+			 * have this one yet, and then neither does the clone.
+			 * replicate_reference_tables() copies it to both later.
+			 */
+			if (ActiveShardPlacementOnGroup(primaryGroupId, colocatedShardId) == NULL)
+			{
+				continue;
+			}
 
 			/*
 			 * Insert shard placement record for the clone node and

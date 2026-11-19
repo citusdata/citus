@@ -257,7 +257,7 @@ check-follower-cluster: all
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/multi_follower_schedule $(EXTRA_TESTS)
 
 check-add-backup-node: all
-	$(pg_regress_multi_check) --load-extension=citus --follower-cluster --backupnodetest --worker-count=7 \
+	$(pg_regress_multi_check) --load-extension=citus --follower-cluster --backupnodetest --worker-count=8 \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/multi_add_backup_node_schedule $(EXTRA_TESTS)
 
 check-operations: all

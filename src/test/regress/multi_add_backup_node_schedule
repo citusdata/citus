@@ -5,3 +5,4 @@ test: multi_add_node_from_backup_coordinator
 test: multi_add_node_from_backup_concurrent
 test: multi_add_node_from_backup_fence
 test: multi_add_node_from_backup_identity_failure
+test: multi_add_node_from_backup_reference_tables

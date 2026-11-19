@@ -156,6 +156,9 @@ DEPS = {
     "multi_add_node_from_backup_identity_failure": TestDeps(
         None, worker_count=7, repeatable=False
     ),
+    "multi_add_node_from_backup_reference_tables": TestDeps(
+        None, ["multi_add_node_from_backup"], worker_count=8, repeatable=False
+    ),
     # Prepares coordinator metadata and registers follower workers as secondaries.
     "multi_follower_dml": TestDeps(
         None,
