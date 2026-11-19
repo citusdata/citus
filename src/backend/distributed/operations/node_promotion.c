@@ -95,16 +95,51 @@ PG_FUNCTION_INFO_V1(citus_promote_clone_and_rebalance);
  * ones that remain on the primary, for example because they are in use, on the
  * clone too.
  *
- * Only the Citus metadata of the current database is handled. In other
- * databases of the primary that use Citus, writes are not blocked, the clone is
- * not added to the metadata, and it keeps the identity of the primary, so its
- * maintenance daemon acts as the primary there.
+ * Only the Citus metadata of the current database is handled, so nodes that use
+ * Citus in more than one database are not supported. In the other databases,
+ * writes are not blocked, the clone is not added to the metadata, and it keeps
+ * the identity of the primary, so its maintenance daemon acts as the primary
+ * there.
+ *
+ * Unlogged tables are not supported either. Physical replication does not copy
+ * their data, so the promotion errors out if the primary has placements of
+ * unlogged distributed or reference tables, see
+ * ErrorIfPrimaryHasUnloggedPlacements().
  *
  * The promotion cannot run inside a transaction block: its write fence would
  * last until the transaction ends, and a rollback could not undo pg_promote()
  * or the identity of the clone. Called from a function or a DO block, it errors
  * out if earlier commands of its transaction made changes or ran on other
  * nodes, see ErrorIfCommandsBeforePromotion().
+ *
+ * Until the clone has an identity of its own, its maintenance daemon acts as
+ * the primary, see AssignCloneNodeIdentity(). Operators should therefore
+ * disable the daemon tasks that would act for the primary before the
+ * promotion, preferably by starting the clone with:
+ *
+ *   citus.recover_2pc_interval = -1
+ *   citus.defer_shard_delete_interval = -1
+ *   citus.background_task_queue_interval = -1
+ *
+ * If the clone already runs, reload its configuration before the promotion,
+ * and allow its maintenance daemon to process the reload; a SET in a session
+ * is not enough. Restore the previous values only once both the identity of
+ * the clone and its registration have committed, that is, once the promotion
+ * has committed. If either outcome is unknown, leave the tasks disabled. Leave
+ * the settings of the primary unchanged. These settings do not stop the
+ * recover_prepared_transactions() call of the identity transaction, which runs
+ * under the write fence.
+ *
+ * If the promotion fails before it calls pg_promote(), the clone stays a
+ * replica and an inactive clone in the metadata, and the promotion can be
+ * retried. Once it calls pg_promote(), which it reports with a NOTICE, the
+ * clone cannot follow the primary again, even if it is still in recovery when
+ * the promotion fails, and it may keep the identity of the primary. So if the
+ * promotion fails from then on, shut the clone down. To use the server as a
+ * clone again, rebuild it as a replica of the primary, for example from a new
+ * base backup. Citus does not manage replication slots, so if the clone used
+ * one on the primary, drop it once the clone is promoted or discarded, since
+ * the primary keeps WAL for it otherwise.
  */
 Datum
 citus_promote_clone_and_rebalance(PG_FUNCTION_ARGS)
@@ -582,7 +617,9 @@ PromoteCloneNode(WorkerNode *cloneWorkerNode)
  * ExecuteCommandListInRemoteTransaction(), so that the promotion does not
  * register a clone that might lack its identity.
  *
- * This does not fully close the window after pg_promote():
+ * This does not fully close the window after pg_promote(), unless operators
+ * apply the settings that the comment of citus_promote_clone_and_rebalance()
+ * describes, which keep the maintenance daemon of the clone from acting:
  * - Until the first transaction commits, the maintenance daemon of the clone
  *   can act on the cleanup records and background jobs of a coordinator, and
  *   for example drop the resources of operations that still run on it.
