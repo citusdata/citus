@@ -27,6 +27,7 @@
 #include "distributed/local_executor.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/query_colocation_checker.h"
+#include "distributed/query_utils.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/worker_shard_visibility.h"
 
@@ -474,17 +475,31 @@ FilterShardsFromPgclass(Node *node, void *context)
 
 			/* add relation_is_a_known_shard(oid) IS NOT TRUE to the quals of the query */
 			Node *newQual = CreateRelationIsAKnownShardFilter(varno);
-			Node *oldQuals = query->jointree->quals;
-			if (oldQuals)
+
+			if (RangeTableEntryIsOnNullableSideOfOuterJoin(query, varno))
 			{
-				query->jointree->quals = (Node *) makeBoolExpr(
-					AND_EXPR,
-					list_make2(oldQuals, newQual),
-					-1);
+				/*
+				 * Filter shards when scanning pg_class, so that the outer join
+				 * null-extends a row whose only match is a shard instead of
+				 * removing the row.
+				 */
+				rangeTableEntry->securityQuals =
+					lappend(rangeTableEntry->securityQuals, newQual);
 			}
 			else
 			{
-				query->jointree->quals = newQual;
+				Node *oldQuals = query->jointree->quals;
+				if (oldQuals)
+				{
+					query->jointree->quals = (Node *) makeBoolExpr(
+						AND_EXPR,
+						list_make2(oldQuals, newQual),
+						-1);
+				}
+				else
+				{
+					query->jointree->quals = newQual;
+				}
 			}
 
 			MemoryContextSwitchTo(originalContext);

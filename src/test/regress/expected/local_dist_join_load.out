@@ -37,3 +37,24 @@ ALTER TABLE reference DROP column a;
 INSERT INTO distributed SELECT i,  i::text, now() FROM generate_series(0,100)i;
 INSERT INTO reference SELECT i,  i::text FROM generate_series(0,100)i;
 INSERT INTO local SELECT i,  i::text FROM generate_series(0,100)i;
+-- Data for the planned-subquery outer join regression.
+CREATE TABLE outer_join_ref (id int);
+SELECT create_reference_table('outer_join_ref');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE outer_join_dist (id int);
+SELECT create_distributed_table('outer_join_dist', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO outer_join_ref SELECT generate_series(0, 10);
+INSERT INTO outer_join_ref SELECT generate_series(50, 70);
+INSERT INTO outer_join_ref VALUES (NULL), (NULL), (0);
+INSERT INTO outer_join_dist SELECT generate_series(0, 10);
+INSERT INTO outer_join_dist SELECT generate_series(70, 90);
+INSERT INTO outer_join_dist VALUES (0);
