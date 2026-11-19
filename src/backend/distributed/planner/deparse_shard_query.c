@@ -619,6 +619,14 @@ ConvertRteToSubqueryWithEmptyResult(RangeTblEntry *rte)
 	subquery->jointree = joinTree;
 
 	rte->rtekind = RTE_SUBQUERY;
+
+	/*
+	 * Table references normally have inh set even when they have no children.
+	 * This replacement is an ordinary empty subquery, not an append relation.
+	 * Clear the table's flag so later planning does not mistake it for one.
+	 */
+	rte->inh = false;
+
 #if PG_VERSION_NUM >= PG_VERSION_16
 
 	/* no permission checking for this RTE */

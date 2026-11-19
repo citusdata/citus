@@ -223,6 +223,23 @@ SELECT count(*) FROM
 SELECT count(d2.id) FROM local l LEFT JOIN
 	(distributed d1 JOIN distributed d2 ON d1.id = d2.id) ON l.id = d2.id;
 
+-- Join normalization must also work without local execution.
+SET citus.enable_local_execution TO off;
+SELECT count(*) FROM local LEFT JOIN distributed USING (id);
+SELECT count(*) FROM distributed RIGHT JOIN local USING (id);
+RESET citus.enable_local_execution;
+
+-- A surviving distributed subquery must not prevent join normalization.
+SELECT count(*) FROM local l LEFT JOIN distributed d USING (id)
+CROSS JOIN (SELECT count(*) FROM distributed) s;
+
+-- Normalize the SELECT without losing an unreferenced modifying CTE's effects.
+BEGIN;
+WITH m AS (DELETE FROM distributed WHERE id < 2 RETURNING id)
+SELECT count(*) FROM local l LEFT JOIN distributed d USING (id);
+SELECT count(*) FROM distributed;
+ROLLBACK;
+
 -- A planned subquery is not an eliminated nullable relation.
 WITH joined AS (
     SELECT r.id FROM outer_join_ref r
