@@ -38,6 +38,11 @@ CREATE TABLE coord_clone_local (id bigserial, payload text);
 SELECT citus_add_local_table_to_metadata('coord_clone_local');
 INSERT INTO coord_clone_local (payload) SELECT 'seed' FROM generate_series(1, 10);
 
+-- An unlogged Citus local table does not stop the promotion, since its shard
+-- also stays on the coordinator.
+CREATE UNLOGGED TABLE coord_clone_unlogged_local (id int);
+SELECT citus_add_local_table_to_metadata('coord_clone_unlogged_local');
+
 -- Remember the Citus local shard id so we can look for its physical copy later.
 SELECT shardid AS local_shardid
 FROM pg_dist_shard WHERE logicalrelid = 'coord_clone_local'::regclass \gset
@@ -173,6 +178,7 @@ DELETE FROM pg_dist_background_job WHERE job_id = :copied_job_id;
 DROP TABLE coord_clone_dist;
 DROP TABLE coord_clone_ref;
 DROP TABLE coord_clone_local;
+DROP TABLE coord_clone_unlogged_local;
 DROP TABLE coord_clone_moved;
 DROP TABLE coord_clone_moved_in_use;
 SET client_min_messages TO WARNING;

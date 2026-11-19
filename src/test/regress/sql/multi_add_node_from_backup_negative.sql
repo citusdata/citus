@@ -144,6 +144,42 @@ SELECT * from pg_dist_node ORDER by nodeid;
 SELECT pg_is_in_recovery() AS clone_in_recovery;
 \c - - - :master_port
 
+-- The promotion also errors out, and the clone stays a replica, if the primary
+-- has placements of unlogged distributed or reference tables, since physical
+-- replication does not copy their data.
+CREATE UNLOGGED TABLE unlogged_dist (id int);
+SELECT create_distributed_table('unlogged_dist', 'id', shard_count => 8);
+SELECT count(*) > 0 AS primary_has_unlogged_shards
+FROM pg_dist_shard_placement JOIN pg_dist_shard USING (shardid)
+WHERE logicalrelid = 'unlogged_dist'::regclass AND nodeport = :worker_2_port;
+SET client_min_messages TO WARNING;
+SELECT citus_promote_clone_and_rebalance(clone_nodeid => :clone_node_id);
+RESET client_min_messages;
+DROP TABLE unlogged_dist;
+CREATE UNLOGGED TABLE unlogged_ref (id int);
+SELECT create_reference_table('unlogged_ref');
+INSERT INTO unlogged_ref SELECT generate_series(1, 10);
+SET client_min_messages TO WARNING;
+SELECT citus_promote_clone_and_rebalance(clone_nodeid => :clone_node_id);
+RESET client_min_messages;
+
+-- once the table is logged, its data reaches the clone
+ALTER TABLE unlogged_ref SET LOGGED;
+
+-- A partitioned table has no data of its own, so it does not stop the
+-- promotion. Before PostgreSQL 18, one can be unlogged while its partitions
+-- are not, and cannot be made logged.
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+')::int >= 18 AS server_version_ge_18 \gset
+\if :server_version_ge_18
+CREATE TABLE unlogged_parent (id int) PARTITION BY RANGE (id);
+\else
+CREATE UNLOGGED TABLE unlogged_parent (id int) PARTITION BY RANGE (id);
+\endif
+CREATE TABLE logged_part PARTITION OF unlogged_parent FOR VALUES FROM (0) TO (100);
+SELECT create_distributed_table('unlogged_parent', 'id', shard_count => 8);
+INSERT INTO unlogged_parent SELECT generate_series(0, 99);
+
 -- A standalone promotion of the same clone succeeds. The clone gets an identity
 -- of its own, so it does not act as worker_2, e.g. in 2PC recovery.
 SET client_min_messages TO WARNING;
@@ -157,7 +193,11 @@ SELECT metadata->>'server_id' AS primary_server_id FROM pg_dist_node_metadata \g
 SELECT pg_is_in_recovery() AS clone_in_recovery, groupid = :clone_group_id AS clone_has_own_group_id,
        metadata->>'server_id' <> :'primary_server_id' AS clone_has_own_server_id
 FROM pg_dist_local_group, pg_dist_node_metadata;
+SELECT count(*) AS logged_ref_rows FROM unlogged_ref;
+SELECT count(*) AS partitioned_rows FROM unlogged_parent;
 \c - - - :master_port
+DROP TABLE unlogged_ref;
+DROP TABLE unlogged_parent;
 
 -- place the shards of the tables that the next tests create as before
 SELECT 1 FROM citus_set_node_property('localhost', :follower_worker_2_port, 'shouldhaveshards', false);

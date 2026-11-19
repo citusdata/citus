@@ -262,6 +262,65 @@ SELECT pg_is_in_recovery() AS clone_in_recovery;
 (1 row)
 
 \c - - - :master_port
+-- The promotion also errors out, and the clone stays a replica, if the primary
+-- has placements of unlogged distributed or reference tables, since physical
+-- replication does not copy their data.
+CREATE UNLOGGED TABLE unlogged_dist (id int);
+SELECT create_distributed_table('unlogged_dist', 'id', shard_count => 8);
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT count(*) > 0 AS primary_has_unlogged_shards
+FROM pg_dist_shard_placement JOIN pg_dist_shard USING (shardid)
+WHERE logicalrelid = 'unlogged_dist'::regclass AND nodeport = :worker_2_port;
+ primary_has_unlogged_shards
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SET client_min_messages TO WARNING;
+SELECT citus_promote_clone_and_rebalance(clone_nodeid => :clone_node_id);
+ERROR:  cannot promote a clone of node localhost:xxxxx, which has placements of the unlogged table public.unlogged_dist
+DETAIL:  Physical replication does not copy the data of unlogged tables, so the clone would not have it.
+HINT:  Make the table logged with ALTER TABLE ... SET LOGGED before promoting the clone.
+RESET client_min_messages;
+DROP TABLE unlogged_dist;
+CREATE UNLOGGED TABLE unlogged_ref (id int);
+SELECT create_reference_table('unlogged_ref');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO unlogged_ref SELECT generate_series(1, 10);
+SET client_min_messages TO WARNING;
+SELECT citus_promote_clone_and_rebalance(clone_nodeid => :clone_node_id);
+ERROR:  cannot promote a clone of node localhost:xxxxx, which has placements of the unlogged table public.unlogged_ref
+DETAIL:  Physical replication does not copy the data of unlogged tables, so the clone would not have it.
+HINT:  Make the table logged with ALTER TABLE ... SET LOGGED before promoting the clone.
+RESET client_min_messages;
+-- once the table is logged, its data reaches the clone
+ALTER TABLE unlogged_ref SET LOGGED;
+-- A partitioned table has no data of its own, so it does not stop the
+-- promotion. Before PostgreSQL 18, one can be unlogged while its partitions
+-- are not, and cannot be made logged.
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+')::int >= 18 AS server_version_ge_18 \gset
+\if :server_version_ge_18
+CREATE TABLE unlogged_parent (id int) PARTITION BY RANGE (id);
+\else
+CREATE UNLOGGED TABLE unlogged_parent (id int) PARTITION BY RANGE (id);
+\endif
+CREATE TABLE logged_part PARTITION OF unlogged_parent FOR VALUES FROM (0) TO (100);
+SELECT create_distributed_table('unlogged_parent', 'id', shard_count => 8);
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO unlogged_parent SELECT generate_series(0, 99);
 -- A standalone promotion of the same clone succeeds. The clone gets an identity
 -- of its own, so it does not act as worker_2, e.g. in 2PC recovery.
 SET client_min_messages TO WARNING;
@@ -290,7 +349,21 @@ FROM pg_dist_local_group, pg_dist_node_metadata;
  f                 | t                      | t
 (1 row)
 
+SELECT count(*) AS logged_ref_rows FROM unlogged_ref;
+ logged_ref_rows
+---------------------------------------------------------------------
+              10
+(1 row)
+
+SELECT count(*) AS partitioned_rows FROM unlogged_parent;
+ partitioned_rows
+---------------------------------------------------------------------
+              100
+(1 row)
+
 \c - - - :master_port
+DROP TABLE unlogged_ref;
+DROP TABLE unlogged_parent;
 -- place the shards of the tables that the next tests create as before
 SELECT 1 FROM citus_set_node_property('localhost', :follower_worker_2_port, 'shouldhaveshards', false);
  ?column?
@@ -325,31 +398,31 @@ INSERT INTO ref_table2 SELECT i FROM generate_series(1, 5) i;
 SELECT * from get_snapshot_based_node_split_plan('localhost', :worker_3_port, 'localhost', :follower_worker_3_port);
   table_name  | shardid | shard_size | placement_node
 ---------------------------------------------------------------------
- backup_test2 |  102091 |          0 | Primary Node
- backup_test2 |  102095 |          0 | Primary Node
- backup_test2 |  102099 |          0 | Primary Node
- backup_test2 |  102103 |          0 | Primary Node
- backup_test2 |  102111 |          0 | Primary Node
- backup_test2 |  102115 |          0 | Primary Node
- backup_test2 |  102119 |          0 | Primary Node
- backup_test2 |  102123 |          0 | Primary Node
- backup_test2 |  102127 |          0 | Primary Node
- backup_test2 |  102131 |          0 | Primary Node
- backup_test2 |  102135 |          0 | Primary Node
- backup_test2 |  102139 |          0 | Primary Node
- backup_test2 |  102143 |          0 | Primary Node
- backup_test2 |  102063 |          0 | Clone Node
- backup_test2 |  102071 |          0 | Clone Node
- backup_test2 |  102107 |          0 | Clone Node
- backup_test2 |  102047 |          0 | Clone Node
- backup_test2 |  102051 |          0 | Clone Node
- backup_test2 |  102055 |          0 | Clone Node
- backup_test2 |  102059 |          0 | Clone Node
- backup_test2 |  102067 |          0 | Clone Node
- backup_test2 |  102075 |          0 | Clone Node
- backup_test2 |  102079 |          0 | Clone Node
- backup_test2 |  102083 |          0 | Clone Node
- backup_test2 |  102087 |          0 | Clone Node
+ backup_test2 |  102116 |          0 | Primary Node
+ backup_test2 |  102120 |          0 | Primary Node
+ backup_test2 |  102124 |          0 | Primary Node
+ backup_test2 |  102128 |          0 | Primary Node
+ backup_test2 |  102136 |          0 | Primary Node
+ backup_test2 |  102140 |          0 | Primary Node
+ backup_test2 |  102144 |          0 | Primary Node
+ backup_test2 |  102148 |          0 | Primary Node
+ backup_test2 |  102152 |          0 | Primary Node
+ backup_test2 |  102156 |          0 | Primary Node
+ backup_test2 |  102160 |          0 | Primary Node
+ backup_test2 |  102164 |          0 | Primary Node
+ backup_test2 |  102168 |          0 | Primary Node
+ backup_test2 |  102088 |          0 | Clone Node
+ backup_test2 |  102096 |          0 | Clone Node
+ backup_test2 |  102132 |          0 | Clone Node
+ backup_test2 |  102072 |          0 | Clone Node
+ backup_test2 |  102076 |          0 | Clone Node
+ backup_test2 |  102080 |          0 | Clone Node
+ backup_test2 |  102084 |          0 | Clone Node
+ backup_test2 |  102092 |          0 | Clone Node
+ backup_test2 |  102100 |          0 | Clone Node
+ backup_test2 |  102104 |          0 | Clone Node
+ backup_test2 |  102108 |          0 | Clone Node
+ backup_test2 |  102112 |          0 | Clone Node
 (25 rows)
 
 SET client_min_messages to 'LOG';
@@ -369,32 +442,32 @@ NOTICE:  Updating metadata for promoted clone localhost:xxxxx (ID 6)
 NOTICE:  re-ranged 6 sequence(s) on promoted clone localhost:xxxxx (ID 6) for new group 6
 NOTICE:  adjusting shard placements for primary localhost:xxxxx and clone localhost:xxxxx
 NOTICE:  processing 13 shards for primary node GroupID 5
-LOG:  inserting DELETE shard record for shard public.backup_test2_102091 from clone node GroupID 6
-LOG:  inserting DELETE shard record for shard public.backup_test2_102095 from clone node GroupID 6
-LOG:  inserting DELETE shard record for shard public.backup_test2_102099 from clone node GroupID 6
-LOG:  inserting DELETE shard record for shard public.backup_test2_102103 from clone node GroupID 6
-LOG:  inserting DELETE shard record for shard public.backup_test2_102111 from clone node GroupID 6
-LOG:  inserting DELETE shard record for shard public.backup_test2_102115 from clone node GroupID 6
-LOG:  inserting DELETE shard record for shard public.backup_test2_102119 from clone node GroupID 6
-LOG:  inserting DELETE shard record for shard public.backup_test2_102123 from clone node GroupID 6
-LOG:  inserting DELETE shard record for shard public.backup_test2_102127 from clone node GroupID 6
-LOG:  inserting DELETE shard record for shard public.backup_test2_102131 from clone node GroupID 6
-LOG:  inserting DELETE shard record for shard public.backup_test2_102135 from clone node GroupID 6
-LOG:  inserting DELETE shard record for shard public.backup_test2_102139 from clone node GroupID 6
-LOG:  inserting DELETE shard record for shard public.backup_test2_102143 from clone node GroupID 6
+LOG:  inserting DELETE shard record for shard public.backup_test2_102116 from clone node GroupID 6
+LOG:  inserting DELETE shard record for shard public.backup_test2_102120 from clone node GroupID 6
+LOG:  inserting DELETE shard record for shard public.backup_test2_102124 from clone node GroupID 6
+LOG:  inserting DELETE shard record for shard public.backup_test2_102128 from clone node GroupID 6
+LOG:  inserting DELETE shard record for shard public.backup_test2_102136 from clone node GroupID 6
+LOG:  inserting DELETE shard record for shard public.backup_test2_102140 from clone node GroupID 6
+LOG:  inserting DELETE shard record for shard public.backup_test2_102144 from clone node GroupID 6
+LOG:  inserting DELETE shard record for shard public.backup_test2_102148 from clone node GroupID 6
+LOG:  inserting DELETE shard record for shard public.backup_test2_102152 from clone node GroupID 6
+LOG:  inserting DELETE shard record for shard public.backup_test2_102156 from clone node GroupID 6
+LOG:  inserting DELETE shard record for shard public.backup_test2_102160 from clone node GroupID 6
+LOG:  inserting DELETE shard record for shard public.backup_test2_102164 from clone node GroupID 6
+LOG:  inserting DELETE shard record for shard public.backup_test2_102168 from clone node GroupID 6
 NOTICE:  processing 12 shards for clone node GroupID 6
-LOG:  inserting DELETE shard record for shard public.backup_test2_102063 from primary node GroupID 5
-LOG:  inserting DELETE shard record for shard public.backup_test2_102071 from primary node GroupID 5
-LOG:  inserting DELETE shard record for shard public.backup_test2_102107 from primary node GroupID 5
-LOG:  inserting DELETE shard record for shard public.backup_test2_102047 from primary node GroupID 5
-LOG:  inserting DELETE shard record for shard public.backup_test2_102051 from primary node GroupID 5
-LOG:  inserting DELETE shard record for shard public.backup_test2_102055 from primary node GroupID 5
-LOG:  inserting DELETE shard record for shard public.backup_test2_102059 from primary node GroupID 5
-LOG:  inserting DELETE shard record for shard public.backup_test2_102067 from primary node GroupID 5
-LOG:  inserting DELETE shard record for shard public.backup_test2_102075 from primary node GroupID 5
-LOG:  inserting DELETE shard record for shard public.backup_test2_102079 from primary node GroupID 5
-LOG:  inserting DELETE shard record for shard public.backup_test2_102083 from primary node GroupID 5
-LOG:  inserting DELETE shard record for shard public.backup_test2_102087 from primary node GroupID 5
+LOG:  inserting DELETE shard record for shard public.backup_test2_102088 from primary node GroupID 5
+LOG:  inserting DELETE shard record for shard public.backup_test2_102096 from primary node GroupID 5
+LOG:  inserting DELETE shard record for shard public.backup_test2_102132 from primary node GroupID 5
+LOG:  inserting DELETE shard record for shard public.backup_test2_102072 from primary node GroupID 5
+LOG:  inserting DELETE shard record for shard public.backup_test2_102076 from primary node GroupID 5
+LOG:  inserting DELETE shard record for shard public.backup_test2_102080 from primary node GroupID 5
+LOG:  inserting DELETE shard record for shard public.backup_test2_102084 from primary node GroupID 5
+LOG:  inserting DELETE shard record for shard public.backup_test2_102092 from primary node GroupID 5
+LOG:  inserting DELETE shard record for shard public.backup_test2_102100 from primary node GroupID 5
+LOG:  inserting DELETE shard record for shard public.backup_test2_102104 from primary node GroupID 5
+LOG:  inserting DELETE shard record for shard public.backup_test2_102108 from primary node GroupID 5
+LOG:  inserting DELETE shard record for shard public.backup_test2_102112 from primary node GroupID 5
 NOTICE:  shard placement adjustment complete for primary localhost:xxxxx and clone localhost:xxxxx
 NOTICE:  Clone node localhost:xxxxx (ID 6) metadata updated. It is now a primary
 NOTICE:  Clone node localhost:xxxxx (ID 6) successfully registered as a worker node
@@ -433,10 +506,10 @@ SELECT nodename, nodeport, count(shardid) FROM pg_dist_shard_placement GROUP BY 
  nodename  | nodeport | count
 ---------------------------------------------------------------------
  localhost |     9071 |    36
- localhost |     9072 |    13
+ localhost |     9072 |    15
  localhost |     9073 |    17
  localhost |    57637 |    38
- localhost |    57638 |    36
+ localhost |    57638 |    34
  localhost |    57639 |    18
 (6 rows)
 

@@ -3,14 +3,17 @@
 #include "miscadmin.h"
 
 #include "access/xact.h"
+#include "catalog/pg_class.h"
 #include "portability/instr_time.h"
 #include "storage/latch.h"
 #include "utils/builtins.h"
 #include "utils/fmgrprotos.h"
+#include "utils/lsyscache.h"
 #include "utils/pg_lsn.h"
 #include "utils/wait_event.h"
 
 #include "distributed/argutils.h"
+#include "distributed/citus_ruleutils.h"
 #include "distributed/clonenode_utils.h"
 #include "distributed/cluster_changes_block.h"
 #include "distributed/coordinator_protocol.h"
@@ -18,6 +21,7 @@
 #include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
+#include "distributed/metadata_utility.h"
 #include "distributed/remote_commands.h"
 #include "distributed/resource_lock.h"
 #include "distributed/shard_cleaner.h"
@@ -40,6 +44,7 @@ static void AssignCloneNodeIdentity(WorkerNode *cloneNode);
 static void ExecuteCommandListInRemoteTransaction(MultiConnection *connection,
 												  List *commandList);
 static void EnsureSingleNodePromotion(WorkerNode *primaryNode);
+static void ErrorIfPrimaryHasUnloggedPlacements(WorkerNode *primaryNode);
 static void AdjustCloneSequenceRangesForNewGroup(WorkerNode *cloneNode);
 
 PG_FUNCTION_INFO_V1(citus_promote_clone_and_rebalance);
@@ -52,7 +57,8 @@ PG_FUNCTION_INFO_V1(citus_promote_clone_and_rebalance);
  * 1. Validates that the clone node exists and is properly configured
  * 2. Ensures the clone is inactive and has a valid primary node reference
  * 3. Blocks all writes to the primary node to prevent data divergence
- * 4. Decides which shards move to the clone, before any irreversible step
+ * 4. Checks that the primary has no placements of unlogged tables, and decides
+ *    which shards move to the clone, before any irreversible step
  * 5. Ensures that the primary has no unresolved prepared transactions, waits
  *    for clone replay to reach a fixed source WAL insertion position, and
  *    checks that the metadata workers still hold the write fence
@@ -240,6 +246,12 @@ citus_promote_clone_and_rebalance(PG_FUNCTION_ARGS)
 	 * also lock the colocation groups that got shards on it meanwhile.
 	 */
 	EnsureSingleNodePromotion(primaryNode);
+
+	/*
+	 * The write fence also stops DDL, so the tables with placements on the
+	 * primary stay logged until the clone is promoted.
+	 */
+	ErrorIfPrimaryHasUnloggedPlacements(primaryNode);
 
 	/*
 	 * pg_promote() cannot be undone, so decide how to split the shards before
@@ -1053,6 +1065,46 @@ EnsureSingleNodePromotion(WorkerNode *primaryNode)
 					errdetail("A rebalance was already scheduled as background job"),
 					errhint("To monitor progress, run: SELECT * FROM "
 							"citus_rebalance_status();")));
+	}
+}
+
+
+/*
+ * ErrorIfPrimaryHasUnloggedPlacements errors out if the primary has a
+ * placement of an unlogged distributed or reference table. Physical
+ * replication does not copy the data of unlogged tables, and the clone resets
+ * them to empty when it is promoted, so the shards that move to the clone
+ * would lose their rows, and so would its reference table placements. The
+ * placements of Citus local tables stay on the coordinator, and the copies on
+ * its clone are dropped, so these do not matter. Neither do partitioned
+ * tables, which have no data of their own; before PostgreSQL 18 one can be
+ * unlogged while its partitions are not, and cannot be made logged.
+ */
+static void
+ErrorIfPrimaryHasUnloggedPlacements(WorkerNode *primaryNode)
+{
+	List *placementList = AllShardPlacementsOnNodeGroup(primaryNode->groupId);
+
+	GroupShardPlacement *placement = NULL;
+	foreach_declared_ptr(placement, placementList)
+	{
+		Oid relationId = RelationIdForShard(placement->shardId);
+		if (IsCitusTableType(relationId, CITUS_LOCAL_TABLE) ||
+			!RELKIND_HAS_STORAGE(get_rel_relkind(relationId)) ||
+			get_rel_persistence(relationId) != RELPERSISTENCE_UNLOGGED)
+		{
+			continue;
+		}
+
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("cannot promote a clone of node %s:%d, which has "
+							   "placements of the unlogged table %s",
+							   primaryNode->workerName, primaryNode->workerPort,
+							   generate_qualified_relation_name(relationId)),
+						errdetail("Physical replication does not copy the data of "
+								  "unlogged tables, so the clone would not have it."),
+						errhint("Make the table logged with ALTER TABLE ... SET "
+								"LOGGED before promoting the clone.")));
 	}
 }
 
