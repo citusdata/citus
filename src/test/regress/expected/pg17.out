@@ -1276,7 +1276,7 @@ SELECT conname, contype FROM pg_constraint WHERE conname = 'local_exclude_named'
 ALTER TABLE distributed_partitioned_table ADD EXCLUDE USING btree (id WITH =, partition_col WITH =);
 ALTER TABLE local_partitioned_table ADD EXCLUDE USING btree (partition_col WITH =);
 -- Step 8: Verify the unnamed exclusion constraints were added
-SELECT conname, contype FROM pg_constraint WHERE conrelid = 'local_partitioned_table'::regclass AND contype = 'x';
+SELECT conname, contype FROM pg_constraint WHERE conrelid = 'local_partitioned_table'::regclass AND contype = 'x' ORDER BY conname;
                   conname                   | contype
 ---------------------------------------------------------------------
  local_exclude_named                        | x
@@ -1285,7 +1285,7 @@ SELECT conname, contype FROM pg_constraint WHERE conrelid = 'local_partitioned_t
 
 \c - - :public_worker_1_host :worker_1_port
 SET search_path TO pg17;
-SELECT conname, contype FROM pg_constraint WHERE conrelid = 'pg17.distributed_partitioned_table'::regclass AND contype = 'x';
+SELECT conname, contype FROM pg_constraint WHERE conrelid = 'pg17.distributed_partitioned_table'::regclass AND contype = 'x' ORDER BY conname;
                        conname                       | contype
 ---------------------------------------------------------------------
  dist_exclude_named                                  | x
