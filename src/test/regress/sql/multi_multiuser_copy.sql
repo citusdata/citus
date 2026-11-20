@@ -60,3 +60,5 @@ RESET ROLE;
 SET ROLE no_access;
 COPY (SELECT * FROM customer_copy_hash ORDER BY 1) TO STDOUT;
 RESET ROLE;
+
+DROP TABLE customer_copy_hash;

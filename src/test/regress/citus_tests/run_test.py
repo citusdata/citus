@@ -173,6 +173,7 @@ DEPS = {
     ),
     "function_propagation": TestDeps("minimal_schedule"),
     "metadata_replay_security": TestDeps("minimal_schedule"),
+    "start_stop_metadata_sync": TestDeps(None, ["multi_mx_create_table"]),
     "citus_shards": TestDeps("minimal_schedule"),
     "grant_on_foreign_server_propagation": TestDeps("minimal_schedule"),
     "multi_modifying_xacts": TestDeps("minimal_schedule"),
@@ -239,6 +240,9 @@ DEPS = {
     ),
     "add_coordinator": TestDeps(
         "minimal_schedule", ["remove_coordinator_from_metadata"], repeatable=False
+    ),
+    "multi_multiuser_copy": TestDeps(
+        "minimal_schedule", ["multi_create_table", "multi_create_users"]
     ),
     "multi_multiuser_auth": TestDeps(
         "minimal_schedule",
@@ -325,11 +329,20 @@ def run_regress_test(test_name, args):
 
     dependencies = test_dependencies(test_name, original_schedule, schedule_line, args)
 
+    cluster_runs = 1
+    if original_schedule == "multi_follower_schedule":
+        # Follower tests change the cluster topology and need fresh replicas each run.
+        cluster_runs = args["repeat"]
+        args = dict(args, repeat=1)
+
     with tmp_schedule(test_name, dependencies, schedule_line, args) as schedule:
         if "upgrade" in original_schedule:
             run_schedule_with_python(test_name, schedule, dependencies)
         else:
-            run_schedule_with_multiregress(test_name, schedule, dependencies, args)
+            for _ in range(cluster_runs):
+                run_schedule_with_multiregress(
+                    test_name, schedule, dependencies, args, original_schedule
+                )
 
 
 def run_schedule_with_python(test_name, schedule, dependencies):
@@ -382,7 +395,9 @@ def run_single_citus_upgrade_test(test_name, schedule, fake_config_args):
         os.remove(before_schedule_path)
 
 
-def run_schedule_with_multiregress(test_name, schedule, dependencies, args):
+def run_schedule_with_multiregress(
+    test_name, schedule, dependencies, args, original_schedule
+):
     worker_count = needed_worker_count(test_name, dependencies)
 
     # find suitable make recipe
@@ -394,6 +409,10 @@ def run_schedule_with_multiregress(test_name, schedule, dependencies, args):
         "failure"
     ):
         make_recipe = "check-failure-custom-schedule"
+    elif original_schedule == "multi_follower_schedule":
+        make_recipe = "check-follower-custom-schedule"
+    elif original_schedule == "split_output_plugin_denied_schedule":
+        make_recipe = "check-split-output-plugin-denied-custom-schedule"
     elif test_name.startswith("columnar"):
         if dependencies.schedule is None:
             # Columanar isolation tests don't depend on a base schedule,
@@ -502,6 +521,19 @@ def find_test_schedule_and_line(test_name, args):
 def test_dependencies(test_name, test_schedule, schedule_line, args):
     if test_name in DEPS:
         return DEPS[test_name]
+
+    if test_schedule in (
+        "multi_follower_schedule",
+        "split_output_plugin_denied_schedule",
+    ):
+        preceding_tests = []
+        for line in (REGRESS_DIR / test_schedule).read_text().splitlines():
+            if line.startswith("test:"):
+                tests = line.split()[1:]
+                if test_name in tests:
+                    break
+                preceding_tests.extend(tests)
+        return TestDeps(None, preceding_tests)
 
     if "citus_upgrade" in test_schedule:
         return TestDeps(None, citus_upgrade_infra=True)

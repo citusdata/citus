@@ -132,6 +132,10 @@ check-custom-schedule: all
 	$(pg_regress_multi_check) --load-extension=citus --worker-count=$(WORKERCOUNT) \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/$(SCHEDULE) $(EXTRA_TESTS)
 
+check-follower-custom-schedule: all
+	$(pg_regress_multi_check) --load-extension=citus --follower-cluster --worker-count=$(WORKERCOUNT) \
+	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/$(SCHEDULE) $(EXTRA_TESTS)
+
 check-failure-custom-schedule: all
 	$(pg_regress_multi_check) --load-extension=citus --mitmproxy --worker-count=$(WORKERCOUNT) \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/$(SCHEDULE) $(EXTRA_TESTS)
@@ -286,6 +290,10 @@ check-split: all
 check-split-output-plugin-denied: all
 	CITUS_TEST_SKIP_OUTPUT_PLUGIN_ALLOWLIST=1 $(pg_regress_multi_check) --load-extension=citus \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/split_output_plugin_denied_schedule $(EXTRA_TESTS)
+
+check-split-output-plugin-denied-custom-schedule: all
+	CITUS_TEST_SKIP_OUTPUT_PLUGIN_ALLOWLIST=1 $(pg_regress_multi_check) --load-extension=citus \
+	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/$(SCHEDULE) $(EXTRA_TESTS)
 
 check-failure: all
 	$(pg_regress_multi_check) --load-extension=citus --mitmproxy \

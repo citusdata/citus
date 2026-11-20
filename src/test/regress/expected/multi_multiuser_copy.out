@@ -56,3 +56,4 @@ SET ROLE no_access;
 COPY (SELECT * FROM customer_copy_hash ORDER BY 1) TO STDOUT;
 ERROR:  permission denied for table customer_copy_hash
 RESET ROLE;
+DROP TABLE customer_copy_hash;
