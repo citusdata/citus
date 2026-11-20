@@ -77,6 +77,13 @@ typedef struct DDLJob
 	List *taskList;            /* worker DDL tasks to execute */
 
 	/*
+	 * Whether worker tasks must finish before running the local command.  This is
+	 * used by nontransactional commands whose partial worker state must remain
+	 * retryable if either worker or local execution fails.
+	 */
+	bool executeBeforeLocalCommand;
+
+	/*
 	 * Only applicable when any of the tasks cannot be executed in a
 	 * transaction block.
 	 *
