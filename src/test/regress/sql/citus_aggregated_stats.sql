@@ -28,7 +28,7 @@ ANALYZE current_check;
 
 SELECT schemaname, tablename, attname, null_frac, most_common_vals, most_common_freqs FROM pg_stats
   WHERE tablename IN ('current_check', 'dist_current_check', 'ref_current_check', 'citus_local_current_check')
-  ORDER BY 1;
+  ORDER BY 1, 2, 3;
 
 SELECT * FROM citus_stats
   WHERE tablename IN ('current_check', 'dist_current_check', 'ref_current_check', 'citus_local_current_check')
@@ -76,7 +76,7 @@ ANALYZE citus_local_current_check;
 
 SELECT schemaname, tablename, attname, null_frac, most_common_vals, most_common_freqs FROM pg_stats
   WHERE tablename IN ('current_check', 'dist_current_check', 'ref_current_check', 'citus_local_current_check')
-  ORDER BY 1;
+  ORDER BY 1, 2, 3;
 
 SELECT * FROM citus_stats
   WHERE tablename IN ('current_check', 'dist_current_check', 'ref_current_check', 'citus_local_current_check')

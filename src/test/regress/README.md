@@ -41,6 +41,9 @@ You can pass `--repeat` or `r` parameter to run the given test for multiple time
 src/test/regress/citus_tests/run_test.py multi_utility_warnings -r 1000
 ```
 
+Follower-schedule tests include their preceding setup tests and create a fresh
+primary/follower cluster for each repetition, since they change replication topology.
+
 To force the script to use base schedules rather than minimal ones, you can
 pass `-b` or `--use-base-schedule`.
 
