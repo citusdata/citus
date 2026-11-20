@@ -255,4 +255,30 @@ ALTER SYSTEM RESET citus.node_conninfo;
 select pg_reload_conf();
 select pg_sleep(0.1); -- wait for config reload to apply
 
+-- A retired metadata connection must not block promotion of an ordinary connection.
+CREATE VIEW metadata_warm AS SELECT a FROM test;
+ALTER SYSTEM SET citus.node_conninfo = 'sslmode=allow';
+BEGIN;
+SELECT pg_reload_conf();
+SELECT pg_sleep(0.1);
+SHOW citus.node_conninfo;
+SELECT count(*) FROM test WHERE a = 0;
+SAVEPOINT metadata_retry;
+CREATE VIEW metadata_after_select AS SELECT a FROM test;
+ROLLBACK TO metadata_retry;
+CREATE VIEW metadata_after_select AS SELECT a FROM test;
+COMMIT;
+SELECT count(*) FROM metadata_after_select;
+
+-- Without an intervening SELECT, allocating a replacement must work as well.
+ALTER SYSTEM RESET citus.node_conninfo;
+BEGIN;
+SELECT pg_reload_conf();
+SELECT pg_sleep(0.1);
+SHOW citus.node_conninfo;
+CREATE VIEW metadata_without_select AS SELECT a FROM test;
+COMMIT;
+SELECT count(*) FROM metadata_without_select;
+
+DROP VIEW metadata_warm, metadata_after_select, metadata_without_select;
 DROP SCHEMA node_conninfo_reload CASCADE;

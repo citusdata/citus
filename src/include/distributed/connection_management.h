@@ -100,10 +100,13 @@ enum MultiConnectionMode
 	 * metadata includes the distributed table on the workers) can be modified
 	 * accross multiple connections.
 	 *
-	 * With this flag, we guarantee that there is a single metadata connection.
-	 * But note that this connection can be used for any other operation.
-	 * In other words, this connection is not exclusively reserved for metadata
-	 * operations.
+	 * Within each connection hash entry, metadata requests share one connection,
+	 * except that an unclaimed connection forced to close at transaction end can
+	 * be replaced if no remote BEGIN has been sent. Such retired descriptors
+	 * remain tagged for metadata until cleanup.
+	 *
+	 * A metadata connection can also be used for other operations; it is not
+	 * exclusively reserved for metadata operations.
 	 */
 	REQUIRE_METADATA_CONNECTION = 1 << 5,
 
