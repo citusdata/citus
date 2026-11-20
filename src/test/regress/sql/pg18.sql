@@ -2101,6 +2101,18 @@ RESET citus.allow_unsafe_insert_select_pushdown;
 DROP SCHEMA pg18_insert_select_pushdown CASCADE;
 SET search_path TO pg18_nn;
 
+-- INSERT .. RETURNING the whole inserted row together with old and new (#8762)
+CREATE TABLE whole_row_old_new (tid int PRIMARY KEY, balance int);
+SELECT create_distributed_table('whole_row_old_new', 'tid');
+INSERT INTO whole_row_old_new VALUES (1, 10);
+INSERT INTO whole_row_old_new AS t VALUES (2, 20) RETURNING t, old, new;
+INSERT INTO whole_row_old_new VALUES (3, 30) RETURNING old, new;
+INSERT INTO whole_row_old_new AS t VALUES (1, 11)
+    ON CONFLICT (tid) DO UPDATE SET balance = excluded.balance RETURNING t, old, new;
+INSERT INTO whole_row_old_new AS t VALUES (1, 12)
+    ON CONFLICT (tid) DO UPDATE SET balance = excluded.balance
+    RETURNING WITH (OLD AS o, NEW AS n) o, n;
+
 
 -- cleanup with minimum verbosity
 SET client_min_messages TO ERROR;

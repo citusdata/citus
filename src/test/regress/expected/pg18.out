@@ -3321,6 +3321,42 @@ DETAIL:  drop cascades to table dist
 drop cascades to table res
 drop cascades to function batch_transform(text[])
 SET search_path TO pg18_nn;
+-- INSERT .. RETURNING the whole inserted row together with old and new (#8762)
+CREATE TABLE whole_row_old_new (tid int PRIMARY KEY, balance int);
+SELECT create_distributed_table('whole_row_old_new', 'tid');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO whole_row_old_new VALUES (1, 10);
+INSERT INTO whole_row_old_new AS t VALUES (2, 20) RETURNING t, old, new;
+   t    | old |  new
+---------------------------------------------------------------------
+ (2,20) |     | (2,20)
+(1 row)
+
+INSERT INTO whole_row_old_new VALUES (3, 30) RETURNING old, new;
+ old |  new
+---------------------------------------------------------------------
+     | (3,30)
+(1 row)
+
+INSERT INTO whole_row_old_new AS t VALUES (1, 11)
+    ON CONFLICT (tid) DO UPDATE SET balance = excluded.balance RETURNING t, old, new;
+   t    |  old   |  new
+---------------------------------------------------------------------
+ (1,11) | (1,10) | (1,11)
+(1 row)
+
+INSERT INTO whole_row_old_new AS t VALUES (1, 12)
+    ON CONFLICT (tid) DO UPDATE SET balance = excluded.balance
+    RETURNING WITH (OLD AS o, NEW AS n) o, n;
+   o    |   n
+---------------------------------------------------------------------
+ (1,11) | (1,12)
+(1 row)
+
 -- cleanup with minimum verbosity
 SET client_min_messages TO ERROR;
 RESET search_path;
