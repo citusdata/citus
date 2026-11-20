@@ -30,29 +30,38 @@ with and without columnar. PG17/18 also run normal and mixed old-Citus upgrades
 from v14.0.1. The single matrix contains 41 suite jobs, limits concurrency to
 two, and does not cancel other shards on failure. `ASAN result` requires every
 selected job to succeed, including instrumentation and diagnostic checks.
-Jobs use Ubuntu 24.04. Python suites explicitly provision Python 3.12 to match
-the regression Pipfile. Setup verifies
-the Danish UTF-8 OS locale; a fresh-cluster preflight also requires initdb to
-import the native `da_DK` catalog alias used by the collation tests.
 
-`setup_cassert_pg` opts into GCC ASAN with `sanitizer: address`; its default
-`none` preserves ordinary cassert and arm64 assert-off builds. PostgreSQL and
-both current/old Citus libraries use `-O1 -g3 -fno-omit-frame-pointer
--fsanitize=address -fsanitize-address-use-after-scope` and link with
-`-fsanitize=address`. Sanitizer caches are separate and include the action/config
-hash and Ubuntu version. The PG19 `typeof_unqual` probe uses Citus's GNU C99
-mode and supplies that result to PostgreSQL's configure, so its installed
-headers do not advertise a C23-only spelling to a C99 consumer. PostgreSQL
-itself retains its required C11-or-newer build mode.
-Cold builds and cache hits verify the selected prefix, PostgreSQL flags,
-ASAN symbols, and runtime linkage of PostgreSQL, libpq, and both Citus libraries.
-Old upgrade tarballs are built locally with the same compiler/flags and verified
-before the upgrade harness reuses them.
+Jobs use Ubuntu 24.04. Python suites explicitly provision Python 3.12 to match
+the regression Pipfile. Setup verifies the Danish UTF-8 OS locale; a fresh-cluster
+preflight also requires `initdb` to import the native `da_DK` catalog alias used
+by the collation tests.
+
+`setup_cassert_pg` opts into GCC ASAN and the UBSan bool check with
+`sanitizer: address-bool`; its default `none` preserves ordinary cassert and
+arm64 assert-off builds. PostgreSQL and both current/old Citus libraries use
+`-O1 -g3 -fno-omit-frame-pointer -fsanitize=address,bool
+-fno-sanitize-recover=bool -fsanitize-address-use-after-scope` and link with
+`-fsanitize=address,bool`. Other UBSan checks are not enabled. Sanitizer caches
+are separate and include the action/config hash and Ubuntu version. The PG19
+`typeof_unqual` probe uses Citus's GNU C99 mode and supplies that result to
+PostgreSQL's configure, so its installed headers do not advertise a C23-only
+spelling to a C99 consumer. PostgreSQL itself retains its required C11-or-newer
+build mode. Cold builds and cache hits verify the selected prefix, PostgreSQL
+flags, and ASAN runtime linkage of PostgreSQL, libpq, and both Citus libraries.
+They require libubsan linkage only when a binary references its invalid-value
+handler. Old upgrade tarballs are built locally with the same compiler/flags
+and verified before the upgrade harness reuses them. UBSan output is captured
+from each suite's combined test output and fails the job if a diagnostic was
+printed, even when a test harness otherwise hides a backend failure.
 
 For local reproduction, build in an isolated Linux checkout with the same flags
 and assertions. Set `ASAN_OPTIONS=detect_leaks=0:abort_on_error=1:symbolize=1:log_path=<absolute-report-directory>/asan`
 before running instrumented programs; keep that directory outside harness cleanup
-paths. This is address-error coverage, not LeakSanitizer or UBSan coverage.
+paths. Set `UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1` to halt on
+invalid-boolean reports and print a symbolized stack trace. UBSan diagnostics
+are captured from test output rather than a runtime log file. This is
+address-error and invalid-boolean coverage, not LeakSanitizer or full UBSan
+coverage.
 Python/libpq launchers need the matching GCC runtime first: apply
 `LD_PRELOAD="$(gcc -print-file-name=libasan.so)"` only to the native test command
 process tree, never globally to JavaScript Actions or tool installation.

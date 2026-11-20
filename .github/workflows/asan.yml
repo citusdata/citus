@@ -85,12 +85,12 @@ jobs:
         if: matrix.group == 'pg-upgrade'
         with:
           pg_full: ${{ matrix.old_full }}
-          sanitizer: address
+          sanitizer: address-bool
           cold_cache: ${{ inputs.cold_cache }}
       - uses: ./.github/actions/setup_cassert_pg
         with:
           pg_full: ${{ matrix.full }}
-          sanitizer: address
+          sanitizer: address-bool
           cold_cache: ${{ inputs.cold_cache }}
       - name: Verify runtime and symbolized error reporting
         shell: bash
@@ -119,6 +119,23 @@ jobs:
           test "$status" -ne 0
           grep -E 'ERROR: AddressSanitizer: heap-buffer-overflow' "$ASAN_DIR"/canary/asan.*
           grep -E 'canary.c:[0-9]+' "$ASAN_DIR"/canary/asan.*
+          cat > "$ASAN_DIR/canary/bool-canary.c" <<'C'
+          int main(void)
+          {
+              unsigned char raw = 2;
+              volatile _Bool *value = (volatile _Bool *) &raw;
+              return *value;
+          }
+          C
+          "$CC" $CFLAGS "$ASAN_DIR/canary/bool-canary.c" $LDFLAGS \
+            -o "$ASAN_DIR/canary/bool-canary"
+          status=0
+          UBSAN_OPTIONS="halt_on_error=1:print_stacktrace=1" \
+            "$ASAN_DIR/canary/bool-canary" > "$ASAN_DIR/canary/bool-output.txt" 2>&1 || status=$?
+          test "$status" -ne 0
+          grep -F "load of value 2, which is not a valid value for type '_Bool'" \
+            "$ASAN_DIR/canary/bool-output.txt"
+          grep -F 'bool-canary.c:' "$ASAN_DIR/canary/bool-output.txt"
           # Python loads instrumented libpq; prove that the matching runtime comes first.
           LD_PRELOAD="$runtime" python3 -c \
             'import ctypes, os, subprocess; ctypes.CDLL(subprocess.check_output([os.environ["PG_CONFIG"], "--libdir"], text=True).strip() + "/libpq.so")'
@@ -156,6 +173,9 @@ jobs:
             for library in citus.so citus_columnar.so; do
               binary="$ASAN_DIR/old-citus$("$PG_CONFIG" --pkglibdir)/$library"
               readelf -d "$binary" | grep 'NEEDED.*libasan'
+              if nm -D "$binary" | grep '__ubsan_handle_load_invalid_value_abort' > /dev/null; then
+                readelf -d "$binary" | grep 'NEEDED.*libubsan'
+              fi
               nm -D "$binary" | grep '__asan_init'
               ldd "$binary"
               if ldd "$binary" | grep 'not found'; then
@@ -177,7 +197,7 @@ jobs:
           # Restrict preloading to native test commands and their Python/libpq subprocesses.
           run_test() {
             /usr/bin/time -v -a -o "$ASAN_DIR/tests.time" \
-              env LD_PRELOAD="$ASAN_RUNTIME" "$@"
+              env LD_PRELOAD="$ASAN_RUNTIME" "$@" 2>&1 | tee -a "$ASAN_DIR/tests.output"
           }
           case "$GROUP" in
             regress)
@@ -260,8 +280,27 @@ jobs:
             echo "::error::Old Citus instrumentation was not verified"
             failed=1
           fi
-          # Even a harness that swallows a backend's failure must not hide an ASAN report.
-          # Expected canary reports live outside this directory.
+          ubsan_paths=(src/test "$ASAN_DIR/tests.output")
+          if [ -d /tmp/pg_upgrade_newData_logs ]; then
+            ubsan_paths+=(/tmp/pg_upgrade_newData_logs)
+          fi
+          set +e
+          grep -R -n -F --binary-files=without-match 'runtime error:' \
+            "${ubsan_paths[@]}" > "$ASAN_DIR/reports/ubsan-tests"
+          grep_status=$?
+          set -e
+          if [ "$grep_status" -eq 0 ]; then
+            echo "::error::UBSan diagnostic(s) found in test output"
+            failed=1
+          elif [ "$grep_status" -eq 1 ]; then
+            rm -f "$ASAN_DIR/reports/ubsan-tests"
+          else
+            echo "::error::Failed to scan test output for UBSan diagnostics (grep exit $grep_status)"
+            cat "$ASAN_DIR/reports/ubsan-tests"
+            failed=1
+          fi
+          # Even a harness that swallows a backend's failure must not hide sanitizer reports.
+          # UBSan diagnostics are captured from test output; expected canary reports live outside.
           test -d "$ASAN_DIR/reports"
           while IFS= read -r -d '' report; do
             echo "::error::Sanitizer diagnostic: $report"
@@ -290,6 +329,7 @@ jobs:
             ${{ runner.temp }}/asan/*.time
             ${{ runner.temp }}/asan/*-verified
             ${{ runner.temp }}/asan/tests-completed
+            ${{ runner.temp }}/asan/tests.output
             ${{ runner.temp }}/asan/reports/
             ${{ runner.temp }}/asan/canary/
 
