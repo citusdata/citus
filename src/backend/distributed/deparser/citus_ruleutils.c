@@ -1042,48 +1042,61 @@ deparse_index_columns(StringInfo buffer, List *indexParameterList, List *deparse
 			appendStringInfoChar(buffer, ',');
 		}
 
-		if (indexElement->name)
-		{
-			appendStringInfo(buffer, "%s ", quote_identifier(indexElement->name));
-		}
-		else if (indexElement->expr)
-		{
-			appendStringInfo(buffer, "(%s)", deparse_expression(indexElement->expr,
-																deparseContext, false,
-																false));
-		}
+		deparse_index_element(buffer, indexElement, deparseContext);
+	}
+}
 
-		if (indexElement->collation != NIL)
-		{
-			appendStringInfo(buffer, "COLLATE %s ",
-							 NameListToQuotedString(indexElement->collation));
-		}
 
-		if (indexElement->opclass != NIL)
-		{
-			appendStringInfo(buffer, "%s ",
-							 NameListToQuotedString(indexElement->opclass));
-		}
+/*
+ * deparse_index_element appends a single index parameter to the provided
+ * buffer: the column name or expression, followed by its collation, operator
+ * class and operator class parameters, and ordering. Each part is followed by a
+ * space. An expression must already be transformed.
+ */
+void
+deparse_index_element(StringInfo buffer, IndexElem *indexElement, List *deparseContext)
+{
+	if (indexElement->name)
+	{
+		appendStringInfo(buffer, "%s ", quote_identifier(indexElement->name));
+	}
+	else if (indexElement->expr)
+	{
+		appendStringInfo(buffer, "(%s)", deparse_expression(indexElement->expr,
+															deparseContext, false,
+															false));
+	}
 
-		/* Commit on postgres: 911e70207703799605f5a0e8aad9f06cff067c63*/
-		if (indexElement->opclassopts != NIL)
-		{
-			appendStringInfoString(buffer, "(");
-			AppendStorageParametersToString(buffer, indexElement->opclassopts);
-			appendStringInfoString(buffer, ") ");
-		}
+	if (indexElement->collation != NIL)
+	{
+		appendStringInfo(buffer, "COLLATE %s ",
+						 NameListToQuotedString(indexElement->collation));
+	}
 
-		if (indexElement->ordering != SORTBY_DEFAULT)
-		{
-			bool sortAsc = (indexElement->ordering == SORTBY_ASC);
-			appendStringInfo(buffer, "%s ", (sortAsc ? "ASC" : "DESC"));
-		}
+	if (indexElement->opclass != NIL)
+	{
+		appendStringInfo(buffer, "%s ",
+						 NameListToQuotedString(indexElement->opclass));
+	}
 
-		if (indexElement->nulls_ordering != SORTBY_NULLS_DEFAULT)
-		{
-			bool nullsFirst = (indexElement->nulls_ordering == SORTBY_NULLS_FIRST);
-			appendStringInfo(buffer, "NULLS %s ", (nullsFirst ? "FIRST" : "LAST"));
-		}
+	/* Commit on postgres: 911e70207703799605f5a0e8aad9f06cff067c63*/
+	if (indexElement->opclassopts != NIL)
+	{
+		appendStringInfoString(buffer, "(");
+		AppendStorageParametersToString(buffer, indexElement->opclassopts);
+		appendStringInfoString(buffer, ") ");
+	}
+
+	if (indexElement->ordering != SORTBY_DEFAULT)
+	{
+		bool sortAsc = (indexElement->ordering == SORTBY_ASC);
+		appendStringInfo(buffer, "%s ", (sortAsc ? "ASC" : "DESC"));
+	}
+
+	if (indexElement->nulls_ordering != SORTBY_NULLS_DEFAULT)
+	{
+		bool nullsFirst = (indexElement->nulls_ordering == SORTBY_NULLS_FIRST);
+		appendStringInfo(buffer, "NULLS %s ", (nullsFirst ? "FIRST" : "LAST"));
 	}
 }
 

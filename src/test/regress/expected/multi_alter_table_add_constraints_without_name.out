@@ -308,6 +308,82 @@ SELECT conname, tgfoid::regproc, tgtype, tgdeferrable, tginitdeferred
 
 \c - - :master_host :master_port
 ALTER TABLE AT_AddConstNoName.products DROP CONSTRAINT products_name_product_no_excl;
+-- The checks below compare the EXCLUDE constraint of every shard with the one on
+-- the coordinator: its definition and the storage parameters of its index.
+CREATE FUNCTION AT_AddConstNoName.check_excl_on_shards(OUT coordinator_def text, OUT shards_match bool)
+LANGUAGE plpgsql AS $fn$
+DECLARE
+    query text := $$SELECT string_agg(pg_get_constraintdef(c.oid) ||
+                                      coalesce(' ' || array_to_string(i.reloptions, ','), ''), '; ')
+                      FROM pg_catalog.pg_constraint c
+                      JOIN pg_catalog.pg_class i ON i.oid = c.conindid
+                     WHERE c.conrelid = '%s'::regclass AND c.contype = 'x'$$;
+BEGIN
+    EXECUTE format(query, 'AT_AddConstNoName.products') INTO coordinator_def;
+    SELECT bool_and(success AND result = coordinator_def) INTO shards_match
+      FROM run_command_on_placements('AT_AddConstNoName.products', query);
+END;
+$fn$;
+-- Check "ADD EXCLUDE" with an expression, a schema-qualified operator and a WHERE clause
+ALTER TABLE AT_AddConstNoName.products ADD EXCLUDE USING btree (product_no WITH OPERATOR(pg_catalog.=), (lower(name)) WITH =) WHERE (price > 0);
+SELECT * FROM AT_AddConstNoName.check_excl_on_shards();
+                                      coordinator_def                                       | shards_match
+---------------------------------------------------------------------
+ EXCLUDE USING btree (product_no WITH =, lower(name) WITH =) WHERE ((price > (0)::numeric)) | t
+(1 row)
+
+ALTER TABLE AT_AddConstNoName.products DROP CONSTRAINT products_product_no_expr_excl;
+-- the WHERE clause must reach the shards: rows outside the predicate do not conflict
+ALTER TABLE AT_AddConstNoName.products ADD EXCLUDE USING btree (product_no WITH =) WHERE (price > 0);
+INSERT INTO AT_AddConstNoName.products VALUES (1, 'a', 0), (1, 'b', 0), (1, 'c', 5);
+INSERT INTO AT_AddConstNoName.products VALUES (1, 'd', 5);
+ERROR:  conflicting key value violates exclusion constraint "products_product_no_excl_5410000"
+DETAIL:  Key (product_no)=(1) conflicts with existing key (product_no)=(1).
+CONTEXT:  while executing command on localhost:xxxxx
+DELETE FROM AT_AddConstNoName.products;
+ALTER TABLE AT_AddConstNoName.products DROP CONSTRAINT products_product_no_excl;
+-- Check "ADD EXCLUDE" with INCLUDE
+ALTER TABLE AT_AddConstNoName.products ADD EXCLUDE USING btree (product_no WITH =) INCLUDE (price);
+SELECT * FROM AT_AddConstNoName.check_excl_on_shards();
+                     coordinator_def                     | shards_match
+---------------------------------------------------------------------
+ EXCLUDE USING btree (product_no WITH =) INCLUDE (price) | t
+(1 row)
+
+ALTER TABLE AT_AddConstNoName.products DROP CONSTRAINT products_product_no_excl;
+-- Check "ADD EXCLUDE" with storage parameters
+ALTER TABLE AT_AddConstNoName.products ADD EXCLUDE USING btree (product_no WITH =) WITH (fillfactor=70);
+SELECT * FROM AT_AddConstNoName.check_excl_on_shards();
+                               coordinator_def                                | shards_match
+---------------------------------------------------------------------
+ EXCLUDE USING btree (product_no WITH =) WITH (fillfactor='70') fillfactor=70 | t
+(1 row)
+
+ALTER TABLE AT_AddConstNoName.products DROP CONSTRAINT products_product_no_excl;
+-- Check "ADD EXCLUDE" with ordering and a collation
+ALTER TABLE AT_AddConstNoName.products ADD EXCLUDE USING btree (product_no DESC NULLS LAST WITH =, name COLLATE "C" text_pattern_ops WITH =);
+SELECT * FROM AT_AddConstNoName.check_excl_on_shards();
+                                          coordinator_def                                          | shards_match
+---------------------------------------------------------------------
+ EXCLUDE USING btree (product_no DESC NULLS LAST WITH =, name COLLATE "C" text_pattern_ops WITH =) | t
+(1 row)
+
+ALTER TABLE AT_AddConstNoName.products DROP CONSTRAINT products_product_no_name_excl;
+-- Check "ADD EXCLUDE" with operator class parameters
+CREATE EXTENSION pg_trgm;
+ALTER TABLE AT_AddConstNoName.products ADD EXCLUDE USING gist (product_no WITH =, name gist_trgm_ops (siglen='32') WITH =);
+SELECT * FROM AT_AddConstNoName.check_excl_on_shards();
+                                 coordinator_def                                 | shards_match
+---------------------------------------------------------------------
+ EXCLUDE USING gist (product_no WITH =, name gist_trgm_ops (siglen='32') WITH =) | t
+(1 row)
+
+ALTER TABLE AT_AddConstNoName.products DROP CONSTRAINT products_product_no_name_excl;
+DROP EXTENSION pg_trgm;
+-- "ADD EXCLUDE ... USING INDEX TABLESPACE" is not supported, like CREATE INDEX ... TABLESPACE
+ALTER TABLE AT_AddConstNoName.products ADD EXCLUDE USING btree (product_no WITH =) USING INDEX TABLESPACE pg_default;
+ERROR:  specifying tablespaces with ADD EXCLUDE statements is currently unsupported
+DROP FUNCTION AT_AddConstNoName.check_excl_on_shards();
 -- Check "ADD CHECK"
 ALTER TABLE AT_AddConstNoName.products ADD CHECK (product_no > 0 AND price > 0);
 SELECT con.conname
