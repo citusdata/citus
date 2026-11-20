@@ -1145,32 +1145,53 @@ ColocatedShardIntervalList(ShardInterval *shardInterval)
 		return colocatedShardList;
 	}
 
-	int shardIntervalIndex = ShardIndex(shardInterval);
 	List *colocatedTableList = ColocatedTableList(distributedTableId);
-
-	/* ShardIndex have to find index of given shard */
-	Assert(shardIntervalIndex >= 0);
+	MemoryContext callerContext = CurrentMemoryContext;
+	MemoryContext localContext = AllocSetContextCreate(callerContext,
+													   "ColocatedShardIntervalList",
+													   ALLOCSET_DEFAULT_SIZES);
 
 	Oid colocatedTableId = InvalidOid;
 	foreach_declared_oid(colocatedTableId, colocatedTableList)
 	{
-		CitusTableCacheEntry *colocatedTableCacheEntry =
-			GetCitusTableCacheEntry(colocatedTableId);
+		MemoryContextSwitchTo(localContext);
+		List *shardIntervalList =
+			LoadUnsortedShardIntervalListViaCatalog(colocatedTableId);
 
 		/*
-		 * Since we iterate over co-located tables, shard count of each table should be
-		 * same and greater than shardIntervalIndex.
+		 * Avoid populating the metadata cache for every table in large colocation
+		 * groups. We only need the shard whose range matches the input shard.
 		 */
-		Assert(cacheEntry->shardIntervalArrayLength == colocatedTableCacheEntry->
-			   shardIntervalArrayLength);
+		Assert(cacheEntry->shardIntervalArrayLength == list_length(shardIntervalList));
 
-		ShardInterval *colocatedShardInterval =
-			colocatedTableCacheEntry->sortedShardIntervalArray[shardIntervalIndex];
+		ShardInterval *colocatedShardInterval = NULL;
+		if (HasDistributionKeyCacheEntry(cacheEntry))
+		{
+			ShardInterval *candidateShardInterval = NULL;
+			foreach_declared_ptr(candidateShardInterval, shardIntervalList)
+			{
+				if (HashPartitionedShardIntervalsEqual(shardInterval,
+													   candidateShardInterval))
+				{
+					colocatedShardInterval = candidateShardInterval;
+					break;
+				}
+			}
+		}
+		else
+		{
+			colocatedShardInterval = linitial(shardIntervalList);
+		}
 
+		Assert(colocatedShardInterval != NULL);
+		MemoryContextSwitchTo(callerContext);
 		ShardInterval *copyShardInterval = CopyShardInterval(colocatedShardInterval);
-
 		colocatedShardList = lappend(colocatedShardList, copyShardInterval);
+
+		MemoryContextReset(localContext);
 	}
+
+	MemoryContextDelete(localContext);
 
 	Assert(list_length(colocatedTableList) == list_length(colocatedShardList));
 
