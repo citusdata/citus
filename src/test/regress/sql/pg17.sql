@@ -454,7 +454,8 @@ SELECT child.relname AS partition_name,
 FROM pg_inherits
 JOIN pg_class parent ON pg_inherits.inhparent = parent.oid
 JOIN pg_class child ON pg_inherits.inhrelid = child.oid
-WHERE parent.relname = 'partitioned_table';
+WHERE parent.relname = 'partitioned_table'
+ORDER BY child.relname;
 
 -- (2) The partitions have the same identity column as the parent table;
 -- This is PG17 behavior for support for identity in partitioned tables.
@@ -470,7 +471,8 @@ SELECT child.relname AS partition_name,
 FROM pg_inherits
 JOIN pg_class parent ON pg_inherits.inhparent = parent.oid
 JOIN pg_class child ON pg_inherits.inhrelid = child.oid
-WHERE parent.relname = 'partitioned_table';
+WHERE parent.relname = 'partitioned_table'
+ORDER BY child.relname;
 \d pt_3;
 
 -- Partition pt_4 has its own identity column, which is not allowed in PG17
@@ -488,7 +490,8 @@ SELECT child.relname AS partition_name,
 FROM pg_inherits
 JOIN pg_class parent ON pg_inherits.inhparent = parent.oid
 JOIN pg_class child ON pg_inherits.inhrelid = child.oid
-WHERE parent.relname = 'partitioned_table';
+WHERE parent.relname = 'partitioned_table'
+ORDER BY child.relname;
 
 -- (2) The partititions have the same identity column as the parent table
 \d pt_1;
@@ -508,7 +511,8 @@ SELECT child.relname AS partition_name,
 FROM pg_inherits
 JOIN pg_class parent ON pg_inherits.inhparent = parent.oid
 JOIN pg_class child ON pg_inherits.inhrelid = child.oid
-WHERE parent.relname = 'partitioned_table';
+WHERE parent.relname = 'partitioned_table'
+ORDER BY child.relname;
 \d pt_3;
 
 -- Verify that the detach has propagated to the worker node
@@ -520,7 +524,8 @@ SELECT child.relname AS partition_name,
 FROM pg_inherits
 JOIN pg_class parent ON pg_inherits.inhparent = parent.oid
 JOIN pg_class child ON pg_inherits.inhrelid = child.oid
-WHERE parent.relname = 'partitioned_table';
+WHERE parent.relname = 'partitioned_table'
+ORDER BY child.relname;
 \d pt_3;
 
 \c - - - :master_port
@@ -776,10 +781,10 @@ ALTER TABLE distributed_partitioned_table ADD EXCLUDE USING btree (id WITH =, pa
 ALTER TABLE local_partitioned_table ADD EXCLUDE USING btree (partition_col WITH =);
 
 -- Step 8: Verify the unnamed exclusion constraints were added
-SELECT conname, contype FROM pg_constraint WHERE conrelid = 'local_partitioned_table'::regclass AND contype = 'x';
+SELECT conname, contype FROM pg_constraint WHERE conrelid = 'local_partitioned_table'::regclass AND contype = 'x' ORDER BY conname;
 \c - - :public_worker_1_host :worker_1_port
 SET search_path TO pg17;
-SELECT conname, contype FROM pg_constraint WHERE conrelid = 'pg17.distributed_partitioned_table'::regclass AND contype = 'x';
+SELECT conname, contype FROM pg_constraint WHERE conrelid = 'pg17.distributed_partitioned_table'::regclass AND contype = 'x' ORDER BY conname;
 
 -- Step 9: Drop the exclusion constraints from both tables
 \c - - :master_host :master_port
