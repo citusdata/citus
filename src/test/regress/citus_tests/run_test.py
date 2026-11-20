@@ -173,6 +173,7 @@ DEPS = {
     ),
     "function_propagation": TestDeps("minimal_schedule"),
     "metadata_replay_security": TestDeps("minimal_schedule"),
+    "start_stop_metadata_sync": TestDeps(None, ["multi_mx_create_table"]),
     "citus_shards": TestDeps("minimal_schedule"),
     "grant_on_foreign_server_propagation": TestDeps("minimal_schedule"),
     "multi_modifying_xacts": TestDeps("minimal_schedule"),
