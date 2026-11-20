@@ -1342,7 +1342,7 @@ SELECT conname, contype FROM pg_constraint WHERE conname = 'local_exclude_named'
 ALTER TABLE distributed_partitioned_table ADD EXCLUDE USING btree (id WITH =, partition_col WITH =);
 ALTER TABLE local_partitioned_table ADD EXCLUDE USING btree (partition_col WITH =);
 -- Step 8: Verify the unnamed exclusion constraints were added
-SELECT conname, contype FROM pg_constraint WHERE conrelid = 'local_partitioned_table'::regclass AND contype = 'x';
+SELECT conname, contype FROM pg_constraint WHERE conrelid = 'local_partitioned_table'::regclass AND contype = 'x' ORDER BY conname;
                   conname                   | contype
 ---------------------------------------------------------------------
  local_exclude_named                        | x
@@ -1351,7 +1351,7 @@ SELECT conname, contype FROM pg_constraint WHERE conrelid = 'local_partitioned_t
 
 \c - - :public_worker_1_host :worker_1_port
 SET search_path TO pg17;
-SELECT conname, contype FROM pg_constraint WHERE conrelid = 'pg17.distributed_partitioned_table'::regclass AND contype = 'x';
+SELECT conname, contype FROM pg_constraint WHERE conrelid = 'pg17.distributed_partitioned_table'::regclass AND contype = 'x' ORDER BY conname;
                        conname                       | contype
 ---------------------------------------------------------------------
  dist_exclude_named                                  | x
@@ -2087,10 +2087,9 @@ CONTEXT:  PL/pgSQL function public.explain_filter(text,boolean) line XX at FOR o
    ->  Task
          Node: host=localhost port=N dbname=regression
          ->  Seq Scan on int8_tbl_12242024 i8  (cost=N.N..N.N rows=N width=N)
-             Planning:
                Memory: used=NkB  allocated=NkB
    Memory: used=NkB  allocated=NkB
-(9 rows)
+(8 rows)
 
 select public.explain_filter('explain (memory, analyze, buffers false) select * from int8_tbl i8');
 NOTICE:  issuing SELECT * FROM worker_save_query_explain_analyze('SELECT q1, q2 FROM pg17.int8_tbl_12242024 i8 WHERE true', '{"verbose": false, "costs": true, "buffers": false, "wal": false, "memory": true, "serialize": "none", "timing": true, "summary": true, "format": "TEXT"}') AS (field_0 bigint, field_1 bigint)
@@ -2106,14 +2105,13 @@ CONTEXT:  PL/pgSQL function public.explain_filter(text,boolean) line XX at FOR o
          Tuple data received from node: N bytes
          Node: host=localhost port=N dbname=regression
          ->  Seq Scan on int8_tbl_12242024 i8  (cost=N.N..N.N rows=N width=N) (actual time=N.N..N.N rows=N loops=N)
-             Planning:
                Memory: used=NkB  allocated=NkB
              Planning Time: N.N ms
              Execution Time: N.N ms
    Memory: used=NkB  allocated=NkB
  Planning Time: N.N ms
  Execution Time: N.N ms
-(15 rows)
+(14 rows)
 
 select public.explain_filter('explain (memory, summary, format yaml) select * from int8_tbl i8');
 NOTICE:  issuing EXPLAIN (ANALYZE FALSE, VERBOSE FALSE, COSTS TRUE, BUFFERS FALSE, WAL FALSE, TIMING FALSE, SUMMARY TRUE, MEMORY TRUE, SERIALIZE none, FORMAT YAML) SELECT q1, q2 FROM pg17.int8_tbl_12242024 i8 WHERE true
@@ -2228,10 +2226,9 @@ CONTEXT:  PL/pgSQL function public.explain_filter(text,boolean) line XX at FOR o
    ->  Task
          Node: host=localhost port=N dbname=regression
          ->  Seq Scan on int8_tbl_12242024 i8  (cost=N.N..N.N rows=N width=N)
-             Planning:
                Memory: used=NkB  allocated=NkB
    Memory: used=NkB  allocated=NkB
-(9 rows)
+(8 rows)
 
 -- serialize tests, same as postgres tests, we just distributed the table
 select public.explain_filter('explain (analyze, serialize, buffers, format yaml) select * from int8_tbl i8');

@@ -781,10 +781,10 @@ ALTER TABLE distributed_partitioned_table ADD EXCLUDE USING btree (id WITH =, pa
 ALTER TABLE local_partitioned_table ADD EXCLUDE USING btree (partition_col WITH =);
 
 -- Step 8: Verify the unnamed exclusion constraints were added
-SELECT conname, contype FROM pg_constraint WHERE conrelid = 'local_partitioned_table'::regclass AND contype = 'x';
+SELECT conname, contype FROM pg_constraint WHERE conrelid = 'local_partitioned_table'::regclass AND contype = 'x' ORDER BY conname;
 \c - - :public_worker_1_host :worker_1_port
 SET search_path TO pg17;
-SELECT conname, contype FROM pg_constraint WHERE conrelid = 'pg17.distributed_partitioned_table'::regclass AND contype = 'x';
+SELECT conname, contype FROM pg_constraint WHERE conrelid = 'pg17.distributed_partitioned_table'::regclass AND contype = 'x' ORDER BY conname;
 
 -- Step 9: Drop the exclusion constraints from both tables
 \c - - :master_host :master_port
