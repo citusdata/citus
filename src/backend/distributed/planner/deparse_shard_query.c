@@ -49,7 +49,6 @@
 
 static void UpdateTaskQueryString(Query *query, Task *task);
 static RelationShard * FindRelationShard(Oid inputRelationId, List *relationShardList);
-static void ConvertRteToSubqueryWithEmptyResult(RangeTblEntry *rte);
 static bool ShouldLazyDeparseQuery(Task *task);
 static char * DeparseTaskQuery(Task *task, Query *query);
 
@@ -573,7 +572,7 @@ FindRelationShard(Oid inputRelationId, List *relationShardList)
  * ConvertRteToSubqueryWithEmptyResult converts given relation RTE into
  * subquery RTE that returns no results.
  */
-static void
+void
 ConvertRteToSubqueryWithEmptyResult(RangeTblEntry *rte)
 {
 	Relation relation = table_open(rte->relid, NoLock);
@@ -619,6 +618,13 @@ ConvertRteToSubqueryWithEmptyResult(RangeTblEntry *rte)
 	subquery->jointree = joinTree;
 
 	rte->rtekind = RTE_SUBQUERY;
+
+	/*
+	 * Table references normally have inh set even when they have no children.
+	 * This replacement is an ordinary empty subquery, not an append relation.
+	 * Clear the table's flag so later planning does not mistake it for one.
+	 */
+	rte->inh = false;
 
 	/* no permission checking for this RTE */
 	rte->perminfoindex = 0;

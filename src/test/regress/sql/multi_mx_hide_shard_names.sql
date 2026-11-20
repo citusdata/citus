@@ -251,6 +251,15 @@ RESET citus.enable_metadata_sync;
 -- the shards and indexes do not show up
 SELECT relname FROM pg_catalog.pg_class WHERE relnamespace = 'mx_hide_shard_names'::regnamespace ORDER BY relname;
 
+-- shards stay hidden when pg_class is on the nullable side of an outer join,
+-- and the outer row is null-extended instead of being removed
+SELECT n.nspname, count(c.oid) FROM pg_catalog.pg_namespace n
+LEFT JOIN pg_catalog.pg_class c ON c.relnamespace = n.oid AND c.relname = 'test_table_1130000'
+WHERE n.nspname = 'mx_hide_shard_names' GROUP BY n.nspname;
+SELECT n.nspname, count(c.oid) FROM pg_catalog.pg_class c
+RIGHT JOIN pg_catalog.pg_namespace n ON c.relnamespace = n.oid AND c.relname = 'test_table_1130000'
+WHERE n.nspname = 'mx_hide_shard_names' GROUP BY n.nspname;
+
 -- Relevant Pg17 commit:
 -- https://github.com/postgres/postgres/commit/067701f57758f9baed5bd9d868539738d77bfa92
 -- Relevant PG18 commit:

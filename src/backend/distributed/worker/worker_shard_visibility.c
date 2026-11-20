@@ -27,6 +27,7 @@
 #include "distributed/local_executor.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/query_colocation_checker.h"
+#include "distributed/query_utils.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/worker_shard_visibility.h"
 
@@ -474,11 +475,22 @@ FilterShardsFromPgclass(Node *node, void *context)
 			/* add relation_is_a_known_shard(oid) IS NOT TRUE to the quals of the query */
 			Node *newQual = CreateRelationIsAKnownShardFilter(varno);
 
+			if (RangeTableEntryIsOnNullableSideOfOuterJoin(query, varno))
+			{
+				/*
+				 * Filter shards when scanning pg_class, so that the outer join
+				 * null-extends a row whose only match is a shard instead of
+				 * removing the row.
+				 */
+				rangeTableEntry->securityQuals =
+					lappend(rangeTableEntry->securityQuals, newQual);
+			}
+
 			/*
 			 * In PG17, MERGE queries introduce a new struct `mergeJoinCondition`.
 			 * We need to handle this condition safely.
 			 */
-			if (query->mergeJoinCondition != NULL)
+			else if (query->mergeJoinCondition != NULL)
 			{
 				/* Add the filter to mergeJoinCondition */
 				query->mergeJoinCondition = (Node *) makeBoolExpr(
