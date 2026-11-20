@@ -1922,6 +1922,7 @@ BlessRecordExpression(Expr *expr)
 
 		typeMod = rowTupleDesc->tdtypmod;
 	}
+
 	/*
 	 * Record aggregates need blessed typmods to parse worker results.
 	 * For PG18, AGG_MATCH_RECORD allows MIN/MAX on composite types.
@@ -3284,15 +3285,20 @@ RemovedOuterJoinRelationIndexes(Node *node, Query *query,
 	{
 		JoinExpr *join = (JoinExpr *) node;
 
-		/* A whole joined subtree can be on the nullable side of an outer join. */
+		/*
+		 * A whole joined subtree can be on the nullable side of an outer join.
+		 * PostgreSQL can reduce a FULL join to LEFT or RIGHT before removing
+		 * it, so either side of a FULL join may have been eliminated.
+		 */
+		bool leftNullable = nullable || join->jointype == JOIN_RIGHT ||
+							join->jointype == JOIN_FULL;
+		bool rightNullable = nullable || join->jointype == JOIN_LEFT ||
+							 join->jointype == JOIN_FULL;
 		rteIndexes = RemovedOuterJoinRelationIndexes(join->larg, query, context,
-													 nullable || join->jointype ==
-													 JOIN_RIGHT);
+													 leftNullable);
 		rteIndexes = bms_join(rteIndexes,
 							  RemovedOuterJoinRelationIndexes(join->rarg, query, context,
-															  nullable ||
-															  join->jointype == JOIN_LEFT)
-							  );
+															  rightNullable));
 	}
 	return rteIndexes;
 }
