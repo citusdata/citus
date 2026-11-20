@@ -909,14 +909,33 @@ ConvertTableInternal(TableConversionState *con)
 
 	con->newRelationId = get_relname_relid(con->tempName, con->schemaId);
 
-	if (con->conversionType == ALTER_DISTRIBUTED_TABLE)
+	/*
+	 * Preserve the old table's coordinator_uses_full_sequence_range flag by
+	 * temporarily overriding citus.assign_full_sequence_to_coordinator while
+	 * the new table is created. InsertIntoPgDistPartition() captures the GUC
+	 * value, so the recreated table ends up with the same policy as the
+	 * original. We restore the GUC on both success and error paths.
+	 */
+	bool savedAssignFullSequenceToCoordinator = AssignFullSequenceToCoordinator;
+	CitusTableCacheEntry *oldCacheEntry = GetCitusTableCacheEntry(con->relationId);
+	AssignFullSequenceToCoordinator = oldCacheEntry->coordinatorUsesFullSequenceRange;
+
+	PG_TRY();
 	{
-		CreateDistributedTableLike(con);
+		if (con->conversionType == ALTER_DISTRIBUTED_TABLE)
+		{
+			CreateDistributedTableLike(con);
+		}
+		else if (con->conversionType == ALTER_TABLE_SET_ACCESS_METHOD)
+		{
+			CreateCitusTableLike(con);
+		}
 	}
-	else if (con->conversionType == ALTER_TABLE_SET_ACCESS_METHOD)
+	PG_FINALLY();
 	{
-		CreateCitusTableLike(con);
+		AssignFullSequenceToCoordinator = savedAssignFullSequenceToCoordinator;
 	}
+	PG_END_TRY();
 
 	/* preserve colocation with procedures/functions */
 	if (con->conversionType == ALTER_DISTRIBUTED_TABLE)

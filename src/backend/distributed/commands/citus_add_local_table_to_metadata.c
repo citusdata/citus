@@ -1447,7 +1447,8 @@ InsertMetadataForCitusLocalTable(Oid citusLocalTableId, uint64 shardId,
 	Var *distributionColumn = NULL;
 	InsertIntoPgDistPartition(citusLocalTableId, distributionMethod,
 							  distributionColumn, colocationId,
-							  replicationModel, autoConverted);
+							  replicationModel, autoConverted,
+							  AssignFullSequenceToCoordinator);
 
 	/* set shard storage type according to relation type */
 	char shardStorageType = ShardStorageType(citusLocalTableId);
