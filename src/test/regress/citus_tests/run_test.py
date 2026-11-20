@@ -410,6 +410,8 @@ def run_schedule_with_multiregress(
         make_recipe = "check-failure-custom-schedule"
     elif original_schedule == "multi_follower_schedule":
         make_recipe = "check-follower-custom-schedule"
+    elif original_schedule == "split_output_plugin_denied_schedule":
+        make_recipe = "check-split-output-plugin-denied-custom-schedule"
     elif test_name.startswith("columnar"):
         if dependencies.schedule is None:
             # Columanar isolation tests don't depend on a base schedule,
@@ -519,7 +521,10 @@ def test_dependencies(test_name, test_schedule, schedule_line, args):
     if test_name in DEPS:
         return DEPS[test_name]
 
-    if test_schedule == "multi_follower_schedule":
+    if test_schedule in (
+        "multi_follower_schedule",
+        "split_output_plugin_denied_schedule",
+    ):
         preceding_tests = []
         for line in (REGRESS_DIR / test_schedule).read_text().splitlines():
             if line.startswith("test:"):

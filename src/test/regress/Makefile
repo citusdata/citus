@@ -291,6 +291,10 @@ check-split-output-plugin-denied: all
 	CITUS_TEST_SKIP_OUTPUT_PLUGIN_ALLOWLIST=1 $(pg_regress_multi_check) --load-extension=citus \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/split_output_plugin_denied_schedule $(EXTRA_TESTS)
 
+check-split-output-plugin-denied-custom-schedule: all
+	CITUS_TEST_SKIP_OUTPUT_PLUGIN_ALLOWLIST=1 $(pg_regress_multi_check) --load-extension=citus \
+	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/$(SCHEDULE) $(EXTRA_TESTS)
+
 check-failure: all
 	$(pg_regress_multi_check) --load-extension=citus --mitmproxy \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/failure_schedule $(EXTRA_TESTS)
