@@ -240,7 +240,9 @@ jobs:
               cd src/test/regress
               N=6
               X="$SHARD"
-              TESTS=$(run_test pipenv run python3 citus_tests/print_test_names.py |
+              # Keep stderr out of the captured test-name list.
+              TESTS=$(env LD_PRELOAD="$ASAN_RUNTIME" pipenv run python3 citus_tests/print_test_names.py \
+                2>> "$ASAN_DIR/tests.output" |
                 tr '\n' ',' | awk -v N="$N" -v X="$X" -F, '{
                   split("", parts)
                   for (i = 1; i <= NF; i++) {
@@ -280,24 +282,40 @@ jobs:
             echo "::error::Old Citus instrumentation was not verified"
             failed=1
           fi
-          ubsan_paths=(src/test "$ASAN_DIR/tests.output")
+          ubsan_report="$ASAN_DIR/reports/ubsan-tests"
+          : > "$ubsan_report"
+          ubsan_found=0
+          ubsan_error=0
+          # Scan only text logs/outputs; skip sockets/FIFOs and do not follow symlinks.
+          ubsan_scan() {
+            local status
+            set +e
+            grep -H -n -F -D skip --binary-files=without-match \
+              -e 'runtime error:' "$@" >> "$ubsan_report"
+            status=$?
+            set -e
+            if [ "$status" -eq 0 ]; then
+              ubsan_found=1
+            elif [ "$status" -gt 1 ]; then
+              ubsan_error=1
+            fi
+          }
+          ubsan_dirs=(src/test)
           if [ -d /tmp/pg_upgrade_newData_logs ]; then
-            ubsan_paths+=(/tmp/pg_upgrade_newData_logs)
+            ubsan_dirs+=(/tmp/pg_upgrade_newData_logs)
           fi
-          set +e
-          grep -R -n -F --binary-files=without-match 'runtime error:' \
-            "${ubsan_paths[@]}" > "$ASAN_DIR/reports/ubsan-tests"
-          grep_status=$?
-          set -e
-          if [ "$grep_status" -eq 0 ]; then
+          ubsan_scan "$ASAN_DIR/tests.output"
+          ubsan_scan -r --include='*.log' --include='*.out' --include='*.diffs' \
+            "${ubsan_dirs[@]}"
+          if [ "$ubsan_error" -eq 1 ]; then
+            echo "::error::Failed to scan test output for UBSan diagnostics"
+            cat "$ubsan_report"
+            failed=1
+          elif [ "$ubsan_found" -eq 1 ]; then
             echo "::error::UBSan diagnostic(s) found in test output"
             failed=1
-          elif [ "$grep_status" -eq 1 ]; then
-            rm -f "$ASAN_DIR/reports/ubsan-tests"
           else
-            echo "::error::Failed to scan test output for UBSan diagnostics (grep exit $grep_status)"
-            cat "$ASAN_DIR/reports/ubsan-tests"
-            failed=1
+            rm -f "$ubsan_report"
           fi
           # Even a harness that swallows a backend's failure must not hide sanitizer reports.
           # UBSan diagnostics are captured from test output; expected canary reports live outside.
