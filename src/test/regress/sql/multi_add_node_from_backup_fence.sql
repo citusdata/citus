@@ -9,6 +9,10 @@
 -- catch up. The promotion runs over dblink. Both promotions fail before
 -- pg_promote(), so the clone stays a replica.
 --
+-- The test also checks that the promotion makes the primary flush its WAL up to
+-- the catch-up target, so that the clone does not wait for an unrelated flush
+-- to receive it.
+--
 CREATE SCHEMA promotion_fence;
 SET search_path TO promotion_fence;
 SET statement_timeout TO '120s';
@@ -53,6 +57,15 @@ BEGIN
     END LOOP;
 END $$;
 
+-- a transaction that is still open on the primary wrote WAL, which the primary
+-- does not flush on its own right away
+SELECT dblink_connect('unflushed', :'primary_conn');
+SELECT dblink_exec('unflushed', 'SET idle_in_transaction_session_timeout TO 0');
+SELECT dblink_exec('unflushed', 'CREATE TABLE promotion_fence_unflushed (id int)');
+SELECT dblink_exec('unflushed', 'BEGIN');
+SELECT dblink_exec('unflushed', 'INSERT INTO promotion_fence_unflushed VALUES (1)');
+SELECT lsn AS unflushed_lsn FROM dblink('unflushed', 'SELECT pg_current_wal_insert_lsn()') AS t(lsn pg_lsn) \gset
+
 -- the promotions are found waiting for the clone by their connection to it,
 -- so wait for the ones of earlier promotions to go away first
 DO $$
@@ -77,6 +90,9 @@ BEGIN
         PERFORM pg_sleep(0.01);
     END LOOP;
 END $$;
+-- the promotion made the primary flush the WAL of the open transaction
+SELECT r AS open_transaction_wal_flushed
+FROM dblink(:'primary_conn', format('SELECT pg_current_wal_flush_lsn() >= %L', :'unflushed_lsn')) AS t(r bool);
 SELECT pg_sleep(2);
 SELECT relation AS fence_on_primary
 FROM dblink(:'primary_conn', $$SELECT relation::regclass::text FROM pg_locks
@@ -89,6 +105,8 @@ SELECT pg_cancel_backend(pid) AS cancelled FROM pg_stat_activity
 WHERE query LIKE 'SELECT citus_promote_clone_and_rebalance%' AND state = 'active';
 SELECT count(*) AS promotion_rows FROM dblink_get_result('idle_promotion', false) AS t(r text);
 SELECT dblink_disconnect('idle_promotion');
+SELECT dblink_exec('unflushed', 'ROLLBACK');
+SELECT dblink_disconnect('unflushed');
 
 SELECT dblink_exec(:'primary_conn', 'ALTER SYSTEM RESET idle_in_transaction_session_timeout');
 SELECT r AS reloaded FROM dblink(:'primary_conn', 'SELECT pg_catalog.pg_reload_conf()') AS t(r bool);
@@ -133,6 +151,7 @@ SELECT r AS clone_in_recovery FROM dblink(:'clone_conn', $$SELECT pg_is_in_recov
 SELECT isactive, nodeisclone FROM pg_dist_node WHERE nodeid = :clone_node_id;
 
 -- cleanup
+SELECT dblink_exec(:'primary_conn', 'DROP TABLE promotion_fence_unflushed');
 SET client_min_messages TO WARNING;
 DROP SCHEMA promotion_fence CASCADE;
 RESET client_min_messages;

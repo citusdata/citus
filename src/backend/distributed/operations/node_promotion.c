@@ -23,6 +23,7 @@
 #include "distributed/metadata_sync.h"
 #include "distributed/metadata_utility.h"
 #include "distributed/remote_commands.h"
+#include "distributed/replication_origin_session_utils.h"
 #include "distributed/resource_lock.h"
 #include "distributed/shard_cleaner.h"
 #include "distributed/shard_rebalancer.h"
@@ -37,6 +38,7 @@ static void BlockAllWritesToWorkerNode(WorkerNode *workerNode);
 static void LockShardsOnAllMetadataNodes(List *placementList);
 static void BlockDistributedTransactionsStartedOnNode(WorkerNode *workerNode);
 static void EnsureNoPreparedTransactionsOnNode(MultiConnection *connection);
+static void FlushSourceWal(MultiConnection *connection);
 static XLogRecPtr GetNodeWalPosition(MultiConnection *connection, bool replay);
 static bool GetNodeIsInRecoveryStatus(WorkerNode *workerNode);
 static void PromoteCloneNode(WorkerNode *cloneWorkerNode);
@@ -76,13 +78,15 @@ PG_FUNCTION_INFO_V1(citus_promote_clone_and_rebalance);
  *   acquiring locks. Unlimited waiting can hold shard write locks indefinitely,
  *   but remains interruptible by cancellation or statement_timeout.
  *   A positive budget starts after acquiring
- *   the write locks and includes fetching the source target and clone probes,
+ *   the write locks and includes fetching the source target, flushing the
+ *   source WAL, and clone probes,
  *   but excludes promotion and rebalancing. No probe starts after the budget
  *   expires; a successful in-flight probe is accepted even if it finishes later.
  *   This is not a hard deadline on remote I/O; statement_timeout can cancel it.
  *
  * After the write fence is acquired, a source insertion LSN is captured once,
- * including WAL from completed asynchronous commits. Clone replay must reach or
+ * including WAL from completed asynchronous commits, and the source flushes its
+ * WAL beyond it, see FlushSourceWal(). Clone replay must reach or
  * exceed this target before promotion. Unrelated WAL can advance beyond the
  * target without extending the wait. Consistency depends on the write fence
  * (see BlockAllWritesToWorkerNode) preventing the changes that the clone would
@@ -346,6 +350,7 @@ citus_promote_clone_and_rebalance(PG_FUNCTION_ARGS)
 		FinishConnectionEstablishment(sourceConnection);
 		EnsureNoPreparedTransactionsOnNode(sourceConnection);
 		targetLsn = GetNodeWalPosition(sourceConnection, false);
+		FlushSourceWal(sourceConnection);
 	}
 	PG_FINALLY();
 	{
@@ -776,6 +781,36 @@ GetNodeWalPosition(MultiConnection *connection, bool replay)
 	}
 
 	return position;
+}
+
+
+/*
+ * FlushSourceWal makes the source flush its WAL beyond the catch-up target,
+ * which it just read over the given connection, so that the clone receives the
+ * WAL up to the target right away: walsenders only send flushed WAL. The WAL
+ * writer soon flushes full pages and asynchronous commits, but not, for
+ * example, the WAL of a transaction that is still in progress, or of one that
+ * aborted without a transaction id. Without the flush, such WAL could wait for
+ * an unrelated flush for many seconds, while the write fence is held.
+ *
+ * A commit flushes the WAL only if its transaction wrote WAL before its commit
+ * record. So rather than commit a transaction, the source writes a
+ * non-transactional logical decoding message, and flushes the WAL up to its
+ * end. This also gives the clone a record that ends after the target.
+ * Otherwise, the clone might not reach a target at a page boundary: the
+ * insertion LSN then points after the page header, while replay stops at the
+ * end of the last record, before the header.
+ *
+ * With citus.enable_change_data_capture, the message gets the replication
+ * origin that Citus uses for its internal changes, so that CDC skips it.
+ */
+static void
+FlushSourceWal(MultiConnection *connection)
+{
+	SetupReplicationOriginRemoteSession(connection);
+	ExecuteCriticalRemoteCommand(connection,
+								 "SELECT pg_catalog.pg_logical_emit_message(false, "
+								 "'citus_promote_clone_and_rebalance', '', true)");
 }
 
 
