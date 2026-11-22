@@ -39,7 +39,20 @@ test_case "different"
 
 tmpdir=$(mktemp -d)
 mkdir "$tmpdir/expected" "$tmpdir/results"
-trap 'rm -f "$tmpdir/expected/seclabel.out" "$tmpdir/expected/seclabel.out.modified" "$tmpdir/results/seclabel.out" "$tmpdir/results/seclabel.out.modified"; rmdir "$tmpdir/expected" "$tmpdir/results" "$tmpdir"' EXIT
+cleanup()
+{
+	rm -f \
+		"$tmpdir/expected/seclabel.out" \
+		"$tmpdir/expected/seclabel.out.modified" \
+		"$tmpdir/results/seclabel.out" \
+		"$tmpdir/results/seclabel.out.modified" \
+		"$tmpdir/expected/source.c" \
+		"$tmpdir/expected/source.c.modified" \
+		"$tmpdir/results/source.c" \
+		"$tmpdir/results/source.c.modified"
+	rmdir "$tmpdir/expected" "$tmpdir/results" "$tmpdir"
+}
+trap cleanup EXIT
 
 printf '%s\n' \
 	"SELECT 1 FROM citus_add_node('localhost', :worker_2_port);" \
@@ -67,3 +80,10 @@ if diff -u "$tmpdir/expected/seclabel.out" "$tmpdir/results/seclabel.out" > /dev
 	echo "seclabel comparison accepted a missing command" >&2
 	exit 1
 fi
+
+printf '%s\n' 'int source;' > "$tmpdir/expected/source.c"
+cp "$tmpdir/expected/source.c" "$tmpdir/results/source.c"
+touch -t 200001010000 "$tmpdir/expected/source.c"
+source_mtime=$(stat -c %Y "$tmpdir/expected/source.c")
+diff "$tmpdir/expected/source.c" "$tmpdir/results/source.c" > /dev/null
+test "$source_mtime" = "$(stat -c %Y "$tmpdir/expected/source.c")"

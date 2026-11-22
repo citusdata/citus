@@ -277,7 +277,8 @@ jobs:
           PY
               monitor_pid=$!
               trap 'kill "$monitor_pid" 2>/dev/null || true; wait "$monitor_pid" 2>/dev/null || true' EXIT
-              run_test pipenv run make check-arbitrary-configs parallel=4 CONFIGS="$TESTS"
+              # Keep all configs, but limit concurrent clusters for sanitizer memory headroom.
+              run_test pipenv run make check-arbitrary-configs parallel=2 CONFIGS="$TESTS"
               if ! kill -0 "$monitor_pid" 2>/dev/null; then
                 wait "$monitor_pid" || true
                 echo "::error::Resource monitor exited before the suite completed"
