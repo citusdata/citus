@@ -46,6 +46,26 @@ then
 	fi
 	sed -Ef "$normalize_file" < "$file1" > "$file1.modified"
 	sed -Ef "$normalize_file" < "$file2" > "$file2.modified"
+	if [[ "$test" == "seclabel" ]]
+	then
+		# Node activation emits these independent metadata commands in heap-scan order.
+		python3 - "$file1.modified" "$file2.modified" <<'PY' || exit $?
+import pathlib
+import re
+import sys
+
+header = "SELECT 1 FROM citus_add_node('localhost', :worker_2_port);\n"
+pair = r"NOTICE:  issuing [^\n]*\nDETAIL:  [^\n]*\n"
+block = re.compile(f"({re.escape(header)})((?:{pair})+)")
+for name in sys.argv[1:]:
+    path = pathlib.Path(name)
+    text = path.read_text()
+    text = block.sub(lambda m: m[1] + "".join(sorted(re.findall(pair, m[2]))), text)
+    path.write_text(text)
+PY
+		"$DIFF" -w $args "$file1.modified" "$file2.modified"
+		exit $?
+	fi
 	"$DIFF" -w $args "$file1.modified" "$file2.modified" | LC_CTYPE=C.UTF-8 diff-filter "$BASEDIR/normalize.sed"
 	exit ${PIPESTATUS[0]}
 else

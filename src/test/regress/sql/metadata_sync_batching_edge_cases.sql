@@ -403,7 +403,7 @@ SELECT logicalrelid::regclass,
         WHERE s.logicalrelid = p.logicalrelid) AS placements
 FROM pg_dist_partition p
 WHERE logicalrelid::regclass::text LIKE 'msbe\_no\_active\_placements.%'
-ORDER BY 1;
+ORDER BY logicalrelid::regclass::text;
 
 \c - - - :master_port
 SET search_path TO metadata_sync_batching_edge_cases;

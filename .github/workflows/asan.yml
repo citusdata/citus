@@ -252,7 +252,37 @@ jobs:
               }')
               echo "$TESTS"
               test -n "$TESTS"
-              run_test pipenv run make check-arbitrary-configs parallel=4 CONFIGS="$TESTS" ;;
+              python3 -u - "$ASAN_DIR/resources.log" <<'PY' &
+          import datetime
+          import pathlib
+          import shutil
+          import sys
+          import time
+
+          with open(sys.argv[1], "w", buffering=1) as log:
+              while True:
+                  meminfo = pathlib.Path("/proc/meminfo").read_text().splitlines()
+                  memory = " ".join(line for line in meminfo if line.startswith(("MemAvailable:", "SwapFree:")))
+                  cgroup = pathlib.Path("/sys/fs/cgroup")
+                  events = cgroup / "memory.events"
+                  usage = cgroup / "memory.current"
+                  disk = shutil.disk_usage(".")
+                  sample = (f"{datetime.datetime.now(datetime.timezone.utc).isoformat()} "
+                            f"{memory} disk_free_bytes={disk.free} "
+                            f"cgroup_bytes={usage.read_text().strip() if usage.exists() else 'unavailable'} "
+                            f"cgroup_events={events.read_text().strip().replace(chr(10), ',') if events.exists() else 'unavailable'}")
+                  print(sample, flush=True)
+                  print(sample, file=log, flush=True)
+                  time.sleep(30)
+          PY
+              monitor_pid=$!
+              trap 'kill "$monitor_pid" 2>/dev/null || true; wait "$monitor_pid" 2>/dev/null || true' EXIT
+              run_test pipenv run make check-arbitrary-configs parallel=4 CONFIGS="$TESTS"
+              if ! kill -0 "$monitor_pid" 2>/dev/null; then
+                wait "$monitor_pid" || true
+                echo "::error::Resource monitor exited before the suite completed"
+                exit 1
+              fi ;;
             *) echo "::error::Unknown suite: $GROUP"; exit 1 ;;
           esac
           touch "$ASAN_DIR/tests-completed"
@@ -348,6 +378,7 @@ jobs:
             ${{ runner.temp }}/asan/*-verified
             ${{ runner.temp }}/asan/tests-completed
             ${{ runner.temp }}/asan/tests.output
+            ${{ runner.temp }}/asan/resources.log
             ${{ runner.temp }}/asan/reports/
             ${{ runner.temp }}/asan/canary/
 
