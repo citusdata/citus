@@ -41,7 +41,7 @@ jobs:
   # Bounded to the two newest majors for phase 1; bump here to widen the arm coverage.
   params:
     name: Initialize parameters
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       pg_versions: '[{ "major": "17", "full": "17.11" }, { "major": "18", "full": "18.6" }]'
     steps:
@@ -95,7 +95,7 @@ jobs:
     name: Open issue on failure
     needs: [ test ]
     if: failure()
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/github-script@v7
         with:

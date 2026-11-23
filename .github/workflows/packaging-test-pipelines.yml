@@ -17,7 +17,7 @@ concurrency:
 jobs:
 
   get_postgres_versions_from_file:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       pg_versions: ${{ steps.get-postgres-versions.outputs.pg_versions }}
     steps:
@@ -41,7 +41,7 @@ jobs:
   rpm_build_tests:
     name: rpm_build_tests
     needs: get_postgres_versions_from_file
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -113,7 +113,7 @@ jobs:
   deb_build_tests:
     name: deb_build_tests
     needs: get_postgres_versions_from_file
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -195,7 +195,7 @@ jobs:
       - get_postgres_versions_from_file
       - rpm_build_tests
       - deb_build_tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Show results of required jobs
         run: echo '${{ toJSON(needs) }}'
