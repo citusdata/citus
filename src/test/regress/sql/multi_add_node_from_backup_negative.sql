@@ -205,8 +205,22 @@ DROP SUBSCRIPTION promotion_sub;
 
 -- A standalone promotion of the same clone succeeds. The clone gets an identity
 -- of its own, so it does not act as worker_2, e.g. in 2PC recovery.
+--
+-- The promotion commits right after its statement, so in a pipeline, the next
+-- command runs in a new transaction. psql supports pipelines from version 18.
+-- Older versions run the commands one by one, and print the same output, since
+-- the pipeline ends on the line of the commands.
+SELECT :VERSION_NUM >= 180000 AS psql_has_pipelines \gset
+\if :psql_has_pipelines
+\set start_pipeline '\\startpipeline'
+\set end_pipeline '\\endpipeline'
+\else
+\set start_pipeline ''
+\set end_pipeline ''
+\endif
 SET client_min_messages TO WARNING;
-SELECT citus_promote_clone_and_rebalance(clone_nodeid => :clone_node_id);
+:start_pipeline
+SELECT citus_promote_clone_and_rebalance(clone_nodeid => :clone_node_id); SELECT pg_current_xact_id_if_assigned() IS NULL AS own_transaction; :end_pipeline
 RESET client_min_messages;
 SELECT isactive, nodeisclone FROM pg_dist_node WHERE nodeid = :clone_node_id;
 SELECT groupid AS clone_group_id FROM pg_dist_node WHERE nodeid = :clone_node_id \gset

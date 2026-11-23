@@ -125,9 +125,13 @@ PG_FUNCTION_INFO_V1(citus_promote_clone_and_rebalance);
  * The promotion cannot run inside a transaction block, which includes a query
  * string with more than one statement: its write fence would last until the
  * transaction ends, and a rollback could not undo pg_promote() or the identity
- * of the clone. Called from a function or a DO block, it errors out if earlier
- * commands of its transaction made changes or ran on other nodes, see
- * ErrorIfCommandsBeforePromotion().
+ * of the clone. For the same reason, its transaction commits right after the
+ * statement that runs it, so in a pipeline, the next commands run in a new
+ * transaction. Called from a function or a DO block, or after other commands of
+ * a pipeline, it errors out if earlier commands of its transaction made changes
+ * or ran on other nodes, see ErrorIfCommandsBeforePromotion(). The commands
+ * after it in the same function or DO block still run in its transaction, so an
+ * error in one of them rolls back its metadata changes after pg_promote().
  *
  * Until the clone has an identity of its own, its maintenance daemon acts as
  * the primary, see AssignCloneNodeIdentity(). Operators should therefore
@@ -180,6 +184,16 @@ citus_promote_clone_and_rebalance(PG_FUNCTION_ARGS)
 	}
 
 	ErrorIfCommandsBeforePromotion();
+
+	/*
+	 * Like PreventInTransactionBlock(), commit as soon as the statement that
+	 * runs the promotion finishes. In a pipeline of the extended query
+	 * protocol, the next commands would otherwise run in its transaction until
+	 * the next Sync message, so the write fence would last longer, and an
+	 * error in one of them would roll back the metadata changes of the
+	 * promotion after pg_promote().
+	 */
+	MyXactFlags |= XACT_FLAGS_NEEDIMMEDIATECOMMIT;
 
 	/* Get clone_nodeid argument */
 	int32 cloneNodeIdArg = PG_GETARG_INT32(0);
@@ -520,10 +534,12 @@ citus_promote_clone_and_rebalance(PG_FUNCTION_ARGS)
  * since they hold locks of the same transaction.
  *
  * Transaction blocks are rejected before, so such commands can only come from
- * the same function or DO block. Distributed modifications set
- * XactModificationLevel. Local changes, including the metadata changes that are
- * also sent to other nodes, assign a transaction id. Commands that ran on other
- * nodes in a coordinated transaction are rejected too.
+ * the same function or DO block, or from earlier commands of a pipeline of the
+ * extended query protocol, which share a transaction until the next Sync
+ * message. Distributed modifications set XactModificationLevel. Local changes,
+ * including the metadata changes that are also sent to other nodes, assign a
+ * transaction id. Commands that ran on other nodes in a coordinated transaction
+ * are rejected too.
  */
 static void
 ErrorIfCommandsBeforePromotion(void)
