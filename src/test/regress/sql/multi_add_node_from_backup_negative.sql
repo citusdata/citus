@@ -180,6 +180,27 @@ CREATE TABLE logged_part PARTITION OF unlogged_parent FOR VALUES FROM (0) TO (10
 SELECT create_distributed_table('unlogged_parent', 'id', shard_count => 8);
 INSERT INTO unlogged_parent SELECT generate_series(0, 99);
 
+-- The promotion also errors out, and the clone stays a replica, if the primary
+-- has an enabled subscription, which the promoted clone would start too. The
+-- subscription cannot connect to its publisher, it only needs to be enabled.
+\c - - - :worker_2_port
+SET client_min_messages TO ERROR;
+CREATE SUBSCRIPTION promotion_sub CONNECTION 'host=localhost port=1 dbname=regression'
+    PUBLICATION promotion_pub WITH (connect = false);
+RESET client_min_messages;
+ALTER SUBSCRIPTION promotion_sub ENABLE;
+\c - - - :master_port
+SET client_min_messages TO WARNING;
+SELECT citus_promote_clone_and_rebalance(clone_nodeid => :clone_node_id);
+RESET client_min_messages;
+\c - - - :follower_worker_2_port
+SELECT pg_is_in_recovery() AS clone_in_recovery;
+\c - - - :worker_2_port
+ALTER SUBSCRIPTION promotion_sub DISABLE;
+ALTER SUBSCRIPTION promotion_sub SET (slot_name = NONE);
+DROP SUBSCRIPTION promotion_sub;
+\c - - - :master_port
+
 -- A standalone promotion of the same clone succeeds. The clone gets an identity
 -- of its own, so it does not act as worker_2, e.g. in 2PC recovery.
 SET client_min_messages TO WARNING;

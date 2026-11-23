@@ -51,6 +51,7 @@ static void ExecuteCommandListInRemoteTransaction(MultiConnection *connection,
 												  List *commandList);
 static void EnsureSingleNodePromotion(WorkerNode *primaryNode);
 static void ErrorIfPrimaryHasUnloggedPlacements(WorkerNode *primaryNode);
+static void EnsureNoEnabledSubscriptionsOnNode(MultiConnection *connection);
 static void AdjustCloneSequenceRangesForNewGroup(WorkerNode *cloneNode);
 
 PG_FUNCTION_INFO_V1(citus_promote_clone_and_rebalance);
@@ -113,6 +114,13 @@ PG_FUNCTION_INFO_V1(citus_promote_clone_and_rebalance);
  * their data, so the promotion errors out if the primary has placements of
  * unlogged distributed or reference tables, see
  * ErrorIfPrimaryHasUnloggedPlacements().
+ *
+ * The promotion also errors out if the primary has enabled logical replication
+ * subscriptions, see EnsureNoEnabledSubscriptionsOnNode(). To promote its
+ * clone, disable them on the primary, and enable them again once the promotion
+ * has committed. The promoted clone keeps disabled copies of them. Before
+ * dropping one there, set its slot_name to NONE, since DROP SUBSCRIPTION would
+ * otherwise drop the replication slot on the publisher that the primary uses.
  *
  * The promotion cannot run inside a transaction block: its write fence would
  * last until the transaction ends, and a rollback could not undo pg_promote()
@@ -353,6 +361,7 @@ citus_promote_clone_and_rebalance(PG_FUNCTION_ARGS)
 	{
 		FinishConnectionEstablishment(sourceConnection);
 		EnsureNoPreparedTransactionsOnNode(sourceConnection);
+		EnsureNoEnabledSubscriptionsOnNode(sourceConnection);
 		targetLsn = GetNodeWalPosition(sourceConnection, false);
 		FlushSourceWal(sourceConnection);
 	}
@@ -1212,6 +1221,83 @@ ErrorIfPrimaryHasUnloggedPlacements(WorkerNode *primaryNode)
 								  "unlogged tables, so the clone would not have it."),
 						errhint("Make the table logged with ALTER TABLE ... SET "
 								"LOGGED before promoting the clone.")));
+	}
+}
+
+
+/*
+ * EnsureNoEnabledSubscriptionsOnNode errors out if the node behind the given
+ * connection has enabled logical replication subscriptions, in any database.
+ * The clone inherits them, and starts them too once it is promoted, so that
+ * its apply workers compete with the ones of the node for the replication
+ * slots on the publishers. If the clone takes over a slot, the node no longer
+ * receives the changes. This is checked right before the catch-up; the write
+ * fence does not stop subscriptions from being enabled after that.
+ */
+static void
+EnsureNoEnabledSubscriptionsOnNode(MultiConnection *connection)
+{
+	const char *query =
+		"SELECT s.subname, d.datname FROM pg_catalog.pg_subscription s "
+		"JOIN pg_catalog.pg_database d ON d.oid = s.subdbid "
+		"WHERE s.subenabled ORDER BY d.datname, s.subname LIMIT 1";
+
+	if (SendRemoteCommand(connection, query) == 0)
+	{
+		ReportConnectionError(connection, ERROR);
+	}
+
+	PGresult *result = GetRemoteCommandResult(connection, true);
+	if (result == NULL)
+	{
+		ReportConnectionError(connection, ERROR);
+	}
+	if (!IsResponseOK(result))
+	{
+		ReportResultError(connection, result, ERROR);
+	}
+
+	char *subscriptionName = NULL;
+	char *databaseName = NULL;
+	PG_TRY();
+	{
+		if (PQntuples(result) > 1 || PQnfields(result) != 2)
+		{
+			ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
+							errmsg("unexpected subscription result from node %s:%d",
+								   connection->hostname, connection->port)));
+		}
+
+		if (PQntuples(result) == 1)
+		{
+			subscriptionName = pstrdup(PQgetvalue(result, 0, 0));
+			databaseName = pstrdup(PQgetvalue(result, 0, 1));
+		}
+	}
+	PG_FINALLY();
+	{
+		PQclear(result);
+	}
+	PG_END_TRY();
+	if (!ClearResults(connection, true) || PQstatus(connection->pgConn) != CONNECTION_OK)
+	{
+		ReportConnectionError(connection, ERROR);
+	}
+
+	if (subscriptionName != NULL)
+	{
+		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+						errmsg("cannot promote a clone of node %s:%d, which has the "
+							   "enabled subscription %s in database %s",
+							   connection->hostname, connection->port,
+							   quote_identifier(subscriptionName),
+							   quote_identifier(databaseName)),
+						errdetail("The promoted clone would start the subscription "
+								  "too, and could take over its replication slot on "
+								  "the publisher."),
+						errhint("Disable the subscriptions of the node with ALTER "
+								"SUBSCRIPTION ... DISABLE before promoting the clone, "
+								"and enable them again once the promotion commits.")));
 	}
 }
 
