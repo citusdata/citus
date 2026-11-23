@@ -25,7 +25,7 @@ on:
 jobs:
   build:
     name: Build Citus
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     container:
       image: ${{ vars.build_image_name }}:${{ vars.pg17_version  }}${{ vars.image_suffix }}
       options: --user root
@@ -44,7 +44,7 @@ jobs:
           ./install-${{ env.PG_MAJOR }}.tar
   prepare_parallelization_matrix:
     name: Prepare parallelization matrix
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       json: ${{ steps.parallelization.outputs.json }}
     steps:
@@ -55,7 +55,7 @@ jobs:
           count: ${{ inputs.flaky_test_parallel_jobs }}
   test_flakyness:
     name: Test flakyness
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     container:
       image: ${{ vars.fail_test_image_name }}:${{ vars.pg17_version  }}${{ vars.image_suffix }}
       options: --user root
