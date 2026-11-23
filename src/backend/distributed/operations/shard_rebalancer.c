@@ -2977,8 +2977,6 @@ InitRebalanceState(List *workerNodeList, List *shardPlacementList,
 													  fillState->capacity);
 		fillState->shardCostListDesc = lappend(fillState->shardCostListDesc,
 											   shardCost);
-		fillState->shardCostListDesc = SortList(fillState->shardCostListDesc,
-												CompareShardCostDesc);
 
 		state->totalCost += shardCost->cost;
 
@@ -2993,6 +2991,17 @@ InitRebalanceState(List *workerNodeList, List *shardPlacementList,
 		}
 	}
 	foreach_htab_cleanup(placement, &status);
+
+	/*
+	 * Sort the shard costs of each node once, rather than after each append.
+	 * Shard ids break ties between equal costs, so the order is the same.
+	 */
+	NodeFillState *nodeFillState = NULL;
+	foreach_declared_ptr(nodeFillState, state->fillStateListAsc)
+	{
+		nodeFillState->shardCostListDesc = SortList(nodeFillState->shardCostListDesc,
+													CompareShardCostDesc);
+	}
 
 	state->fillStateListAsc = SortList(state->fillStateListAsc, CompareNodeFillStateAsc);
 	state->fillStateListDesc = SortList(state->fillStateListDesc,
