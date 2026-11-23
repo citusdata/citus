@@ -102,7 +102,7 @@ static void ExecuteFetchTaskList(List *fetchTaskList);
  * to all nodes containing that shard.
  *
  * returnValue[shardIndex] is list of cstrings each of which is a resultId which
- * correspond to targetRelation->sortedShardIntervalArray[shardIndex].
+ * correspond to targetRelation->generalShardIntervals[shardIndex].
  *
  * partitionColumnIndex determines the column in the selectTaskList to use for
  * partitioning.
@@ -183,7 +183,6 @@ WrapTasksForPartitioning(const char *resultIdPrefix, List *selectTaskList,
 						 bool binaryFormat)
 {
 	List *wrappedTaskList = NIL;
-	ShardInterval **shardIntervalArray = targetRelation->sortedShardIntervalArray;
 	int shardCount = targetRelation->shardIntervalArrayLength;
 
 	ArrayType *minValueArray = NULL;
@@ -198,7 +197,16 @@ WrapTasksForPartitioning(const char *resultIdPrefix, List *selectTaskList,
 						&intervalTypeId, &intervalTypeMod);
 	getTypeOutputInfo(intervalTypeId, &intervalTypeOutFunc, &intervalTypeVarlena);
 
-	ShardMinMaxValueArrays(shardIntervalArray, shardCount, intervalTypeOutFunc,
+	ShardInterval **intervals = targetRelation->generalShardIntervals;
+	if (targetRelation->hasCompactShards)
+	{
+		intervals = palloc_array(ShardInterval *, shardCount);
+		for (int i = 0; i < shardCount; i++)
+		{
+			intervals[i] = CopyCachedShardInterval(targetRelation, i);
+		}
+	}
+	ShardMinMaxValueArrays(intervals, shardCount, intervalTypeOutFunc,
 						   &minValueArray, &maxValueArray);
 	StringInfo minValuesString = ArrayObjectToString(minValueArray, TEXTOID,
 													 intervalTypeMod);
@@ -426,15 +434,14 @@ TupleToDistributedResultFragment(HeapTuple tuple,
 	int64 rowCount = DatumGetInt64(heap_getattr(tuple, 3, tupleDesc, &isNull));
 
 	Assert(targetShardIndex < targetRelation->shardIntervalArrayLength);
-	ShardInterval *shardInterval =
-		targetRelation->sortedShardIntervalArray[targetShardIndex];
+	uint64 shardId = CachedShardId(targetRelation, targetShardIndex);
 
 	DistributedResultFragment *distributedResultFragment =
 		palloc0(sizeof(DistributedResultFragment));
 
 	distributedResultFragment->nodeId = sourceNodeId;
 	distributedResultFragment->targetShardIndex = targetShardIndex;
-	distributedResultFragment->targetShardId = shardInterval->shardId;
+	distributedResultFragment->targetShardId = shardId;
 	distributedResultFragment->resultId = text_to_cstring(resultId);
 	distributedResultFragment->rowCount = rowCount;
 
@@ -476,7 +483,7 @@ ExecuteSelectTasksIntoTupleDest(List *taskList, TupleDestination *tupleDestinati
  * calls to fetch_intermediate_results() between nodes.
  *
  * returnValue[shardIndex] is list of result Ids that are colocated with
- * targetRelation->sortedShardIntervalArray[shardIndex] after fetch tasks are
+ * targetRelation->generalShardIntervals[shardIndex] after fetch tasks are
  * done.
  */
 static List **

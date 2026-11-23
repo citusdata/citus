@@ -163,9 +163,7 @@ GenerateTaskListWithColocatedIntermediateResults(Oid targetRelationId,
 
 	for (int shardOffset = 0; shardOffset < shardCount; shardOffset++)
 	{
-		ShardInterval *targetShardInterval =
-			targetCacheEntry->sortedShardIntervalArray[shardOffset];
-		uint64 shardId = targetShardInterval->shardId;
+		uint64 shardId = CachedShardId(targetCacheEntry, shardOffset);
 		List *columnAliasList = NIL;
 		StringInfo queryString = makeStringInfo();
 		StringInfo resultId = makeStringInfo();
@@ -213,8 +211,8 @@ GenerateTaskListWithColocatedIntermediateResults(Oid targetRelationId,
 		List *insertShardPlacementList = ActiveShardPlacementList(shardId);
 
 		RelationShard *relationShard = CitusMakeNode(RelationShard);
-		relationShard->relationId = targetShardInterval->relationId;
-		relationShard->shardId = targetShardInterval->shardId;
+		relationShard->relationId = targetCacheEntry->relationId;
+		relationShard->shardId = shardId;
 
 		Task *modifyTask = CreateBasicTask(jobId, taskIdIndex, MODIFY_TASK,
 										   queryString->data);
@@ -293,7 +291,7 @@ AdjustTaskQueryForEmptySource(Oid targetRelationId,
  * redistributedResults into the given target relation.
  * redistributedResults[shardIndex] is list of cstrings each of which is
  * a result name which should be inserted into
- * targetRelation->sortedShardIntervalArray[shardIndex].
+ * targetRelation->generalShardIntervals[shardIndex].
  */
 List *
 GenerateTaskListWithRedistributedResults(Query *modifyQueryViaCoordinatorOrRepartition,
@@ -324,10 +322,8 @@ GenerateTaskListWithRedistributedResults(Query *modifyQueryViaCoordinatorOrRepar
 
 	for (shardOffset = 0; shardOffset < shardCount; shardOffset++)
 	{
-		ShardInterval *targetShardInterval =
-			targetRelation->sortedShardIntervalArray[shardOffset];
-		List *resultIdList = redistributedResults[targetShardInterval->shardIndex];
-		uint64 shardId = targetShardInterval->shardId;
+		uint64 shardId = CachedShardId(targetRelation, shardOffset);
+		List *resultIdList = redistributedResults[shardOffset];
 		StringInfo queryString = makeStringInfo();
 
 		/* skip empty tasks */
@@ -385,8 +381,8 @@ GenerateTaskListWithRedistributedResults(Query *modifyQueryViaCoordinatorOrRepar
 		List *insertShardPlacementList = ActiveShardPlacementList(shardId);
 
 		RelationShard *relationShard = CitusMakeNode(RelationShard);
-		relationShard->relationId = targetShardInterval->relationId;
-		relationShard->shardId = targetShardInterval->shardId;
+		relationShard->relationId = targetRelation->relationId;
+		relationShard->shardId = shardId;
 
 		Task *modifyTask = CreateBasicTask(jobId, taskIdIndex, MODIFY_TASK,
 										   queryString->data);

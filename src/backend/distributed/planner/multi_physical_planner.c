@@ -2029,18 +2029,16 @@ BuildMapMergeJob(Query *jobQuery, List *dependentJobList, Var *partitionKey,
 	{
 		CitusTableCacheEntry *cache = GetCitusTableCacheEntry(baseRelationId);
 		int shardCount = cache->shardIntervalArrayLength;
-		ShardInterval **cachedSortedShardIntervalArray =
-			cache->sortedShardIntervalArray;
 		bool hasUninitializedShardInterval =
 			cache->hasUninitializedShardInterval;
 
 		ShardInterval **sortedShardIntervalArray =
-			palloc0(sizeof(ShardInterval) * shardCount);
+			palloc_array(ShardInterval *, shardCount);
 
 		for (int shardIndex = 0; shardIndex < shardCount; shardIndex++)
 		{
 			sortedShardIntervalArray[shardIndex] =
-				CopyShardInterval(cachedSortedShardIntervalArray[shardIndex]);
+				CopyCachedShardInterval(cache, shardIndex);
 		}
 
 		if (hasUninitializedShardInterval)
@@ -2673,37 +2671,35 @@ QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 		RelationRestriction *relationRestriction =
 			(RelationRestriction *) lfirst(restrictionCell);
 		Oid relationId = relationRestriction->relationId;
-		ShardInterval *shardInterval = NULL;
+		int intervalIndex = shardIndex;
 
 		CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
 		if (!HasDistributionKeyCacheEntry(cacheEntry))
 		{
 			/* non-distributed tables have only one shard */
-			shardInterval = cacheEntry->sortedShardIntervalArray[0];
+			intervalIndex = 0;
 
 			/* use as anchor shard only if we couldn't find any yet */
 			if (anchorShardId == INVALID_SHARD_ID)
 			{
-				anchorShardId = shardInterval->shardId;
+				anchorShardId = CachedShardId(cacheEntry, intervalIndex);
 			}
 		}
 		else if (UpdateOrDeleteOrMergeQuery(originalQuery))
 		{
-			shardInterval = cacheEntry->sortedShardIntervalArray[shardIndex];
 			if (!modifyWithSubselect || relationId == resultRelationOid)
 			{
 				/* for UPDATE/DELETE the shard in the result relation becomes the anchor shard */
-				anchorShardId = shardInterval->shardId;
+				anchorShardId = CachedShardId(cacheEntry, intervalIndex);
 			}
 		}
 		else
 		{
 			/* for SELECT we pick an arbitrary shard as the anchor shard */
-			shardInterval = cacheEntry->sortedShardIntervalArray[shardIndex];
-			anchorShardId = shardInterval->shardId;
+			anchorShardId = CachedShardId(cacheEntry, intervalIndex);
 		}
 
-		ShardInterval *copiedShardInterval = CopyShardInterval(shardInterval);
+		ShardInterval *copiedShardInterval = CopyCachedShardInterval(cacheEntry, intervalIndex);
 
 		taskShardList = lappend(taskShardList, list_make1(copiedShardInterval));
 

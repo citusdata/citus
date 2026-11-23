@@ -249,14 +249,12 @@ SortedShardIntervalArray(Oid distributedTableId)
 	Oid shardIdTypeId = INT8OID;
 
 	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(distributedTableId);
-	ShardInterval **shardIntervalArray = cacheEntry->sortedShardIntervalArray;
 	int shardIdCount = cacheEntry->shardIntervalArrayLength;
 	Datum *shardIdDatumArray = palloc0(shardIdCount * sizeof(Datum));
 
 	for (int shardIndex = 0; shardIndex < shardIdCount; ++shardIndex)
 	{
-		ShardInterval *shardId = shardIntervalArray[shardIndex];
-		Datum shardIdDatum = Int64GetDatum(shardId->shardId);
+		Datum shardIdDatum = Int64GetDatum(CachedShardId(cacheEntry, shardIndex));
 
 		shardIdDatumArray[shardIndex] = shardIdDatum;
 	}

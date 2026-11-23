@@ -361,7 +361,7 @@ CreateDistributedInsertSelectPlan(Query *originalQuery,
 	for (int shardOffset = 0; shardOffset < shardCount; shardOffset++)
 	{
 		ShardInterval *targetShardInterval =
-			targetCacheEntry->sortedShardIntervalArray[shardOffset];
+			CopyCachedShardInterval(targetCacheEntry, shardOffset);
 
 		Task *modifyTask = RouterModifyTaskForShardInterval(originalQuery,
 															targetCacheEntry,

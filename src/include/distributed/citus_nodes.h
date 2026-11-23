@@ -93,6 +93,18 @@ CitusNodeTagI(Node *node)
 }
 
 
+/* Build the header for a Citus node in either caller storage or palloc'd memory. */
+static inline CitusNode
+CitusNodeHeader(CitusNodeTag tag)
+{
+	CitusNode header = { 0 };
+	header.extensible.type = T_ExtensibleNode;
+	header.extensible.extnodename = CitusNodeTagNames[tag - CITUS_NODE_TAG_START];
+	header.citus_tag = tag;
+	return header;
+}
+
+
 /* Citus variant of newNode(), don't use directly. */
 static inline CitusNode *
 CitusNewNode(size_t size, CitusNodeTag tag)
@@ -101,9 +113,7 @@ CitusNewNode(size_t size, CitusNodeTag tag)
 
 	Assert(size >= sizeof(CitusNode));		/* need the ExtensibleNode and the tag, at least */
 	result = (CitusNode *) palloc0(size);
-	result->extensible.type = T_ExtensibleNode;
-	result->extensible.extnodename = CitusNodeTagNames[tag - CITUS_NODE_TAG_START];
-	result->citus_tag = (int) (tag);
+	*result = CitusNodeHeader(tag);
 
 	return result;
 }

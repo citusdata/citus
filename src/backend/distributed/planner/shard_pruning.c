@@ -267,7 +267,6 @@ static void AddHashRestrictionToInstance(ClauseWalkerContext *context, OpExpr *o
 										 Var *varClause, Const *constantClause);
 static void AddNewConjuction(ClauseWalkerContext *context, PruningTreeNode *node);
 static PruningInstance * CopyPartialPruningInstance(PruningInstance *sourceInstance);
-static List * ShardArrayToList(ShardInterval **shardArray, int length);
 static List * DeepCopyShardIntervalList(List *originalShardIntervalList);
 static int PerformValueCompare(FunctionCallInfo compareFunctionCall, Datum a,
 							   Datum b);
@@ -320,6 +319,7 @@ PruneShards(Oid relationId, Index rangeTableId, List *whereClauseList,
 	ClauseWalkerContext context = { 0 };
 	ListCell *pruneCell;
 	List *prunedList = NIL;
+	Bitmapset *seenCompactIndexes = NULL;
 	bool foundRestriction = false;
 	bool foundPartitionColumnValue = false;
 	Const *singlePartitionValueConst = NULL;
@@ -339,9 +339,7 @@ PruneShards(Oid relationId, Index rangeTableId, List *whereClauseList,
 	/* short circuit for non-distributed tables such as reference table */
 	if (!HasDistributionKeyCacheEntry(cacheEntry))
 	{
-		prunedList = ShardArrayToList(cacheEntry->sortedShardIntervalArray,
-									  cacheEntry->shardIntervalArrayLength);
-		return DeepCopyShardIntervalList(prunedList);
+		return CopyCachedShardIntervalList(cacheEntry);
 	}
 
 
@@ -452,15 +450,23 @@ PruneShards(Oid relationId, Index rangeTableId, List *whereClauseList,
 
 		List *pruneOneList = PruneOne(cacheEntry, &context, prune);
 
-		if (prunedList)
+		if (cacheEntry->hasCompactShards && list_length(context.pruningInstances) > 1)
 		{
-			/*
-			 * We can use list_union_ptr, which is a lot faster than doing
-			 * comparing shards by value, because all the ShardIntervals are
-			 * guaranteed to be from
-			 * CitusTableCacheEntry->sortedShardIntervalArray (thus having the
-			 * same pointer values).
-			 */
+			/* Materialized nodes have distinct addresses even for the same shard. */
+			ShardInterval *interval = NULL;
+			foreach_declared_ptr(interval, pruneOneList)
+			{
+				if (!bms_is_member(interval->shardIndex, seenCompactIndexes))
+				{
+					seenCompactIndexes = bms_add_member(seenCompactIndexes,
+														interval->shardIndex);
+					prunedList = lappend(prunedList, interval);
+				}
+			}
+		}
+		else if (prunedList)
+		{
+			/* General cache intervals have stable addresses. */
 			prunedList = list_union_ptr(prunedList, pruneOneList);
 		}
 		else
@@ -478,8 +484,7 @@ PruneShards(Oid relationId, Index rangeTableId, List *whereClauseList,
 	/* found no valid restriction, build list of all shards */
 	if (!foundRestriction)
 	{
-		prunedList = ShardArrayToList(cacheEntry->sortedShardIntervalArray,
-									  cacheEntry->shardIntervalArrayLength);
+		prunedList = CopyCachedShardIntervalList(cacheEntry);
 	}
 
 	if (IsLoggableLevel(DEBUG3))
@@ -521,6 +526,11 @@ PruneShards(Oid relationId, Index rangeTableId, List *whereClauseList,
 	 * Deep copy list, so it's independent of the CitusTableCacheEntry
 	 * contents.
 	 */
+	bms_free(seenCompactIndexes);
+	if (!foundRestriction || cacheEntry->hasCompactShards)
+	{
+		return prunedList;
+	}
 	return DeepCopyShardIntervalList(prunedList);
 }
 
@@ -1380,25 +1390,6 @@ CopyPartialPruningInstance(PruningInstance *sourceInstance)
 
 
 /*
- * ShardArrayToList builds a list of out the array of ShardInterval*.
- */
-static List *
-ShardArrayToList(ShardInterval **shardArray, int length)
-{
-	List *shardIntervalList = NIL;
-
-	for (int shardIndex = 0; shardIndex < length; shardIndex++)
-	{
-		ShardInterval *shardInterval =
-			shardArray[shardIndex];
-		shardIntervalList = lappend(shardIntervalList, shardInterval);
-	}
-
-	return shardIntervalList;
-}
-
-
-/*
  * DeepCopyShardIntervalList copies originalShardIntervalList and the
  * contained ShardIntervals, into a new list.
  */
@@ -1463,8 +1454,6 @@ PruneOne(CitusTableCacheEntry *cacheEntry, ClauseWalkerContext *context,
 	 */
 	if (prune->hashedEqualConsts)
 	{
-		ShardInterval **sortedShardIntervalArray = cacheEntry->sortedShardIntervalArray;
-
 		Assert(context->partitionMethod == DISTRIBUTE_BY_HASH);
 
 		int shardIndex = FindShardIntervalIndex(prune->hashedEqualConsts->constvalue,
@@ -1475,7 +1464,7 @@ PruneOne(CitusTableCacheEntry *cacheEntry, ClauseWalkerContext *context,
 			return NIL;
 		}
 		else if (shardInterval &&
-				 sortedShardIntervalArray[shardIndex]->shardId != shardInterval->shardId)
+				 CachedShardId(cacheEntry, shardIndex) != shardInterval->shardId)
 		{
 			/*
 			 * equalConst based pruning above yielded a different shard than
@@ -1487,7 +1476,11 @@ PruneOne(CitusTableCacheEntry *cacheEntry, ClauseWalkerContext *context,
 		}
 		else
 		{
-			return list_make1(sortedShardIntervalArray[shardIndex]);
+			if (cacheEntry->hasCompactShards)
+			{
+				return list_make1(CopyCachedShardInterval(cacheEntry, shardIndex));
+			}
+			return list_make1(cacheEntry->generalShardIntervals[shardIndex]);
 		}
 	}
 
@@ -1789,7 +1782,7 @@ PruneWithBoundaries(CitusTableCacheEntry *cacheEntry, ClauseWalkerContext *conte
 {
 	List *remainingShardList = NIL;
 	int shardCount = cacheEntry->shardIntervalArrayLength;
-	ShardInterval **sortedShardIntervalArray = cacheEntry->sortedShardIntervalArray;
+	ShardInterval **sortedShardIntervalArray = cacheEntry->generalShardIntervals;
 	bool hasLowerBound = false;
 	bool hasUpperBound = false;
 	Datum lowerBound = 0;
@@ -1904,7 +1897,7 @@ ExhaustivePrune(CitusTableCacheEntry *cacheEntry, ClauseWalkerContext *context,
 {
 	List *remainingShardList = NIL;
 	int shardCount = cacheEntry->shardIntervalArrayLength;
-	ShardInterval **sortedShardIntervalArray = cacheEntry->sortedShardIntervalArray;
+	ShardInterval **sortedShardIntervalArray = cacheEntry->generalShardIntervals;
 
 	for (int curIdx = 0; curIdx < shardCount; curIdx++)
 	{

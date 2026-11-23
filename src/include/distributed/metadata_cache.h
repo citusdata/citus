@@ -40,6 +40,17 @@ extern int ReadFromSecondaries;
 #define GROUP_ID_UPGRADING -2
 
 
+/* Sorted hash shard with one zero-length placement and known int4 bounds. */
+typedef struct CompactHashShard
+{
+	uint64 shardId;
+	uint64 placementId;
+	int32 minHashValue;
+	int32 maxHashValue;
+	int32 groupId;
+	char storageType;
+} CompactHashShard;
+
 /*
  * Representation of a table's metadata that is frequently used for
  * distributed execution. Cached.
@@ -67,9 +78,16 @@ typedef struct
 	char replicationModel;
 	bool autoConverted; /* table auto-added to metadata, valid for citus local tables */
 
+	/* Selects the active member of the interval array union below. */
+	bool hasCompactShards;
+
 	/* pg_dist_shard metadata (variable-length ShardInterval array) for this table */
 	int shardIntervalArrayLength;
-	ShardInterval **sortedShardIntervalArray;
+	union
+	{
+		ShardInterval **generalShardIntervals;
+		CompactHashShard *compactShards;
+	};
 
 	/* comparator for partition column's type, NULL if DISTRIBUTE_BY_NONE */
 	FmgrInfo *shardColumnCompareFunction;
@@ -99,6 +117,14 @@ typedef struct
 	GroupShardPlacement **arrayOfPlacementArrays;
 	int *arrayOfPlacementArrayLengths;
 } CitusTableCacheEntry;
+
+extern uint64 CachedShardId(const CitusTableCacheEntry *entry, int index);
+extern List * CopyCachedShardIntervalList(const CitusTableCacheEntry *entry);
+extern ShardInterval * CopyCachedShardInterval(const CitusTableCacheEntry *entry,
+											   int index);
+extern GroupShardPlacement * CachedShardPlacements(const CitusTableCacheEntry *entry,
+												   int index, GroupShardPlacement *scratch,
+												   int *count);
 
 typedef struct DistObjectCacheEntryKey
 {
