@@ -100,6 +100,11 @@ SELECT (SELECT array_agg(shardid ORDER BY shardid)
         FROM pg_dist_shard_placement JOIN pg_dist_shard USING (shardid)
         WHERE logicalrelid = 'dist'::regclass AND nodeport = :worker_5_port) AS split_plan_has_all_shards;
 
+-- the shards of a table colocated with dist share the metadata locks of the
+-- shards of dist, so the write fence sends only the shards of dist to workers
+CREATE TABLE dist_colocated (id int PRIMARY KEY);
+SELECT create_distributed_table('dist_colocated', 'id', colocate_with => 'dist');
+
 -- another primary, whose clone is promoted concurrently, without shards of
 -- the colocation groups of the first one
 SET client_min_messages TO WARNING;
@@ -229,9 +234,10 @@ SELECT CASE WHEN :late_shard_port = :worker_1_port THEN :worker_2_port ELSE :wor
 \set SHOW_CONTEXT never
 
 -- writes to the primary's shards are blocked on all nodes, including the
--- shards of the new table
+-- shards of the new table, and of the table colocated with dist
 SELECT dblink_exec(:'worker_1_conn', format('SET lock_timeout TO ''1s''; INSERT INTO promotion_concurrency.dist VALUES (%s)', :key_on_primary));
 SELECT dblink_exec(:'worker_1_conn', format('SET lock_timeout TO ''1s''; INSERT INTO promotion_concurrency.late VALUES (%s)', :late_key_on_primary));
+SELECT dblink_exec(:'worker_1_conn', format('SET lock_timeout TO ''1s''; INSERT INTO promotion_concurrency.dist_colocated VALUES (%s)', :key_on_primary));
 SET lock_timeout TO '1s';
 INSERT INTO dist VALUES (:key_on_primary);
 INSERT INTO late VALUES (:late_key_on_primary);

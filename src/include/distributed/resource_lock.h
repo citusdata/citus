@@ -245,6 +245,7 @@ enum DistLockConfigs
 
 /* Lock shard/relation metadata for safe modifications */
 extern void LockShardDistributionMetadata(int64 shardId, LOCKMODE lockMode);
+extern void SetLocktagForShardDistributionMetadata(int64 shardId, LOCKTAG *tag);
 extern void EnsureShardOwner(uint64 shardId, bool missingOk);
 extern void LockShardListMetadataOnWorkers(LOCKMODE lockmode, List *shardIntervalList);
 extern void BlockWritesToShardList(List *shardList);

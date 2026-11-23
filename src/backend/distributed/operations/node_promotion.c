@@ -33,6 +33,10 @@
 #include "distributed/worker_transaction.h"
 
 
+/* the number of shards whose metadata locks a command of the write fence takes */
+#define SHARD_METADATA_LOCK_BATCH_SIZE 1000
+
+
 static void ErrorIfCommandsBeforePromotion(void);
 static void BlockAllWritesToWorkerNode(WorkerNode *workerNode);
 static void LockShardsOnAllMetadataNodes(List *placementList);
@@ -886,6 +890,11 @@ BlockAllWritesToWorkerNode(WorkerNode *workerNode)
  * shards, so lock the shards that they know about on them, too.
  * lock_shard_metadata() accepts at most ExclusiveLock, which conflicts with
  * the ShareLock that writers take.
+ *
+ * The colocated shards of hash-distributed and single-shard tables share one
+ * metadata lock per shard index, so only the first shard of each lock is sent,
+ * in batches. Sorted by shard id, the workers take the locks in the same order
+ * as with all shards.
  */
 static void
 LockShardsOnAllMetadataNodes(List *placementList)
@@ -904,7 +913,33 @@ LockShardsOnAllMetadataNodes(List *placementList)
 	}
 
 	shardIntervalList = SortList(shardIntervalList, CompareShardIntervalsById);
-	LockShardListMetadataOnWorkers(ExclusiveLock, shardIntervalList);
+
+	HTAB *lockTagSet = CreateSimpleHashSet(LOCKTAG);
+	List *batchShardIntervalList = NIL;
+	ShardInterval *shardInterval = NULL;
+	foreach_declared_ptr(shardInterval, shardIntervalList)
+	{
+		LOCKTAG lockTag;
+		memset(&lockTag, 0, sizeof(lockTag));
+		SetLocktagForShardDistributionMetadata(shardInterval->shardId, &lockTag);
+
+		bool foundInSet = false;
+		hash_search(lockTagSet, &lockTag, HASH_ENTER, &foundInSet);
+		if (foundInSet)
+		{
+			continue;
+		}
+
+		batchShardIntervalList = lappend(batchShardIntervalList, shardInterval);
+		if (list_length(batchShardIntervalList) == SHARD_METADATA_LOCK_BATCH_SIZE)
+		{
+			LockShardListMetadataOnWorkers(ExclusiveLock, batchShardIntervalList);
+			batchShardIntervalList = NIL;
+		}
+	}
+
+	LockShardListMetadataOnWorkers(ExclusiveLock, batchShardIntervalList);
+	hash_destroy(lockTagSet);
 }
 
 
