@@ -4033,9 +4033,12 @@ GetPrimaryCloneSplitRebalanceSteps(RebalanceOptions *options, WorkerNode *cloneN
 	/*
 	 * Collect all active shard placements on the source node for the given relations.
 	 * Unlike the main rebalancer, we build a single list of all relevant source placements
-	 * across all specified relations (or all relations if none specified).
+	 * across all specified relations (or all relations if none specified). A
+	 * hash set of their shard ids skips a shard that is listed under multiple
+	 * relations, without walking the list.
 	 */
 	List *allSourcePlacements = NIL;
+	HTAB *sourceShardIdSet = CreateSimpleHashSet(uint64);
 	Oid relationIdItr = InvalidOid;
 	foreach_declared_oid(relationIdItr, options->relationIdList)
 	{
@@ -4049,17 +4052,9 @@ GetPrimaryCloneSplitRebalanceSteps(RebalanceOptions *options, WorkerNode *cloneN
 		{
 			if (placement->nodeId == sourceNode->nodeId)
 			{
-				/* Ensure we don't add duplicate shardId if it's somehow listed under multiple relations */
 				bool alreadyAdded = false;
-				ShardPlacement *existingPlacement = NULL;
-				foreach_declared_ptr(existingPlacement, allSourcePlacements)
-				{
-					if (existingPlacement->shardId == placement->shardId)
-					{
-						alreadyAdded = true;
-						break;
-					}
-				}
+				hash_search(sourceShardIdSet, &placement->shardId, HASH_ENTER,
+							&alreadyAdded);
 				if (!alreadyAdded)
 				{
 					allSourcePlacements = lappend(allSourcePlacements, placement);
@@ -4067,6 +4062,7 @@ GetPrimaryCloneSplitRebalanceSteps(RebalanceOptions *options, WorkerNode *cloneN
 			}
 		}
 	}
+	hash_destroy(sourceShardIdSet);
 
 	List *activeWorkerList = list_make2(options->workerNode, cloneNode);
 	SplitPrimaryCloneShards *splitShards = palloc0(sizeof(SplitPrimaryCloneShards));
@@ -4117,12 +4113,10 @@ GetPrimaryCloneSplitRebalanceSteps(RebalanceOptions *options, WorkerNode *cloneN
 			float4 sourceCurrentCost = sourceFillState->totalCost;
 			float4 targetCurrentCost = 0; /* Representing cost on target from these source shards */
 
-			/* Sort shards on source node by cost (descending). This is a common heuristic. */
-			sourceFillState->shardCostListDesc = SortList(sourceFillState->
-														  shardCostListDesc,
-														  CompareShardCostDesc);
-
-			List *potentialMoves = NIL;
+			/*
+			 * InitRebalanceState() sorted the shards on the source node by cost
+			 * (descending). This is a common heuristic.
+			 */
 			ListCell *lc_shardcost = NULL;
 
 			/*
@@ -4156,12 +4150,6 @@ GetPrimaryCloneSplitRebalanceSteps(RebalanceOptions *options, WorkerNode *cloneN
 
 				if (diffAfter < diffBefore)
 				{
-					PlacementUpdateEvent *update = palloc0(sizeof(PlacementUpdateEvent));
-					update->shardId = shardToConsider->shardId;
-					update->sourceNode = sourceNode;
-					update->targetNode = targetNode;
-					update->updateType = PLACEMENT_UPDATE_MOVE;
-					potentialMoves = lappend(potentialMoves, update);
 					splitShards->cloneShardIdList = lappend(splitShards->cloneShardIdList,
 															shardIdPointer);
 
