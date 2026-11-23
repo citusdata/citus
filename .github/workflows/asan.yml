@@ -2,6 +2,9 @@ name: ASAN
 run-name: ASAN (${{ github.ref_name }})
 
 on:
+  push:
+    branches:
+      - ihalatci/asan-shard1-larger-runner-validation
   workflow_dispatch:
     inputs:
       cold_cache:
@@ -60,7 +63,8 @@ jobs:
   test:
     needs: params
     name: ASAN ${{ matrix.name }}
-    runs-on: ubuntu-24.04
+    # Shard 1 requires a configured larger runner; an unset variable must not fall back.
+    runs-on: ${{ fromJSON(matrix.group == 'arbitrary-configs' && matrix.shard == 1 && toJSON(vars.ASAN_SHARD1_RUNNER) || '"ubuntu-24.04"') }}
     timeout-minutes: ${{ matrix.timeout }}
     strategy:
       fail-fast: false
@@ -86,12 +90,12 @@ jobs:
         with:
           pg_full: ${{ matrix.old_full }}
           sanitizer: address-bool
-          cold_cache: ${{ inputs.cold_cache }}
+          cold_cache: ${{ inputs.cold_cache || false }}
       - uses: ./.github/actions/setup_cassert_pg
         with:
           pg_full: ${{ matrix.full }}
           sanitizer: address-bool
-          cold_cache: ${{ inputs.cold_cache }}
+          cold_cache: ${{ inputs.cold_cache || false }}
       - name: Verify runtime and symbolized error reporting
         shell: bash
         run: |
