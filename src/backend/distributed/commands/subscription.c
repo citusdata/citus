@@ -13,6 +13,7 @@
 #include "postgres.h"
 
 #include "libpq-fe.h"
+#include "miscadmin.h"
 #include "safe_lib.h"
 
 #include "commands/defrem.h"
@@ -32,6 +33,8 @@ static char * GenerateConninfoWithAuth(char *conninfo);
  * ProcessCreateSubscriptionStmt looks for a special citus_use_authinfo option.
  * If it is set to true, then we'll expand the node's authinfo into the create
  * statement (see GenerateConninfoWithAuth).
+ *
+ * Only superusers may use the option
  */
 Node *
 ProcessCreateSubscriptionStmt(CreateSubscriptionStmt *createSubStmt)
@@ -56,6 +59,13 @@ ProcessCreateSubscriptionStmt(CreateSubscriptionStmt *createSubStmt)
 
 	if (useAuthinfo)
 	{
+		if (!superuser())
+		{
+			ereport(ERROR, (errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+							errmsg("only superusers can use the "
+								   "citus_use_authinfo option")));
+		}
+
 		createSubStmt->conninfo = GenerateConninfoWithAuth(createSubStmt->conninfo);
 	}
 
