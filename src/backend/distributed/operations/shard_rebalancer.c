@@ -22,6 +22,7 @@
 
 #include "access/genam.h"
 #include "access/htup_details.h"
+#include "catalog/pg_class.h"
 #include "catalog/pg_proc.h"
 #include "catalog/pg_type.h"
 #include "commands/dbcommands.h"
@@ -290,6 +291,8 @@ static bool ShardAllowedOnNode(uint64 shardId, WorkerNode *workerNode, void *con
 static float4 NodeCapacity(WorkerNode *workerNode, void *context);
 static ShardCost GetShardCost(uint64 shardId, void *context);
 static List * NonColocatedDistRelationIdList(void);
+static void ErrorIfRebalanceMovesUnloggedTablesLogically(List *placementUpdateList,
+														 char shardTransferMode);
 static List * CollectCitusTableIdsForPlacementUpdates(List *placementUpdateList);
 static void RebalanceTableShards(RebalanceOptions *options, Oid shardReplicationModeOid);
 static int64 RebalanceTableShardsBackground(RebalanceOptions *options, Oid
@@ -2392,6 +2395,7 @@ RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationMo
 		ErrorIfTablesCannotUseReplicaIdentityFull(relationIdList);
 	}
 
+	ErrorIfRebalanceMovesUnloggedTablesLogically(placementUpdateList, shardTransferMode);
 	DropOrphanedResourcesInSeparateTransaction();
 
 	/* find the name of the shard transfer mode to interpolate in the scheduled command */
@@ -2503,6 +2507,51 @@ RebalanceTableShardsBackground(RebalanceOptions *options, Oid shardReplicationMo
 					 "citus_rebalance_status();")));
 
 	return jobId;
+}
+
+
+/*
+ * ErrorIfRebalanceMovesUnloggedTablesLogically rejects planned logical moves
+ * that include an unlogged table before a background job is created.
+ */
+static void
+ErrorIfRebalanceMovesUnloggedTablesLogically(List *placementUpdateList,
+											 char shardTransferMode)
+{
+	if (shardTransferMode == TRANSFER_MODE_BLOCK_WRITES)
+	{
+		return;
+	}
+
+	PlacementUpdateEvent *move = NULL;
+	foreach_declared_ptr(move, placementUpdateList)
+	{
+		Oid relationId = RelationIdForShard(move->shardId);
+
+		if (!CanUseLogicalReplication(relationId, shardTransferMode))
+		{
+			continue;
+		}
+
+		List *colocatedTableList = ColocatedTableList(relationId);
+		Oid colocatedTableId = InvalidOid;
+		foreach_declared_oid(colocatedTableId, colocatedTableList)
+		{
+			if (get_rel_persistence(colocatedTableId) == RELPERSISTENCE_UNLOGGED)
+			{
+				ereport(ERROR,
+						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						 errmsg("cannot move shards of unlogged table %s using "
+								"logical replication",
+								generate_qualified_relation_name(colocatedTableId)),
+						 errhint("Retry citus_rebalance_start() with "
+								 "shard_transfer_mode => 'block_writes' to block "
+								 "writes during shard copies.")));
+			}
+		}
+
+		list_free(colocatedTableList);
+	}
 }
 
 

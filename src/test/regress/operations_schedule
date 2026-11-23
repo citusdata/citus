@@ -6,6 +6,7 @@ test: shard_rebalancer_unit
 test: shard_rebalancer
 test: background_rebalance
 test: background_rebalance_no_replica_identity
+test: background_rebalance_unlogged
 test: background_rebalance_parallel
 test: foreign_key_to_reference_shard_rebalance
 test: multi_move_mx
