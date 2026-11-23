@@ -150,6 +150,12 @@ check-custom-schedule-vg: all
 	--valgrind-path=valgrind --valgrind-log-file=$(CITUS_VALGRIND_LOG_FILE) \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/$(SCHEDULE) $(EXTRA_TESTS)
 
+check-follower-custom-schedule-vg: all
+	$(pg_regress_multi_check) --load-extension=citus --follower-cluster \
+	--valgrind --pg_ctl-timeout=360 --connection-timeout=500000 --worker-count=$(WORKERCOUNT) \
+	--valgrind-path=valgrind --valgrind-log-file=$(CITUS_VALGRIND_LOG_FILE) \
+	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/$(SCHEDULE) $(EXTRA_TESTS)
+
 check-failure-custom-schedule-vg: all
 	$(pg_regress_multi_check) --load-extension=citus --mitmproxy \
 	--valgrind --pg_ctl-timeout=360 --connection-timeout=500000 --worker-count=$(WORKERCOUNT) \
@@ -293,6 +299,12 @@ check-split-output-plugin-denied: all
 
 check-split-output-plugin-denied-custom-schedule: all
 	CITUS_TEST_SKIP_OUTPUT_PLUGIN_ALLOWLIST=1 $(pg_regress_multi_check) --load-extension=citus \
+	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/$(SCHEDULE) $(EXTRA_TESTS)
+
+check-split-output-plugin-denied-custom-schedule-vg: all
+	CITUS_TEST_SKIP_OUTPUT_PLUGIN_ALLOWLIST=1 $(pg_regress_multi_check) --load-extension=citus \
+	--valgrind --pg_ctl-timeout=360 --connection-timeout=500000 --worker-count=$(WORKERCOUNT) \
+	--valgrind-path=valgrind --valgrind-log-file=$(CITUS_VALGRIND_LOG_FILE) \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/$(SCHEDULE) $(EXTRA_TESTS)
 
 check-failure: all

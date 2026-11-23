@@ -46,6 +46,7 @@ primary/follower cluster for each repetition, since they change replication topo
 
 Output-plugin-denial tests also include their preceding setup and use a cluster
 with the Citus logical decoding plugin excluded from the allowlist.
+Both routes support `--valgrind` while preserving these cluster settings.
 
 To force the script to use base schedules rather than minimal ones, you can
 pass `-b` or `--use-base-schedule`.

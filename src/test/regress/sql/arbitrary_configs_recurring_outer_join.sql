@@ -89,6 +89,22 @@ LEFT JOIN
 ) t6
 USING (id);
 
+-- Without dropped columns, system-column and whole-row Vars must be remapped too.
+SELECT COUNT(*) FROM
+local t1
+LEFT JOIN
+(
+    SELECT * FROM
+    (SELECT * FROM reference t2 JOIN distributed t3 USING (id)) p
+    JOIN
+    (SELECT t4.*, (t5.ctid IS NULL) AS no_tid
+     FROM reference t4
+     LEFT JOIN distributed_dense t5 USING (id)) q
+    USING(id)
+) t6
+USING (id);
+SELECT COUNT(*) FROM local LEFT JOIN dense_row_view USING (id);
+
 BEGIN;
   WITH cte AS (
     DELETE FROM distributed
