@@ -42,3 +42,16 @@ INSERT INTO outer_join_ref VALUES (NULL), (NULL), (0);
 INSERT INTO outer_join_dist SELECT generate_series(0, 10);
 INSERT INTO outer_join_dist SELECT generate_series(70, 90);
 INSERT INTO outer_join_dist VALUES (0);
+
+-- An eliminated relation without dropped columns, and a view stored before
+-- the table gained a column.
+CREATE TABLE distributed_dense (id bigint PRIMARY KEY, name text);
+SELECT create_distributed_table('distributed_dense', 'id');
+INSERT INTO distributed_dense SELECT id, name FROM distributed;
+-- PostgresConfig does not distribute the table and warns about the view.
+SET client_min_messages TO ERROR;
+CREATE VIEW dense_row_view AS
+    SELECT r.id, d AS row_value
+    FROM reference r LEFT JOIN distributed_dense d USING (id);
+RESET client_min_messages;
+ALTER TABLE distributed_dense ADD COLUMN added text;
