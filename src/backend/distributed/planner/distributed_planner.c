@@ -3125,12 +3125,10 @@ ConvertRemovedOuterJoinRelation(Query *query, Index rteIndex)
 	rte->eref->colnames = columnNames;
 	rte->alias->colnames = copyObject(columnNames);
 
-	if (list_length(columnNames) == attributeMap->maplen)
-	{
-		free_attrmap(attributeMap);
-		return;
-	}
-
+	/*
+	 * Remap even without dropped-column gaps: whole-row and system-column
+	 * Vars must become NULL constants, since an empty subquery cannot supply them.
+	 */
 	Query *remappedQuery = (Query *) replace_rte_variables((Node *) query, rteIndex, 0,
 														   RemapRemovedOuterJoinVar,
 														   attributeMap, NULL);

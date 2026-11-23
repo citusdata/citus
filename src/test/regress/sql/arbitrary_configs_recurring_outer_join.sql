@@ -89,6 +89,28 @@ LEFT JOIN
 ) t6
 USING (id);
 
+-- Without dropped columns, system-column and whole-row Vars must be remapped too.
+-- Older majors retain the join and cannot deparse system-column placeholders.
+\if :removes_outer_join
+\set removed_join_column 'ctid'
+\else
+\set removed_join_column 'id'
+\endif
+SELECT COUNT(*) FROM
+local t1
+LEFT JOIN
+(
+    SELECT * FROM
+    (SELECT * FROM reference t2 JOIN distributed t3 USING (id)) p
+    JOIN
+    (SELECT t4.*, (t5.:removed_join_column IS NULL) AS no_tid
+     FROM reference t4
+     LEFT JOIN distributed_dense t5 USING (id)) q
+    USING(id)
+) t6
+USING (id);
+SELECT COUNT(*) FROM local LEFT JOIN dense_row_view USING (id);
+
 BEGIN;
   WITH cte AS (
     DELETE FROM distributed
