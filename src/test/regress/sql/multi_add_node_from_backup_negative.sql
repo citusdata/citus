@@ -129,10 +129,12 @@ SELECT pg_is_in_recovery() AS clone_in_recovery;
 
 -- Test 9: The promotion cannot run inside a transaction block, where its write
 -- fence would last until the transaction ends, and a rollback could not undo
--- pg_promote(), so the clone stays a replica
+-- pg_promote(), so the clone stays a replica. A query string with more than one
+-- statement runs as a transaction block too.
 BEGIN;
 SELECT citus_promote_clone_and_rebalance(clone_nodeid => :clone_node_id);
 ROLLBACK;
+SELECT citus_promote_clone_and_rebalance(clone_nodeid => :clone_node_id) \; SELECT 1;
 
 -- Verify no data is lost
 SELECT COUNT(*) from backup_test;

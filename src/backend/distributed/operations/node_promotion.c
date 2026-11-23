@@ -122,11 +122,12 @@ PG_FUNCTION_INFO_V1(citus_promote_clone_and_rebalance);
  * dropping one there, set its slot_name to NONE, since DROP SUBSCRIPTION would
  * otherwise drop the replication slot on the publisher that the primary uses.
  *
- * The promotion cannot run inside a transaction block: its write fence would
- * last until the transaction ends, and a rollback could not undo pg_promote()
- * or the identity of the clone. Called from a function or a DO block, it errors
- * out if earlier commands of its transaction made changes or ran on other
- * nodes, see ErrorIfCommandsBeforePromotion().
+ * The promotion cannot run inside a transaction block, which includes a query
+ * string with more than one statement: its write fence would last until the
+ * transaction ends, and a rollback could not undo pg_promote() or the identity
+ * of the clone. Called from a function or a DO block, it errors out if earlier
+ * commands of its transaction made changes or ran on other nodes, see
+ * ErrorIfCommandsBeforePromotion().
  *
  * Until the clone has an identity of its own, its maintenance daemon acts as
  * the primary, see AssignCloneNodeIdentity(). Operators should therefore
