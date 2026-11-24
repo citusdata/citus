@@ -266,6 +266,8 @@ test: multi_truncate
 # ----------
 test: node_conninfo_reload
 
+test: connection_selection
+
 # ----------
 # multi_foreign_key tests foreign key push down on distributed tables
 # ----------

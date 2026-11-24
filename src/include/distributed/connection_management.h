@@ -90,7 +90,8 @@ enum MultiConnectionMode
 	 * and execute a command over this connection. For this reason, the callers
 	 * should also mark the connection exclusive by using
 	 * ClaimConnectionExclusively() to keep using the same connection outside of
-	 * transactions for multiple commands.
+	 * transactions for multiple commands. Such requests do not return the
+	 * metadata connection of the current transaction.
 	 */
 	OUTSIDE_TRANSACTION = 1 << 4,
 
@@ -100,13 +101,12 @@ enum MultiConnectionMode
 	 * metadata includes the distributed table on the workers) can be modified
 	 * accross multiple connections.
 	 *
-	 * Within each connection hash entry, metadata requests share one connection,
-	 * except that an unclaimed connection forced to close at transaction end can
-	 * be replaced if no remote BEGIN has been sent. Such retired descriptors
-	 * remain tagged for metadata until cleanup.
-	 *
-	 * A metadata connection can also be used for other operations; it is not
-	 * exclusively reserved for metadata operations.
+	 * With this flag, we guarantee that there is a single metadata connection in
+	 * a transaction: the first request binds a connection until the transaction
+	 * ends, and later requests error out if it is not available.
+	 * But note that this connection can be used for any other operation.
+	 * In other words, this connection is not exclusively reserved for metadata
+	 * operations.
 	 */
 	REQUIRE_METADATA_CONNECTION = 1 << 5,
 
@@ -202,12 +202,6 @@ typedef struct MultiConnection
 	/* is the replication origin session has already been setup for this connection. */
 	bool isReplicationOriginSessionSetup;
 
-	/*
-	 * Should be used to access/modify metadata. See REQUIRE_METADATA_CONNECTION for
-	 * the details.
-	 */
-	bool useForMetadataOperations;
-
 	/* time connection establishment was started, for timeout and executor stats */
 	instr_time connectionEstablishmentStart;
 	instr_time connectionEstablishmentEnd;
@@ -265,6 +259,9 @@ typedef struct ConnectionHashEntry
 {
 	ConnectionHashKey key;
 	dlist_head *connections;
+
+	/* connection for metadata operations in the current transaction, if any */
+	MultiConnection *metadataConnection;
 
 	/* connections list is valid or not */
 	bool isValid;
