@@ -11,6 +11,89 @@ make reindent
 
 See the sections below for details on what a specific failing script means.
 
+## Manual AddressSanitizer builds
+
+The `ASAN` workflow (`.github/workflows/asan.yml`) is manual-only. After the
+workflow is available on GitHub, select **Actions > ASAN > Run workflow** and
+choose the ref to test, or use `gh workflow run asan.yml --ref <ref>`.
+Dispatch requires separate authorization; it is not triggered by pushes or PRs.
+It publishes no packages or images and is not a required PR or release gate.
+Select `cold_cache=true` for a fully cold run: every job builds PostgreSQL even
+if another job has already populated the shared cache. Successful cold jobs
+still save caches. Use the default `false` for the subsequent warm run of the
+same revision, and confirm every prefix reports a cache hit in its artifacts.
+
+Coverage matches `nightly_cassert.yml`: PG17/18/19 each run regress, isolation,
+columnar, failure, TAP, generator, and all six arbitrary-config shards. Shard 1
+runs one config at a time on the runner configured by the `ASAN_SHARD1_RUNNER`
+repository or organization variable; other shards run two configs at a time on
+Ubuntu 24.04. Set the variable to a larger runner with enough memory, such as
+`ubuntu-24.04-8core`, before dispatch. PostgreSQL upgrades cover 17->18,
+18->19, and 17->19, each with and without columnar. PG17/18 also run normal
+and mixed old-Citus upgrades from v14.0.1. The single matrix contains 41 suite
+jobs, limits concurrency to two, and does not cancel other shards on failure.
+`ASAN result` requires every selected job to succeed, including instrumentation
+and diagnostic checks.
+
+Jobs use Ubuntu 24.04. Python suites explicitly provision Python 3.12 to match
+the regression Pipfile. Setup verifies the Danish UTF-8 OS locale; a fresh-cluster
+preflight also requires `initdb` to import the native `da_DK` catalog alias used
+by the collation tests.
+
+`setup_cassert_pg` opts into GCC ASAN and the UBSan bool check with
+`sanitizer: address-bool`; its default `none` preserves ordinary cassert and
+arm64 assert-off builds. PostgreSQL and both current/old Citus libraries use
+`-O1 -g3 -fno-omit-frame-pointer -fsanitize=address,bool
+-fno-sanitize-recover=bool -fsanitize-address-use-after-scope` and link with
+`-fsanitize=address,bool`. Other UBSan checks are not enabled. Sanitizer caches
+are separate and include the action/config hash and Ubuntu version. The PG19
+`typeof_unqual` probe uses Citus's GNU C99 mode and supplies that result to
+PostgreSQL's configure, so its installed headers do not advertise a C23-only
+spelling to a C99 consumer. PostgreSQL itself retains its required C11-or-newer
+build mode. Cold builds and cache hits verify the selected prefix, PostgreSQL
+flags, and ASAN runtime linkage of PostgreSQL, libpq, and both Citus libraries.
+They require libubsan linkage only when a binary references its invalid-value
+handler. Old upgrade tarballs are built locally with the same compiler/flags
+and verified before the upgrade harness reuses them. UBSan output is captured
+from each suite's combined test output and fails the job if a diagnostic was
+printed, even when a test harness otherwise hides a backend failure.
+
+For local reproduction, build in an isolated Linux checkout with the same flags
+and assertions. Set `ASAN_OPTIONS=detect_leaks=0:abort_on_error=1:symbolize=1:log_path=<absolute-report-directory>/asan`
+before running instrumented programs; keep that directory outside harness cleanup
+paths. Set `UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1` to halt on
+invalid-boolean reports and print a symbolized stack trace. UBSan diagnostics
+are captured from test output rather than a runtime log file. This is
+address-error and invalid-boolean coverage, not LeakSanitizer or full UBSan
+coverage.
+Python/libpq launchers need the matching GCC runtime first: apply
+`LD_PRELOAD="$(gcc -print-file-name=libasan.so)"` only to the native test command
+process tree, never globally to JavaScript Actions or tool installation.
+Do not disable runtime-order checks. A deliberate heap-overflow canary must exit
+nonzero with a symbolized report; its expected reports are separate from suite
+reports. No suppressions, suite skips, or expected-red exceptions are used.
+
+Each `asan-PG...` artifact contains compiler/runtime and revision identities,
+configure flags, cache-hit evidence, verification markers, build timings, test
+timings, and ASAN reports. `logs-PG...` artifacts retain native logs and diffs.
+Any nonempty suite ASAN report fails the job even if the harness returns zero;
+native command failures and missing mandatory verification also fail it.
+Cleanup and uploads run on failure/cancellation when the runner can execute them.
+Hard termination or job timeout can prevent final evidence upload.
+
+Compare complete cold-cache and warm-cache runs of the same revision before
+choosing nightly cadence or mandatory release policy. `/usr/bin/time -v` files
+record command durations and maximum RSS, not aggregate runner peak memory.
+A warm PG cache has no new PG build timing; Citus is always rebuilt.
+The result summary links per-job artifacts and sums completed job durations in
+runner-minutes (excluding the still-running result job); this is not billed time.
+Keep timeouts, OOMs, infrastructure failures, suite failures, and sanitizer
+findings visible and distinguish them when interpreting costs.
+Acceptance additionally requires an isolated failure-injection run proving a
+suite report fails `ASAN result` even when its command returns zero, plus green
+existing Build & Test, cassert, and arm64 callers. Push/dispatch approval and
+these full GitHub Actions acceptance runs are separate from local validation.
+
 ## `citus_indent`
 
 We format all our code using the coding conventions in the

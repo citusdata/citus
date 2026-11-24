@@ -182,7 +182,8 @@ SELECT * FROM stat_counters.dist_table WHERE a = 1;
 SELECT * FROM stat_counters.dist_table WHERE a = 1;
 
 -- first one establishes a connection, the second one reuses it
-SELECT connection_reused = 1 FROM citus_stat_counters WHERE name = current_database();
+-- other backends can also reuse connections while this test runs
+SELECT connection_reused >= 1 FROM citus_stat_counters WHERE name = current_database();
 
 SET citus.force_max_query_parallelization TO ON;
 SELECT * FROM stat_counters.dist_table;
