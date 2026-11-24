@@ -36,3 +36,54 @@ function test_case()
 
 test_case "same"
 test_case "different"
+
+tmpdir=$(mktemp -d)
+mkdir "$tmpdir/expected" "$tmpdir/results"
+cleanup()
+{
+	rm -f \
+		"$tmpdir/expected/seclabel.out" \
+		"$tmpdir/expected/seclabel.out.modified" \
+		"$tmpdir/results/seclabel.out" \
+		"$tmpdir/results/seclabel.out.modified" \
+		"$tmpdir/expected/source.c" \
+		"$tmpdir/expected/source.c.modified" \
+		"$tmpdir/results/source.c" \
+		"$tmpdir/results/source.c.modified"
+	rmdir "$tmpdir/expected" "$tmpdir/results" "$tmpdir"
+}
+trap cleanup EXIT
+
+printf '%s\n' \
+	"SELECT 1 FROM citus_add_node('localhost', :worker_2_port);" \
+	"NOTICE:  issuing command a" "DETAIL:  on server localhost:57637 connectionId: 1" \
+	"NOTICE:  issuing command b" "DETAIL:  on server localhost:57638 connectionId: 2" \
+	"result" > "$tmpdir/expected/seclabel.out"
+printf '%s\n' \
+	"SELECT 1 FROM citus_add_node('localhost', :worker_2_port);" \
+	"NOTICE:  issuing command b" "DETAIL:  on server localhost:57638 connectionId: 2" \
+	"NOTICE:  issuing command a" "DETAIL:  on server localhost:57637 connectionId: 1" \
+	"result" > "$tmpdir/results/seclabel.out"
+if ! diff -u "$tmpdir/expected/seclabel.out" "$tmpdir/results/seclabel.out"; then
+	exit 1
+fi
+
+sed -i 's/command b/command changed/' "$tmpdir/results/seclabel.out"
+if diff -u "$tmpdir/expected/seclabel.out" "$tmpdir/results/seclabel.out" > /dev/null; then
+	echo "seclabel comparison accepted a changed command" >&2
+	exit 1
+fi
+
+cp "$tmpdir/expected/seclabel.out" "$tmpdir/results/seclabel.out"
+sed -i '/NOTICE:  issuing command b/{N;d;}' "$tmpdir/results/seclabel.out"
+if diff -u "$tmpdir/expected/seclabel.out" "$tmpdir/results/seclabel.out" > /dev/null; then
+	echo "seclabel comparison accepted a missing command" >&2
+	exit 1
+fi
+
+printf '%s\n' 'int source;' > "$tmpdir/expected/source.c"
+cp "$tmpdir/expected/source.c" "$tmpdir/results/source.c"
+touch -t 200001010000 "$tmpdir/expected/source.c"
+source_mtime=$(stat -c %Y "$tmpdir/expected/source.c")
+diff "$tmpdir/expected/source.c" "$tmpdir/results/source.c" > /dev/null
+test "$source_mtime" = "$(stat -c %Y "$tmpdir/expected/source.c")"

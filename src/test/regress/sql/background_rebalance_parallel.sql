@@ -83,11 +83,12 @@ SELECT S.shardid, P.colocationid
 FROM pg_dist_shard S, pg_dist_partition P
 WHERE S.logicalrelid = P.logicalrelid ORDER BY S.shardid ASC;
 
-SELECT D.task_id,
-       (SELECT T.command FROM pg_dist_background_task T WHERE T.task_id = D.task_id),
-       D.depends_on,
-       (SELECT T.command FROM pg_dist_background_task T WHERE T.task_id = D.depends_on)
-FROM pg_dist_background_task_depend D  WHERE job_id = 17777 ORDER BY D.task_id, D.depends_on ASC;
+SELECT T.command AS task_command, DT.command AS depends_on_command
+FROM pg_dist_background_task_depend D
+LEFT JOIN pg_dist_background_task T ON T.task_id = D.task_id
+LEFT JOIN pg_dist_background_task DT ON DT.task_id = D.depends_on
+WHERE D.job_id = 17777
+ORDER BY T.command, DT.command;
 
 
 -- Check that if there is a reference table that needs to be synched to a node,
