@@ -1,3 +1,33 @@
+### citus v12.1.17 (November 23, 2026) ###
+
+* Adds compatibility with PostgreSQL 14.25, 15.20 and 16.16, including fixes
+  for queries affected by outer-join removal and system-column or whole-row
+  references to removed relations (#8974)
+
+* Uses a trusted search path for internal metadata queries
+
+* Evaluates replayed object definitions with their owner's privileges and
+  restores execution context after errors
+
+* Preserves explicit function and procedure EXECUTE privileges during
+  distribution and node activation, including PUBLIC and owner revocations
+
+* Quotes tablespace names in REINDEX commands sent to shards (#8872)
+
+* Qualifies and quotes support function names in ALTER FUNCTION commands
+  (#8873)
+
+* Quotes EXTRACT fields when deparsing queries on PostgreSQL 14 through 16
+  (#8813)
+
+* Matches PostgreSQL's list parsing when processing output_plugin_libraries
+  (#8798)
+
+* Speeds up ALTER EXTENSION citus UPDATE with many distributed objects
+  (#8894)
+
+* Runs cluster node health checks in parallel (#8937)
+
 ### citus v12.1.14 (August 4, 2026) ###
 
 * Fixes a crash on a writable standby coordinator when a write targets a shard
