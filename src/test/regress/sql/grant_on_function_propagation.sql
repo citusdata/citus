@@ -121,8 +121,105 @@ SELECT proname, pronargs, proacl FROM pg_proc WHERE proname IN ('function_notice
 SELECT proname, pronargs, proacl FROM pg_proc WHERE proname IN ('function_notice', 'function_hello', 'not_distributed_function') ORDER BY 1, 2;
 \c - - - :master_port
 
+-- Explicit ACLs replace defaults during distribution and node activation.
+SET search_path TO grant_on_function, public;
+SET citus.enable_metadata_sync TO off;
+CREATE FUNCTION acl_replay_default() RETURNS int LANGUAGE sql AS 'SELECT 1';
+CREATE FUNCTION acl_replay_public() RETURNS int LANGUAGE sql AS 'SELECT 1';
+CREATE FUNCTION acl_replay_private() RETURNS int LANGUAGE sql SECURITY DEFINER AS 'SELECT 1';
+CREATE FUNCTION acl_replay_empty() RETURNS int LANGUAGE sql AS 'SELECT 1';
+CREATE FUNCTION acl_replay_grantee_only() RETURNS int LANGUAGE sql AS 'SELECT 1';
+CREATE PROCEDURE acl_replay_default_proc() LANGUAGE sql AS 'SELECT 1';
+CREATE PROCEDURE acl_replay_public_proc() LANGUAGE sql AS 'SELECT 1';
+CREATE PROCEDURE acl_replay_private_proc() LANGUAGE sql SECURITY DEFINER AS 'SELECT 1';
+CREATE PROCEDURE acl_replay_empty_proc() LANGUAGE sql AS 'SELECT 1';
+CREATE PROCEDURE acl_replay_grantee_only_proc() LANGUAGE sql AS 'SELECT 1';
+ALTER FUNCTION acl_replay_public() OWNER TO function_user_2;
+ALTER FUNCTION acl_replay_private() OWNER TO function_user_2;
+ALTER FUNCTION acl_replay_grantee_only() OWNER TO function_user_2;
+ALTER PROCEDURE acl_replay_public_proc() OWNER TO function_user_2;
+ALTER PROCEDURE acl_replay_private_proc() OWNER TO function_user_2;
+ALTER PROCEDURE acl_replay_grantee_only_proc() OWNER TO function_user_2;
+ALTER FUNCTION acl_replay_empty() OWNER TO function_user_2;
+ALTER PROCEDURE acl_replay_empty_proc() OWNER TO function_user_2;
+REVOKE EXECUTE ON ROUTINE acl_replay_public(), acl_replay_public_proc() FROM PUBLIC;
+GRANT EXECUTE ON ROUTINE acl_replay_public(), acl_replay_public_proc() TO PUBLIC;
+REVOKE EXECUTE ON ROUTINE acl_replay_private(), acl_replay_private_proc() FROM PUBLIC;
+GRANT EXECUTE ON ROUTINE acl_replay_private(), acl_replay_private_proc() TO function_user_1;
+REVOKE EXECUTE ON ROUTINE acl_replay_empty(), acl_replay_empty_proc() FROM PUBLIC, function_user_2;
+REVOKE EXECUTE ON ROUTINE acl_replay_grantee_only(), acl_replay_grantee_only_proc() FROM PUBLIC, function_user_2;
+GRANT EXECUTE ON ROUTINE acl_replay_grantee_only(), acl_replay_grantee_only_proc() TO function_user_1;
+RESET citus.enable_metadata_sync;
+
+SELECT proname, cardinality(proacl) AS empty_acl_entries
+FROM pg_proc WHERE oid IN ('acl_replay_empty()'::regprocedure, 'acl_replay_empty_proc()'::regprocedure)
+ORDER BY proname;
+
+SELECT create_distributed_function('acl_replay_default()');
+SELECT create_distributed_function('acl_replay_public()');
+SELECT create_distributed_function('acl_replay_private()');
+SELECT create_distributed_function('acl_replay_empty()');
+SELECT create_distributed_function('acl_replay_grantee_only()');
+SELECT create_distributed_function('acl_replay_default_proc()');
+SELECT create_distributed_function('acl_replay_public_proc()');
+SELECT create_distributed_function('acl_replay_private_proc()');
+SELECT create_distributed_function('acl_replay_empty_proc()');
+SELECT create_distributed_function('acl_replay_grantee_only_proc()');
+
+-- Replacing an existing routine still validates as its owner, even when that
+-- owner has explicitly lost EXECUTE. Replay must restore the exact ACL.
+SET citus.enable_ddl_propagation TO off;
+CREATE OR REPLACE FUNCTION acl_replay_empty() RETURNS int LANGUAGE sql AS 'SELECT 2';
+CREATE OR REPLACE PROCEDURE acl_replay_empty_proc() LANGUAGE sql AS 'SELECT 2';
+SET citus.enable_ddl_propagation TO on;
+SELECT 1 FROM citus_activate_node('localhost', :worker_1_port);
+SELECT 1 FROM citus_activate_node('localhost', :worker_1_port);
+
+SELECT proname, proacl AS source_acl
+FROM pg_proc
+WHERE pronamespace = 'grant_on_function'::regnamespace AND proname LIKE 'acl_replay_%'
+ORDER BY proname;
+
+\c - - - :worker_1_port
+SELECT proname, proacl AS replayed_acl
+FROM pg_proc
+WHERE pronamespace = 'grant_on_function'::regnamespace AND proname LIKE 'acl_replay_%'
+ORDER BY proname;
+SELECT proname, prokind, proacl IS NULL AS default_acl, cardinality(proacl) AS acl_entries,
+       EXISTS (SELECT 1 FROM aclexplode(COALESCE(proacl, acldefault('f', proowner))) AS acl
+               WHERE acl.grantee = 0 AND acl.privilege_type = 'EXECUTE') AS public_execute,
+       EXISTS (SELECT 1 FROM aclexplode(COALESCE(proacl, acldefault('f', proowner))) AS acl
+               WHERE acl.grantee = proowner AND acl.privilege_type = 'EXECUTE') AS owner_grant,
+       has_function_privilege(proowner, oid, 'EXECUTE') AS owner_execute,
+       has_function_privilege('function_user_1', oid, 'EXECUTE') AS user_execute
+FROM pg_proc
+WHERE pronamespace = 'grant_on_function'::regnamespace AND proname LIKE 'acl_replay_%'
+ORDER BY proname;
+\c - - - :master_port
+
 -- add the previously removed node
 SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
+SELECT 1 FROM citus_activate_node('localhost', :worker_2_port);
+
+\c - - - :worker_2_port
+SELECT proname, proacl AS replayed_acl
+FROM pg_proc
+WHERE pronamespace = 'grant_on_function'::regnamespace AND proname LIKE 'acl_replay_%'
+ORDER BY proname;
+SELECT proname, prokind, proacl IS NULL AS default_acl, cardinality(proacl) AS acl_entries,
+       EXISTS (SELECT 1 FROM aclexplode(COALESCE(proacl, acldefault('f', proowner))) AS acl
+               WHERE acl.grantee = 0 AND acl.privilege_type = 'EXECUTE') AS public_execute,
+       EXISTS (SELECT 1 FROM aclexplode(COALESCE(proacl, acldefault('f', proowner))) AS acl
+               WHERE acl.grantee = proowner AND acl.privilege_type = 'EXECUTE') AS owner_grant,
+       has_function_privilege(proowner, oid, 'EXECUTE') AS owner_execute,
+       has_function_privilege('function_user_1', oid, 'EXECUTE') AS user_execute
+FROM pg_proc
+WHERE pronamespace = 'grant_on_function'::regnamespace AND proname LIKE 'acl_replay_%'
+ORDER BY proname;
+\c - - - :master_port
+SET search_path TO grant_on_function, public;
+DROP ROUTINE acl_replay_default(), acl_replay_public(), acl_replay_private(), acl_replay_empty(), acl_replay_grantee_only(),
+             acl_replay_default_proc(), acl_replay_public_proc(), acl_replay_private_proc(), acl_replay_empty_proc(), acl_replay_grantee_only_proc();
 
 -- check if the grants are propagated correctly
 SELECT proname, pronargs, proacl FROM pg_proc WHERE proname IN ('function_notice', 'function_hello') ORDER BY 1, 2;
@@ -131,6 +228,12 @@ SELECT proname, pronargs, proacl FROM pg_proc WHERE proname IN ('function_notice
 \c - - - :master_port
 
 -- check that it works correctly with a user that is not distributed
+CREATE FUNCTION "acl quoted"() RETURNS int LANGUAGE sql AS 'SELECT 1';
+REVOKE EXECUTE ON FUNCTION "acl quoted"() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION "acl quoted"() TO function_user_1;
+SELECT create_distributed_function('"acl quoted"()');
+DROP FUNCTION "acl quoted"();
+
 CREATE OR REPLACE FUNCTION not_propagated_function_user_test()
 RETURNS void
 LANGUAGE plpgsql AS $$

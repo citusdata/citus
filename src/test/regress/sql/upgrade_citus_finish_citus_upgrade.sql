@@ -2,8 +2,11 @@
 
 -- Note that pg_catalog.citus_finish_citus_upgrade() behaves differently
 -- when last upgrade citus version is less than 11
--- so we have two alternative outputs for this test
+-- Exact alternatives distinguish pre-11, 11.3 and current-schema upgrades.
 \set upgrade_test_old_citus_version `echo "$CITUS_OLD_VERSION"`
+SELECT substring(:'upgrade_test_old_citus_version', 'v(\d+\.\d+)')
+AS upgrade_test_old_citus_major_minor;
+
 SELECT substring(:'upgrade_test_old_citus_version', 'v(\d+)\.\d+\.\d+')::int < 11
 AS upgrade_test_old_citus_version_lt_11_0;
 

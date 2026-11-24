@@ -335,8 +335,8 @@ NOTICE:  creating a new table for undistribute_table.view_table
 NOTICE:  moving the data of undistribute_table.view_table
 NOTICE:  dropping the old undistribute_table.view_table
 NOTICE:  drop cascades to 3 other objects
-DETAIL:  drop cascades to view undis_view1
-drop cascades to view undis_view2
+DETAIL:  drop cascades to view undistribute_table.undis_view1
+drop cascades to view undistribute_table.undis_view2
 drop cascades to view another_schema.undis_view3
 CONTEXT:  SQL statement "DROP TABLE undistribute_table.view_table CASCADE"
 NOTICE:  renaming the new table to undistribute_table.view_table
@@ -417,7 +417,7 @@ SELECT undistribute_table('rule_table_4');
 NOTICE:  creating a new table for undistribute_table.rule_table_4
 NOTICE:  moving the data of undistribute_table.rule_table_4
 NOTICE:  dropping the old undistribute_table.rule_table_4
-NOTICE:  drop cascades to rule rule_1 on table rule_table_3
+NOTICE:  drop cascades to rule rule_1 on table undistribute_table.rule_table_3
 CONTEXT:  SQL statement "DROP TABLE undistribute_table.rule_table_4 CASCADE"
 NOTICE:  renaming the new table to undistribute_table.rule_table_4
  undistribute_table

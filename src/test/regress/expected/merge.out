@@ -3941,7 +3941,7 @@ SELECT undistribute_table('dist_source');
 NOTICE:  creating a new table for merge_schema.dist_source
 NOTICE:  moving the data of merge_schema.dist_source
 NOTICE:  dropping the old merge_schema.dist_source
-NOTICE:  drop cascades to view show_tables
+NOTICE:  drop cascades to view merge_schema.show_tables
 CONTEXT:  SQL statement "DROP TABLE merge_schema.dist_source CASCADE"
 NOTICE:  renaming the new table to merge_schema.dist_source
  undistribute_table
@@ -3974,7 +3974,7 @@ SELECT undistribute_table('dist_source');
 NOTICE:  creating a new table for merge_schema.dist_source
 NOTICE:  moving the data of merge_schema.dist_source
 NOTICE:  dropping the old merge_schema.dist_source
-NOTICE:  drop cascades to view show_tables
+NOTICE:  drop cascades to view merge_schema.show_tables
 CONTEXT:  SQL statement "DROP TABLE merge_schema.dist_source CASCADE"
 NOTICE:  renaming the new table to merge_schema.dist_source
  undistribute_table
@@ -4008,7 +4008,7 @@ SELECT undistribute_table('dist_target');
 NOTICE:  creating a new table for merge_schema.dist_target
 NOTICE:  moving the data of merge_schema.dist_target
 NOTICE:  dropping the old merge_schema.dist_target
-NOTICE:  drop cascades to view show_tables
+NOTICE:  drop cascades to view merge_schema.show_tables
 CONTEXT:  SQL statement "DROP TABLE merge_schema.dist_target CASCADE"
 NOTICE:  renaming the new table to merge_schema.dist_target
  undistribute_table
@@ -4020,7 +4020,7 @@ SELECT undistribute_table('dist_source');
 NOTICE:  creating a new table for merge_schema.dist_source
 NOTICE:  moving the data of merge_schema.dist_source
 NOTICE:  dropping the old merge_schema.dist_source
-NOTICE:  drop cascades to view show_tables
+NOTICE:  drop cascades to view merge_schema.show_tables
 CONTEXT:  SQL statement "DROP TABLE merge_schema.dist_source CASCADE"
 NOTICE:  renaming the new table to merge_schema.dist_source
  undistribute_table
@@ -4060,7 +4060,7 @@ SELECT undistribute_table('dist_target');
 NOTICE:  creating a new table for merge_schema.dist_target
 NOTICE:  moving the data of merge_schema.dist_target
 NOTICE:  dropping the old merge_schema.dist_target
-NOTICE:  drop cascades to view show_tables
+NOTICE:  drop cascades to view merge_schema.show_tables
 CONTEXT:  SQL statement "DROP TABLE merge_schema.dist_target CASCADE"
 NOTICE:  renaming the new table to merge_schema.dist_target
  undistribute_table
@@ -4072,7 +4072,7 @@ SELECT undistribute_table('dist_source');
 NOTICE:  creating a new table for merge_schema.dist_source
 NOTICE:  moving the data of merge_schema.dist_source
 NOTICE:  dropping the old merge_schema.dist_source
-NOTICE:  drop cascades to view show_tables
+NOTICE:  drop cascades to view merge_schema.show_tables
 CONTEXT:  SQL statement "DROP TABLE merge_schema.dist_source CASCADE"
 NOTICE:  renaming the new table to merge_schema.dist_source
  undistribute_table

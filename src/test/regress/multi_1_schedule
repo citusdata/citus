@@ -17,6 +17,8 @@
 # ---
 test: multi_extension
 test: multi_test_helpers multi_test_helpers_superuser multi_create_fdw
+test: force_search_path_in_execute
+test: metadata_replay_security
 test: single_node
 test: relation_access_tracking_single_node
 test: single_node_truncate

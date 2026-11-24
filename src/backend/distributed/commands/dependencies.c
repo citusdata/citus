@@ -14,9 +14,14 @@
 
 #include "catalog/dependency.h"
 #include "catalog/objectaddress.h"
+#include "catalog/pg_proc.h"
 #include "commands/extension.h"
 #include "storage/lmgr.h"
+#include "utils/acl.h"
+#include "utils/builtins.h"
 #include "utils/lsyscache.h"
+#include "utils/regproc.h"
+#include "utils/syscache.h"
 
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
@@ -24,6 +29,7 @@
 #include "distributed/listutils.h"
 #include "distributed/metadata/dependency.h"
 #include "distributed/metadata/distobject.h"
+#include "distributed/metadata_replay_security.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/multi_executor.h"
 #include "distributed/relation_access_tracking.h"
@@ -37,6 +43,9 @@ static void ErrorIfCircularDependencyExists(const ObjectAddress *objectAddress);
 static int ObjectAddressComparator(const void *a, const void *b);
 static void EnsureDependenciesExistOnAllNodes(const ObjectAddress *target);
 static List * GetDependencyCreateDDLCommands(const ObjectAddress *dependency);
+static List * GetDependencyCreateDDLCommandsForMetadataReplay(const ObjectAddress *
+															  dependency);
+static char * TemporaryRoutineOwnerExecuteGrant(Oid functionId);
 static bool ShouldPropagateObject(const ObjectAddress *address);
 static char * DropTableIfExistsCommand(Oid relationId);
 
@@ -59,6 +68,7 @@ EnsureDependenciesExistOnAllNodes(const ObjectAddress *target)
 {
 	List *dependenciesWithCommands = NIL;
 	List *ddlCommands = NULL;
+	List *protectedDDLCommands = NIL;
 
 	/*
 	 * If there is any unsupported dependency or circular dependency exists, Citus can
@@ -73,6 +83,9 @@ EnsureDependenciesExistOnAllNodes(const ObjectAddress *target)
 	{
 		List *dependencyCommands = GetDependencyCreateDDLCommands(dependency);
 		ddlCommands = list_concat(ddlCommands, dependencyCommands);
+		protectedDDLCommands =
+			list_concat(protectedDDLCommands,
+						GetDependencyCreateDDLCommandsForMetadataReplay(dependency));
 
 		/* create a new list with dependencies that actually created commands */
 		if (list_length(dependencyCommands) > 0)
@@ -88,6 +101,8 @@ EnsureDependenciesExistOnAllNodes(const ObjectAddress *target)
 
 	/* since we are executing ddl commands lets disable propagation, primarily for mx */
 	ddlCommands = list_concat(list_make1(DISABLE_DDL_PROPAGATION), ddlCommands);
+	protectedDDLCommands = list_concat(list_make1(DISABLE_DDL_PROPAGATION),
+									   protectedDDLCommands);
 
 	/*
 	 * Make sure that no new nodes are added after this point until the end of the
@@ -141,7 +156,7 @@ EnsureDependenciesExistOnAllNodes(const ObjectAddress *target)
 
 			SendCommandListToWorkerOutsideTransaction(nodeName, nodePort,
 													  CitusExtensionOwnerName(),
-													  ddlCommands);
+													  protectedDDLCommands);
 		}
 	}
 
@@ -567,6 +582,108 @@ GetAllDependencyCreateDDLCommands(const List *dependencies)
 	foreach_ptr(dependency, dependencies)
 	{
 		commands = list_concat(commands, GetDependencyCreateDDLCommands(dependency));
+	}
+
+	return commands;
+}
+
+
+/*
+ * Routine definitions can evaluate expressions, but their generated ACL replay
+ * cannot. Keep SET ROLE/GRANT/RESET ROLE outside the restricted owner context so
+ * that PostgreSQL can preserve the original grantor.
+ */
+static List *
+GetDependencyCreateDDLCommandsForMetadataReplay(const ObjectAddress *dependency)
+{
+	if (getObjectClass(dependency) == OCLASS_PROC)
+	{
+		List *commands = CreateFunctionDDLCommandsIdempotent(dependency);
+		commands = ProtectMetadataReplayCommandList(commands, dependency);
+		char *ownerExecuteGrant = TemporaryRoutineOwnerExecuteGrant(dependency->objectId);
+		if (ownerExecuteGrant != NULL)
+		{
+			commands = lcons(ownerExecuteGrant, commands);
+		}
+		return list_concat(commands, GrantOnFunctionDDLCommands(dependency->objectId));
+	}
+
+	return ProtectMetadataReplayCommandList(GetDependencyCreateDDLCommands(dependency),
+											dependency);
+}
+
+
+/*
+ * PostgreSQL validators require EXECUTE even for an owner's CREATE OR REPLACE.
+ * The complete command list is atomic in every replay transport, so its final
+ * ACL replay removes this temporary grant, and any failure rolls it back.
+ */
+static char *
+TemporaryRoutineOwnerExecuteGrant(Oid functionId)
+{
+	HeapTuple tuple = SearchSysCache1(PROCOID, ObjectIdGetDatum(functionId));
+	if (!HeapTupleIsValid(tuple))
+	{
+		elog(ERROR, "cache lookup failed for function %u", functionId);
+	}
+
+	Oid ownerId = ((Form_pg_proc) GETSTRUCT(tuple))->proowner;
+	bool aclIsNull = false;
+	SysCacheGetAttr(PROCOID, tuple, Anum_pg_proc_proacl, &aclIsNull);
+	ReleaseSysCache(tuple);
+
+	if (aclIsNull ||
+		object_aclcheck(ProcedureRelationId, functionId, ownerId, ACL_EXECUTE) ==
+		ACLCHECK_OK)
+	{
+		return NULL;
+	}
+
+	char *identity = format_procedure_qualified(functionId);
+	char *owner = GetUserNameFromId(ownerId, false);
+	char *ownerName = quote_literal_cstr(owner);
+	char *grant = psprintf("GRANT EXECUTE ON ROUTINE %s TO %s", identity,
+						   quote_identifier(owner));
+
+	/*
+	 * GRANT updates and locks the routine's catalog tuple until transaction end.
+	 * Recheck its identity and owner afterwards, before any definition executes,
+	 * to reject concurrent renames or ownership changes without committing a grant.
+	 */
+	char *body = psprintf(
+		"DECLARE routine_id pg_catalog.oid := pg_catalog.to_regprocedure(%s); "
+		"BEGIN IF EXISTS (SELECT 1 FROM pg_catalog.pg_proc p "
+		"WHERE p.oid = routine_id "
+		"AND pg_catalog.pg_get_userbyid(p.proowner) = %s "
+		"AND NOT pg_catalog.has_function_privilege(p.proowner, p.oid, 'EXECUTE')) "
+		"THEN EXECUTE %s; "
+		"IF pg_catalog.to_regprocedure(%s) IS DISTINCT FROM routine_id "
+		"OR NOT EXISTS (SELECT 1 FROM pg_catalog.pg_proc p "
+		"WHERE p.oid = routine_id "
+		"AND pg_catalog.pg_get_userbyid(p.proowner) = %s) "
+		"THEN RAISE EXCEPTION 'routine identity or owner changed during metadata replay'; "
+		"END IF; END IF; END",
+		quote_literal_cstr(identity), ownerName, quote_literal_cstr(grant),
+		quote_literal_cstr(identity), ownerName);
+
+	return psprintf("DO %s", quote_literal_cstr(body));
+}
+
+
+/*
+ * Mark dependency definitions whenever replay sends them through a privileged
+ * connection, retaining the owner of each object rather than the target owner.
+ */
+List *
+GetAllDependencyCreateDDLCommandsForMetadataReplay(const List *dependencies)
+{
+	List *commands = NIL;
+	ObjectAddress *dependency = NULL;
+	foreach_ptr(dependency, dependencies)
+	{
+		commands = list_concat(commands,
+							   GetDependencyCreateDDLCommandsForMetadataReplay(
+								   dependency));
 	}
 
 	return commands;

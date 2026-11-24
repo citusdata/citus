@@ -50,6 +50,7 @@
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
+#include "utils/regproc.h"
 #include "utils/snapmgr.h"
 #include "utils/syscache.h"
 
@@ -68,6 +69,7 @@
 #include "distributed/metadata/distobject.h"
 #include "distributed/metadata/pg_dist_object.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/metadata_replay_security.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/metadata_utility.h"
 #include "distributed/multi_executor.h"
@@ -2281,7 +2283,8 @@ GetObjectsForGrantStmt(ObjectType objectType, Oid objectId)
 
 /*
  * GrantOnFunctionDDLCommands creates a list of ddl command for replicating the permissions
- * of roles on distributed functions.
+ * of roles on distributed functions. Explicit ACLs replace default execution
+ * grants rather than adding to them.
  */
 List *
 GrantOnFunctionDDLCommands(Oid functionOid)
@@ -2300,9 +2303,16 @@ GrantOnFunctionDDLCommands(Oid functionOid)
 	Acl *acl = DatumGetAclPCopy(aclDatum);
 	AclItem *aclDat = ACL_DAT(acl);
 	int aclNum = ACL_NUM(acl);
+	Oid ownerId = ((Form_pg_proc) GETSTRUCT(proctup))->proowner;
+	char *ownerName = GetUserNameFromId(ownerId, false);
 	List *commands = NIL;
 
 	ReleaseSysCache(proctup);
+
+	/* A NULL ACL uses defaults; even an empty explicit ACL replaces them. */
+	commands = lappend(commands, psprintf("REVOKE EXECUTE ON ROUTINE %s FROM PUBLIC, %s;",
+										  format_procedure_qualified(functionOid),
+										  quote_identifier(ownerName)));
 
 	for (int i = 0; i < aclNum; i++)
 	{
@@ -2726,6 +2736,30 @@ InterTableRelationshipOfRelationCommandList(Oid relationId)
 		char *alterTableAttachPartitionCommands =
 			GenerateAlterTableAttachPartitionCommand(relationId);
 		commandList = lappend(commandList, alterTableAttachPartitionCommands);
+	}
+
+	return commandList;
+}
+
+
+/*
+ * Protect partition bounds when node activation uses a privileged connection.
+ */
+static List *
+InterTableRelationshipOfRelationCommandListForMetadataReplay(Oid relationId)
+{
+	List *commandList = GetReferencingForeignConstaintCommands(relationId);
+
+	if (PartitionTable(relationId))
+	{
+		ObjectAddress relationAddress = { 0 };
+		ObjectAddressSet(relationAddress, RelationRelationId, relationId);
+		List *attachCommandList =
+			list_make1(GenerateAlterTableAttachPartitionCommand(relationId));
+		commandList =
+			list_concat(commandList,
+						ProtectMetadataReplayCommandList(attachCommandList,
+														 &relationAddress));
 	}
 
 	return commandList;
@@ -5137,7 +5171,8 @@ SendDependencyCreationCommands(MetadataSyncContext *context)
 		}
 
 		/* dependency creation commands */
-		List *ddlCommands = GetAllDependencyCreateDDLCommands(list_make1(dependency));
+		List *ddlCommands =
+			GetAllDependencyCreateDDLCommandsForMetadataReplay(list_make1(dependency));
 		SendOrCollectCommandListToActivatedNodes(context, ddlCommands);
 	}
 	MemoryContextSwitchTo(oldContext);
@@ -5341,7 +5376,8 @@ SendInterTableRelationshipCommands(MetadataSyncContext *context)
 			continue;
 		}
 
-		List *commandList = InterTableRelationshipOfRelationCommandList(relationId);
+		List *commandList =
+			InterTableRelationshipOfRelationCommandListForMetadataReplay(relationId);
 		SendOrCollectCommandListToActivatedNodes(context, commandList);
 	}
 	MemoryContextSwitchTo(oldContext);

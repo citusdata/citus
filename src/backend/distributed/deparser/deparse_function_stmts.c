@@ -297,7 +297,8 @@ AppendDefElemSet(StringInfo buf, DefElem *def)
 static void
 AppendDefElemSupport(StringInfo buf, DefElem *def)
 {
-	appendStringInfo(buf, " SUPPORT %s", defGetString(def));
+	appendStringInfo(buf, " SUPPORT %s",
+					 NameListToQuotedString(castNode(List, def->arg)));
 }
 
 
@@ -784,7 +785,7 @@ AppendGrantOnFunctionFunctions(StringInfo buf, GrantStmt *stmt)
 		 */
 		ObjectWithArgs *function = (ObjectWithArgs *) lfirst(cell);
 
-		appendStringInfoString(buf, NameListToString(function->objname));
+		appendStringInfoString(buf, NameListToQuotedString(function->objname));
 		if (!function->args_unspecified)
 		{
 			/* if args are specified, we should append "(arg1, arg2, ...)" to the function name */
