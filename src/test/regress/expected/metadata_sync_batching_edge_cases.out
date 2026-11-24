@@ -499,7 +499,7 @@ SELECT logicalrelid::regclass,
         WHERE s.logicalrelid = p.logicalrelid) AS placements
 FROM pg_dist_partition p
 WHERE logicalrelid::regclass::text LIKE 'msbe\_no\_active\_placements.%'
-ORDER BY 1;
+ORDER BY logicalrelid::regclass::text;
               logicalrelid               | shards | placements
 ---------------------------------------------------------------------
  msbe_no_active_placements.dist_table    |      0 |          0

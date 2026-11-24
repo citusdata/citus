@@ -22,7 +22,7 @@ env:
 jobs:
   params:
     name: Initialize parameters
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       matrix: ${{ steps.matrix.outputs.matrix }}
       citus_old_version: v14.0.1
@@ -60,7 +60,7 @@ jobs:
   test:
     needs: params
     name: ASAN ${{ matrix.name }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(matrix.group == 'arbitrary-configs' && matrix.shard == 1 && toJSON(vars.ASAN_SHARD1_RUNNER) || '"ubuntu-24.04"') }}
     timeout-minutes: ${{ matrix.timeout }}
     strategy:
       fail-fast: false
@@ -85,12 +85,12 @@ jobs:
         if: matrix.group == 'pg-upgrade'
         with:
           pg_full: ${{ matrix.old_full }}
-          sanitizer: address
+          sanitizer: address-bool
           cold_cache: ${{ inputs.cold_cache }}
       - uses: ./.github/actions/setup_cassert_pg
         with:
           pg_full: ${{ matrix.full }}
-          sanitizer: address
+          sanitizer: address-bool
           cold_cache: ${{ inputs.cold_cache }}
       - name: Verify runtime and symbolized error reporting
         shell: bash
@@ -119,14 +119,42 @@ jobs:
           test "$status" -ne 0
           grep -E 'ERROR: AddressSanitizer: heap-buffer-overflow' "$ASAN_DIR"/canary/asan.*
           grep -E 'canary.c:[0-9]+' "$ASAN_DIR"/canary/asan.*
+          cat > "$ASAN_DIR/canary/bool-canary.c" <<'C'
+          int main(void)
+          {
+              unsigned char raw = 2;
+              volatile _Bool *value = (volatile _Bool *) &raw;
+              return *value;
+          }
+          C
+          "$CC" $CFLAGS "$ASAN_DIR/canary/bool-canary.c" $LDFLAGS \
+            -o "$ASAN_DIR/canary/bool-canary"
+          status=0
+          UBSAN_OPTIONS="halt_on_error=1:print_stacktrace=1" \
+            "$ASAN_DIR/canary/bool-canary" > "$ASAN_DIR/canary/bool-output.txt" 2>&1 || status=$?
+          test "$status" -ne 0
+          grep -F "load of value 2, which is not a valid value for type '_Bool'" \
+            "$ASAN_DIR/canary/bool-output.txt"
+          grep -F 'bool-canary.c:' "$ASAN_DIR/canary/bool-output.txt"
           # Python loads instrumented libpq; prove that the matching runtime comes first.
           LD_PRELOAD="$runtime" python3 -c \
             'import ctypes, os, subprocess; ctypes.CDLL(subprocess.check_output([os.environ["PG_CONFIG"], "--libdir"], text=True).strip() + "/libpq.so")'
+          # initdb must import the libc alias, not merely find OS locale data.
+          bindir="$("$PG_CONFIG" --bindir)"
+          "$bindir/initdb" -D "$ASAN_DIR/locale-check" --no-sync --encoding=UTF8 --locale=C
+          echo "SELECT collname FROM pg_catalog.pg_collation WHERE collname = 'da_DK';" |
+            "$bindir/postgres" --single -D "$ASAN_DIR/locale-check" template1 \
+              > "$ASAN_DIR/locale-verification.txt"
+          grep -F '= "da_DK"' "$ASAN_DIR/locale-verification.txt"
           touch "$ASAN_DIR/runtime-verified"
+      - uses: actions/setup-python@v6
+        if: contains(fromJson('["failure","generator","pg-upgrade","citus-upgrade","arbitrary-configs"]'), matrix.group)
+        with:
+          python-version: "3.12"
       - name: Install python test env
         if: contains(fromJson('["failure","generator","pg-upgrade","citus-upgrade","arbitrary-configs"]'), matrix.group)
         shell: bash
-        run: ( cd src/test/regress && pipenv install --deploy )
+        run: ( cd src/test/regress && pipenv install --deploy --python "$(command -v python)" )
       - name: Build and verify old Citus
         if: matrix.group == 'citus-upgrade'
         shell: bash
@@ -145,6 +173,9 @@ jobs:
             for library in citus.so citus_columnar.so; do
               binary="$ASAN_DIR/old-citus$("$PG_CONFIG" --pkglibdir)/$library"
               readelf -d "$binary" | grep 'NEEDED.*libasan'
+              if nm -D "$binary" | grep '__ubsan_handle_load_invalid_value_abort' > /dev/null; then
+                readelf -d "$binary" | grep 'NEEDED.*libubsan'
+              fi
               nm -D "$binary" | grep '__asan_init'
               ldd "$binary"
               if ldd "$binary" | grep 'not found'; then
@@ -166,7 +197,7 @@ jobs:
           # Restrict preloading to native test commands and their Python/libpq subprocesses.
           run_test() {
             /usr/bin/time -v -a -o "$ASAN_DIR/tests.time" \
-              env LD_PRELOAD="$ASAN_RUNTIME" "$@"
+              env LD_PRELOAD="$ASAN_RUNTIME" "$@" 2>&1 | tee -a "$ASAN_DIR/tests.output"
           }
           case "$GROUP" in
             regress)
@@ -209,7 +240,9 @@ jobs:
               cd src/test/regress
               N=6
               X="$SHARD"
-              TESTS=$(run_test pipenv run python3 citus_tests/print_test_names.py |
+              # Keep stderr out of the captured test-name list.
+              TESTS=$(env LD_PRELOAD="$ASAN_RUNTIME" pipenv run python3 citus_tests/print_test_names.py \
+                2>> "$ASAN_DIR/tests.output" |
                 tr '\n' ',' | awk -v N="$N" -v X="$X" -F, '{
                   split("", parts)
                   for (i = 1; i <= NF; i++) {
@@ -219,7 +252,41 @@ jobs:
               }')
               echo "$TESTS"
               test -n "$TESTS"
-              run_test pipenv run make check-arbitrary-configs parallel=4 CONFIGS="$TESTS" ;;
+              python3 -u - "$ASAN_DIR/resources.log" <<'PY' &
+          import datetime
+          import pathlib
+          import shutil
+          import sys
+          import time
+
+          with open(sys.argv[1], "w", buffering=1) as log:
+              while True:
+                  meminfo = pathlib.Path("/proc/meminfo").read_text().splitlines()
+                  memory = " ".join(line for line in meminfo if line.startswith(("MemAvailable:", "SwapFree:")))
+                  cgroup = pathlib.Path("/sys/fs/cgroup")
+                  events = cgroup / "memory.events"
+                  usage = cgroup / "memory.current"
+                  disk = shutil.disk_usage(".")
+                  sample = (f"{datetime.datetime.now(datetime.timezone.utc).isoformat()} "
+                            f"{memory} disk_free_bytes={disk.free} "
+                            f"cgroup_bytes={usage.read_text().strip() if usage.exists() else 'unavailable'} "
+                            f"cgroup_events={events.read_text().strip().replace(chr(10), ',') if events.exists() else 'unavailable'}")
+                  print(sample, flush=True)
+                  print(sample, file=log, flush=True)
+                  time.sleep(30)
+          PY
+              monitor_pid=$!
+              trap 'kill "$monitor_pid" 2>/dev/null || true; wait "$monitor_pid" 2>/dev/null || true' EXIT
+              parallel=2
+              if [ "$SHARD" = 1 ]; then
+                parallel=1
+              fi
+              run_test pipenv run make check-arbitrary-configs parallel="$parallel" CONFIGS="$TESTS"
+              if ! kill -0 "$monitor_pid" 2>/dev/null; then
+                wait "$monitor_pid" || true
+                echo "::error::Resource monitor exited before the suite completed"
+                exit 1
+              fi ;;
             *) echo "::error::Unknown suite: $GROUP"; exit 1 ;;
           esac
           touch "$ASAN_DIR/tests-completed"
@@ -249,8 +316,43 @@ jobs:
             echo "::error::Old Citus instrumentation was not verified"
             failed=1
           fi
-          # Even a harness that swallows a backend's failure must not hide an ASAN report.
-          # Expected canary reports live outside this directory.
+          ubsan_report="$ASAN_DIR/reports/ubsan-tests"
+          : > "$ubsan_report"
+          ubsan_found=0
+          ubsan_error=0
+          # Scan only text logs/outputs; skip sockets/FIFOs and do not follow symlinks.
+          ubsan_scan() {
+            local status
+            set +e
+            grep -H -n -F -D skip --binary-files=without-match \
+              -e 'runtime error:' "$@" >> "$ubsan_report"
+            status=$?
+            set -e
+            if [ "$status" -eq 0 ]; then
+              ubsan_found=1
+            elif [ "$status" -gt 1 ]; then
+              ubsan_error=1
+            fi
+          }
+          ubsan_dirs=(src/test)
+          if [ -d /tmp/pg_upgrade_newData_logs ]; then
+            ubsan_dirs+=(/tmp/pg_upgrade_newData_logs)
+          fi
+          ubsan_scan "$ASAN_DIR/tests.output"
+          ubsan_scan -r --include='*.log' --include='*.out' --include='*.diffs' \
+            "${ubsan_dirs[@]}"
+          if [ "$ubsan_error" -eq 1 ]; then
+            echo "::error::Failed to scan test output for UBSan diagnostics"
+            cat "$ubsan_report"
+            failed=1
+          elif [ "$ubsan_found" -eq 1 ]; then
+            echo "::error::UBSan diagnostic(s) found in test output"
+            failed=1
+          else
+            rm -f "$ubsan_report"
+          fi
+          # Even a harness that swallows a backend's failure must not hide sanitizer reports.
+          # UBSan diagnostics are captured from test output; expected canary reports live outside.
           test -d "$ASAN_DIR/reports"
           while IFS= read -r -d '' report; do
             echo "::error::Sanitizer diagnostic: $report"
@@ -279,6 +381,8 @@ jobs:
             ${{ runner.temp }}/asan/*.time
             ${{ runner.temp }}/asan/*-verified
             ${{ runner.temp }}/asan/tests-completed
+            ${{ runner.temp }}/asan/tests.output
+            ${{ runner.temp }}/asan/resources.log
             ${{ runner.temp }}/asan/reports/
             ${{ runner.temp }}/asan/canary/
 
@@ -286,7 +390,7 @@ jobs:
     name: ASAN result
     needs: [params, test]
     if: always()
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       actions: read
