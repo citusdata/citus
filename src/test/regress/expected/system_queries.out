@@ -1,3 +1,5 @@
+BEGIN;
+SET LOCAL citus.show_shards_for_app_name_prefixes = '';
 -- The following query retrieves the foreign key constraints of the table "pg_dist_background_job"
 -- along with their details. This modification includes a fix for a null pointer exception that occurred
 -- in the "HasRangeTableRef" method of "worker_shard_visibility". The issue was resolved with PR #7604.
@@ -31,3 +33,4 @@ order by
  pg_dist_background_task_depend_job_id_fkey | job_id      | pg_dist_background_job | pg_catalog
 (2 rows)
 
+END;

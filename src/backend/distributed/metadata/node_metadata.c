@@ -1988,7 +1988,10 @@ RemoveNodeFromCluster(char *nodeName, int32 nodePort)
 		 * Secondary nodes are read-only, never 2PC is used.
 		 * Hence, no items can be inserted to pg_dist_transaction
 		 * for secondary nodes.
+		 *
+		 * Serialize deletion with recovery, after acquiring pg_dist_node.
 		 */
+		LockTransactionRecovery(ShareUpdateExclusiveLock);
 		DeleteWorkerTransactions(workerNode);
 	}
 

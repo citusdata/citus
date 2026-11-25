@@ -144,6 +144,7 @@ jobs:
           - check-split-output-plugin-denied
           - check-multi
           - check-multi-1
+          - check-multi-1-create-citus
           - check-multi-mx
           - check-vanilla
           - check-isolation
