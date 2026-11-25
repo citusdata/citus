@@ -147,5 +147,14 @@ SELECT proname,
 FROM (VALUES ('master_add_node'), ('format'),
 ('citus_depended_proc'), ('citus_independed_proc')) procs(proname);
 
+-- citus objects stay hidden when the meta table is on the nullable side of an
+-- outer join, and the outer row is null-extended instead of being removed
+SET citus.hide_citus_dependent_objects TO true;
+SELECT n.nspname, count(c.oid) FROM pg_namespace n
+LEFT JOIN pg_class c ON c.relnamespace = n.oid AND c.relname = 'pg_dist_shard'
+WHERE n.nspname = 'pg_catalog' GROUP BY n.nspname;
+
+RESET citus.hide_citus_dependent_objects;
+
 -- drop the namespace with all its objects
 DROP SCHEMA citus_dependend_object CASCADE;

@@ -50,6 +50,14 @@ step "s1-commit"
     COMMIT;
 }
 
+// ALTER SCHEMA RENAME updates the schema's pg_namespace row. Lock that row so the
+// rename waits for s1 on every PostgreSQL minor version, not only on those that
+// also lock the schema itself during rename (14.25/15.20/16.16, CVE-2026-6467).
+step "s1-lock-schema-row"
+{
+    SELECT nspname FROM pg_namespace WHERE nspname = 'tenant1' FOR UPDATE;
+}
+
 session "s2"
 
 step "s2-drop-schema"
@@ -125,8 +133,8 @@ permutation "s1-begin" "s1-schema-distribute" "s2-drop-schema" "s1-commit" "s1-v
 permutation "s1-schema-distribute" "s1-begin" "s1-schema-undistribute" "s2-drop-schema" "s1-commit" "s1-verify-distributed-schema"
 
 // RENAME SCHEMA
-permutation "s1-begin" "s1-schema-distribute" "s2-rename-schema" "s1-commit" "s1-verify-distributed-schema"
-permutation "s1-schema-distribute" "s1-begin" "s1-schema-undistribute" "s2-rename-schema" "s1-commit" "s1-verify-distributed-schema"
+permutation "s1-begin" "s1-schema-distribute" "s1-lock-schema-row" "s2-rename-schema" "s1-commit" "s1-verify-distributed-schema"
+permutation "s1-schema-distribute" "s1-begin" "s1-schema-undistribute" "s1-lock-schema-row" "s2-rename-schema" "s1-commit" "s1-verify-distributed-schema"
 
 // CREATE TABLE
 permutation "s1-begin" "s1-schema-distribute" "s2-add-table" "s1-commit" "s1-verify-distributed-schema"

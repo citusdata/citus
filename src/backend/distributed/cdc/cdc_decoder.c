@@ -259,18 +259,33 @@ TranslateAndPublishRelationForCDC(LogicalDecodingContext *ctx, ReorderBufferTXN 
 	/* Get the distributed table's relation for this shard.*/
 	Relation targetRelation = RelationIdGetRelation(targetRelationid);
 
+	/* Keep the reorder buffer's tuples intact for ownership and size accounting. */
+	ReorderBufferChange translatedChange = *change;
+	ReorderBufferTupleBuf oldTuple;
+	ReorderBufferTupleBuf newTuple;
+	if (change->data.tp.oldtuple != NULL)
+	{
+		oldTuple = *change->data.tp.oldtuple;
+		translatedChange.data.tp.oldtuple = &oldTuple;
+	}
+	if (change->data.tp.newtuple != NULL)
+	{
+		newTuple = *change->data.tp.newtuple;
+		translatedChange.data.tp.newtuple = &newTuple;
+	}
+
 	/*
 	 * Check if there has been a schema change (such as a dropped column), by comparing
 	 * the number of attributes in the shard table and the shell table.
 	 */
-	TranslateChangesIfSchemaChanged(relation, targetRelation, change);
+	TranslateChangesIfSchemaChanged(relation, targetRelation, &translatedChange);
 
 	/*
 	 * Publish the change to the shard table as the change in the distributed table,
 	 * so that the CDC client can see the change in the distributed table,
 	 * instead of the shard table, by calling the pgoutput's callback function.
 	 */
-	ouputPluginChangeCB(ctx, txn, targetRelation, change);
+	ouputPluginChangeCB(ctx, txn, targetRelation, &translatedChange);
 	RelationClose(targetRelation);
 }
 
