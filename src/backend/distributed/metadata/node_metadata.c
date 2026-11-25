@@ -110,7 +110,6 @@ static void InsertPlaceholderCoordinatorRecord(void);
 static void InsertNodeRow(int nodeid, char *nodename, int32 nodeport,
 						  NodeMetadata *nodeMetadata);
 static void DeleteNodeRow(char *nodename, int32 nodeport);
-static void BlockDistributedQueriesOnMetadataNodes(void);
 static char * LockPgDistNodeCommand(LOCKMODE lockMode);
 static WorkerNode * TupleToWorkerNode(Relation pgDistNode, TupleDesc tupleDescriptor,
 									  HeapTuple heapTuple);
@@ -665,7 +664,7 @@ citus_disable_node(PG_FUNCTION_ARGS)
  * BlockDistributedQueriesOnMetadataNodes blocks all the modification queries on
  * all nodes. Hence, should be used with caution.
  */
-static void
+void
 BlockDistributedQueriesOnMetadataNodes(void)
 {
 	/* first, block on the coordinator */

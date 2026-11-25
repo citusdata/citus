@@ -395,3 +395,7 @@ s/^[[:space:]]*ERROR:[[:space:]]+could not connect to the publisher:[[:space:]]*
 # can be removed when dropping pg17 support
 s/(:varnullingrels \(b\) :varlevelsup 0) (:varnosyn 1)/\1 :varreturningtype 0 \2/g
 # end pg18 varreturningtype
+
+# The catch-up timeout of citus_promote_clone_and_rebalance() reports WAL
+# positions that vary between runs
+s/Target WAL position is [0-9A-F]+\/[0-9A-F]+; last observed replay position is [0-9A-F]+\/[0-9A-F]+/Target WAL position is X\/X; last observed replay position is X\/X/g
