@@ -99,6 +99,9 @@ typedef struct RemovedOuterJoinContext
 static bool CollectReferencedRelationIdentities(Node *node, Bitmapset **identities);
 static bool ReplaceRemovedOuterJoinRelations(Node *node,
 											 RemovedOuterJoinContext *context);
+static void ReplaceRemovedOuterJoinRelationsInQuery(Query *query,
+													RemovedOuterJoinContext *context,
+													bool nullable);
 static Bitmapset * RemovedOuterJoinRelationIndexes(Node *node, Query *query,
 												   RemovedOuterJoinContext *context,
 												   bool nullable);
@@ -3185,18 +3188,30 @@ ReplaceRemovedOuterJoinRelations(Node *node, RemovedOuterJoinContext *context)
 	if (IsA(node, Query))
 	{
 		Query *query = (Query *) node;
-		Bitmapset *rteIndexes = RemovedOuterJoinRelationIndexes((Node *) query->jointree,
-																query, context, false);
-		int rteIndex = -1;
-		while ((rteIndex = bms_next_member(rteIndexes, rteIndex)) >= 0)
-		{
-			ConvertRemovedOuterJoinRelation(query, rteIndex);
-		}
-		bms_free(rteIndexes);
+		ReplaceRemovedOuterJoinRelationsInQuery(query, context, false);
 		return query_tree_walker(query, ReplaceRemovedOuterJoinRelations, context, 0);
 	}
 
 	return expression_tree_walker(node, ReplaceRemovedOuterJoinRelations, context);
+}
+
+
+/*
+ * Replace the eliminated relations in the query's join tree. When nullable is
+ * true, the whole query is on the nullable side of an outer join.
+ */
+static void
+ReplaceRemovedOuterJoinRelationsInQuery(Query *query, RemovedOuterJoinContext *context,
+										bool nullable)
+{
+	Bitmapset *rteIndexes = RemovedOuterJoinRelationIndexes((Node *) query->jointree,
+															query, context, nullable);
+	int rteIndex = -1;
+	while ((rteIndex = bms_next_member(rteIndexes, rteIndex)) >= 0)
+	{
+		ConvertRemovedOuterJoinRelation(query, rteIndex);
+	}
+	bms_free(rteIndexes);
 }
 
 
@@ -3215,9 +3230,17 @@ RemovedOuterJoinRelationIndexes(Node *node, Query *query,
 	{
 		Index rteIndex = ((RangeTblRef *) node)->rtindex;
 		RangeTblEntry *rte = rt_fetch(rteIndex, query->rtable);
-		if (rte->rtekind == RTE_RELATION &&
-			IsCitusTableType(rte->relid, DISTRIBUTED_TABLE) &&
-			!bms_is_member(GetRTEIdentity(rte), context->referencedIdentities))
+		if (rte->rtekind == RTE_SUBQUERY)
+		{
+			/*
+			 * PostgreSQL can pull a subquery or view up into this query and then
+			 * remove its relations, so they are on the nullable side as well.
+			 */
+			ReplaceRemovedOuterJoinRelationsInQuery(rte->subquery, context, true);
+		}
+		else if (rte->rtekind == RTE_RELATION &&
+				 IsCitusTableType(rte->relid, DISTRIBUTED_TABLE) &&
+				 !bms_is_member(GetRTEIdentity(rte), context->referencedIdentities))
 		{
 			int identity = GetRTEIdentity(rte);
 			RangeTblEntry *transformedRte = NULL;

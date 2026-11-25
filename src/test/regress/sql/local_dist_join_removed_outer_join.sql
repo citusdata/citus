@@ -19,6 +19,15 @@ INSERT INTO local SELECT i, i::text FROM generate_series(0,100) i;
 -- Preserve dropped-column handling when PostgreSQL removes the distributed side.
 SELECT count(*) FROM local LEFT JOIN distributed USING (id);
 
+-- PostgreSQL can pull a view or subquery up before removing the join.
+CREATE VIEW distributed_view AS SELECT * FROM distributed;
+SELECT count(*) FROM local LEFT JOIN distributed_view USING (id);
+SELECT count(*) FROM local LEFT JOIN (SELECT id, name FROM distributed) d USING (id);
+SELECT count(*) FROM (SELECT * FROM (SELECT * FROM distributed) d1) d2 RIGHT JOIN local USING (id);
+-- A relation whose columns are used above the join is kept.
+SELECT count(d.name) FROM local LEFT JOIN distributed_view d USING (id);
+
+DROP VIEW distributed_view;
 DROP TABLE local, distributed;
 RESET search_path;
 DROP SCHEMA local_dist_join_removed_outer_join;
