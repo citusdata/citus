@@ -3689,7 +3689,7 @@ BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 		 * FuncExpr coercions for casts created with CREATE CAST ... WITH
 		 * FUNCTION .. AS IMPLICIT. To support this first we strip them here.
 		 * Then we do the coercion manually below using
-		 * TransformPartitionRestrictionValue, if the types are not the same.
+		 * TransformPartitionRestrictionValue.
 		 *
 		 * NOTE: eval_const_expressions below would do some of these removals
 		 * too, but it's unclear if it would do all of them. It is possible
@@ -3729,9 +3729,14 @@ BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 								   "column")));
 		}
 
-		/* actually do the coercions that we skipped before, if fails throw an
-		 * error */
-		if (partitionValueConst->consttype != partitionColumn->vartype)
+		/*
+		 * Redo the assignment coercion that we stripped above, and error out if
+		 * it fails. This includes the column's typmod even when the types
+		 * match: a numeric(10,2) column stores 1.015 as 1.02, so we must route
+		 * by 1.02.
+		 */
+		if (partitionValueConst->consttype != partitionColumn->vartype ||
+			partitionColumn->vartypmod != -1)
 		{
 			bool missingOk = false;
 			partitionValueConst =
