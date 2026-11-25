@@ -53,8 +53,9 @@ static bool ShouldHideShards(void);
 static bool ShouldHideShardsInternal(void);
 static bool IsPgBgWorker(void);
 static bool FilterShardsFromPgclass(Node *node, void *context);
-static Node * CreateRelationIsAKnownShardFilter(int pgClassVarno);
+static Node * CreateRelationIsAKnownShardFilter(int pgClassVarno, Bitmapset *nullingRels);
 static bool HasRangeTableRef(Node *node, int *varno);
+static bool FindNullingRelsForVarno(Node *jtnode, int varno, Bitmapset **nullingRels);
 
 PG_FUNCTION_INFO_V1(citus_table_is_visible);
 PG_FUNCTION_INFO_V1(relation_is_a_known_shard);
@@ -471,8 +472,19 @@ FilterShardsFromPgclass(Node *node, void *context)
 			/* make sure the expression is in the right memory context */
 			MemoryContext originalContext = MemoryContextSwitchTo(queryContext);
 
+			/*
+			 * The filter is added to the top-level quals, i.e. above every join of
+			 * the query. Since PG16 a Var that references the nullable side of an
+			 * outer join from above that join must carry the join's RT index in
+			 * varnullingrels, otherwise the planner sees an inconsistent tree
+			 * (e.g. "negative bitmapset member not allowed" on PG18 with
+			 * "pg_class c LEFT JOIN pg_class t ON ...").
+			 */
+			Bitmapset *nullingRels = NULL;
+			FindNullingRelsForVarno((Node *) query->jointree, varno, &nullingRels);
+
 			/* add relation_is_a_known_shard(oid) IS NOT TRUE to the quals of the query */
-			Node *newQual = CreateRelationIsAKnownShardFilter(varno);
+			Node *newQual = CreateRelationIsAKnownShardFilter(varno, nullingRels);
 
 			/*
 			 * In PG17, MERGE queries introduce a new struct `mergeJoinCondition`.
@@ -534,6 +546,64 @@ HasRangeTableRef(Node *node, int *varno)
 	return expression_tree_walker(node, HasRangeTableRef, varno);
 }
 
+ /*
+  * FindNullingRelsForVarno walks a join tree looking for the RangeTblRef of the
+  * given varno. It returns true if found and adds to *nullingRels the RT index
+  * of every outer join above it for which that relation is on the nullable
+  * side. Nothing is added when the relation is not found under jtnode.
+  */
+ static bool
+ FindNullingRelsForVarno(Node *jtnode, int varno, Bitmapset **nullingRels)
+{
+	if (jtnode == NULL)
+		return false;
+
+	if (IsA(jtnode, RangeTblRef))
+		return ((RangeTblRef *) jtnode)->rtindex == varno;
+
+	if (IsA(jtnode, FromExpr))
+	{
+		FromExpr *fromExpr = (FromExpr *) jtnode;
+		Node *child = NULL;
+
+		foreach_declared_ptr(child, fromExpr->fromlist)
+		{
+			if (FindNullingRelsForVarno(child, varno, nullingRels))
+				return true;
+		}
+
+		return false;
+	}
+
+	if (IsA(jtnode, JoinExpr))
+	{
+		JoinExpr *joinExpr = (JoinExpr *) jtnode;
+
+		if (FindNullingRelsForVarno(joinExpr->larg, varno, nullingRels))
+		{
+			if ((joinExpr->jointype == JOIN_RIGHT ||
+				 joinExpr->jointype == JOIN_FULL) && joinExpr->rtindex > 0)
+			{
+				*nullingRels = bms_add_member(*nullingRels, joinExpr->rtindex);
+			}
+			return true;
+		}
+
+		if (FindNullingRelsForVarno(joinExpr->rarg, varno, nullingRels))
+		{
+			if ((joinExpr->jointype == JOIN_LEFT ||
+				 joinExpr->jointype == JOIN_FULL) && joinExpr->rtindex > 0)
+			{
+				*nullingRels = bms_add_member(*nullingRels, joinExpr->rtindex);
+			}
+			return true;
+		}
+
+		return false;
+	}
+
+	return false;
+}
 
 /*
  * CreateRelationIsAKnownShardFilter constructs an expression of the form:
@@ -546,12 +616,13 @@ HasRangeTableRef(Node *node, int *varno)
  * filter might be applied on an oid that is then NULL.
  */
 static Node *
-CreateRelationIsAKnownShardFilter(int pgClassVarno)
+CreateRelationIsAKnownShardFilter(int pgClassVarno, Bitmapset *nullingRels)
 {
 	/* oid is always the first column */
 	AttrNumber oidAttNum = 1;
 
 	Var *oidVar = makeVar(pgClassVarno, oidAttNum, OIDOID, -1, InvalidOid, 0);
+	oidVar->varnullingrels = nullingRels;
 
 	/* build the call to read_intermediate_result */
 	FuncExpr *funcExpr = makeNode(FuncExpr);
