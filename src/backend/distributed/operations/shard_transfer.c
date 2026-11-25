@@ -99,7 +99,6 @@ static const char *ShardTransferTypeFunctionNames[] = {
 };
 
 /* local function forward declarations */
-static bool CanUseLogicalReplication(Oid relationId, char shardReplicationMode);
 static void ErrorIfTableCannotBeReplicated(Oid relationId);
 static void ErrorIfTargetNodeIsNotSafeForTransfer(const char *targetNodeName,
 												  int targetNodePort,
@@ -1740,7 +1739,7 @@ BlockWritesToShardList(List *shardList)
 /*
  * CanUseLogicalReplication returns true if the given table can be logically replicated.
  */
-static bool
+bool
 CanUseLogicalReplication(Oid relationId, char shardReplicationMode)
 {
 	if (shardReplicationMode == TRANSFER_MODE_BLOCK_WRITES)
