@@ -189,3 +189,10 @@ test: multi_having_var_remapping
 # check-multi-1-create-citus, which is not part of the N-1 test matrix.
 # ----------
 test: node_removal_transaction_recovery
+
+# ----------
+# citus_use_authinfo covers a superuser check introduced in 14.3; not present
+# in the N-1 (14.2-1) coordinator library. Run it only under
+# check-multi-1-create-citus, which is not part of the N-1 test matrix.
+# ----------
+test: citus_use_authinfo
