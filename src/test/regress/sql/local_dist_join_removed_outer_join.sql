@@ -26,6 +26,7 @@ SELECT count(*) FROM local LEFT JOIN distributed_view USING (id);
 SELECT count(*) FROM local LEFT JOIN (SELECT * FROM distributed) d USING (id);
 SELECT count(*) FROM nested_distributed_view RIGHT JOIN local USING (id);
 SELECT count(*) FROM local LEFT JOIN (SELECT id, name FROM distributed) d USING (id);
+SELECT count(*) FROM local LEFT JOIN (SELECT id, ctid FROM distributed) d USING (id);
 SELECT count(*) FROM (SELECT * FROM (SELECT * FROM distributed) d1) d2 RIGHT JOIN local USING (id);
 
 -- A referenced view output must still read the surviving distributed relation.
