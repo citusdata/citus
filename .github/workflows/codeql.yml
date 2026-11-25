@@ -23,15 +23,21 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v3
 
+    - name: Load CI versions
+      id: ci-versions
+      uses: ./.github/actions/load-ci-versions
+
     - name: Initialize CodeQL
       uses: github/codeql-action/init@v2
       with:
         languages: ${{ matrix.language }}
 
     - name: Install package dependencies
+      env:
+        PG_MAJOR: ${{ steps.ci-versions.outputs.default_pg_major }}
       run: |
         # Create the file repository configuration:
-        sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main 15" > /etc/apt/sources.list.d/pgdg.list'
+        sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
         # Import the repository signing key:
         wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add -
         sudo apt-get update
@@ -60,8 +66,7 @@ jobs:
           libzstd-dev \
           libzstd1 \
           lintian \
-          postgresql-server-dev-15 \
-          postgresql-server-dev-all \
+          "postgresql-server-dev-${PG_MAJOR}" \
           python3-pip \
           python3-setuptools \
           wget \
@@ -70,8 +75,10 @@ jobs:
 
     - name: Configure, Build and Install Citus
       if: matrix.language == 'cpp'
+      env:
+        PG_MAJOR: ${{ steps.ci-versions.outputs.default_pg_major }}
       run: |
-        ./configure
+        PG_CONFIG="/usr/lib/postgresql/${PG_MAJOR}/bin/pg_config" ./configure
         make -sj8
         sudo make install-all
 
