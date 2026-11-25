@@ -58,6 +58,7 @@
 #include "distributed/shard_rebalancer.h"
 #include "distributed/shard_split.h"
 #include "distributed/shard_transfer.h"
+#include "distributed/transaction_management.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/worker_transaction.h"
@@ -497,6 +498,16 @@ TransferShards(int64 shardId, char *sourceNodeName,
 	if (transferType == SHARD_TRANSFER_MOVE)
 	{
 		ErrorIfMoveUnsupportedTableType(distributedTableId);
+
+		/*
+		 * A second move via logical replication in the transaction errors out
+		 * below anyway, with an error of its own.
+		 */
+		if (!(PlacementMovedUsingLogicalReplicationInTX &&
+			  CanUseLogicalReplication(distributedTableId, shardReplicationMode)))
+		{
+			ErrorIfShardTransferAfterModifications("move shard");
+		}
 	}
 	else if (transferType == SHARD_TRANSFER_COPY)
 	{
@@ -1482,6 +1493,35 @@ ErrorIfMoveUnsupportedTableType(Oid relationId)
 						errmsg("table %s is a reference table, moving shard of "
 							   "a reference table is not supported",
 							   qualifiedRelationName)));
+	}
+}
+
+
+/*
+ * ErrorIfShardTransferAfterModifications errors out if earlier commands of the
+ * current transaction modified data or schema. Shard transfers copy the shards
+ * in other transactions, which do not see these modifications. After a move,
+ * they would only commit on the old placements, which are dropped. The other
+ * transactions can also wait for the locks of this transaction forever, for
+ * example to create a replication slot.
+ *
+ * The executor also counts commands that ran outside of the transaction, like
+ * the secondary indexes that a move via logical replication creates, so a
+ * blocking move after such a move errors out too, as a split does.
+ *
+ * operationName completes the error message, like "move shard".
+ */
+void
+ErrorIfShardTransferAfterModifications(const char *operationName)
+{
+	if (XactModificationLevel > XACT_MODIFICATION_NONE)
+	{
+		ereport(ERROR, (errcode(ERRCODE_ACTIVE_SQL_TRANSACTION),
+						errmsg("cannot %s after other modifications in the same "
+							   "transaction", operationName),
+						errdetail("Shards are copied in other transactions, which "
+								  "would not see the modifications."),
+						errhint("Run the command in a separate transaction.")));
 	}
 }
 
