@@ -109,6 +109,9 @@ static void RemapRemovedOuterJoinColumns(Node *node, Query *query, Index rteInde
 #endif
 static bool ReplaceRemovedOuterJoinRelations(Node *node,
 											 RemovedOuterJoinContext *context);
+static void ReplaceRemovedOuterJoinRelationsInQuery(Query *query,
+													RemovedOuterJoinContext *context,
+													bool nullable);
 static Bitmapset * RemovedOuterJoinRelationIndexes(Node *node, Query *query,
 												   RemovedOuterJoinContext *context,
 												   bool nullable);
@@ -3099,33 +3102,45 @@ ReplaceRemovedOuterJoinRelations(Node *node, RemovedOuterJoinContext *context)
 	if (IsA(node, Query))
 	{
 		Query *query = (Query *) node;
-		Bitmapset *rteIndexes = RemovedOuterJoinRelationIndexes((Node *) query->jointree,
-																query, context, false);
-		int rteIndex = -1;
-		while ((rteIndex = bms_next_member(rteIndexes, rteIndex)) >= 0)
-		{
-#if PG_VERSION_NUM < PG_VERSION_16
-
-			/*
-			 * PG15 retains both join inputs. Leave their column numbering and
-			 * join metadata alone. If recursive planning wraps the unused
-			 * relation, however, the subquery cannot supply a system column
-			 * or the table's composite value.
-			 */
-			Query *remappedQuery = (Query *) replace_rte_variables((Node *) query,
-																   rteIndex, 0,
-																   RemapRemovedOuterJoinVar,
-																   NULL, NULL);
-			*query = *remappedQuery;
-#else
-			ConvertRemovedOuterJoinRelation(query, rteIndex);
-#endif
-		}
-		bms_free(rteIndexes);
+		ReplaceRemovedOuterJoinRelationsInQuery(query, context, false);
 		return query_tree_walker(query, ReplaceRemovedOuterJoinRelations, context, 0);
 	}
 
 	return expression_tree_walker(node, ReplaceRemovedOuterJoinRelations, context);
+}
+
+
+/*
+ * ReplaceRemovedOuterJoinRelationsInQuery keeps relation indexes local to the
+ * query that owns them, including nullable subqueries flattened by PostgreSQL.
+ */
+static void
+ReplaceRemovedOuterJoinRelationsInQuery(Query *query, RemovedOuterJoinContext *context,
+										bool nullable)
+{
+	Bitmapset *rteIndexes = RemovedOuterJoinRelationIndexes((Node *) query->jointree,
+															query, context, nullable);
+	int rteIndex = -1;
+	while ((rteIndex = bms_next_member(rteIndexes, rteIndex)) >= 0)
+	{
+#if PG_VERSION_NUM < PG_VERSION_16
+
+		/*
+		 * PG15 retains both join inputs. Leave their column numbering and
+		 * join metadata alone. If recursive planning wraps the unused
+		 * relation, however, the subquery cannot supply a system column
+		 * or the table's composite value.
+		 */
+		Query *remappedQuery = (Query *) replace_rte_variables((Node *) query,
+															   rteIndex, 0,
+															   RemapRemovedOuterJoinVar,
+															   NULL, NULL);
+		*query = *remappedQuery;
+#else
+		ConvertRemovedOuterJoinRelation(query, rteIndex);
+#endif
+	}
+	bms_free(rteIndexes);
 }
 
 
@@ -3160,6 +3175,11 @@ RemovedOuterJoinRelationIndexes(Node *node, Query *query,
 					return bms_make_singleton(rteIndex);
 				}
 			}
+		}
+		else if (rte->rtekind == RTE_SUBQUERY)
+		{
+			/* Pull-up can leave the eliminated relation in an original subquery. */
+			ReplaceRemovedOuterJoinRelationsInQuery(rte->subquery, context, true);
 		}
 	}
 	else if (IsA(node, FromExpr))
