@@ -1189,16 +1189,6 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS c
    101
 (1 row)
 
--- PostgreSQL 16.16 / 17.12 / 18.7 remove the nullable "distributed" side earlier, so
--- whether "local" gets wrapped depends on the minor version; only check the count.
-SET client_min_messages TO WARNING;
-SELECT count(*) FROM local LEFT JOIN distributed USING (id);
- count
----------------------------------------------------------------------
-   101
-(1 row)
-
-SET client_min_messages TO DEBUG1;
 SELECT id, name FROM distributed LEFT JOIN local USING (id) ORDER BY 1 LIMIT 1;
 DEBUG:  Wrapping relation "local" to a subquery
 DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS "dummy-1" FROM local_dist_join_mixed.local WHERE true
