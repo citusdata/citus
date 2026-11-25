@@ -48,7 +48,8 @@ typedef enum AdvisoryLocktagClass
 	ADV_LOCKTAG_CLASS_CITUS_REBALANCE_PLACEMENT_COLOCATION = 13,
 	ADV_LOCKTAG_CLASS_CITUS_BACKGROUND_TASK = 14,
 	ADV_LOCKTAG_CLASS_CITUS_GLOBAL_DDL_SERIALIZATION = 15,
-	ADV_LOCKTAG_CLASS_CITUS_SHARD_MOVE = 16
+	ADV_LOCKTAG_CLASS_CITUS_SHARD_MOVE = 16,
+	ADV_LOCKTAG_CLASS_CITUS_SHARD_TRANSFER_NODE = 17
 } AdvisoryLocktagClass;
 
 /* CitusOperations has constants for citus operations */
@@ -114,6 +115,16 @@ typedef enum CitusOperations
 						 (uint32) ((colocationOrTableId) >> 32), \
 						 (uint32) (colocationOrTableId), \
 						 ADV_LOCKTAG_CLASS_CITUS_REBALANCE_PLACEMENT_COLOCATION)
+
+/* reuse advisory lock, but with different, unused field 4 (17)
+ * Also it has the database hardcoded to MyDatabaseId, to ensure the locks
+ * are local to each database */
+#define SET_LOCKTAG_SHARD_TRANSFER_NODE(tag, groupId) \
+	SET_LOCKTAG_ADVISORY(tag, \
+						 MyDatabaseId, \
+						 (uint32) 0, \
+						 (uint32) (groupId), \
+						 ADV_LOCKTAG_CLASS_CITUS_SHARD_TRANSFER_NODE)
 
 
 /* advisory lock for citus operations, also it has the database hardcoded to MyDatabaseId,
@@ -233,6 +244,7 @@ enum DistLockConfigs
 
 /* Lock shard/relation metadata for safe modifications */
 extern void LockShardDistributionMetadata(int64 shardId, LOCKMODE lockMode);
+extern void SetLocktagForShardDistributionMetadata(int64 shardId, LOCKTAG *tag);
 extern void EnsureShardOwner(uint64 shardId, bool missingOk);
 extern void LockShardListMetadataOnWorkers(LOCKMODE lockmode, List *shardIntervalList);
 extern void BlockWritesToShardList(List *shardList);

@@ -1,0 +1,761 @@
+--
+-- Test that citus_promote_clone_and_rebalance() blocks the changes that the
+-- clone could miss once it stops replicating: writes to the primary's shards
+-- from any node, DDL from any node, commit decisions of distributed
+-- transactions that the primary starts, shard moves, splits and rebalances
+-- that involve the primary, changes to the colocation groups with shards on
+-- the primary, and new shards. Also test that it does not start while a shard
+-- move onto the primary runs, or while the primary has prepared transactions
+-- that are not resolved yet, that the promotion of another clone waits for it
+-- rather than deadlocking with it, that the clone gets its own group id only
+-- once transaction recovery on it ends, that a recovery run that starts on the
+-- clone meanwhile waits for it, that the clone deletes the cleanup records that
+-- it copied before that, and that shard ids that do not fit in an int are kept
+-- intact. Registering the clone in a transaction that wrote to the primary
+-- keeps that write.
+--
+-- Pausing the replay on the clone keeps the promotion waiting for the clone to
+-- catch up, with all of these blocked. The promotion runs over dblink, so this
+-- session must stay connected to the coordinator until it finishes.
+--
+CREATE SCHEMA promotion_concurrency;
+SET search_path TO promotion_concurrency;
+SET citus.next_shard_id TO 9960000;
+SET citus.shard_count TO 32;
+SET citus.shard_replication_factor TO 1;
+SET statement_timeout TO '120s';
+-- tables without shards on the primary, created before it joins the cluster
+CREATE TABLE moved (id int PRIMARY KEY);
+SELECT create_distributed_table('moved', 'id', shard_count => 1, colocate_with => 'none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE inflight (id int PRIMARY KEY);
+SELECT create_distributed_table('inflight', 'id', shard_count => 1, colocate_with => 'none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE spread (id int PRIMARY KEY);
+SELECT create_distributed_table('spread', 'id', shard_count => 16, colocate_with => 'none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT shardid AS moved_shard_id, nodeport AS moved_shard_port
+FROM pg_dist_shard_placement JOIN pg_dist_shard USING (shardid)
+WHERE logicalrelid = 'moved'::regclass \gset
+SELECT nodeid AS moved_node_id FROM pg_dist_node WHERE nodeport = :moved_shard_port \gset
+SELECT CASE WHEN :moved_shard_port = :worker_1_port THEN :worker_2_port ELSE :worker_1_port END AS moved_target_port \gset
+SELECT shardid AS inflight_shard_id, nodeport AS inflight_shard_port
+FROM pg_dist_shard_placement JOIN pg_dist_shard USING (shardid)
+WHERE logicalrelid = 'inflight'::regclass \gset
+-- DDL from workers is propagated only if the coordinator is in the metadata
+SET client_min_messages TO WARNING;
+SELECT 1 FROM citus_set_coordinator_host('localhost', :master_port);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+SELECT master_add_node('localhost', :worker_5_port) AS worker_5_node_id \gset
+RESET client_min_messages;
+-- the tables with shards on the primary get shard ids that do not fit in an int
+RESET citus.next_shard_id;
+ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 3000000000;
+CREATE TABLE dist (id int PRIMARY KEY);
+SELECT create_distributed_table('dist', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO dist SELECT generate_series(1, 100);
+CREATE TABLE late (id int PRIMARY KEY);
+CREATE TABLE new_dist (id int PRIMARY KEY);
+CREATE TABLE cdtc (id int PRIMARY KEY);
+SELECT citus_add_local_table_to_metadata('cdtc');
+ citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+-- keys in a shard on the primary and in shards on two other workers
+WITH placed_keys AS (
+    SELECT g AS id, nodeport
+    FROM generate_series(101, 2000) g
+    JOIN pg_dist_shard_placement p
+      ON p.shardid = get_shard_id_for_distribution_column('dist', g)
+)
+SELECT (SELECT min(id) FROM placed_keys WHERE nodeport = :worker_5_port) AS key_on_primary,
+       (SELECT max(id) FROM placed_keys WHERE nodeport = :worker_5_port) AS other_key_on_primary,
+       (SELECT min(id) FROM placed_keys WHERE nodeport = :worker_1_port) AS key_on_worker_1,
+       (SELECT max(id) FROM placed_keys WHERE nodeport = :worker_1_port) AS other_key_on_worker_1,
+       (SELECT min(id) FROM placed_keys WHERE nodeport = :worker_2_port) AS key_on_worker_2 \gset
+SET citus.enable_ddl_propagation TO off;
+CREATE EXTENSION dblink;
+RESET citus.enable_ddl_propagation;
+SELECT format('host=localhost port=%s dbname=%s user=%s', :master_port, current_database(), current_user) AS coordinator_conn,
+       format('host=localhost port=%s dbname=%s user=%s', :worker_5_port, current_database(), current_user) AS primary_conn,
+       format('host=localhost port=%s dbname=%s user=%s', :follower_worker_5_port, current_database(), current_user) AS clone_conn,
+       format('host=localhost port=%s dbname=%s user=%s', :worker_1_port, current_database(), current_user) AS worker_1_conn \gset
+SELECT set_config('promotion_concurrency.primary_conn', :'primary_conn', false) IS NOT NULL AS set,
+       set_config('promotion_concurrency.clone_conn', :'clone_conn', false) IS NOT NULL AS set,
+       set_config('promotion_concurrency.worker_1_conn', :'worker_1_conn', false) IS NOT NULL AS set;
+ set | set | set
+---------------------------------------------------------------------
+ t   | t   | t
+(1 row)
+
+-- registering the clone keeps the changes that its transaction made on the
+-- primary
+BEGIN;
+INSERT INTO dist VALUES (:other_key_on_primary);
+SELECT citus_add_clone_node('localhost', :follower_worker_5_port, 'localhost', :worker_5_port) AS clone_node_id \gset
+NOTICE:  checking replication relationship between primary localhost:xxxxx and clone localhost:xxxxx
+NOTICE:  checking replication status of clone node localhost:xxxxx
+NOTICE:  clone localhost:xxxxx is properly connected to primary localhost:xxxxx and is not synchronous
+COMMIT;
+SELECT count(*) AS committed FROM dist WHERE id = :other_key_on_primary;
+ committed
+---------------------------------------------------------------------
+         1
+(1 row)
+
+-- the split plan contains all shards on the primary, with their ids intact
+SELECT (SELECT array_agg(shardid ORDER BY shardid)
+        FROM get_snapshot_based_node_split_plan('localhost', :worker_5_port, 'localhost', :follower_worker_5_port)) =
+       (SELECT array_agg(shardid ORDER BY shardid)
+        FROM pg_dist_shard_placement JOIN pg_dist_shard USING (shardid)
+        WHERE logicalrelid = 'dist'::regclass AND nodeport = :worker_5_port) AS split_plan_has_all_shards;
+ split_plan_has_all_shards
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- the shards of a table colocated with dist share the metadata locks of the
+-- shards of dist, so the write fence sends only the shards of dist to workers
+CREATE TABLE dist_colocated (id int PRIMARY KEY);
+SELECT create_distributed_table('dist_colocated', 'id', colocate_with => 'dist');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- another primary, whose clone is promoted concurrently, without shards of
+-- the colocation groups of the first one
+SET client_min_messages TO WARNING;
+SELECT 1 FROM master_add_node('localhost', :worker_6_port);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+SELECT citus_add_clone_node('localhost', :follower_worker_6_port, 'localhost', :worker_6_port) AS other_clone_node_id \gset
+SELECT 1 FROM citus_set_node_property('localhost', :worker_6_port, 'shouldhaveshards', false);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+SELECT 1 FROM replicate_reference_tables('block_writes');
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+RESET client_min_messages;
+-- a rebalance of spread would move shards onto the primary
+SELECT count(*) > 0 AS spread_rebalance_onto_primary
+FROM get_rebalance_table_shards_plan('spread', threshold => 0.01, rebalance_strategy => 'by_shard_count')
+WHERE targetport = :worker_5_port;
+ spread_rebalance_onto_primary
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- the promotion does not start while the primary has prepared transactions of
+-- Citus that are not resolved yet, since the clone would roll them back
+SELECT dblink_exec(:'primary_conn', 'BEGIN; SELECT pg_catalog.txid_current(); PREPARE TRANSACTION ''citus_99999_1_1_1''');
+     dblink_exec
+---------------------------------------------------------------------
+ PREPARE TRANSACTION
+(1 row)
+
+SELECT citus_promote_clone_and_rebalance(:clone_node_id);
+NOTICE:  Starting promotion process for clone node localhost:xxxxx (ID 14), original primary localhost:xxxxx (ID 13)
+NOTICE:  checking replication relationship between primary localhost:xxxxx and clone localhost:xxxxx
+NOTICE:  checking replication status of clone node localhost:xxxxx
+NOTICE:  clone localhost:xxxxx is properly connected to primary localhost:xxxxx and is not synchronous
+NOTICE:  Blocking writes on shards of original primary node localhost:xxxxx (group 10)
+NOTICE:  Blocking all writes to worker node localhost:xxxxx (ID 13)
+NOTICE:  Waiting for clone localhost:xxxxx to catch up with primary localhost:xxxxx (timeout: 300 seconds)
+ERROR:  node localhost:xxxxx has 1 prepared transactions of Citus that are not resolved yet
+DETAIL:  The clone would inherit them, but they would only be resolved on the node.
+HINT:  Retry once 2PC recovery resolves them, or run recover_prepared_transactions() on the node that started them.
+SELECT r AS clone_in_recovery FROM dblink(:'clone_conn', $$SELECT pg_is_in_recovery()$$) AS t(r bool);
+ clone_in_recovery
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT dblink_exec(:'primary_conn', 'ROLLBACK PREPARED ''citus_99999_1_1_1''');
+    dblink_exec
+---------------------------------------------------------------------
+ ROLLBACK PREPARED
+(1 row)
+
+-- the promotion does not start while a shard move onto the primary runs; a
+-- write in progress keeps the move waiting
+SELECT dblink_connect('writer', :'coordinator_conn');
+ dblink_connect
+---------------------------------------------------------------------
+ OK
+(1 row)
+
+SELECT dblink_exec('writer', 'BEGIN; INSERT INTO promotion_concurrency.inflight VALUES (1)');
+ dblink_exec
+---------------------------------------------------------------------
+ INSERT 0 1
+(1 row)
+
+SELECT dblink_connect('mover', :'coordinator_conn');
+ dblink_connect
+---------------------------------------------------------------------
+ OK
+(1 row)
+
+SELECT dblink_send_query('mover', format('SELECT citus_move_shard_placement(%s, ''localhost'', %s, ''localhost'', %s, ''block_writes'')',
+                                         :inflight_shard_id, :inflight_shard_port, :worker_5_port));
+ dblink_send_query
+---------------------------------------------------------------------
+                 1
+(1 row)
+
+DO $$
+BEGIN
+    WHILE dblink_is_busy('mover') = 1 AND NOT EXISTS (
+        SELECT FROM pg_stat_activity
+        WHERE query LIKE 'SELECT citus_move_shard_placement%' AND wait_event_type = 'Lock') LOOP
+        PERFORM pg_sleep(0.01);
+        PERFORM pg_stat_clear_snapshot();
+    END LOOP;
+END $$;
+SELECT citus_promote_clone_and_rebalance(:clone_node_id);
+ERROR:  could not acquire the shard transfer lock of node localhost:xxxxx to promote its clone
+DETAIL:  It means that either a shard move, copy, split or rebalance involving the node, or the promotion of a clone of the node is happening.
+HINT:  Make sure that the concurrent operation has finished and re-run the command
+SELECT dblink_exec('writer', 'ROLLBACK');
+ dblink_exec
+---------------------------------------------------------------------
+ ROLLBACK
+(1 row)
+
+SELECT count(*) AS moves FROM dblink_get_result('mover') AS t(r text);
+ moves
+---------------------------------------------------------------------
+     1
+(1 row)
+
+SELECT dblink_disconnect('mover');
+ dblink_disconnect
+---------------------------------------------------------------------
+ OK
+(1 row)
+
+SELECT dblink_disconnect('writer');
+ dblink_disconnect
+---------------------------------------------------------------------
+ OK
+(1 row)
+
+SELECT nodeport = :worker_5_port AS inflight_on_primary FROM pg_dist_shard_placement WHERE shardid = :inflight_shard_id;
+ inflight_on_primary
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SET client_min_messages TO WARNING;
+CALL citus_cleanup_orphaned_resources();
+RESET client_min_messages;
+-- pause the replay on the clone, then write WAL on the primary that it has to catch up with
+SELECT r AS paused FROM dblink(:'clone_conn', $$SELECT pg_wal_replay_pause()$$) AS t(r text);
+ paused
+---------------------------------------------------------------------
+
+(1 row)
+
+DO $$
+BEGIN
+    WHILE (SELECT state FROM dblink(current_setting('promotion_concurrency.clone_conn'),
+                                    $q$SELECT pg_get_wal_replay_pause_state()$q$) AS t(state text)) <> 'paused' LOOP
+        PERFORM pg_sleep(0.01);
+    END LOOP;
+END $$;
+SELECT dblink_exec(:'primary_conn', 'CREATE TABLE promotion_concurrency_wal (id int); DROP TABLE promotion_concurrency_wal');
+ dblink_exec
+---------------------------------------------------------------------
+ DROP TABLE
+(1 row)
+
+-- the clone also copies a cleanup record of the primary
+SELECT dblink_exec(:'primary_conn', $$INSERT INTO pg_catalog.pg_dist_cleanup
+    VALUES (nextval('pg_catalog.pg_dist_cleanup_recordid_seq'), 8984000, 1,
+            'public.promotion_concurrency_no_such_shard',
+            (SELECT groupid FROM pg_catalog.pg_dist_local_group), 2)$$);
+ dblink_exec
+---------------------------------------------------------------------
+ INSERT 0 1
+(1 row)
+
+-- a write in progress keeps the promotion waiting in its write fence
+SELECT dblink_connect('writer', :'coordinator_conn');
+ dblink_connect
+---------------------------------------------------------------------
+ OK
+(1 row)
+
+SELECT dblink_exec('writer', format('BEGIN; INSERT INTO promotion_concurrency.dist VALUES (%s)', :key_on_primary));
+ dblink_exec
+---------------------------------------------------------------------
+ INSERT 0 1
+(1 row)
+
+SELECT dblink_connect('promotion', :'coordinator_conn');
+ dblink_connect
+---------------------------------------------------------------------
+ OK
+(1 row)
+
+SELECT dblink_send_query('promotion', format('SELECT citus_promote_clone_and_rebalance(%s)', :clone_node_id));
+ dblink_send_query
+---------------------------------------------------------------------
+                 1
+(1 row)
+
+DO $$
+BEGIN
+    WHILE dblink_is_busy('promotion') = 1 AND NOT EXISTS (
+        SELECT FROM pg_stat_activity
+        WHERE query LIKE 'SELECT citus_promote_clone_and_rebalance%' AND wait_event_type = 'Lock') LOOP
+        PERFORM pg_sleep(0.01);
+        PERFORM pg_stat_clear_snapshot();
+    END LOOP;
+END $$;
+-- meanwhile, a new table gets shards on the primary
+SELECT create_distributed_table('late', 'id', colocate_with => 'none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- and the promotion of another clone waits for this one before it takes any
+-- other lock, so they do not deadlock when they block writes
+SELECT dblink_connect('other_promotion', :'coordinator_conn' || ' application_name=other_promotion');
+ dblink_connect
+---------------------------------------------------------------------
+ OK
+(1 row)
+
+SELECT dblink_send_query('other_promotion', format('SELECT citus_promote_clone_and_rebalance(%s)', :other_clone_node_id));
+ dblink_send_query
+---------------------------------------------------------------------
+                 1
+(1 row)
+
+DO $$
+BEGIN
+    WHILE dblink_is_busy('other_promotion') = 1 AND NOT EXISTS (
+        SELECT FROM pg_stat_activity
+        WHERE application_name = 'other_promotion' AND wait_event_type = 'Lock') LOOP
+        PERFORM pg_sleep(0.01);
+        PERFORM pg_stat_clear_snapshot();
+    END LOOP;
+END $$;
+SELECT relation::regclass, mode FROM pg_locks
+WHERE NOT granted AND pid = (SELECT pid FROM pg_stat_activity WHERE application_name = 'other_promotion');
+   relation   |         mode
+---------------------------------------------------------------------
+ pg_dist_node | ShareRowExclusiveLock
+(1 row)
+
+SELECT dblink_exec('writer', 'ROLLBACK');
+ dblink_exec
+---------------------------------------------------------------------
+ ROLLBACK
+(1 row)
+
+SELECT dblink_disconnect('writer');
+ dblink_disconnect
+---------------------------------------------------------------------
+ OK
+(1 row)
+
+-- wait until the promotion waits for the clone to catch up, with everything blocked
+DO $$
+BEGIN
+    WHILE dblink_is_busy('promotion') = 1 AND NOT EXISTS (
+        SELECT FROM dblink(current_setting('promotion_concurrency.clone_conn'),
+                           $q$SELECT 1 FROM pg_stat_activity
+                              WHERE query LIKE 'SELECT pg_last_wal_replay_lsn()%'
+                                AND pid <> pg_backend_pid()$q$) AS t(found int)) LOOP
+        PERFORM pg_sleep(0.01);
+    END LOOP;
+END $$;
+SELECT min(g) AS late_key_on_primary
+FROM generate_series(1, 2000) g
+JOIN pg_dist_shard_placement p ON p.shardid = get_shard_id_for_distribution_column('late', g)
+WHERE p.nodeport = :worker_5_port \gset
+SELECT shardid AS late_shard_id, nodeport AS late_shard_port
+FROM pg_dist_shard_placement JOIN pg_dist_shard USING (shardid)
+WHERE logicalrelid = 'late'::regclass AND nodeport <> :worker_5_port
+ORDER BY shardid LIMIT 1 \gset
+SELECT CASE WHEN :late_shard_port = :worker_1_port THEN :worker_2_port ELSE :worker_1_port END AS late_target_port \gset
+-- PG19 adds the lock that was waited for, with its OIDs, to the context of
+-- lock timeout errors, so hide the context of the lock timeouts below
+\set SHOW_CONTEXT never
+-- writes to the primary's shards are blocked on all nodes, including the
+-- shards of the new table, and of the table colocated with dist
+SELECT dblink_exec(:'worker_1_conn', format('SET lock_timeout TO ''1s''; INSERT INTO promotion_concurrency.dist VALUES (%s)', :key_on_primary));
+ERROR:  canceling statement due to lock timeout
+SELECT dblink_exec(:'worker_1_conn', format('SET lock_timeout TO ''1s''; INSERT INTO promotion_concurrency.late VALUES (%s)', :late_key_on_primary));
+ERROR:  canceling statement due to lock timeout
+SELECT dblink_exec(:'worker_1_conn', format('SET lock_timeout TO ''1s''; INSERT INTO promotion_concurrency.dist_colocated VALUES (%s)', :key_on_primary));
+ERROR:  canceling statement due to lock timeout
+SET lock_timeout TO '1s';
+INSERT INTO dist VALUES (:key_on_primary);
+ERROR:  canceling statement due to lock timeout
+INSERT INTO late VALUES (:late_key_on_primary);
+ERROR:  canceling statement due to lock timeout
+RESET lock_timeout;
+-- other writes are not
+SELECT dblink_exec(:'worker_1_conn', format('SET lock_timeout TO ''1s''; INSERT INTO promotion_concurrency.dist VALUES (%s)', :other_key_on_worker_1));
+ dblink_exec
+---------------------------------------------------------------------
+ INSERT 0 1
+(1 row)
+
+-- distributed transactions that the primary starts cannot commit
+SELECT dblink_exec(:'primary_conn', format('SET lock_timeout TO ''1s''; BEGIN; INSERT INTO promotion_concurrency.dist VALUES (%s), (%s); COMMIT', :key_on_worker_1, :key_on_worker_2));
+ERROR:  canceling statement due to lock timeout
+-- DDL is blocked on all nodes, and so are new shards
+SELECT dblink_exec(:'worker_1_conn', 'SET lock_timeout TO ''1s''; CREATE SCHEMA promotion_concurrency_worker_ddl');
+ERROR:  canceling statement due to lock timeout
+SET lock_timeout TO '1s';
+CREATE SCHEMA promotion_concurrency_coordinator_ddl;
+ERROR:  canceling statement due to lock timeout
+SELECT create_distributed_table('new_dist', 'id', colocate_with => 'none');
+ERROR:  canceling statement due to lock timeout
+-- shard moves, splits and rebalances that involve the primary are rejected,
+-- whatever the colocation group
+SELECT citus_move_shard_placement(:moved_shard_id, 'localhost', :moved_shard_port, 'localhost', :worker_5_port, 'block_writes');
+ERROR:  could not acquire the shard transfer lock of node localhost:xxxxx to move shards
+DETAIL:  It means that either a shard move, copy, split or rebalance involving the node, or the promotion of a clone of the node is happening.
+HINT:  Make sure that the concurrent operation has finished and re-run the command
+SELECT citus_split_shard_by_split_points(:moved_shard_id, ARRAY['0'], ARRAY[:moved_node_id, :worker_5_node_id], 'block_writes');
+ERROR:  could not acquire the shard transfer lock of node localhost:xxxxx to split shards
+DETAIL:  It means that either a shard move, copy, split or rebalance involving the node, or the promotion of a clone of the node is happening.
+HINT:  Make sure that the concurrent operation has finished and re-run the command
+SELECT create_distributed_table_concurrently('cdtc', 'id', colocate_with => 'none');
+ERROR:  could not acquire the shard transfer lock of node localhost:xxxxx to split shards
+DETAIL:  It means that either a shard move, copy, split or rebalance involving the node, or the promotion of a clone of the node is happening.
+HINT:  Make sure that the concurrent operation has finished and re-run the command
+SELECT rebalance_table_shards('spread', threshold => 0.01, rebalance_strategy => 'by_shard_count', shard_transfer_mode => 'block_writes');
+ERROR:  could not acquire the shard transfer lock of node localhost:xxxxx to move shards
+DETAIL:  It means that either a shard move, copy, split or rebalance involving the node, or the promotion of a clone of the node is happening.
+HINT:  Make sure that the concurrent operation has finished and re-run the command
+-- and so are the ones that change the colocation groups with shards on the
+-- primary, including the group of the new table
+SELECT rebalance_table_shards('dist', shard_transfer_mode => 'block_writes');
+ERROR:  could not acquire the lock required to rebalance promotion_concurrency.dist
+DETAIL:  It means that either a concurrent shard move or shard copy is happening.
+HINT:  Make sure that the concurrent operation has finished and re-run the command
+SELECT citus_move_shard_placement(:late_shard_id, 'localhost', :late_shard_port, 'localhost', :late_target_port, 'block_writes');
+ERROR:  could not acquire the lock required to move promotion_concurrency.late
+DETAIL:  It means that either a concurrent shard move or colocated distributed table creation is happening.
+HINT:  Make sure that the concurrent operation has finished and re-run the command
+-- other shard moves are not rejected, they wait for the promotion like other
+-- metadata changes
+SELECT citus_move_shard_placement(:moved_shard_id, 'localhost', :moved_shard_port, 'localhost', :moved_target_port, 'block_writes');
+ERROR:  canceling statement due to lock timeout
+RESET lock_timeout;
+\set SHOW_CONTEXT always
+-- The clone gets its own group id only once transaction recovery on it ends,
+-- since a run keeps the group id that it read first, the primary's. To keep
+-- recovery on the clone running, leave a prepared transaction of the primary
+-- on worker_1, which recovery rolls back since it has no commit record, and
+-- make commits on worker_1 wait for a synchronous standby that does not exist.
+SELECT groupid AS primary_group_id, format('citus_%s_1_1_0', groupid) AS orphaned_gid
+FROM pg_dist_node WHERE nodeid = :worker_5_node_id \gset
+SELECT set_config('promotion_concurrency.primary_group_id', :'primary_group_id', false) IS NOT NULL AS set;
+ set
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT dblink_exec(:'worker_1_conn', format('BEGIN; SELECT pg_catalog.txid_current(); PREPARE TRANSACTION %L', :'orphaned_gid'));
+     dblink_exec
+---------------------------------------------------------------------
+ PREPARE TRANSACTION
+(1 row)
+
+SELECT dblink_exec(:'worker_1_conn', 'ALTER SYSTEM SET synchronous_standby_names TO ''promotion_concurrency_no_standby''');
+ dblink_exec
+---------------------------------------------------------------------
+ ALTER SYSTEM
+(1 row)
+
+SELECT r AS reloaded FROM dblink(:'worker_1_conn', 'SELECT pg_catalog.pg_reload_conf()') AS t(r bool);
+ reloaded
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT dblink_connect('sync_probe', :'worker_1_conn');
+ dblink_connect
+---------------------------------------------------------------------
+ OK
+(1 row)
+
+SELECT dblink_send_query('sync_probe', 'SELECT pg_catalog.txid_current()');
+ dblink_send_query
+---------------------------------------------------------------------
+                 1
+(1 row)
+
+DO $$
+BEGIN
+    WHILE dblink_is_busy('sync_probe') = 1 AND NOT EXISTS (
+        SELECT FROM dblink(current_setting('promotion_concurrency.worker_1_conn'),
+                           $q$SELECT 1 FROM pg_stat_activity
+                              WHERE wait_event = 'SyncRep'
+                                AND query = 'SELECT pg_catalog.txid_current()'$q$) AS t(found int)) LOOP
+        PERFORM pg_sleep(0.01);
+    END LOOP;
+END $$;
+-- the promotion promotes the clone, and then waits for recovery on it
+SELECT r AS resumed FROM dblink(:'clone_conn', $$SELECT pg_wal_replay_resume()$$) AS t(r text);
+ resumed
+---------------------------------------------------------------------
+
+(1 row)
+
+DO $$
+BEGIN
+    WHILE dblink_is_busy('promotion') = 1 AND NOT EXISTS (
+        SELECT FROM dblink(current_setting('promotion_concurrency.worker_1_conn'),
+                           $q$SELECT 1 FROM pg_stat_activity
+                              WHERE wait_event = 'SyncRep' AND backend_type = 'client backend'
+                                AND query <> 'SELECT pg_catalog.txid_current()'$q$) AS t(found int)) LOOP
+        PERFORM pg_sleep(0.01);
+    END LOOP;
+END $$;
+SELECT q AS waiting_on_worker_1
+FROM dblink(:'worker_1_conn', $$SELECT left(query, 17) FROM pg_stat_activity
+                                 WHERE wait_event = 'SyncRep' AND backend_type = 'client backend'
+                                   AND query <> 'SELECT pg_catalog.txid_current()'$$) AS t(q text);
+ waiting_on_worker_1
+---------------------------------------------------------------------
+ ROLLBACK PREPARED
+(1 row)
+
+SELECT dblink_is_busy('promotion') AS promotion_waits;
+ promotion_waits
+---------------------------------------------------------------------
+               1
+(1 row)
+
+SELECT promoted, groupid = :primary_group_id AS has_primary_group_id
+FROM dblink(:'clone_conn', $$SELECT NOT pg_is_in_recovery(), groupid FROM pg_dist_local_group$$)
+     AS t(promoted bool, groupid int);
+ promoted | has_primary_group_id
+---------------------------------------------------------------------
+ t        | t
+(1 row)
+
+-- before the promotion waits for recovery to assign the group id, the clone
+-- deletes the cleanup records that it copied, so that its maintenance daemon
+-- does not act on them meanwhile
+DO $$
+BEGIN
+    WHILE NOT EXISTS (
+        SELECT FROM dblink(current_setting('promotion_concurrency.clone_conn'),
+                           $q$SELECT 1 FROM pg_stat_activity a JOIN pg_locks l ON l.pid = a.pid
+                              WHERE a.query = 'SELECT pg_catalog.recover_prepared_transactions()'
+                                AND l.locktype = 'advisory'$q$) AS t(found int))
+      AND (SELECT groupid FROM dblink(current_setting('promotion_concurrency.clone_conn'),
+                                      'SELECT groupid FROM pg_dist_local_group') AS t(groupid int))
+          = current_setting('promotion_concurrency.primary_group_id')::int LOOP
+        PERFORM pg_sleep(0.01);
+    END LOOP;
+END $$;
+SELECT c AS clone_cleanup_records
+FROM dblink(:'clone_conn', 'SELECT count(*) FROM pg_dist_cleanup') AS t(c bigint);
+ clone_cleanup_records
+---------------------------------------------------------------------
+                     0
+(1 row)
+
+-- a recovery run that starts on the clone meanwhile waits for the transaction
+-- recovery lock, which the promotion keeps until the clone has its own group
+-- id, since the run reads the group id only once it has the lock
+SELECT dblink_connect('late_recovery', :'clone_conn' || ' application_name=late_recovery');
+ dblink_connect
+---------------------------------------------------------------------
+ OK
+(1 row)
+
+SELECT dblink_send_query('late_recovery', 'SELECT pg_catalog.recover_prepared_transactions()');
+ dblink_send_query
+---------------------------------------------------------------------
+                 1
+(1 row)
+
+DO $$
+BEGIN
+    WHILE dblink_is_busy('late_recovery') = 1 AND NOT EXISTS (
+        SELECT FROM dblink(current_setting('promotion_concurrency.clone_conn'),
+                           $q$SELECT 1 FROM pg_stat_activity a JOIN pg_locks l ON l.pid = a.pid
+                              WHERE a.application_name = 'late_recovery'
+                                AND l.locktype = 'advisory' AND NOT l.granted$q$) AS t(found int)) LOOP
+        PERFORM pg_sleep(0.01);
+    END LOOP;
+END $$;
+SELECT dblink_is_busy('late_recovery') AS late_recovery_waits;
+ late_recovery_waits
+---------------------------------------------------------------------
+                   1
+(1 row)
+
+-- once commits on worker_1 do not wait anymore, recovery on the clone ends, the
+-- promotion finishes, and then the other one
+SELECT dblink_exec(:'worker_1_conn', 'ALTER SYSTEM RESET synchronous_standby_names');
+ dblink_exec
+---------------------------------------------------------------------
+ ALTER SYSTEM
+(1 row)
+
+SELECT r AS reloaded FROM dblink(:'worker_1_conn', 'SELECT pg_catalog.pg_reload_conf()') AS t(r bool);
+ reloaded
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT count(*) AS probe_committed FROM dblink_get_result('sync_probe') AS t(x bigint);
+ probe_committed
+---------------------------------------------------------------------
+               1
+(1 row)
+
+SELECT dblink_disconnect('sync_probe');
+ dblink_disconnect
+---------------------------------------------------------------------
+ OK
+(1 row)
+
+SELECT r AS promoted FROM dblink_get_result('promotion') AS t(r text);
+ promoted
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT dblink_disconnect('promotion');
+ dblink_disconnect
+---------------------------------------------------------------------
+ OK
+(1 row)
+
+SELECT r AS late_recovery_recovered FROM dblink_get_result('late_recovery') AS t(r int);
+ late_recovery_recovered
+---------------------------------------------------------------------
+                       0
+(1 row)
+
+SELECT dblink_disconnect('late_recovery');
+ dblink_disconnect
+---------------------------------------------------------------------
+ OK
+(1 row)
+
+SELECT r AS other_promoted FROM dblink_get_result('other_promotion') AS t(r text);
+ other_promoted
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT dblink_disconnect('other_promotion');
+ dblink_disconnect
+---------------------------------------------------------------------
+ OK
+(1 row)
+
+SELECT nodeid = :clone_node_id AS first_clone, isactive, noderole, nodeisclone
+FROM pg_dist_node WHERE nodeid IN (:clone_node_id, :other_clone_node_id) ORDER BY nodeid;
+ first_clone | isactive | noderole | nodeisclone
+---------------------------------------------------------------------
+ t           | t        | primary  | f
+ f           | t        | primary  | f
+(2 rows)
+
+-- of the writes after the initial load, the one in the transaction that
+-- registered the clone and the one that was not blocked went through, and all
+-- shards of the new table exist, also the ones that moved to the clone
+SELECT count(*) FROM dist;
+ count
+---------------------------------------------------------------------
+   102
+(1 row)
+
+SELECT count(*) FROM late;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+SELECT count(*) > 0 AS clone_got_shards
+FROM pg_dist_shard_placement WHERE nodeport = :follower_worker_5_port AND shardid > 2147483647;
+ clone_got_shards
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- recovery on the clone rolled back the prepared transaction of the primary,
+-- as the primary would have
+SELECT c AS orphaned_prepared_transactions
+FROM dblink(:'worker_1_conn', format('SELECT count(*) FROM pg_prepared_xacts WHERE gid = %L', :'orphaned_gid')) AS t(c bigint);
+ orphaned_prepared_transactions
+---------------------------------------------------------------------
+                              0
+(1 row)
+
+-- DDL works again and reaches the clone
+CREATE SCHEMA promotion_concurrency_ddl;
+SELECT c AS schema_on_clone
+FROM dblink(:'clone_conn', $$SELECT count(*) FROM pg_namespace WHERE nspname = 'promotion_concurrency_ddl'$$) AS t(c bigint);
+ schema_on_clone
+---------------------------------------------------------------------
+               1
+(1 row)
+
+-- cleanup
+SELECT dblink_exec(:'primary_conn', 'DELETE FROM pg_catalog.pg_dist_cleanup WHERE operation_id = 8984000');
+ dblink_exec
+---------------------------------------------------------------------
+ DELETE 1
+(1 row)
+
+SET client_min_messages TO WARNING;
+DROP SCHEMA promotion_concurrency_ddl;
+DROP SCHEMA promotion_concurrency CASCADE;
+SELECT 1 FROM citus_remove_node('localhost', :master_port);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+RESET client_min_messages;
+RESET statement_timeout;

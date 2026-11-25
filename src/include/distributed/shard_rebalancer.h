@@ -216,13 +216,18 @@ extern List * ReplicationPlacementUpdates(List *workerNodeList, List *shardPlace
 extern void ExecuteRebalancerCommandInSeparateTransaction(char *command);
 extern void AcquirePlacementColocationLock(Oid relationId, int lockMode,
 										   const char *operationName);
+extern void AcquireShardTransferNodeLock(WorkerNode *workerNode, int lockMode,
+										 const char *operationName);
+extern void AcquireColocationLocksForNodeGroup(int32 groupId, const char *operationName);
 
 extern void SetupRebalanceMonitor(List *placementUpdateList,
 								  Oid relationId,
 								  uint64 initialProgressState,
 								  PlacementUpdateStatus initialStatus);
 
-extern void SplitShardsBetweenPrimaryAndClone(WorkerNode *primaryNode,
-											  WorkerNode *cloneNode,
-											  Name strategyName);
+extern void PlanShardSplitBetweenPrimaryAndClone(WorkerNode *primaryNode,
+												 WorkerNode *cloneNode,
+												 Name strategyName,
+												 List **primaryShardIdList,
+												 List **cloneShardIdList);
 #endif   /* SHARD_REBALANCER_H */

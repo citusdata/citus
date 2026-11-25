@@ -96,6 +96,7 @@ extern void EnsureCoordinatorUnlessTenantSchema(Oid relationId);
 extern void EnsureCoordinatorIsInMetadata(void);
 extern void InsertCoordinatorIfClusterEmpty(void);
 extern void LockPgDistNodeOnCoordinatorViaSuperUser(LOCKMODE lockMode);
+extern void BlockDistributedQueriesOnMetadataNodes(void);
 extern uint32 GroupForNode(char *nodeName, int32 nodePort);
 extern WorkerNode * PrimaryNodeForGroup(int32 groupId, bool *groupContainsNodes);
 extern bool NodeIsPrimaryAndRemote(WorkerNode *worker);

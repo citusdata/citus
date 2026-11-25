@@ -67,82 +67,20 @@ DROP TABLE promotion_catchup_wal;
 
 \c - - - :master_port
 SET client_min_messages = WARNING;
+-- the promotion waits for the clone, whose replay is paused, until its
+-- catch-up timeout, or until statement_timeout cancels it
 SET statement_timeout = '60s';
-DO $$
-DECLARE
-    cloneId integer := (SELECT nodeid FROM pg_dist_node WHERE nodeisclone);
-    errorDetail text;
-BEGIN
-    BEGIN
-        PERFORM citus_promote_clone_and_rebalance(
-            clone_nodeid => cloneId, catchup_timeout_seconds => 1);
-        RAISE EXCEPTION 'promotion unexpectedly succeeded with paused replay';
-    EXCEPTION WHEN object_not_in_prerequisite_state THEN
-        IF SQLERRM NOT LIKE '%failed to catch up%' THEN
-            RAISE;
-        END IF;
-        GET STACKED DIAGNOSTICS errorDetail = PG_EXCEPTION_DETAIL;
-        IF errorDetail IS NULL OR errorDetail NOT LIKE 'Target WAL position is %' THEN
-            RAISE EXCEPTION 'missing catch-up timeout diagnostics';
-        END IF;
-    END;
-    IF NOT EXISTS (SELECT FROM pg_dist_node
-                   WHERE nodeid = cloneId AND nodeisclone AND NOT isactive) THEN
-        RAISE EXCEPTION 'timeout changed clone metadata';
-    END IF;
-END $$;
-RESET statement_timeout;
+SELECT citus_promote_clone_and_rebalance(clone_nodeid => :clone_node_id, catchup_timeout_seconds => 1);
 SET statement_timeout = '1s';
-DO $$
-DECLARE
-    cloneId integer := (SELECT nodeid FROM pg_dist_node WHERE nodeisclone);
-BEGIN
-    BEGIN
-        PERFORM citus_promote_clone_and_rebalance(
-            clone_nodeid => cloneId, catchup_timeout_seconds => 0);
-        RAISE EXCEPTION 'promotion unexpectedly succeeded with paused replay';
-    EXCEPTION WHEN query_canceled THEN
-        NULL;
-    END;
-    IF NOT EXISTS (SELECT FROM pg_dist_node
-                   WHERE nodeid = cloneId AND nodeisclone AND NOT isactive) THEN
-        RAISE EXCEPTION 'cancellation changed clone metadata';
-    END IF;
-END $$;
-DO $$
-DECLARE
-    cloneId integer := (SELECT nodeid FROM pg_dist_node WHERE nodeisclone);
-BEGIN
-    BEGIN
-        PERFORM citus_promote_clone_and_rebalance(
-            clone_nodeid => cloneId, catchup_timeout_seconds => 30);
-        RAISE EXCEPTION 'promotion unexpectedly succeeded with paused replay';
-    EXCEPTION WHEN query_canceled THEN
-        NULL;
-    END;
-    IF NOT EXISTS (SELECT FROM pg_dist_node
-                   WHERE nodeid = cloneId AND nodeisclone AND NOT isactive) THEN
-        RAISE EXCEPTION 'cancellation changed clone metadata';
-    END IF;
-END $$;
-RESET statement_timeout;
+SELECT citus_promote_clone_and_rebalance(clone_nodeid => :clone_node_id, catchup_timeout_seconds => 0);
+SELECT citus_promote_clone_and_rebalance(clone_nodeid => :clone_node_id, catchup_timeout_seconds => 30);
 SET statement_timeout = '60s';
-DO $$
-DECLARE
-    cloneId integer := (SELECT nodeid FROM pg_dist_node WHERE nodeisclone);
-BEGIN
-    BEGIN
-        PERFORM citus_promote_clone_and_rebalance(
-            clone_nodeid => cloneId, catchup_timeout_seconds => 1);
-        RAISE EXCEPTION 'promotion unexpectedly succeeded with paused replay';
-    EXCEPTION WHEN object_not_in_prerequisite_state THEN
-        IF SQLERRM NOT LIKE '%failed to catch up%' THEN
-            RAISE;
-        END IF;
-    END;
-END $$;
+SELECT citus_promote_clone_and_rebalance(clone_nodeid => :clone_node_id, catchup_timeout_seconds => 1);
 RESET statement_timeout;
 RESET client_min_messages;
+
+-- none of them changed the metadata of the clone
+SELECT nodeisclone AND NOT isactive AS inactive_clone FROM pg_dist_node WHERE nodeid = :clone_node_id;
 
 \c - - - :follower_worker_2_port
 DO $$
@@ -159,18 +97,149 @@ SELECT citus_promote_clone_and_rebalance(clone_nodeid => :clone_node_id, rebalan
 
 SELECT * from pg_dist_node ORDER by nodeid;
 
--- Test 9: Rollback the citus_promote_clone_and_rebalance transaction
+-- the strategy is checked before pg_promote(), so the clone is still a replica
+\c - - - :follower_worker_2_port
+SELECT pg_is_in_recovery() AS clone_in_recovery;
+\c - - - :master_port
+
+-- Transaction blocks are rejected, but a function or a DO block can still run
+-- other commands before the promotion in its transaction. The promotion errors
+-- out after them, since their changes would only commit after it: changes of
+-- data, of metadata only, and local ones.
+DO $$
+BEGIN
+    INSERT INTO backup_test VALUES (11, 'test11');
+    PERFORM citus_promote_clone_and_rebalance(nodeid) FROM pg_dist_node WHERE nodeisclone;
+END $$;
+DO $$
+BEGIN
+    PERFORM citus_set_node_property(nodename, nodeport, 'shouldhaveshards', false)
+    FROM pg_dist_node WHERE nodeid = 1;
+    PERFORM citus_promote_clone_and_rebalance(nodeid) FROM pg_dist_node WHERE nodeisclone;
+END $$;
+DO $$
+BEGIN
+    CREATE TABLE promotion_local_table (id int);
+    PERFORM citus_promote_clone_and_rebalance(nodeid) FROM pg_dist_node WHERE nodeisclone;
+END $$;
+
+\c - - - :follower_worker_2_port
+SELECT pg_is_in_recovery() AS clone_in_recovery;
+\c - - - :master_port
+
+-- Test 9: The promotion cannot run inside a transaction block, where its write
+-- fence would last until the transaction ends, and a rollback could not undo
+-- pg_promote(), so the clone stays a replica. A query string with more than one
+-- statement runs as a transaction block too.
 BEGIN;
 SELECT citus_promote_clone_and_rebalance(clone_nodeid => :clone_node_id);
 ROLLBACK;
+SELECT citus_promote_clone_and_rebalance(clone_nodeid => :clone_node_id) \; SELECT 1;
 
--- Verify no data is lost after rooling back the transaction
+-- Verify no data is lost
 SELECT COUNT(*) from backup_test;
 SELECT COUNT(*) from ref_table;
 
 SELECT * from pg_dist_node ORDER by nodeid;
 
--- Test 5: Try to add and promote a proper replica after rollback
+\c - - - :follower_worker_2_port
+SELECT pg_is_in_recovery() AS clone_in_recovery;
+\c - - - :master_port
+
+-- The promotion also errors out, and the clone stays a replica, if the primary
+-- has placements of unlogged distributed or reference tables, since physical
+-- replication does not copy their data.
+CREATE UNLOGGED TABLE unlogged_dist (id int);
+SELECT create_distributed_table('unlogged_dist', 'id', shard_count => 8);
+SELECT count(*) > 0 AS primary_has_unlogged_shards
+FROM pg_dist_shard_placement JOIN pg_dist_shard USING (shardid)
+WHERE logicalrelid = 'unlogged_dist'::regclass AND nodeport = :worker_2_port;
+SET client_min_messages TO WARNING;
+SELECT citus_promote_clone_and_rebalance(clone_nodeid => :clone_node_id);
+RESET client_min_messages;
+DROP TABLE unlogged_dist;
+CREATE UNLOGGED TABLE unlogged_ref (id int);
+SELECT create_reference_table('unlogged_ref');
+INSERT INTO unlogged_ref SELECT generate_series(1, 10);
+SET client_min_messages TO WARNING;
+SELECT citus_promote_clone_and_rebalance(clone_nodeid => :clone_node_id);
+RESET client_min_messages;
+
+-- once the table is logged, its data reaches the clone
+ALTER TABLE unlogged_ref SET LOGGED;
+
+-- A partitioned table has no data of its own, so it does not stop the
+-- promotion. Before PostgreSQL 18, one can be unlogged while its partitions
+-- are not, and cannot be made logged.
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+')::int >= 18 AS server_version_ge_18 \gset
+\if :server_version_ge_18
+CREATE TABLE unlogged_parent (id int) PARTITION BY RANGE (id);
+\else
+CREATE UNLOGGED TABLE unlogged_parent (id int) PARTITION BY RANGE (id);
+\endif
+CREATE TABLE logged_part PARTITION OF unlogged_parent FOR VALUES FROM (0) TO (100);
+SELECT create_distributed_table('unlogged_parent', 'id', shard_count => 8);
+INSERT INTO unlogged_parent SELECT generate_series(0, 99);
+
+-- The promotion also errors out, and the clone stays a replica, if the primary
+-- has an enabled subscription, which the promoted clone would start too. The
+-- subscription cannot connect to its publisher, it only needs to be enabled.
+\c - - - :worker_2_port
+SET client_min_messages TO ERROR;
+CREATE SUBSCRIPTION promotion_sub CONNECTION 'host=localhost port=1 dbname=regression'
+    PUBLICATION promotion_pub WITH (connect = false);
+RESET client_min_messages;
+ALTER SUBSCRIPTION promotion_sub ENABLE;
+\c - - - :master_port
+SET client_min_messages TO WARNING;
+SELECT citus_promote_clone_and_rebalance(clone_nodeid => :clone_node_id);
+RESET client_min_messages;
+\c - - - :follower_worker_2_port
+SELECT pg_is_in_recovery() AS clone_in_recovery;
+\c - - - :worker_2_port
+ALTER SUBSCRIPTION promotion_sub DISABLE;
+ALTER SUBSCRIPTION promotion_sub SET (slot_name = NONE);
+DROP SUBSCRIPTION promotion_sub;
+\c - - - :master_port
+
+-- A standalone promotion of the same clone succeeds. The clone gets an identity
+-- of its own, so it does not act as worker_2, e.g. in 2PC recovery.
+--
+-- The promotion commits right after its statement, so in a pipeline, the next
+-- command runs in a new transaction. psql supports pipelines from version 18.
+-- Older versions run the commands one by one, and print the same output, since
+-- the pipeline ends on the line of the commands.
+SELECT :VERSION_NUM >= 180000 AS psql_has_pipelines \gset
+\if :psql_has_pipelines
+\set start_pipeline '\\startpipeline'
+\set end_pipeline '\\endpipeline'
+\else
+\set start_pipeline ''
+\set end_pipeline ''
+\endif
+SET client_min_messages TO WARNING;
+:start_pipeline
+SELECT citus_promote_clone_and_rebalance(clone_nodeid => :clone_node_id); SELECT pg_current_xact_id_if_assigned() IS NULL AS own_transaction; :end_pipeline
+RESET client_min_messages;
+SELECT isactive, nodeisclone FROM pg_dist_node WHERE nodeid = :clone_node_id;
+SELECT groupid AS clone_group_id FROM pg_dist_node WHERE nodeid = :clone_node_id \gset
+\c - - - :worker_2_port
+SELECT metadata->>'server_id' AS primary_server_id FROM pg_dist_node_metadata \gset
+\c - - - :follower_worker_2_port
+SELECT pg_is_in_recovery() AS clone_in_recovery, groupid = :clone_group_id AS clone_has_own_group_id,
+       metadata->>'server_id' <> :'primary_server_id' AS clone_has_own_server_id
+FROM pg_dist_local_group, pg_dist_node_metadata;
+SELECT count(*) AS logged_ref_rows FROM unlogged_ref;
+SELECT count(*) AS partitioned_rows FROM unlogged_parent;
+\c - - - :master_port
+DROP TABLE unlogged_ref;
+DROP TABLE unlogged_parent;
+
+-- place the shards of the tables that the next tests create as before
+SELECT 1 FROM citus_set_node_property('localhost', :follower_worker_2_port, 'shouldhaveshards', false);
+
+-- Test 5: Try to add and promote another proper replica
 SELECT master_add_node('localhost', :worker_3_port) AS nodeid_3 \gset
 SELECT citus_add_clone_node('localhost', :follower_worker_3_port, 'localhost', :worker_3_port) AS clone_node_id_3 \gset
 
