@@ -8,9 +8,9 @@
 -- shape that replay sends.
 --
 
+SET citus.enable_ddl_propagation TO off;
 CREATE SCHEMA metadata_replay_security;
 SET search_path TO metadata_replay_security;
-SET citus.enable_ddl_propagation TO off;
 
 CREATE ROLE metadata_replay_owner;
 ALTER SCHEMA metadata_replay_security OWNER TO metadata_replay_owner;
