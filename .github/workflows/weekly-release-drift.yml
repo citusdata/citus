@@ -1,0 +1,91 @@
+name: Weekly release drift check
+on:
+  schedule: [{ cron: '0 8 * * 1' }]
+  workflow_dispatch:
+concurrency: { group: weekly-release-drift, cancel-in-progress: false }
+permissions: { contents: read, issues: write }
+env: { FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true" }
+jobs:
+  check-drift:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check release drift and upsert issue
+        shell: bash
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: |
+          set -euo pipefail
+          drifts=()
+          add_drift() { drifts+=("- $1"); }
+          get_file() {
+            local -n _dst=$1; local out
+            if out=$(gh api "repos/$2/contents/$3?ref=$4" --jq '.content' 2>&1); then _dst=$(base64 -d <<<"$out"); return 0; fi
+            grep -qE 'HTTP 404|"status":"404"' <<<"$out" && { _dst=""; return 1; }
+            echo "::error::Failed fetching $2/$3@$4: $out" >&2; exit 1
+          }
+          latest_tag() {
+            local refs; refs=$(gh api --paginate "repos/$1/git/matching-refs/tags/v" --jq '.[].ref')
+            cut -d/ -f3- <<<"$refs" | grep -E "${2:-^v[0-9]+\.[0-9]+\.[0-9]+$}" | sort -V | tail -n1
+          }
+
+          # 1. Citus active branches (.github/ci-versions.json) vs citusdata/the-process
+          all_branches=$(gh api --paginate "repos/${GITHUB_REPOSITORY}/branches" --jq '.[].name')
+          [ -n "$all_branches" ] || { echo "::error::No branches returned" >&2; exit 1; }
+          while IFS= read -r br; do
+            [[ "$br" == "main" || "$br" =~ ^release-[0-9]+\.[0-9]+$ ]] || continue
+            get_file cfg "${GITHUB_REPOSITORY}" ".github/ci-versions.json" "$br" || continue
+            tp_br=$(jq -er '.the_process_branch' <<<"$cfg")
+            cur_sha=$(jq -er '.the_process_sha' <<<"$cfg")
+            cur_pg=$(jq -c '.postgres | to_entries | sort_by(.key | tonumber) | from_entries' <<<"$cfg")
+            tip_sha=$(gh api "repos/citusdata/the-process/commits/${tp_br}" --jq '.sha')
+            if get_file tp_ver "citusdata/the-process" "versions.json" "$tip_sha"; then
+              tip_pg=$(jq -c '.postgres_ci | with_entries(.value |= gsub("~"; "")) | to_entries | sort_by(.key | tonumber) | from_entries' <<<"$tp_ver")
+              [ "$cur_sha" = "$tip_sha" ] && [ "$cur_pg" = "$tip_pg" ] \
+                || add_drift "**CI versions (\`$br\`)**: sha \`${cur_sha:0:7}\` vs \`the-process/$tp_br\` \`${tip_sha:0:7}\` (pg: \`$cur_pg\` vs \`$tip_pg\`)"
+            elif [ "$cur_sha" != "$tip_sha" ]; then
+              add_drift "**CI versions (\`$br\`)**: sha \`${cur_sha:0:7}\` behind \`the-process/$tp_br\` \`${tip_sha:0:7}\` (\`versions.json\` missing)"
+            fi
+          done <<<"$all_branches"
+
+          # 2. Latest Citus tag vs packaging (all-citus, pgxn-citus), docker Dockerfile, and Docker Hub
+          latest_citus_tag=$(latest_tag "citusdata/citus"); [ -n "$latest_citus_tag" ] || exit 1
+          latest_citus="${latest_citus_tag#v}"
+          for b in all-citus pgxn-citus; do
+            get_file content "citusdata/packaging" "pkgvars" "$b" || content=""
+            v=$(sed -nE "s/^pkglatest=[\"']?([0-9]+\.[0-9]+\.[0-9]+).*/\1/p" <<<"$content" | head -n1)
+            [ "$v" = "$latest_citus" ] || add_drift "**packaging (\`$b\`)**: \`${v:-missing}\` vs Citus \`$latest_citus\`"
+          done
+          get_file content "citusdata/docker" "pkgvars" "master" || content=""
+          citus_series=$(sed -nE "s/^citus_series=[\"']?([0-9]+)[\"']?.*/\1/p" <<<"$content" | head -n1)
+          citus_series="${citus_series:-${latest_citus%%.*}}"
+          expected_docker_tag=$(latest_tag "citusdata/citus" "^v${citus_series}\.[0-9]+\.0$"); [ -n "$expected_docker_tag" ] || exit 1
+          expected_docker="${expected_docker_tag#v}"
+          get_file content "citusdata/docker" "Dockerfile" "master" || content=""
+          docker_ver=$(sed -nE "s/^ARG[[:space:]]+VERSION=[\"']?([0-9]+\.[0-9]+\.[0-9]+).*/\1/p" <<<"$content" | head -n1)
+          [ "$docker_ver" = "$expected_docker" ] || add_drift "**docker (\`master/Dockerfile\`)**: \`${docker_ver:-missing}\` vs Citus \`$expected_docker\` (series \`$citus_series\`)"
+          hub_code=$(curl --retry 3 --retry-delay 2 -sS -o /dev/null -w '%{http_code}' "https://hub.docker.com/v2/repositories/citusdata/citus/tags/${expected_docker}/")
+          if [ "$hub_code" = "404" ]; then add_drift "**Docker Hub (\`citusdata/citus:${expected_docker}\`)**: tag missing (HTTP 404)"
+          elif [ "$hub_code" != "200" ]; then echo "::error::Docker Hub returned HTTP $hub_code" >&2; exit 1; fi
+
+          # 3. packaging (develop) & docker (master) setup-tools pin vs latest citusdata/tools tag
+          latest_tools=$(latest_tag "citusdata/tools"); [ -n "$latest_tools" ] || exit 1
+          for spec in "citusdata/packaging:develop" "citusdata/docker:master"; do
+            repo="${spec%%:*}"; ref="${spec##*:}"
+            if get_file st "$repo" ".github/actions/setup-tools/action.yml" "$ref"; then
+              pinned=$(sed -nE "s/^[[:space:]]*default:[[:space:]]*[\"']?(v[0-9]+\.[0-9]+\.[0-9]+)[\"']?[[:space:]]*$/\1/p" <<<"$st" | head -n1)
+              [ "$pinned" = "$latest_tools" ] || add_drift "**$repo (\`$ref\` setup-tools)**: \`${pinned:-unparsed}\` vs \`citusdata/tools\` \`$latest_tools\`"
+            else
+              add_drift "**$repo (\`$ref\` setup-tools)**: \`.github/actions/setup-tools/action.yml\` missing (latest \`$latest_tools\`)"
+            fi
+          done
+
+          # 4. Upsert or auto-close the single release-drift issue
+          gh label list --repo "${GITHUB_REPOSITORY}" --search release-drift --json name --jq '.[].name' | grep -qx release-drift \
+            || gh label create release-drift --repo "${GITHUB_REPOSITORY}" --description "Automated release lifecycle drift tracker" --color "d93f0b"
+          open_num=$(gh issue list --repo "${GITHUB_REPOSITORY}" --state open --label release-drift --json number --jq '.[0].number // empty')
+          if ((${#drifts[@]} > 0)); then
+            body=$(printf 'Release lifecycle drift detected (run %s/actions/runs/%s):\n\n%s\n' "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" "${GITHUB_RUN_ID}" "$(printf '%s\n' "${drifts[@]}")")
+            if [ -n "$open_num" ]; then gh issue edit "$open_num" --repo "${GITHUB_REPOSITORY}" --body "$body"
+            else gh issue create --repo "${GITHUB_REPOSITORY}" --title "Release lifecycle drift detected" --label release-drift --body "$body"; fi
+          elif [ -n "$open_num" ]; then
+            gh issue close "$open_num" --repo "${GITHUB_REPOSITORY}" --comment "All release drift checks now pass."
+          fi
