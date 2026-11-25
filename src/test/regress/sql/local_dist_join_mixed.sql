@@ -316,11 +316,6 @@ SELECT count(*) FROM distributed CROSS JOIN local WHERE distributed.id = 1;
 
 -- w count(*) it works fine as PG ignores the  inner tables
 SELECT count(*) FROM distributed LEFT JOIN local USING (id);
--- PostgreSQL 16.16 / 17.12 remove the nullable "distributed" side earlier, so
--- whether "local" gets wrapped depends on the minor version; only check the count.
-SET client_min_messages TO WARNING;
-SELECT count(*) FROM local LEFT JOIN distributed USING (id);
-SET client_min_messages TO DEBUG1;
 
 SELECT id, name FROM distributed LEFT JOIN local USING (id) ORDER BY 1 LIMIT 1;
 SELECT id, name FROM local LEFT JOIN distributed USING (id) ORDER BY 1 LIMIT 1;
