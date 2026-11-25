@@ -886,7 +886,9 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency,
 
 		case OCLASS_ROLE:
 		{
-			return GenerateCreateOrAlterRoleCommand(dependency->objectId);
+			bool includeMemberships = true;
+			return GenerateCreateOrAlterRoleCommand(dependency->objectId,
+													includeMemberships);
 		}
 
 		case OCLASS_SCHEMA:

@@ -364,6 +364,44 @@ ORDER BY role, member;
 -- Clean up interdependent roles
 DROP ROLE interdep_role2, interdep_role1, read_only_role;
 
+-- test roles whose memberships have circular grantor dependencies:
+-- grantor_cycle_a grants via ADMIN that grantor_cycle_b holds and vice versa,
+-- so no role can be created together with all of its memberships first
+SELECT master_remove_node('localhost', :worker_2_port);
+
+CREATE ROLE grantor_cycle_x;
+CREATE ROLE grantor_cycle_y;
+CREATE ROLE grantor_cycle_a;
+CREATE ROLE grantor_cycle_b;
+CREATE ROLE grantor_cycle_c;
+
+GRANT grantor_cycle_x TO grantor_cycle_a WITH ADMIN OPTION;
+GRANT grantor_cycle_y TO grantor_cycle_b WITH ADMIN OPTION;
+GRANT grantor_cycle_x TO grantor_cycle_b WITH INHERIT FALSE, SET FALSE GRANTED BY grantor_cycle_a;
+GRANT grantor_cycle_y TO grantor_cycle_a GRANTED BY grantor_cycle_b;
+
+-- ADMIN delegated by a non-superuser grantor, then used as a grantor
+GRANT grantor_cycle_x TO grantor_cycle_c WITH ADMIN OPTION GRANTED BY grantor_cycle_a;
+GRANT grantor_cycle_x TO grantor_cycle_y GRANTED BY grantor_cycle_c;
+
+SELECT roleid::regrole::text AS role, member::regrole::text, grantor::regrole::text,
+       admin_option, inherit_option, set_option
+FROM pg_auth_members
+WHERE roleid::regrole::text LIKE 'grantor_cycle_%'
+ORDER BY role, member, grantor;
+
+SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+
+\c - - - :worker_2_port
+SELECT roleid::regrole::text AS role, member::regrole::text, grantor::regrole::text,
+       admin_option, inherit_option, set_option
+FROM pg_auth_members
+WHERE roleid::regrole::text LIKE 'grantor_cycle_%'
+ORDER BY role, member, grantor;
+\c - - - :master_port
+
+DROP ROLE grantor_cycle_x, grantor_cycle_y, grantor_cycle_a, grantor_cycle_b, grantor_cycle_c;
+
 DROP ROLE nondist_cascade_1, nondist_cascade_2, nondist_cascade_3, dist_cascade;
 
 -- Test that CREATE ROLE propagates the encrypted password that is stored on the
