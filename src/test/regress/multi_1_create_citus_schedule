@@ -139,3 +139,11 @@ test: node_removal_transaction_recovery
 # the N-1 test matrix. Move back to multi_1_schedule at Citus 15.
 # ----------
 test: insert_select_single_shard_table_8959
+
+# ----------
+# update_subscript_fetch_8987 covers an UPDATE .. SET crash (#8987); the N-1
+# (14.2-1) coordinator library still segfaults on these statements, so this
+# cannot run under the N-1 test matrix. Move to multi_schedule, next to
+# subscripting_op, once the N-1 coordinator library has the fix.
+# ----------
+test: update_subscript_fetch_8987
