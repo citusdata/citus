@@ -30,9 +30,16 @@ extern void CitusExplainOneQuery(Query *query, int cursorOptions, IntoClause *in
 								 ExplainState *es, const char *queryString, ParamListInfo
 								 params,
 								 QueryEnvironment *queryEnv);
-extern List * ExplainAnalyzeTaskList(List *originalTaskList,
+extern List * ExplainAnalyzeTaskList(CitusScanState *scanState,
 									 TupleDestination *defaultTupleDest, TupleDesc
 									 tupleDesc, ParamListInfo params);
+extern void ExecuteSubPlanForExplainAnalyze(CitusScanState *scanState,
+											DistributedSubPlan *subPlan,
+											DestReceiver *dest, int workerCount,
+											bool writeLocalFile);
+extern bool BeginSubPlanInstrumentation(QueryDesc *queryDesc, int eflags);
+extern void AttachSubPlanReports(QueryDesc *queryDesc);
+extern void SaveSubPlanRowCounts(QueryDesc *queryDesc);
 extern bool RequestedForExplainAnalyze(CitusScanState *node);
 extern void ResetExplainAnalyzeData(List *taskList);
 

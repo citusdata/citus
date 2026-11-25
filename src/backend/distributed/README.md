@@ -1714,6 +1714,8 @@ Execution of subplans (CTEs, subqueries that cannot be pushed down) is relativel
 
 The result of each subplan is broadcast to all participating nodes via the COPY .. WITH (format ‘result’) command, which writes to an intermediate result. The intermediate results are read in subsequent shard queries via the read_intermediate_result function.
 
+`EXPLAIN ANALYZE` saves worker measurements during subplan execution. When the coordinator later rebuilds the scan to print it, it matches routed INSERTs by target shard and other tasks by task ID within the scan. The worker shown is the placement that supplied the measurements. If no matching report exists, the task shows `Worker measurements: unavailable`; displaying an executed subplan never runs its SQL again. Plain `EXPLAIN` still requests worker plans without executing the query.
+
 A current downside of the read_intermediate_result function is that it first copies all the tuples into a tuple store, which may be flushed to disk. This could be fixed through a CustomScan, or in PostgreSQL itself.
 
 ## Re-partitioning

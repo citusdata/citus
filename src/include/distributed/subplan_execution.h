@@ -12,12 +12,12 @@
 #define SUBPLAN_EXECUTION_H
 
 
-#include "distributed/multi_physical_planner.h"
+#include "distributed/citus_custom_scan.h"
 
 extern int MaxIntermediateResult;
 extern int SubPlanLevel;
 
-extern void ExecuteSubPlans(DistributedPlan *distributedPlan, bool explainAnalyzeEnabled);
+extern void ExecuteSubPlans(DistributedPlan *distributedPlan, CitusScanState *scanState);
 
 /**
  * IntermediateResultsHashEntry is used to store which nodes need to receive

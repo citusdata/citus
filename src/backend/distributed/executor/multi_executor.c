@@ -46,6 +46,7 @@
 #include "distributed/listutils.h"
 #include "distributed/local_executor.h"
 #include "distributed/multi_executor.h"
+#include "distributed/multi_explain.h"
 #include "distributed/multi_router_planner.h"
 #include "distributed/multi_server_executor.h"
 #include "distributed/relation_access_tracking.h"
@@ -118,6 +119,7 @@ void
 CitusExecutorStart(QueryDesc *queryDesc, int eflags)
 {
 	PlannedStmt *plannedStmt = queryDesc->plannedstmt;
+	bool collecting = BeginSubPlanInstrumentation(queryDesc, eflags);
 
 	/*
 	 * We cannot modify XactReadOnly on Windows because it is not
@@ -149,6 +151,11 @@ CitusExecutorStart(QueryDesc *queryDesc, int eflags)
 #endif
 	{
 		standard_ExecutorStart(queryDesc, eflags);
+	}
+
+	if (collecting)
+	{
+		AttachSubPlanReports(queryDesc);
 	}
 }
 
@@ -258,6 +265,8 @@ CitusExecutorRun(QueryDesc *queryDesc,
 								 execute_once);
 		#endif
 		}
+
+		SaveSubPlanRowCounts(queryDesc);
 
 		if (totalTime)
 		{
