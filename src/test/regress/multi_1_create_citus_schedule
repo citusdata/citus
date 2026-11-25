@@ -139,3 +139,11 @@ test: node_removal_transaction_recovery
 # the N-1 test matrix. Move back to multi_1_schedule at Citus 15.
 # ----------
 test: insert_select_single_shard_table_8959
+
+# ----------
+# shard_move_after_modifications covers shard transfers after modifications in
+# the same transaction, which the N-1 (14.2-1) coordinator library lets through;
+# a move via logical replication then waits forever, so this cannot run under
+# the N-1 test matrix. Move back to operations_schedule at Citus 15.
+# ----------
+test: shard_move_after_modifications

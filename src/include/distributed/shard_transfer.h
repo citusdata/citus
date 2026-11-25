@@ -74,6 +74,7 @@ extern void TransferShards(int64 shardId,
 extern uint64 ShardListSizeInBytes(List *colocatedShardList,
 								   char *workerNodeName, uint32 workerNodePort);
 extern void ErrorIfMoveUnsupportedTableType(Oid relationId);
+extern void ErrorIfShardTransferAfterModifications(const char *operationName);
 extern void CopyShardsToNode(WorkerNode *sourceNode, WorkerNode *targetNode,
 							 List *shardIntervalList, char *snapshotName);
 extern void VerifyTablesHaveReplicaIdentity(List *colocatedTableList);

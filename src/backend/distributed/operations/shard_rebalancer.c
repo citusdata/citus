@@ -1122,6 +1122,10 @@ Datum
 rebalance_table_shards(PG_FUNCTION_ARGS)
 {
 	CheckCitusVersion(ERROR);
+
+	/* the moves run in separate transactions */
+	ErrorIfShardTransferAfterModifications("rebalance shards");
+
 	List *relationIdList = NIL;
 	if (!PG_ARGISNULL(0))
 	{
@@ -1322,6 +1326,13 @@ Datum
 citus_drain_node(PG_FUNCTION_ARGS)
 {
 	CheckCitusVersion(ERROR);
+
+	/*
+	 * The moves run in separate transactions, and so does the change of
+	 * shouldhaveshards below, which therefore needs to come after the check.
+	 */
+	ErrorIfShardTransferAfterModifications("drain node");
+
 	PG_ENSURE_ARGNOTNULL(0, "nodename");
 	PG_ENSURE_ARGNOTNULL(1, "nodeport");
 	PG_ENSURE_ARGNOTNULL(2, "shard_transfer_mode");
@@ -1366,6 +1377,10 @@ Datum
 replicate_table_shards(PG_FUNCTION_ARGS)
 {
 	CheckCitusVersion(ERROR);
+
+	/* the copies run in separate transactions */
+	ErrorIfShardTransferAfterModifications("replicate shards");
+
 	Oid relationId = PG_GETARG_OID(0);
 	uint32 shardReplicationFactor = PG_GETARG_INT32(1);
 	int32 maxShardCopies = PG_GETARG_INT32(2);
