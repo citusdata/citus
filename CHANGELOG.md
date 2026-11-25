@@ -17,6 +17,26 @@
 * Qualifies and quotes support function names in ALTER FUNCTION commands
   (#8873)
 
+* Restricts the citus_use_authinfo subscription option to superusers (#8983)
+
+* Fixes INSERT SELECT into single-shard tables without a distribution key
+  (#8963)
+
+* Cancels only the distributed transaction found to be deadlocked (#8790)
+
+* Fixes catalog memory corruption after downgrading and upgrading Citus
+  (#7950, #8146)
+
+* Propagates the stored password verifier when creating roles (#8966)
+
+* Preserves a replacement maintenance daemon's registration when an older
+  daemon exits (#8158)
+
+* Serializes node removal with transaction recovery (#8885)
+
+* Preserves grantors and correct clause ordering in propagated REVOKE
+  commands (#7517, #8766)
+
 * Quotes EXTRACT fields when deparsing queries on PostgreSQL 14 through 16
   (#8813)
 
