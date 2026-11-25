@@ -1,0 +1,182 @@
+--
+-- INSERT_TYPMOD_ROUTING
+--
+-- An INSERT stores the distribution column value after applying the column's
+-- typmod, e.g. numeric(10,2) rounds 1.015 to 1.02. A router INSERT with a
+-- constant distribution key must pick the shard of the stored value, or
+-- single-shard queries on that value miss the row and a unique constraint on
+-- the distribution column is no longer enforced.
+--
+CREATE SCHEMA insert_typmod_routing;
+SET search_path TO insert_typmod_routing;
+SET citus.next_shard_id TO 7480000;
+SET citus.shard_count TO 32;
+SET citus.shard_replication_factor TO 1;
+-- true if every row is stored in the shard that its stored key maps to
+CREATE FUNCTION rows_in_owning_shard(table_name text)
+RETURNS bool LANGUAGE sql AS $fn$
+    SELECT bool_and(success AND (result = '' OR result = shardid::text))
+    FROM run_command_on_shards(table_name::regclass, format(
+        $q$SELECT coalesce(string_agg(DISTINCT
+               get_shard_id_for_distribution_column(%L, k)::text, ','), '')
+           FROM %%s$q$, table_name));
+$fn$;
+CREATE TABLE numeric_key (k numeric(10,2), v text);
+SELECT create_distributed_table('numeric_key', 'k');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- the test values must map to a different shard once rounded
+SELECT bool_and(get_shard_id_for_distribution_column('numeric_key', val) <>
+                get_shard_id_for_distribution_column('numeric_key', round(val, 2)))
+       AS rounding_changes_shard
+FROM unnest(ARRAY[1.015, 2.015, 6.015, 13.015]) AS val;
+ rounding_changes_shard
+---------------------------------------------------------------------
+ t
+(1 row)
+
+INSERT INTO numeric_key VALUES (1.015, 'typed constant');
+INSERT INTO numeric_key VALUES ('2.015', 'untyped literal');
+INSERT INTO numeric_key VALUES (6.015, 'multi-row 1'), (6.015, 'multi-row 2');
+INSERT INTO numeric_key VALUES (13.015, 'returning') RETURNING k, v;
+   k   |     v
+---------------------------------------------------------------------
+ 13.02 | returning
+(1 row)
+
+-- without parameters, the first execution caches a generic plan, and the
+-- second one routes with the cached plan
+PREPARE insert_constant_key AS
+    INSERT INTO numeric_key VALUES (1.015, 'prepared');
+EXECUTE insert_constant_key;
+EXECUTE insert_constant_key;
+SELECT k, v, count(*) FROM numeric_key WHERE k = 1.02 GROUP BY k, v ORDER BY v;
+  k   |       v        | count
+---------------------------------------------------------------------
+ 1.02 | prepared       |     2
+ 1.02 | typed constant |     1
+(2 rows)
+
+SELECT k, v FROM numeric_key WHERE k = 2.02;
+  k   |        v
+---------------------------------------------------------------------
+ 2.02 | untyped literal
+(1 row)
+
+SELECT k, v FROM numeric_key WHERE k = 6.02 ORDER BY v;
+  k   |      v
+---------------------------------------------------------------------
+ 6.02 | multi-row 1
+ 6.02 | multi-row 2
+(2 rows)
+
+SELECT k, v FROM numeric_key WHERE k = 13.02;
+   k   |     v
+---------------------------------------------------------------------
+ 13.02 | returning
+(1 row)
+
+SELECT rows_in_owning_shard('insert_typmod_routing.numeric_key');
+ rows_in_owning_shard
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- varchar(n) drops trailing spaces beyond n, timestamp(p) rounds
+CREATE TABLE varchar_key (k varchar(3), v text);
+SELECT create_distributed_table('varchar_key', 'k');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT get_shard_id_for_distribution_column('varchar_key', 'cd  '::varchar) <>
+       get_shard_id_for_distribution_column('varchar_key', 'cd '::varchar)
+       AS trimming_changes_shard;
+ trimming_changes_shard
+---------------------------------------------------------------------
+ t
+(1 row)
+
+INSERT INTO varchar_key VALUES ('cd  '::varchar, 'typed constant');
+INSERT INTO varchar_key VALUES ('abcd', 'too long');
+ERROR:  value too long for type character varying(3)
+-- the rows of a multi-row INSERT that all have the same value are not
+-- evaluated before routing, so the routing itself rejects the value
+INSERT INTO varchar_key VALUES ('abcd', 'too long 1'), ('abcd', 'too long 2');
+ERROR:  value too long for type character varying(3)
+SELECT length(k), v FROM varchar_key WHERE k = 'cd ';
+ length |       v
+---------------------------------------------------------------------
+      3 | typed constant
+(1 row)
+
+SELECT rows_in_owning_shard('insert_typmod_routing.varchar_key');
+ rows_in_owning_shard
+---------------------------------------------------------------------
+ t
+(1 row)
+
+CREATE TABLE timestamp_key (k timestamp(0), v text);
+SELECT create_distributed_table('timestamp_key', 'k');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT bool_and(get_shard_id_for_distribution_column('timestamp_key', ts) <>
+                get_shard_id_for_distribution_column('timestamp_key', ts::timestamp(0)))
+       AS rounding_changes_shard
+FROM unnest(ARRAY['2024-01-01 00:00:00.6', '2024-01-02 00:00:00.6']::timestamp[]) AS ts;
+ rounding_changes_shard
+---------------------------------------------------------------------
+ t
+(1 row)
+
+INSERT INTO timestamp_key VALUES ('2024-01-01 00:00:00.6', 'untyped literal');
+INSERT INTO timestamp_key VALUES (timestamp '2024-01-02 00:00:00.6', 'typed constant');
+SELECT k, v FROM timestamp_key WHERE k = '2024-01-01 00:00:01';
+            k             |        v
+---------------------------------------------------------------------
+ Mon Jan 01 00:00:01 2024 | untyped literal
+(1 row)
+
+SELECT k, v FROM timestamp_key WHERE k = '2024-01-02 00:00:01';
+            k             |       v
+---------------------------------------------------------------------
+ Tue Jan 02 00:00:01 2024 | typed constant
+(1 row)
+
+SELECT rows_in_owning_shard('insert_typmod_routing.timestamp_key');
+ rows_in_owning_shard
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- 1.015 is stored as 1.02, so it has to conflict with the existing 1.02
+CREATE TABLE numeric_pkey (k numeric(10,2) PRIMARY KEY, v text);
+SELECT create_distributed_table('numeric_pkey', 'k');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO numeric_pkey VALUES (1.02, 'first');
+-- terse, since the error context depends on the node that has the shard
+\set VERBOSITY terse
+INSERT INTO numeric_pkey VALUES (1.015, 'duplicate');
+ERROR:  duplicate key value violates unique constraint "numeric_pkey_pkey_7480107"
+\set VERBOSITY default
+INSERT INTO numeric_pkey VALUES (1.015, 'upserted')
+    ON CONFLICT (k) DO UPDATE SET v = excluded.v;
+SELECT k, v FROM numeric_pkey;
+  k   |    v
+---------------------------------------------------------------------
+ 1.02 | upserted
+(1 row)
+
+SET client_min_messages TO WARNING;
+DROP SCHEMA insert_typmod_routing CASCADE;

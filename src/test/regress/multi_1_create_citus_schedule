@@ -147,3 +147,12 @@ test: insert_select_single_shard_table_8959
 # subscripting_op, once the N-1 coordinator library has the fix.
 # ----------
 test: update_subscript_fetch_8987
+
+# ----------
+# insert_typmod_routing covers routing INSERTs by the distribution column
+# value after the column's typmod is applied. The N-1 coordinator library
+# routes a constant value before the typmod is applied, so this cannot run
+# under the N-1 test matrix. Move to multi_1_schedule once the N-1 library has
+# the fix.
+# ----------
+test: insert_typmod_routing
