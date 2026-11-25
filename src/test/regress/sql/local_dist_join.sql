@@ -211,6 +211,11 @@ SELECT count(*) FROM distributed LEFT JOIN local USING (id);
 SELECT count(*) FROM local LEFT JOIN distributed USING (id);
 
 SELECT count(*) FROM distributed RIGHT JOIN local USING (id);
+-- PostgreSQL can reduce FULL to LEFT/RIGHT and then remove the distributed side.
+SELECT count(*) FROM local l FULL JOIN distributed d ON l.id = d.id WHERE l.id IS NOT NULL;
+SELECT count(*) FROM distributed d FULL JOIN local l ON l.id = d.id WHERE l.id IS NOT NULL;
+SELECT count(*) FROM local l FULL JOIN (distributed d1 LEFT JOIN distributed d2 USING (id)) q
+ON l.id = q.id WHERE l.id IS NOT NULL;
 SELECT joined.id FROM (local LEFT JOIN distributed USING (id)) AS joined ORDER BY 1 LIMIT 1;
 WITH joined AS MATERIALIZED (SELECT count(*) AS n FROM local LEFT JOIN distributed USING (id))
 SELECT n FROM joined;
