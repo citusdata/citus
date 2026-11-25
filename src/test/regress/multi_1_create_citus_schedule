@@ -141,3 +141,10 @@ test: extract_deparse
 # they remain part of multi_having_pushdown on main.
 # ----------
 test: multi_having_var_remapping
+
+# ----------
+# citus_use_authinfo covers a superuser check introduced in 13.5; not present
+# in the N-1 (13.4-1) coordinator library. Run it only under
+# check-multi-1-create-citus, which is not part of the N-1 test matrix.
+# ----------
+test: citus_use_authinfo
