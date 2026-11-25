@@ -318,6 +318,28 @@ SELECT count(*) FROM distributed CROSS JOIN local WHERE distributed.id = 1;
 SELECT count(*) FROM distributed LEFT JOIN local USING (id);
 SET client_min_messages TO WARNING;
 SELECT count(*) FROM local LEFT JOIN distributed USING (id);
+
+-- Pull-up can move a removed relation out of its original nullable subquery.
+CREATE VIEW distributed_view AS SELECT * FROM distributed;
+CREATE VIEW nested_distributed_view AS SELECT * FROM distributed_view;
+SELECT count(*) FROM local LEFT JOIN distributed_view USING (id);
+SELECT count(*) FROM local LEFT JOIN (SELECT * FROM distributed) d USING (id);
+SELECT count(*) FROM nested_distributed_view RIGHT JOIN local USING (id);
+SELECT count(*) FROM local LEFT JOIN (SELECT id, name FROM distributed) d USING (id);
+SELECT count(*) FROM (SELECT * FROM (SELECT * FROM distributed) d1) d2 RIGHT JOIN local USING (id);
+
+-- A referenced view output must still read the surviving distributed relation.
+SELECT count(d.id), sum(d.id)
+FROM local LEFT JOIN distributed_view d USING (id);
+SELECT count(d.name) FROM local LEFT JOIN distributed_view d USING (id);
+
+DROP VIEW nested_distributed_view, distributed_view;
+
+-- PostgreSQL can reduce FULL to LEFT/RIGHT and then remove the distributed side.
+SELECT count(*) FROM local l FULL JOIN distributed d ON l.id = d.id WHERE l.id IS NOT NULL;
+SELECT count(*) FROM distributed d FULL JOIN local l ON l.id = d.id WHERE l.id IS NOT NULL;
+SELECT count(*) FROM local l FULL JOIN (distributed d1 LEFT JOIN distributed d2 USING (id)) q
+ON l.id = q.id WHERE l.id IS NOT NULL;
 SET client_min_messages TO DEBUG1;
 
 SELECT id, name FROM distributed LEFT JOIN local USING (id) ORDER BY 1 LIMIT 1;
