@@ -246,6 +246,22 @@ FROM sje_d1 d
 JOIN z USING (id)
 JOIN sje_d2 u2 USING (id);
 
+-- Recursive replanning must not normalize an eliminated self-join as an empty input.
+BEGIN;
+SET LOCAL enable_self_join_elimination TO on;
+WITH z AS MATERIALIZED (SELECT id FROM sje_local WHERE id BETWEEN 1 AND 4)
+SELECT count(q.id)
+FROM sje_d1 d
+LEFT JOIN (sje_d2 u1 JOIN sje_d2 u2 USING (id)) q USING (id)
+JOIN z USING (id);
+SET LOCAL enable_self_join_elimination TO on;
+WITH z AS MATERIALIZED (SELECT id FROM sje_local)
+SELECT count(q.id), sum(q.id)
+FROM sje_d1 d
+LEFT JOIN (sje_d2 u1 JOIN sje_d2 u2 USING (id)) q USING (id)
+JOIN z USING (id);
+ROLLBACK;
+
 -- PG18 Feature: JSON functionality - JSON_TABLE has COLUMNS clause for
 -- extracting multiple fields from JSON documents.
 -- PG18 commit: https://github.com/postgres/postgres/commit/bb766cd

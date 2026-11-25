@@ -33,6 +33,12 @@ SELECT count(d.id), sum(d.id)
 FROM local LEFT JOIN distributed_view d USING (id);
 SELECT count(d.name) FROM local LEFT JOIN distributed_view d USING (id);
 
+-- Replanning after recursive planning must not mistake self join elimination
+-- for outer join removal.
+SELECT count(q.id) FROM distributed d0
+LEFT JOIN (distributed d1 JOIN distributed d2 USING (id)) q ON d0.id = q.id
+WHERE d0.name IN (SELECT name FROM distributed ORDER BY name LIMIT 30);
+
 DROP VIEW nested_distributed_view, distributed_view;
 DROP TABLE local, distributed;
 RESET search_path;
