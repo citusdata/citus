@@ -2727,7 +2727,16 @@ get_simple_values_rte(Query *query, TupleDesc resultDesc)
 			if (resultDesc && colno <= resultDesc->natts)
 				colname = NameStr(TupleDescAttr(resultDesc, colno - 1)->attname);
 			else
+			{
 				colname = tle->resname;
+				/* PostgreSQL 18 compatibility: handle NULL resname */
+				if (colname == NULL || strcmp(colname, "?column?") == 0)
+				{
+					static char generated_name[64];
+					snprintf(generated_name, sizeof(generated_name), "intermediate_column_%d", colno);
+					colname = generated_name;
+				}
+			}
 
 			/* does it match the VALUES RTE? */
 			if (colname == NULL || strcmp(colname, cname) != 0)
@@ -2926,8 +2935,17 @@ get_target_list(List *targetList, deparse_context *context)
 			 * When colNamesVisible is true, we should always show the
 			 * assigned column name explicitly.  Otherwise, show it only if
 			 * it's not FigureColname's fallback.
+			 * 
+			 * PostgreSQL 18 fix: Instead of using "?column?" which causes issues
+			 * in complex subqueries, generate a meaningful column name.
 			 */
-			attname = context->colNamesVisible ? NULL : "?column?";
+			if (context->colNamesVisible)
+				attname = NULL;
+			else
+			{
+				/* Generate a column name that won't cause parsing issues */
+				attname = psprintf("expr_%d", colno);
+			}
 		}
 
 		/*
@@ -2940,7 +2958,23 @@ get_target_list(List *targetList, deparse_context *context)
 			colname = NameStr(TupleDescAttr(context->resultDesc,
 											colno - 1)->attname);
 		else
+		{
 			colname = tle->resname;
+			
+			/*
+			 * PostgreSQL 18 fix: tle->resname can be NULL for intermediate expressions.
+			 * In that case, generate a meaningful column name instead of using "?column?".
+			 */
+			if (colname == NULL || strcmp(colname, "?column?") == 0)
+			{
+				/*
+				 * Generate a column name in the format "col_N" where N is the column number.
+				 * This provides a stable, predictable name that won't cause issues with
+				 * column resolution in complex subqueries.
+				 */
+				colname = psprintf("col_%d", colno);
+			}
+		}
 
 		/* Show AS unless the column's name is correct as-is */
 		if (colname)			/* resname could be NULL */
@@ -4541,7 +4575,16 @@ get_variable(Var *var, int levelsup, bool istoplevel, deparse_context *context)
 				colname = NameStr(TupleDescAttr(context->resultDesc,
 												colno - 1)->attname);
 			else
+			{
 				colname = tle->resname;
+				/* PostgreSQL 18 compatibility: handle NULL resname */
+				if (colname == NULL || strcmp(colname, "?column?") == 0)
+				{
+					static char generated_name[64];
+					snprintf(generated_name, sizeof(generated_name), "intermediate_column_%d", colno);
+					colname = generated_name;
+				}
+			}
 			if (colname && strcmp(colname, attname) == 0 &&
 				!equal(var, tle->expr))
 			{
