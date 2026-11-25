@@ -1,0 +1,68 @@
+-- Regression for #8987: setting a column to an array or jsonb subscript, like
+-- "UPDATE t SET v = (ARRAY[1])[1]", crashed the coordinator, since the shard
+-- query deparser took the subscript for an assignment and lost its container.
+-- Kept out of multi_schedule because N-1 runs against older coordinator
+-- libraries would still crash on these statements.
+CREATE SCHEMA update_subscript_fetch_8987;
+SET search_path TO update_subscript_fetch_8987;
+SET citus.shard_count TO 4;
+SET citus.shard_replication_factor TO 1;
+SET citus.next_shard_id TO 60594200;
+
+CREATE DOMAIN int_arr_domain AS INT[];
+CREATE TABLE subs_fetch_update(id INT PRIMARY KEY, val INT, arr INT[], arr_dom int_arr_domain, js JSONB);
+SELECT create_distributed_table('subs_fetch_update', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO subs_fetch_update
+  VALUES (1, 0, '{10,20,30}', '{1,2,3}', '{"a": 1}'),
+         (2, 0, '{40,50,60}', '{4,5,6}', '{"a": 2}');
+
+-- fast path router queries
+UPDATE subs_fetch_update SET val = (ARRAY[7,8])[2] WHERE id = 1;
+UPDATE subs_fetch_update SET val = arr[2] WHERE id = 2;
+
+-- multi-shard query, with an array slice, a domain over an array and jsonb
+UPDATE subs_fetch_update SET arr = arr[2:3], arr_dom = arr_dom[1:2], js = js['a'];
+
+SELECT * FROM subs_fetch_update ORDER BY id;
+ id | val |   arr   | arr_dom | js
+---------------------------------------------------------------------
+  1 |   8 | {20,30} | {1,2}   | 1
+  2 |  50 | {50,60} | {4,5}   | 2
+(2 rows)
+
+
+-- a subscript next to subscript assignments to another column
+UPDATE subs_fetch_update SET arr[1] = 100, val = arr[2], arr[2] = 200;
+
+SELECT * FROM subs_fetch_update ORDER BY id;
+ id | val |    arr    | arr_dom | js
+---------------------------------------------------------------------
+  1 |  30 | {100,200} | {1,2}   | 1
+  2 |  60 | {100,200} | {4,5}   | 2
+(2 rows)
+
+
+-- the SET clauses of INSERT .. ON CONFLICT and MERGE
+INSERT INTO subs_fetch_update VALUES (1)
+ON CONFLICT (id)
+DO UPDATE SET val = (ARRAY[5,6])[1];
+
+MERGE INTO subs_fetch_update t
+USING (SELECT id, arr FROM subs_fetch_update) s ON t.id = s.id AND t.id = 2
+WHEN MATCHED THEN UPDATE SET val = s.arr[1];
+
+SELECT * FROM subs_fetch_update ORDER BY id;
+ id | val |    arr    | arr_dom | js
+---------------------------------------------------------------------
+  1 |   5 | {100,200} | {1,2}   | 1
+  2 | 100 | {100,200} | {4,5}   | 2
+(2 rows)
+
+
+SET client_min_messages TO WARNING;
+DROP SCHEMA update_subscript_fetch_8987 CASCADE;
