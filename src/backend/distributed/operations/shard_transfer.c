@@ -991,7 +991,8 @@ AdjustShardsForPrimaryCloneNodeSplit(WorkerNode *primaryNode,
 	 * on the primary for cleanup, and their cleanup records refer only to the
 	 * primary, so schedule their cleanup on the clone as well.
 	 */
-	InsertCleanupOnSuccessRecordCopies(primaryCleanupRecordList, cloneGroupId);
+	InsertCleanupOnSuccessRecordCopiesForOtherOperations(primaryCleanupRecordList,
+														 cloneGroupId);
 
 	/*
 	 * Handle reference tables - these need to be available on both

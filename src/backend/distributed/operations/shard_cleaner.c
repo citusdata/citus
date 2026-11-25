@@ -508,11 +508,11 @@ InsertCleanupOnSuccessRecordInCurrentTransaction(CleanupObject objectType,
 
 
 /*
- * InsertCleanupOnSuccessRecordCopies inserts a deferred cleanup record as part
- * of the current transaction for the resource of each of the given cleanup
- * records, but on the given node group. This is for a node group that started
- * as a physical copy of the node group of the records, so it has copies of
- * their resources.
+ * InsertCleanupOnSuccessRecordCopiesForOtherOperations inserts a deferred
+ * cleanup record as part of the current transaction for the resource of each
+ * of the given cleanup records, but on the given node group. This is for a
+ * node group that started as a physical copy of the node group of the
+ * records, so it has copies of their resources.
  *
  * Records of the current operation are skipped, since they are not about what
  * earlier operations left behind: copying the ones that a clone promotion adds
@@ -520,7 +520,8 @@ InsertCleanupOnSuccessRecordInCurrentTransaction(CleanupObject objectType,
  * from the clone.
  */
 void
-InsertCleanupOnSuccessRecordCopies(List *cleanupRecordList, int nodeGroupId)
+InsertCleanupOnSuccessRecordCopiesForOtherOperations(List *cleanupRecordList,
+													 int nodeGroupId)
 {
 	CleanupRecord *record = NULL;
 	foreach_declared_ptr(record, cleanupRecordList)

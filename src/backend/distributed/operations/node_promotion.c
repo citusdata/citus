@@ -50,7 +50,7 @@ static void AssignCloneNodeIdentity(WorkerNode *cloneNode);
 static void ExecuteCommandListInRemoteTransaction(MultiConnection *connection,
 												  List *commandList);
 static void EnsureSingleNodePromotion(WorkerNode *primaryNode);
-static void ErrorIfPrimaryHasUnloggedPlacements(WorkerNode *primaryNode);
+static void ErrorIfNodeHasUnloggedPlacements(WorkerNode *workerNode);
 static void EnsureNoEnabledSubscriptionsOnNode(MultiConnection *connection);
 static void AdjustCloneSequenceRangesForNewGroup(WorkerNode *cloneNode);
 
@@ -113,7 +113,7 @@ PG_FUNCTION_INFO_V1(citus_promote_clone_and_rebalance);
  * Unlogged tables are not supported either. Physical replication does not copy
  * their data, so the promotion errors out if the primary has placements of
  * unlogged distributed or reference tables, see
- * ErrorIfPrimaryHasUnloggedPlacements().
+ * ErrorIfNodeHasUnloggedPlacements().
  *
  * The promotion also errors out if the primary has enabled logical replication
  * subscriptions, see EnsureNoEnabledSubscriptionsOnNode(). To promote its
@@ -317,7 +317,7 @@ citus_promote_clone_and_rebalance(PG_FUNCTION_ARGS)
 	 * The write fence also stops DDL, so the tables with placements on the
 	 * primary stay logged until the clone is promoted.
 	 */
-	ErrorIfPrimaryHasUnloggedPlacements(primaryNode);
+	ErrorIfNodeHasUnloggedPlacements(primaryNode);
 
 	/*
 	 * pg_promote() cannot be undone, so decide how to split the shards before
@@ -1203,20 +1203,20 @@ EnsureSingleNodePromotion(WorkerNode *primaryNode)
 
 
 /*
- * ErrorIfPrimaryHasUnloggedPlacements errors out if the primary has a
+ * ErrorIfNodeHasUnloggedPlacements errors out if the given node has a
  * placement of an unlogged distributed or reference table. Physical
- * replication does not copy the data of unlogged tables, and the clone resets
- * them to empty when it is promoted, so the shards that move to the clone
- * would lose their rows, and so would its reference table placements. The
- * placements of Citus local tables stay on the coordinator, and the copies on
- * its clone are dropped, so these do not matter. Neither do partitioned
- * tables, which have no data of their own; before PostgreSQL 18 one can be
- * unlogged while its partitions are not, and cannot be made logged.
+ * replication does not copy the data of unlogged tables, and a clone of the
+ * node resets them to empty when it is promoted, so the shards that move to
+ * the clone would lose their rows, and so would its reference table
+ * placements. The placements of Citus local tables stay on the coordinator,
+ * and the copies on its clone are dropped, so these do not matter. Neither do
+ * partitioned tables, which have no data of their own; before PostgreSQL 18
+ * one can be unlogged while its partitions are not, and cannot be made logged.
  */
 static void
-ErrorIfPrimaryHasUnloggedPlacements(WorkerNode *primaryNode)
+ErrorIfNodeHasUnloggedPlacements(WorkerNode *workerNode)
 {
-	List *placementList = AllShardPlacementsOnNodeGroup(primaryNode->groupId);
+	List *placementList = AllShardPlacementsOnNodeGroup(workerNode->groupId);
 
 	GroupShardPlacement *placement = NULL;
 	foreach_declared_ptr(placement, placementList)
@@ -1232,7 +1232,7 @@ ErrorIfPrimaryHasUnloggedPlacements(WorkerNode *primaryNode)
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						errmsg("cannot promote a clone of node %s:%d, which has "
 							   "placements of the unlogged table %s",
-							   primaryNode->workerName, primaryNode->workerPort,
+							   workerNode->workerName, workerNode->workerPort,
 							   generate_qualified_relation_name(relationId)),
 						errdetail("Physical replication does not copy the data of "
 								  "unlogged tables, so the clone would not have it."),
