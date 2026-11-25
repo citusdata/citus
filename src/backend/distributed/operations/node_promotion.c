@@ -2,28 +2,56 @@
 
 #include "miscadmin.h"
 
+#include "access/xact.h"
+#include "catalog/pg_class.h"
 #include "portability/instr_time.h"
 #include "storage/latch.h"
+#include "utils/builtins.h"
 #include "utils/fmgrprotos.h"
+#include "utils/lsyscache.h"
 #include "utils/pg_lsn.h"
 #include "utils/wait_event.h"
 
 #include "distributed/argutils.h"
+#include "distributed/citus_ruleutils.h"
 #include "distributed/clonenode_utils.h"
+#include "distributed/cluster_changes_block.h"
 #include "distributed/coordinator_protocol.h"
+#include "distributed/hash_helpers.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
+#include "distributed/metadata_utility.h"
 #include "distributed/remote_commands.h"
+#include "distributed/replication_origin_session_utils.h"
+#include "distributed/resource_lock.h"
+#include "distributed/shard_cleaner.h"
 #include "distributed/shard_rebalancer.h"
+#include "distributed/shard_transfer.h"
+#include "distributed/shardinterval_utils.h"
+#include "distributed/transaction_management.h"
 #include "distributed/worker_transaction.h"
 
 
+/* the number of shards whose metadata locks a command of the write fence takes */
+#define SHARD_METADATA_LOCK_BATCH_SIZE 1000
+
+
+static void ErrorIfCommandsBeforePromotion(void);
 static void BlockAllWritesToWorkerNode(WorkerNode *workerNode);
+static void LockShardsOnAllMetadataNodes(List *placementList);
+static void BlockDistributedTransactionsStartedOnNode(WorkerNode *workerNode);
+static void EnsureNoPreparedTransactionsOnNode(MultiConnection *connection);
+static void FlushSourceWal(MultiConnection *connection);
 static XLogRecPtr GetNodeWalPosition(MultiConnection *connection, bool replay);
 static bool GetNodeIsInRecoveryStatus(WorkerNode *workerNode);
 static void PromoteCloneNode(WorkerNode *cloneWorkerNode);
+static void AssignCloneNodeIdentity(WorkerNode *cloneNode);
+static void ExecuteCommandListInRemoteTransaction(MultiConnection *connection,
+												  List *commandList);
 static void EnsureSingleNodePromotion(WorkerNode *primaryNode);
+static void ErrorIfNodeHasUnloggedPlacements(WorkerNode *workerNode);
+static void EnsureNoEnabledSubscriptionsOnNode(MultiConnection *connection);
 static void AdjustCloneSequenceRangesForNewGroup(WorkerNode *cloneNode);
 
 PG_FUNCTION_INFO_V1(citus_promote_clone_and_rebalance);
@@ -36,11 +64,16 @@ PG_FUNCTION_INFO_V1(citus_promote_clone_and_rebalance);
  * 1. Validates that the clone node exists and is properly configured
  * 2. Ensures the clone is inactive and has a valid primary node reference
  * 3. Blocks all writes to the primary node to prevent data divergence
- * 4. Waits for clone replay to reach a fixed source WAL insertion position
- * 5. Promotes the clone node to become a standalone primary
- * 6. Updates metadata to mark the clone as active and primary
- * 7. Rebalances shards between the old primary and new primary
- * 8. Returns void on success
+ * 4. Checks that the primary has no placements of unlogged tables, and decides
+ *    which shards move to the clone, before any irreversible step
+ * 5. Ensures that the primary has no unresolved prepared transactions, waits
+ *    for clone replay to reach a fixed source WAL insertion position, and
+ *    checks that the metadata workers still hold the write fence
+ * 6. Promotes the clone node to become a standalone primary and gives it its
+ *    own identity
+ * 7. Updates metadata to mark the clone as active and primary
+ * 8. Rebalances shards between the old primary and new primary
+ * 9. Returns void on success
  *
  * Arguments:
  * - clone_nodeid: The node ID of the clone to promote
@@ -50,17 +83,84 @@ PG_FUNCTION_INFO_V1(citus_promote_clone_and_rebalance);
  *   acquiring locks. Unlimited waiting can hold shard write locks indefinitely,
  *   but remains interruptible by cancellation or statement_timeout.
  *   A positive budget starts after acquiring
- *   the write locks and includes fetching the source target and clone probes,
+ *   the write locks and includes fetching the source target, flushing the
+ *   source WAL, and clone probes,
  *   but excludes promotion and rebalancing. No probe starts after the budget
  *   expires; a successful in-flight probe is accepted even if it finishes later.
  *   This is not a hard deadline on remote I/O; statement_timeout can cancel it.
  *
- * After the existing shard write fence is acquired, a source insertion LSN is
- * captured once, including WAL from completed asynchronous commits. Clone replay
- * must reach or exceed this target before promotion. Unrelated WAL can advance
- * beyond the target without extending the wait. Consistency depends on the write
- * fence preventing changes to the shard data being split; this wait does not
- * extend the scope of that fence.
+ * After the write fence is acquired, a source insertion LSN is captured once,
+ * including WAL from completed asynchronous commits, and the source flushes its
+ * WAL beyond it, see FlushSourceWal(). Clone replay must reach or
+ * exceed this target before promotion. Unrelated WAL can advance beyond the
+ * target without extending the wait. Consistency depends on the write fence
+ * (see BlockAllWritesToWorkerNode) preventing the changes that the clone would
+ * only receive through replication; this wait does not extend the scope of
+ * that fence.
+ *
+ * Like shard moves, the promotion first cleans up the resources that earlier
+ * operations left for cleanup, like the old placements of moved shards, so that
+ * the clone does not copy them. It schedules the cleanup of the copies of the
+ * ones that remain on the primary, for example because they are in use, on the
+ * clone too.
+ *
+ * Only the Citus metadata of the current database is handled, so nodes that use
+ * Citus in more than one database are not supported. In the other databases,
+ * writes are not blocked, the clone is not added to the metadata, and it keeps
+ * the identity of the primary, so its maintenance daemon acts as the primary
+ * there.
+ *
+ * Unlogged tables are not supported either. Physical replication does not copy
+ * their data, so the promotion errors out if the primary has placements of
+ * unlogged distributed or reference tables, see
+ * ErrorIfNodeHasUnloggedPlacements().
+ *
+ * The promotion also errors out if the primary has enabled logical replication
+ * subscriptions, see EnsureNoEnabledSubscriptionsOnNode(). To promote its
+ * clone, disable them on the primary, and enable them again once the promotion
+ * has committed. The promoted clone keeps disabled copies of them. Before
+ * dropping one there, set its slot_name to NONE, since DROP SUBSCRIPTION would
+ * otherwise drop the replication slot on the publisher that the primary uses.
+ *
+ * The promotion cannot run inside a transaction block, which includes a query
+ * string with more than one statement: its write fence would last until the
+ * transaction ends, and a rollback could not undo pg_promote() or the identity
+ * of the clone. For the same reason, its transaction commits right after the
+ * statement that runs it, so in a pipeline, the next commands run in a new
+ * transaction. Called from a function or a DO block, or after other commands of
+ * a pipeline, it errors out if earlier commands of its transaction made changes
+ * or ran on other nodes, see ErrorIfCommandsBeforePromotion(). The commands
+ * after it in the same function or DO block still run in its transaction, so an
+ * error in one of them rolls back its metadata changes after pg_promote().
+ *
+ * Until the clone has an identity of its own, its maintenance daemon acts as
+ * the primary, see AssignCloneNodeIdentity(). Operators should therefore
+ * disable the daemon tasks that would act for the primary before the
+ * promotion, preferably by starting the clone with:
+ *
+ *   citus.recover_2pc_interval = -1
+ *   citus.defer_shard_delete_interval = -1
+ *   citus.background_task_queue_interval = -1
+ *
+ * If the clone already runs, reload its configuration before the promotion,
+ * and allow its maintenance daemon to process the reload; a SET in a session
+ * is not enough. Restore the previous values only once both the identity of
+ * the clone and its registration have committed, that is, once the promotion
+ * has committed. If either outcome is unknown, leave the tasks disabled. Leave
+ * the settings of the primary unchanged. These settings do not stop the
+ * recover_prepared_transactions() call of the identity transaction, which runs
+ * under the write fence.
+ *
+ * If the promotion fails before it calls pg_promote(), the clone stays a
+ * replica and an inactive clone in the metadata, and the promotion can be
+ * retried. Once it calls pg_promote(), which it reports with a NOTICE, the
+ * clone cannot follow the primary again, even if it is still in recovery when
+ * the promotion fails, and it may keep the identity of the primary. So if the
+ * promotion fails from then on, shut the clone down. To use the server as a
+ * clone again, rebuild it as a replica of the primary, for example from a new
+ * base backup. Citus does not manage replication slots, so if the clone used
+ * one on the primary, drop it once the clone is promoted or discarded, since
+ * the primary keeps WAL for it otherwise.
  */
 Datum
 citus_promote_clone_and_rebalance(PG_FUNCTION_ARGS)
@@ -70,6 +170,30 @@ citus_promote_clone_and_rebalance(PG_FUNCTION_ARGS)
 	/* Ensure superuser and coordinator */
 	EnsureSuperUser();
 	EnsureCoordinator();
+
+	if (IsTransactionBlock())
+	{
+		ereport(ERROR, (errcode(ERRCODE_ACTIVE_SQL_TRANSACTION),
+						errmsg("citus_promote_clone_and_rebalance cannot run inside a "
+							   "transaction block"),
+						errdetail("Its write fence would last until the transaction "
+								  "ends, and a rollback could not undo the promotion "
+								  "of the clone."),
+						errhint("Run the promotion outside a transaction block, for "
+								"example with autocommit enabled.")));
+	}
+
+	ErrorIfCommandsBeforePromotion();
+
+	/*
+	 * Like PreventInTransactionBlock(), commit as soon as the statement that
+	 * runs the promotion finishes. In a pipeline of the extended query
+	 * protocol, the next commands would otherwise run in its transaction until
+	 * the next Sync message, so the write fence would last longer, and an
+	 * error in one of them would roll back the metadata changes of the
+	 * promotion after pg_promote().
+	 */
+	MyXactFlags |= XACT_FLAGS_NEEDIMMEDIATECOMMIT;
 
 	/* Get clone_nodeid argument */
 	int32 cloneNodeIdArg = PG_GETARG_INT32(0);
@@ -83,8 +207,14 @@ citus_promote_clone_and_rebalance(PG_FUNCTION_ARGS)
 						errmsg("catchup_timeout_seconds must be nonnegative")));
 	}
 
-	/* Lock pg_dist_node to prevent concurrent modifications during this operation */
-	LockRelationOid(DistNodeRelationId(), RowExclusiveLock);
+	/*
+	 * Lock pg_dist_node to prevent concurrent modifications during this
+	 * operation. Unlike RowExclusiveLock, ShareRowExclusiveLock conflicts with
+	 * itself, so a concurrent promotion waits here until this one finishes.
+	 * Otherwise, both could hold the lock and deadlock when their write fences
+	 * upgrade it to ExclusiveLock, see BlockAllWritesToWorkerNode().
+	 */
+	LockRelationOid(DistNodeRelationId(), ShareRowExclusiveLock);
 
 	WorkerNode *cloneNode = FindNodeAnyClusterByNodeId(cloneNodeIdArg);
 	if (cloneNode == NULL)
@@ -161,6 +291,14 @@ citus_promote_clone_and_rebalance(PG_FUNCTION_ARGS)
 	EnsureValidCloneMode(primaryNode, cloneNode->workerName, cloneNode->workerPort,
 						 operation);
 
+	/*
+	 * The cleanup records of the resources that the clone copies refer only to
+	 * the primary, so clean up what we can before the clone stops replicating,
+	 * as shard moves do before they copy shards. The locks taken above already
+	 * keep shard transfers from leaving new resources on the primary.
+	 */
+	DropOrphanedResourcesInSeparateTransaction();
+
 	/* Step 1: Block Writes on Original Primary's Shards */
 	ereport(NOTICE, (errmsg(
 						 "Blocking writes on shards of original primary node %s:%d (group %d)",
@@ -168,6 +306,44 @@ citus_promote_clone_and_rebalance(PG_FUNCTION_ARGS)
 						 ->groupId)));
 
 	BlockAllWritesToWorkerNode(primaryNode);
+
+	/*
+	 * The write fence stops new shards from being created on the primary, so
+	 * also lock the colocation groups that got shards on it meanwhile.
+	 */
+	EnsureSingleNodePromotion(primaryNode);
+
+	/*
+	 * The write fence also stops DDL, so the tables with placements on the
+	 * primary stay logged until the clone is promoted.
+	 */
+	ErrorIfNodeHasUnloggedPlacements(primaryNode);
+
+	/*
+	 * pg_promote() cannot be undone, so decide how to split the shards before
+	 * it, while errors such as an invalid rebalance strategy are still harmless.
+	 * The locks taken above keep the shards on the primary that the plan is
+	 * based on.
+	 */
+	List *primaryShardIdList = NIL;
+	List *cloneShardIdList = NIL;
+	PlanShardSplitBetweenPrimaryAndClone(primaryNode, cloneNode,
+										 PG_GETARG_NAME_OR_NULL(1),
+										 &primaryShardIdList, &cloneShardIdList);
+
+	/*
+	 * The clone also copies the resources that the cleanup above could not
+	 * drop from the primary, for example because they were in use, so list
+	 * them to clean up their copies on the clone as well. With the write fence
+	 * in place, no other operation leaves resources on the primary before the
+	 * clone stops replicating. The regular cleanup might still drop some of
+	 * them before that, but cleaning up a copy that does not exist does nothing.
+	 *
+	 * List them before AdjustShardsForPrimaryCloneNodeSplit() adds the
+	 * promotion's own records for the primary: those are for the shards that
+	 * move to the clone, so copying them would drop these shards from the clone.
+	 */
+	List *primaryCleanupRecordList = ListCleanupRecordsForNodeGroup(primaryNode->groupId);
 
 	/* Step 2: Wait for Clone to Catch Up */
 	if (catchUpTimeoutSeconds == 0)
@@ -199,7 +375,10 @@ citus_promote_clone_and_rebalance(PG_FUNCTION_ARGS)
 	PG_TRY();
 	{
 		FinishConnectionEstablishment(sourceConnection);
+		EnsureNoPreparedTransactionsOnNode(sourceConnection);
+		EnsureNoEnabledSubscriptionsOnNode(sourceConnection);
 		targetLsn = GetNodeWalPosition(sourceConnection, false);
+		FlushSourceWal(sourceConnection);
 	}
 	PG_FINALLY();
 	{
@@ -280,12 +459,26 @@ citus_promote_clone_and_rebalance(PG_FUNCTION_ARGS)
 							cloneNode->workerName, cloneNode->workerPort,
 							primaryNode->workerName, primaryNode->workerPort)));
 
+	/*
+	 * The metadata workers hold the write fence in their transactions, which
+	 * end if, for example, their connections fail during the catch-up. Check
+	 * that they still hold it while the promotion can still be undone: a
+	 * command errors out on a connection whose transaction ended.
+	 */
+	SendCommandToWorkersWithMetadata("SELECT 1");
 
 	/* Step 3: PostgreSQL Clone Promotion */
 	ereport(NOTICE, (errmsg("Attempting to promote clone %s:%d via pg_promote().",
 							cloneNode->workerName, cloneNode->workerPort)));
 
 	PromoteCloneNode(cloneNode);
+
+	/*
+	 * Until it has a group of its own, the promoted clone acts as the primary,
+	 * for example in 2PC recovery. Assign its identity right away and outside
+	 * of this transaction, so that this holds even if the promotion fails later.
+	 */
+	AssignCloneNodeIdentity(cloneNode);
 
 	/* Step 4: Update Clone Metadata in pg_dist_node on Coordinator */
 
@@ -304,14 +497,13 @@ citus_promote_clone_and_rebalance(PG_FUNCTION_ARGS)
 	 * group-id window. The clone is a physical replica, so its sequence objects
 	 * still carry the source primary's (groupId << 48) range; the classical
 	 * activation path does the equivalent re-ranging per group id. This must run
-	 * after SyncNodeMetadataToNodes() so the clone's local group id is already
-	 * corrected and visible over the reused metadata connection.
+	 * after SyncNodeMetadataToNodes(), see the function comment.
 	 */
 	AdjustCloneSequenceRangesForNewGroup(cloneNode);
 
 	/* Step 5: Split Shards Between Primary and Clone */
-	SplitShardsBetweenPrimaryAndClone(primaryNode, cloneNode, PG_GETARG_NAME_OR_NULL(1))
-	;
+	AdjustShardsForPrimaryCloneNodeSplit(primaryNode, cloneNode, primaryShardIdList,
+										 cloneShardIdList, primaryCleanupRecordList);
 
 
 	TransactionModifiedNodeMetadata = true; /* Inform Citus about metadata change */
@@ -331,6 +523,38 @@ citus_promote_clone_and_rebalance(PG_FUNCTION_ARGS)
 						 nodeId)));
 
 	PG_RETURN_VOID();
+}
+
+
+/*
+ * ErrorIfCommandsBeforePromotion errors out if earlier commands of the current
+ * transaction made changes, or ran on other nodes. The changes commit only
+ * after the clone is promoted, and the clone keeps only the changes that commit
+ * before it, so it would miss them. The write fence does not stop them either,
+ * since they hold locks of the same transaction.
+ *
+ * Transaction blocks are rejected before, so such commands can only come from
+ * the same function or DO block, or from earlier commands of a pipeline of the
+ * extended query protocol, which share a transaction until the next Sync
+ * message. Distributed modifications set XactModificationLevel. Local changes,
+ * including the metadata changes that are also sent to other nodes, assign a
+ * transaction id. Commands that ran on other nodes in a coordinated transaction
+ * are rejected too.
+ */
+static void
+ErrorIfCommandsBeforePromotion(void)
+{
+	if (XactModificationLevel > XACT_MODIFICATION_NONE ||
+		InCoordinatedTransaction() ||
+		TransactionIdIsValid(GetTopTransactionIdIfAny()))
+	{
+		ereport(ERROR, (errcode(ERRCODE_ACTIVE_SQL_TRANSACTION),
+						errmsg("cannot promote a clone node after other commands in "
+							   "the same transaction"),
+						errdetail("Their changes would only commit after the promotion, "
+								  "so the clone would not receive them."),
+						errhint("Promote the clone in a separate transaction.")));
+	}
 }
 
 
@@ -393,6 +617,121 @@ PromoteCloneNode(WorkerNode *cloneWorkerNode)
 							 "Clone node %s:%d (ID %d) has been successfully promoted.",
 							 cloneWorkerNode->workerName, cloneWorkerNode->workerPort,
 							 cloneWorkerNode->nodeId)));
+	}
+}
+
+
+/*
+ * AssignCloneNodeIdentity turns the promoted clone into a node of its own. As a
+ * physical copy, the clone has its primary's local group id and server id, and
+ * if the primary is the coordinator, also its cleanup records and background
+ * jobs, which the clone's maintenance daemon would act on.
+ *
+ * A first transaction deletes the cleanup records and background jobs. It
+ * commits before the second one waits for transaction recovery, so that the
+ * daemon stops acting on them meanwhile: deferred cleanup checks each record
+ * again right before it drops the resource.
+ *
+ * The second transaction assigns the group id and server id. Transaction
+ * recovery treats the prepared transactions named after the local group id as
+ * its own, and reads the group id once per run. A run that started on the
+ * clone after pg_promote() would therefore keep the primary's group id after
+ * the clone gets its own one, and once the write fence is released, roll back
+ * the prepared transactions that the primary starts. So the transaction starts
+ * with recover_prepared_transactions(): it waits for such a run to end, and it
+ * keeps the transaction recovery lock until the identity commits, so that later
+ * runs read the new group id. It also resolves the primary's prepared
+ * transactions once more itself, which it does as the primary would while the
+ * write fence is held, see BlockDistributedTransactionsStartedOnNode().
+ * Recovery connects to all nodes, so a node that does not respond delays the
+ * promotion while it holds the write fence.
+ *
+ * Both transactions commit right away rather than with the current one, so
+ * that the clone does not keep the primary's identity if the promotion fails
+ * afterwards. They error out unless they commit, see
+ * ExecuteCommandListInRemoteTransaction(), so that the promotion does not
+ * register a clone that might lack its identity.
+ *
+ * This does not fully close the window after pg_promote(), unless operators
+ * apply the settings that the comment of citus_promote_clone_and_rebalance()
+ * describes, which keep the maintenance daemon of the clone from acting:
+ * - Until the first transaction commits, the maintenance daemon of the clone
+ *   can act on the cleanup records and background jobs of a coordinator, and
+ *   for example drop the resources of operations that still run on it.
+ * - If these transactions fail, also at COMMIT, or the coordinator fails before
+ *   they commit, the promotion does not register the clone, and the clone can
+ *   keep the identity of the primary. Once the write fence is released, its 2PC
+ *   recovery could then roll back prepared transactions of the primary on other
+ *   nodes, so such a clone needs to be shut down.
+ */
+static void
+AssignCloneNodeIdentity(WorkerNode *cloneNode)
+{
+	List *copiedStateCommandList = list_make3(
+		"DELETE FROM pg_catalog.pg_dist_cleanup",
+		"DELETE FROM pg_catalog.pg_dist_background_task",
+		"DELETE FROM pg_catalog.pg_dist_background_job");
+
+	List *identityCommandList = list_make3(
+		"SELECT pg_catalog.recover_prepared_transactions()",
+		LocalGroupIdUpdateCommand(cloneNode->groupId),
+		"UPDATE pg_catalog.pg_dist_node_metadata SET metadata = "
+		"jsonb_set(metadata, '{server_id}', "
+		"to_jsonb(pg_catalog.citus_server_id()::text))");
+
+	int connectionFlags = FORCE_NEW_CONNECTION;
+	MultiConnection *connection = GetNodeUserDatabaseConnection(connectionFlags,
+																cloneNode->workerName,
+																cloneNode->workerPort,
+																CurrentUserName(),
+																NULL);
+	PG_TRY();
+	{
+		ExecuteCommandListInRemoteTransaction(connection, copiedStateCommandList);
+		ExecuteCommandListInRemoteTransaction(connection, identityCommandList);
+	}
+	PG_FINALLY();
+	{
+		CloseConnection(connection);
+	}
+	PG_END_TRY();
+}
+
+
+/*
+ * ExecuteCommandListInRemoteTransaction runs the given commands in a separate
+ * transaction over the given connection, and errors out unless it commits.
+ * RemoteTransactionCommit() only warns if COMMIT fails, for example on a
+ * deferred constraint, or if its outcome is unknown since the connection
+ * failed. A COMMIT also returns ROLLBACK, without an error, if the transaction
+ * failed before, so its command tag is checked as well.
+ */
+static void
+ExecuteCommandListInRemoteTransaction(MultiConnection *connection, List *commandList)
+{
+	ExecuteCriticalRemoteCommand(connection, "BEGIN");
+	ExecuteCriticalRemoteCommandList(connection, commandList);
+
+	if (SendRemoteCommand(connection, "COMMIT") == 0)
+	{
+		ReportConnectionError(connection, ERROR);
+	}
+
+	bool raiseInterrupts = true;
+	PGresult *result = GetRemoteCommandResult(connection, raiseInterrupts);
+	if (!IsResponseOK(result))
+	{
+		ReportResultError(connection, result, ERROR);
+	}
+
+	bool committed = strcmp(PQcmdStatus(result), "COMMIT") == 0;
+	PQclear(result);
+	ForgetResults(connection);
+
+	if (!committed)
+	{
+		ereport(ERROR, (errmsg("could not commit transaction on %s:%d",
+							   connection->hostname, connection->port)));
 	}
 }
 
@@ -475,6 +814,51 @@ GetNodeWalPosition(MultiConnection *connection, bool replay)
 }
 
 
+/*
+ * FlushSourceWal makes the source flush its WAL beyond the catch-up target,
+ * which it just read over the given connection, so that the clone receives the
+ * WAL up to the target right away: walsenders only send flushed WAL. The WAL
+ * writer soon flushes full pages and asynchronous commits, but not, for
+ * example, the WAL of a transaction that is still in progress, or of one that
+ * aborted without a transaction id. Without the flush, such WAL could wait for
+ * an unrelated flush for many seconds, while the write fence is held.
+ *
+ * A commit flushes the WAL only if its transaction wrote WAL before its commit
+ * record. So rather than commit a transaction, the source writes a
+ * non-transactional logical decoding message, and flushes the WAL up to its
+ * end. This also gives the clone a record that ends after the target.
+ * Otherwise, the clone might not reach a target at a page boundary: the
+ * insertion LSN then points after the page header, while replay stops at the
+ * end of the last record, before the header.
+ *
+ * With citus.enable_change_data_capture, the message gets the replication
+ * origin that Citus uses for its internal changes, so that CDC skips it.
+ */
+static void
+FlushSourceWal(MultiConnection *connection)
+{
+	SetupReplicationOriginRemoteSession(connection);
+	ExecuteCriticalRemoteCommand(connection,
+								 "SELECT pg_catalog.pg_logical_emit_message(false, "
+								 "'citus_promote_clone_and_rebalance', '', true)");
+}
+
+
+/*
+ * BlockAllWritesToWorkerNode blocks the changes that the clone of the given
+ * node would only receive through replication, which stops at pg_promote():
+ *
+ * - writes to the shards on the node, from the coordinator or any metadata
+ *   worker,
+ * - DDL and metadata changes, which the node that runs them propagates only to
+ *   the active nodes, and the creation of new shards,
+ * - commit decisions of distributed transactions that the node starts, see
+ *   BlockDistributedTransactionsStartedOnNode().
+ *
+ * Changes that started before are waited for. The locks are held until the end
+ * of the transaction, and they are taken in the order that writers and DDL
+ * take them: shard metadata locks before pg_dist_node.
+ */
 static void
 BlockAllWritesToWorkerNode(WorkerNode *workerNode)
 {
@@ -482,7 +866,219 @@ BlockAllWritesToWorkerNode(WorkerNode *workerNode)
 							workerNode->workerName, workerNode->workerPort, workerNode->
 							nodeId)));
 
-	LockShardsInWorkerPlacementList(workerNode, AccessExclusiveLock);
+	/*
+	 * The metadata workers hold the fence in transactions that stay idle while
+	 * the clone catches up. LockShardListMetadataOnWorkers() keeps
+	 * idle_in_transaction_session_timeout from ending them only if it has
+	 * shards to lock.
+	 */
+	SendCommandToWorkersWithMetadata("SET LOCAL idle_in_transaction_session_timeout = 0");
+
+	List *lockedPlacementList = AllShardPlacementsOnNodeGroup(workerNode->groupId);
+	LockShardsOnAllMetadataNodes(lockedPlacementList);
+
+	/* DDL and metadata changes, on the coordinator and all metadata workers */
+	BlockDistributedQueriesOnMetadataNodes();
+
+	/* writes to the shards that were created on the node in the meantime */
+	HTAB *lockedShardIdSet = CreateSimpleHashSet(uint64);
+	GroupShardPlacement *placement = NULL;
+	foreach_declared_ptr(placement, lockedPlacementList)
+	{
+		hash_search(lockedShardIdSet, &placement->shardId, HASH_ENTER, NULL);
+	}
+
+	List *newPlacementList = NIL;
+	List *placementList = AllShardPlacementsOnNodeGroup(workerNode->groupId);
+	foreach_declared_ptr(placement, placementList)
+	{
+		bool foundInSet = false;
+		hash_search(lockedShardIdSet, &placement->shardId, HASH_FIND, &foundInSet);
+		if (!foundInSet)
+		{
+			newPlacementList = lappend(newPlacementList, placement);
+		}
+	}
+
+	hash_destroy(lockedShardIdSet);
+	LockShardsOnAllMetadataNodes(newPlacementList);
+
+	BlockDistributedTransactionsStartedOnNode(workerNode);
+}
+
+
+/*
+ * LockShardsOnAllMetadataNodes blocks the writes to the shards of the given
+ * placements, and waits for the ones in progress, on the coordinator and on
+ * all metadata workers.
+ *
+ * Metadata workers take shard metadata locks only locally when they write to
+ * shards, so lock the shards that they know about on them, too.
+ * lock_shard_metadata() accepts at most ExclusiveLock, which conflicts with
+ * the ShareLock that writers take.
+ *
+ * The colocated shards of hash-distributed and single-shard tables share one
+ * metadata lock per shard index, so only the first shard of each lock is sent,
+ * in batches. Sorted by shard id, the workers take the locks in the same order
+ * as with all shards.
+ */
+static void
+LockShardsOnAllMetadataNodes(List *placementList)
+{
+	LockShardsInPlacementListMetadata(placementList, AccessExclusiveLock);
+
+	List *shardIntervalList = NIL;
+	GroupShardPlacement *placement = NULL;
+	foreach_declared_ptr(placement, placementList)
+	{
+		ShardInterval *shardInterval = LoadShardInterval(placement->shardId);
+		if (ShouldSyncTableMetadata(shardInterval->relationId))
+		{
+			shardIntervalList = lappend(shardIntervalList, shardInterval);
+		}
+	}
+
+	shardIntervalList = SortList(shardIntervalList, CompareShardIntervalsById);
+
+	HTAB *lockTagSet = CreateSimpleHashSet(LOCKTAG);
+	List *batchShardIntervalList = NIL;
+	ShardInterval *shardInterval = NULL;
+	foreach_declared_ptr(shardInterval, shardIntervalList)
+	{
+		LOCKTAG lockTag;
+		memset(&lockTag, 0, sizeof(lockTag));
+		SetLocktagForShardDistributionMetadata(shardInterval->shardId, &lockTag);
+
+		bool foundInSet = false;
+		hash_search(lockTagSet, &lockTag, HASH_ENTER, &foundInSet);
+		if (foundInSet)
+		{
+			continue;
+		}
+
+		batchShardIntervalList = lappend(batchShardIntervalList, shardInterval);
+		if (list_length(batchShardIntervalList) == SHARD_METADATA_LOCK_BATCH_SIZE)
+		{
+			LockShardListMetadataOnWorkers(ExclusiveLock, batchShardIntervalList);
+			batchShardIntervalList = NIL;
+		}
+	}
+
+	LockShardListMetadataOnWorkers(ExclusiveLock, batchShardIntervalList);
+	hash_destroy(lockTagSet);
+}
+
+
+/*
+ * BlockDistributedTransactionsStartedOnNode blocks the commit decisions of the
+ * distributed transactions that the given node starts, like
+ * citus_create_restore_point() does: a node records a decision in its
+ * pg_dist_transaction before committing, so locking that table blocks new
+ * decisions and waits for the ones in progress.
+ *
+ * Until the promoted clone has its own group, its 2PC recovery resolves the
+ * node's prepared transactions based on its copy of pg_dist_transaction, and
+ * it considers none of them in progress. With this lock taken before the clone
+ * catches up, the copy contains every decision that the node made and no
+ * decision is in progress, so the clone resolves them as the node would.
+ *
+ * On a remote node, 2PC recovery also waits for the lock meanwhile.
+ */
+static void
+BlockDistributedTransactionsStartedOnNode(WorkerNode *workerNode)
+{
+	if (workerNode->groupId == GetLocalGroupId())
+	{
+		/* make the local 2PC recovery skip a round rather than wait */
+		LockTransactionRecovery(ShareUpdateExclusiveLock);
+
+		LockRelationOid(DistTransactionRelationId(), ExclusiveLock);
+		LockRelationOid(DistPartitionRelationId(), ExclusiveLock);
+	}
+	else if (workerNode->hasMetadata)
+	{
+		/* nodes without metadata cannot start distributed transactions */
+		SendMetadataCommandListToWorkerListInCoordinatedTransaction(
+			list_make1(workerNode), CurrentUserName(),
+			list_make1(BLOCK_DISTRIBUTED_WRITES_COMMAND));
+	}
+}
+
+
+/*
+ * EnsureNoPreparedTransactionsOnNode errors out if the node behind the given
+ * connection has prepared transactions of Citus. The clone would inherit them,
+ * and once it has a group of its own, 2PC recovery would look for their commit
+ * records under that group, find none, and roll them back on the clone, even
+ * the ones that it commits on the node.
+ *
+ * The write fence stops distributed transactions from preparing on the node,
+ * and waits for the ones in progress to commit or abort. So the remaining ones
+ * are left for 2PC recovery, for example after a failed COMMIT PREPARED.
+ *
+ * Prepared transactions that Citus did not start, or that belong to other
+ * databases, are not checked. The clone inherits them as well, but nothing
+ * resolves them there, so they keep holding their locks on the clone until
+ * they are resolved manually.
+ */
+static void
+EnsureNoPreparedTransactionsOnNode(MultiConnection *connection)
+{
+	const char *query =
+		"SELECT count(*) FROM pg_catalog.pg_prepared_xacts "
+		"WHERE gid COLLATE pg_catalog.default LIKE 'citus\\_%' "
+		"COLLATE pg_catalog.default AND database = pg_catalog.current_database()";
+
+	if (SendRemoteCommand(connection, query) == 0)
+	{
+		ReportConnectionError(connection, ERROR);
+	}
+
+	PGresult *result = GetRemoteCommandResult(connection, true);
+	if (result == NULL)
+	{
+		ReportConnectionError(connection, ERROR);
+	}
+	if (!IsResponseOK(result))
+	{
+		ReportResultError(connection, result, ERROR);
+	}
+
+	int preparedTransactionCount = 0;
+	PG_TRY();
+	{
+		if (PQntuples(result) != 1 || PQnfields(result) != 1)
+		{
+			ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
+							errmsg("unexpected prepared transaction count from "
+								   "node %s:%d", connection->hostname,
+								   connection->port)));
+		}
+
+		preparedTransactionCount = pg_strtoint32(PQgetvalue(result, 0, 0));
+	}
+	PG_FINALLY();
+	{
+		PQclear(result);
+	}
+	PG_END_TRY();
+	if (!ClearResults(connection, true) || PQstatus(connection->pgConn) != CONNECTION_OK)
+	{
+		ReportConnectionError(connection, ERROR);
+	}
+
+	if (preparedTransactionCount > 0)
+	{
+		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+						errmsg("node %s:%d has %d prepared transactions of Citus that "
+							   "are not resolved yet", connection->hostname,
+							   connection->port, preparedTransactionCount),
+						errdetail("The clone would inherit them, but they would only "
+								  "be resolved on the node."),
+						errhint("Retry once 2PC recovery resolves them, or run "
+								"recover_prepared_transactions() on the node that "
+								"started them.")));
+	}
 }
 
 
@@ -563,30 +1159,37 @@ GetNodeIsInRecoveryStatus(WorkerNode *workerNode)
 
 
 /*
- * EnsureSingleNodePromotion ensures that only one node promotion operation
- * can proceed at a time by acquiring necessary locks and checking for
- * conflicting operations.
+ * EnsureSingleNodePromotion ensures that no other operation adds shards to or
+ * removes shards from the primary concurrently with the promotion, or changes
+ * the colocation groups with shards on it, and errors out otherwise:
  *
- * This function performs the following safety checks:
- * 1. Verifies no rebalance operations are currently running, as they would
- *    conflict with the shard redistribution that occurs during promotion
- * 2. Acquires exclusive placement colocation locks on all shards residing
- *    on the primary node's group to prevent concurrent shard operations
- *
- * The locks are acquired in shard ID order to prevent deadlocks when
- * multiple operations attempt to lock the same set of shards.
- *
- * Arguments:
- * - primaryNode: The primary node whose shards need to be locked
+ * - The shard transfer lock of the primary stops the shard moves, copies,
+ *   splits and rebalances that involve the primary, whatever the colocation
+ *   group: a shard moved onto the primary meanwhile might never reach the
+ *   clone.
+ * - The colocation locks of the colocation groups with shards on the primary
+ *   stop the other operations that change or rely on their placements, like
+ *   adding a table to them. The split of the shards is planned on these
+ *   placements.
  *
  * Throws ERROR if:
- * - A rebalance operation is already running
- * - Unable to acquire necessary locks
+ * - A concurrent shard move, copy, split or rebalance holds one of the locks
+ * - A rebalance is already running as a background job
  */
 static void
 EnsureSingleNodePromotion(WorkerNode *primaryNode)
 {
-	/* Error out if some rebalancer is running */
+	AcquireShardTransferNodeLock(primaryNode, ExclusiveLock, "promote its clone");
+	AcquireColocationLocksForNodeGroup(primaryNode->groupId, "promote clone");
+
+	/*
+	 * Error out if a rebalance is running as a background job. A rebalance that
+	 * is scheduled after this check cannot move shards to or from the primary
+	 * while the promotion runs either: scheduling it fails on the rebalance
+	 * locks taken above if the primary has shards of distributed tables, and
+	 * otherwise its moves that involve the primary fail on the shard transfer
+	 * lock.
+	 */
 	int64 jobId = 0;
 	if (HasNonTerminalJobOfType("rebalance", &jobId))
 	{
@@ -596,20 +1199,122 @@ EnsureSingleNodePromotion(WorkerNode *primaryNode)
 					errhint("To monitor progress, run: SELECT * FROM "
 							"citus_rebalance_status();")));
 	}
-	List *placementList = AllShardPlacementsOnNodeGroup(primaryNode->groupId);
+}
 
-	/* lock shards in order of shard id to prevent deadlock */
-	placementList = SortList(placementList, CompareShardPlacementsByShardId);
+
+/*
+ * ErrorIfNodeHasUnloggedPlacements errors out if the given node has a
+ * placement of an unlogged distributed or reference table. Physical
+ * replication does not copy the data of unlogged tables, and a clone of the
+ * node resets them to empty when it is promoted, so the shards that move to
+ * the clone would lose their rows, and so would its reference table
+ * placements. The placements of Citus local tables stay on the coordinator,
+ * and the copies on its clone are dropped, so these do not matter. Neither do
+ * partitioned tables, which have no data of their own; before PostgreSQL 18
+ * one can be unlogged while its partitions are not, and cannot be made logged.
+ */
+static void
+ErrorIfNodeHasUnloggedPlacements(WorkerNode *workerNode)
+{
+	List *placementList = AllShardPlacementsOnNodeGroup(workerNode->groupId);
 
 	GroupShardPlacement *placement = NULL;
 	foreach_declared_ptr(placement, placementList)
 	{
-		int64 shardId = placement->shardId;
-		ShardInterval *shardInterval = LoadShardInterval(shardId);
-		Oid distributedTableId = shardInterval->relationId;
+		Oid relationId = RelationIdForShard(placement->shardId);
+		if (IsCitusTableType(relationId, CITUS_LOCAL_TABLE) ||
+			!RELKIND_HAS_STORAGE(get_rel_relkind(relationId)) ||
+			get_rel_persistence(relationId) != RELPERSISTENCE_UNLOGGED)
+		{
+			continue;
+		}
 
-		AcquirePlacementColocationLock(distributedTableId, ExclusiveLock, "promote clone")
-		;
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("cannot promote a clone of node %s:%d, which has "
+							   "placements of the unlogged table %s",
+							   workerNode->workerName, workerNode->workerPort,
+							   generate_qualified_relation_name(relationId)),
+						errdetail("Physical replication does not copy the data of "
+								  "unlogged tables, so the clone would not have it."),
+						errhint("Make the table logged with ALTER TABLE ... SET "
+								"LOGGED before promoting the clone.")));
+	}
+}
+
+
+/*
+ * EnsureNoEnabledSubscriptionsOnNode errors out if the node behind the given
+ * connection has enabled logical replication subscriptions, in any database.
+ * The clone inherits them, and starts them too once it is promoted, so that
+ * its apply workers compete with the ones of the node for the replication
+ * slots on the publishers. If the clone takes over a slot, the node no longer
+ * receives the changes. This is checked right before the catch-up; the write
+ * fence does not stop subscriptions from being enabled after that.
+ */
+static void
+EnsureNoEnabledSubscriptionsOnNode(MultiConnection *connection)
+{
+	const char *query =
+		"SELECT s.subname, d.datname FROM pg_catalog.pg_subscription s "
+		"JOIN pg_catalog.pg_database d ON d.oid = s.subdbid "
+		"WHERE s.subenabled ORDER BY d.datname, s.subname LIMIT 1";
+
+	if (SendRemoteCommand(connection, query) == 0)
+	{
+		ReportConnectionError(connection, ERROR);
+	}
+
+	PGresult *result = GetRemoteCommandResult(connection, true);
+	if (result == NULL)
+	{
+		ReportConnectionError(connection, ERROR);
+	}
+	if (!IsResponseOK(result))
+	{
+		ReportResultError(connection, result, ERROR);
+	}
+
+	char *subscriptionName = NULL;
+	char *databaseName = NULL;
+	PG_TRY();
+	{
+		if (PQntuples(result) > 1 || PQnfields(result) != 2)
+		{
+			ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
+							errmsg("unexpected subscription result from node %s:%d",
+								   connection->hostname, connection->port)));
+		}
+
+		if (PQntuples(result) == 1)
+		{
+			subscriptionName = pstrdup(PQgetvalue(result, 0, 0));
+			databaseName = pstrdup(PQgetvalue(result, 0, 1));
+		}
+	}
+	PG_FINALLY();
+	{
+		PQclear(result);
+	}
+	PG_END_TRY();
+	if (!ClearResults(connection, true) || PQstatus(connection->pgConn) != CONNECTION_OK)
+	{
+		ReportConnectionError(connection, ERROR);
+	}
+
+	if (subscriptionName != NULL)
+	{
+		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+						errmsg("cannot promote a clone of node %s:%d, which has the "
+							   "enabled subscription %s in database %s",
+							   connection->hostname, connection->port,
+							   quote_identifier(subscriptionName),
+							   quote_identifier(databaseName)),
+						errdetail("The promoted clone would start the subscription "
+								  "too, and could take over its replication slot on "
+								  "the publisher."),
+						errhint("Disable the subscriptions of the node with ALTER "
+								"SUBSCRIPTION ... DISABLE before promoting the clone, "
+								"and enable them again once the promotion commits.")));
 	}
 }
 
@@ -629,11 +1334,11 @@ EnsureSingleNodePromotion(WorkerNode *primaryNode)
  *
  * The command list is built on the coordinator (reusing the existing per-table
  * sequence command builders) and sent to the clone over the metadata connection
- * via SendMetadataCommandListToWorkerListInCoordinatedTransaction. That path
- * reuses the same connection SyncNodeMetadataToNodes() used to update
- * pg_dist_local_group, so the corrected local group id is visible when
- * AlterSequenceMinMax() runs on the clone. Therefore this MUST be called after
- * SyncNodeMetadataToNodes().
+ * via SendMetadataCommandListToWorkerListInCoordinatedTransaction. The clone's
+ * local group id is already corrected by AssignCloneNodeIdentity(), so it is
+ * visible when AlterSequenceMinMax() runs on the clone. The metadata connection
+ * requires the clone to be an active metadata node, therefore this MUST be
+ * called after ActivateCloneNodeAsPrimary() and SyncNodeMetadataToNodes().
  */
 static void
 AdjustCloneSequenceRangesForNewGroup(WorkerNode *cloneNode)
