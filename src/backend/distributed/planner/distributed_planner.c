@@ -90,15 +90,18 @@ int PlannerLevel = 0;
 
 static void PostPGPlanNormalization(Query *originalQuery, Query *query);
 
-#if PG_VERSION_NUM >= PG_VERSION_16
 typedef struct RemovedOuterJoinContext
 {
 	Bitmapset *referencedIdentities;
-	List *rangeTableList;
+	List *candidateRtes;
 	Bitmapset *removedIdentities;
 } RemovedOuterJoinContext;
 
-static bool CollectReferencedRelationIdentities(Node *node, Bitmapset **identities);
+#if PG_VERSION_NUM < PG_VERSION_16
+static List * DeadRelationRTEs(PlannerRestrictionContext *context);
+#endif
+static bool CollectReferencedRelationIdentities(Node *node,
+												RemovedOuterJoinContext *context);
 static bool ReplaceRemovedOuterJoinRelations(Node *node,
 											 RemovedOuterJoinContext *context);
 static Bitmapset * RemovedOuterJoinRelationIndexes(Node *node, Query *query,
@@ -111,7 +114,6 @@ static Node * RemapRemovedOuterJoinVar(Var *var,
 									   replace_rte_variables_context *context);
 static void RemapRemovedOuterJoinColumns(Node *node, Query *query, Index rteIndex,
 										 AttrMap *attributeMap);
-#endif
 
 static bool ListContainsDistributedTableRTE(List *rangeTableList,
 											bool *maybeHasForeignDistributedTable);
@@ -2966,13 +2968,19 @@ CheckPostPlanDistribution(DistributedPlanningContext *planContext, bool
 static void
 PostPGPlanNormalization(Query *originalQuery, Query *query)
 {
-#if PG_VERSION_NUM >= PG_VERSION_16
 	if (originalQuery->commandType == CMD_SELECT)
 	{
 		RemovedOuterJoinContext context = { 0 };
-		context.rangeTableList = ExtractRangeTableEntryList(query);
-		CollectReferencedRelationIdentities((Node *) query,
-											&context.referencedIdentities);
+#if PG_VERSION_NUM < PG_VERSION_16
+		context.candidateRtes = DeadRelationRTEs(CurrentPlannerRestrictionContext());
+		if (context.candidateRtes == NIL)
+		{
+			return;
+		}
+#else
+		context.candidateRtes = ExtractRangeTableEntryList(query);
+#endif
+		CollectReferencedRelationIdentities((Node *) query, &context);
 		ReplaceRemovedOuterJoinRelations((Node *) originalQuery, &context);
 		if (!bms_is_empty(context.removedIdentities))
 		{
@@ -2980,13 +2988,55 @@ PostPGPlanNormalization(Query *originalQuery, Query *query)
 												  context.removedIdentities);
 		}
 	}
-#endif
 }
 
 
-#if PG_VERSION_NUM >= PG_VERSION_16
+#if PG_VERSION_NUM < PG_VERSION_16
+
+/*
+ * PG15 leaves an eliminated outer-join input in the jointree and marks its
+ * RelOptInfo dead instead. Collect the exact RTEs, not just their identities:
+ * another copy that is still referenced must prevent replacement.
+ */
+static List *
+DeadRelationRTEs(PlannerRestrictionContext *context)
+{
+	List *deadRtes = NIL;
+	List *visitedRoots = NIL;
+	List *restrictions = context->relationRestrictionContext->relationRestrictionList;
+	RelationRestriction *restriction = NULL;
+	foreach_declared_ptr(restriction, restrictions)
+	{
+		PlannerInfo *root = restriction->plannerInfo;
+		if (list_member_ptr(visitedRoots, root))
+		{
+			continue;
+		}
+		visitedRoots = lappend(visitedRoots, root);
+
+		for (int rti = 1; rti < root->simple_rel_array_size; rti++)
+		{
+			RelOptInfo *rel = root->simple_rel_array[rti];
+			if (rel == NULL || rel->reloptkind != RELOPT_DEADREL)
+			{
+				continue;
+			}
+
+			/* Only relations assigned an RTE identity can match the original query. */
+			RangeTblEntry *rte = planner_rt_fetch(rti, root);
+			if (rte->rtekind == RTE_RELATION && rte->values_lists != NIL)
+			{
+				deadRtes = lappend(deadRtes, rte);
+			}
+		}
+	}
+	return deadRtes;
+}
+
+
+#endif
 static bool
-CollectReferencedRelationIdentities(Node *node, Bitmapset **identities)
+CollectReferencedRelationIdentities(Node *node, RemovedOuterJoinContext *context)
 {
 	if (node == NULL)
 	{
@@ -3005,15 +3055,22 @@ CollectReferencedRelationIdentities(Node *node, Bitmapset **identities)
 			RangeTblEntry *rte = rt_fetch(lfirst_int(cell), query->rtable);
 			if (rte->rtekind == RTE_RELATION)
 			{
-				*identities = bms_add_member(*identities, GetRTEIdentity(rte));
+#if PG_VERSION_NUM < PG_VERSION_16
+				if (list_member_ptr(context->candidateRtes, rte))
+				{
+					continue;
+				}
+#endif
+				context->referencedIdentities =
+					bms_add_member(context->referencedIdentities, GetRTEIdentity(rte));
 			}
 		}
 
 		return query_tree_walker(query, CollectReferencedRelationIdentities,
-								 identities, 0);
+								 context, 0);
 	}
 
-	return expression_tree_walker(node, CollectReferencedRelationIdentities, identities);
+	return expression_tree_walker(node, CollectReferencedRelationIdentities, context);
 }
 
 
@@ -3044,7 +3101,7 @@ ReplaceRemovedOuterJoinRelations(Node *node, RemovedOuterJoinContext *context)
 
 
 /*
- * PostgreSQL 16.16 can remove outer joins from the transformed jointree.
+ * PostgreSQL can eliminate an outer join while planning.
  * The original tree is still used for deparsing and recursive planning. Keep
  * its join structure and aliases, but replace eliminated distributed relations
  * with empty subqueries so later planning cannot reintroduce them.
@@ -3066,7 +3123,7 @@ RemovedOuterJoinRelationIndexes(Node *node, Query *query,
 			RangeTblEntry *transformedRte = NULL;
 
 			/* A missing relation may have been recursively planned, not eliminated. */
-			foreach_declared_ptr(transformedRte, context->rangeTableList)
+			foreach_declared_ptr(transformedRte, context->candidateRtes)
 			{
 				if (transformedRte->rtekind == RTE_RELATION &&
 					GetRTEIdentity(transformedRte) == identity)
@@ -3266,6 +3323,3 @@ RemapRemovedOuterJoinColumns(Node *node, Query *query, Index rteIndex,
 		RemapRemovedOuterJoinColumns(join->rarg, query, rteIndex, attributeMap);
 	}
 }
-
-
-#endif

@@ -53,7 +53,7 @@ LEFT JOIN
 USING (id);
 
 -- Dropped-column placeholders must not shift aliases or collide with live names.
--- Older majors do not remove this join and retain the legacy placeholder names.
+-- Only PG16+ removes the join from the transformed jointree.
 SELECT current_setting('server_version_num')::int >= 160000 AS removes_outer_join \gset
 \if :removes_outer_join
 \set removed_join_aliases '(id, "dummy-1", "dummy-5")'
@@ -104,6 +104,12 @@ LEFT JOIN
 ) t6
 USING (id);
 SELECT COUNT(*) FROM local LEFT JOIN dense_row_view USING (id);
+
+-- The join can be eliminated in one inlined copy, but the other still needs d.
+WITH joined AS NOT MATERIALIZED (
+    SELECT r.id, d.name FROM reference r LEFT JOIN distributed_dense d USING (id)
+)
+SELECT count(a.name) FROM joined a JOIN joined b USING (id);
 
 BEGIN;
   WITH cte AS (
