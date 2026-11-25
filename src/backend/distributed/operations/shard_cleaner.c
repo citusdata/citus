@@ -508,6 +508,37 @@ InsertCleanupOnSuccessRecordInCurrentTransaction(CleanupObject objectType,
 
 
 /*
+ * InsertCleanupOnSuccessRecordCopiesForOtherOperations inserts a deferred
+ * cleanup record as part of the current transaction for the resource of each
+ * of the given cleanup records, but on the given node group. This is for a
+ * node group that started as a physical copy of the node group of the
+ * records, so it has copies of their resources.
+ *
+ * Records of the current operation are skipped, since they are not about what
+ * earlier operations left behind: copying the ones that a clone promotion adds
+ * for the shards that move to the clone, for example, would drop these shards
+ * from the clone.
+ */
+void
+InsertCleanupOnSuccessRecordCopiesForOtherOperations(List *cleanupRecordList,
+													 int nodeGroupId)
+{
+	CleanupRecord *record = NULL;
+	foreach_declared_ptr(record, cleanupRecordList)
+	{
+		if (record->operationId == CurrentOperationId)
+		{
+			continue;
+		}
+
+		InsertCleanupOnSuccessRecordInCurrentTransaction(record->objectType,
+														 record->objectName,
+														 nodeGroupId);
+	}
+}
+
+
+/*
  * InsertCleanupRecordOutsideTransaction inserts a new pg_dist_cleanup entry in a
  * separate transaction to ensure the record persists after rollback. We should
  * delete these records if the operation completes successfully.
@@ -1293,6 +1324,43 @@ ListCleanupRecords(void)
 													indexOK, NULL, scanKeyCount, NULL);
 
 	HeapTuple heapTuple = NULL;
+	while (HeapTupleIsValid(heapTuple = systable_getnext(scanDescriptor)))
+	{
+		CleanupRecord *record = TupleToCleanupRecord(heapTuple, tupleDescriptor);
+		recordList = lappend(recordList, record);
+	}
+
+	systable_endscan(scanDescriptor);
+	table_close(pgDistCleanup, NoLock);
+
+	return recordList;
+}
+
+
+/*
+ * ListCleanupRecordsForNodeGroup lists the current cleanup records of the
+ * resources on the given node group. The records are opaque outside of this
+ * file.
+ */
+List *
+ListCleanupRecordsForNodeGroup(int nodeGroupId)
+{
+	Relation pgDistCleanup = table_open(DistCleanupRelationId(), AccessShareLock);
+	TupleDesc tupleDescriptor = RelationGetDescr(pgDistCleanup);
+
+	ScanKeyData scanKey[1];
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_cleanup_node_group_id, BTEqualStrategyNumber,
+				F_INT4EQ, Int32GetDatum(nodeGroupId));
+
+	int scanKeyCount = 1;
+	Oid scanIndexId = InvalidOid;
+	bool useIndex = false;
+	SysScanDesc scanDescriptor = systable_beginscan(pgDistCleanup, scanIndexId, useIndex,
+													NULL,
+													scanKeyCount, scanKey);
+
+	HeapTuple heapTuple = NULL;
+	List *recordList = NIL;
 	while (HeapTupleIsValid(heapTuple = systable_getnext(scanDescriptor)))
 	{
 		CleanupRecord *record = TupleToCleanupRecord(heapTuple, tupleDescriptor);

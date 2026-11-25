@@ -96,6 +96,17 @@ extern void InsertCleanupOnSuccessRecordInCurrentTransaction(CleanupObject objec
 															 int nodeGroupId);
 
 /*
+ * ListCleanupRecordsForNodeGroup lists the current cleanup records of the
+ * resources on the given node group, and
+ * InsertCleanupOnSuccessRecordCopiesForOtherOperations inserts deferred
+ * cleanup records in the current transaction for their resources on another
+ * node group, which started as a physical copy of it.
+ */
+extern List * ListCleanupRecordsForNodeGroup(int nodeGroupId);
+extern void InsertCleanupOnSuccessRecordCopiesForOtherOperations(List *cleanupRecordList,
+																 int nodeGroupId);
+
+/*
  * InsertCleanupRecordInSeparateTransaction inserts a new pg_dist_cleanup entry
  * in a separate transaction to ensure the record persists after rollback.
  *

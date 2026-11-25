@@ -486,3 +486,7 @@ s/local_table_5_col_1_fkey_([0-9]+)/local_table_5_col_1_fkey1_\1/g
 # these rules can be removed when PG19 is the minimum supported version
 s/, IO FALSE,/,/g
 s/"io": false, //g
+
+# The catch-up timeout of citus_promote_clone_and_rebalance() reports WAL
+# positions that vary between runs
+s/Target WAL position is [0-9A-F]+\/[0-9A-F]+; last observed replay position is [0-9A-F]+\/[0-9A-F]+/Target WAL position is X\/X; last observed replay position is X\/X/g

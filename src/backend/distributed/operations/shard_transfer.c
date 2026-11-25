@@ -508,6 +508,23 @@ TransferShards(int64 shardId, char *sourceNodeName,
 
 	AcquirePlacementColocationLock(distributedTableId, RowExclusiveLock, operationName);
 
+	/*
+	 * Lock the node that the shards are added to, and for moves also the node
+	 * that they are removed from, see AcquireShardTransferNodeLock().
+	 */
+	char *nodeLockOperationName = psprintf("%s shards", operationName);
+	WorkerNode *targetNode = FindWorkerNode(targetNodeName, targetNodePort);
+	AcquireShardTransferNodeLock(targetNode, RowExclusiveLock, nodeLockOperationName);
+	if (transferType == SHARD_TRANSFER_MOVE)
+	{
+		WorkerNode *sourceNode = FindWorkerNode(sourceNodeName, sourceNodePort);
+		if (sourceNode != NULL)
+		{
+			AcquireShardTransferNodeLock(sourceNode, RowExclusiveLock,
+										 nodeLockOperationName);
+		}
+	}
+
 	List *colocatedTableList;
 	List *colocatedShardList;
 
@@ -796,7 +813,8 @@ TransferShards(int64 shardId, char *sourceNodeName,
  *    - Adds cleanup records to remove the shard data from clone node
  *
  * 3. Reference tables:
- *    - Inserts new placement records on the clone node
+ *    - Inserts new placement records on the clone node, for the reference
+ *      tables that the primary has a placement of
  *    - Data is already present on clone, so only metadata update is needed
  *
  * 4. Citus local tables (only when the primary is the coordinator):
@@ -805,14 +823,22 @@ TransferShards(int64 shardId, char *sourceNodeName,
  *    - A coordinator clone carries a byte-for-byte copy of that shard data, so
  *      cleanup records are added to drop the orphaned copy from the clone node
  *
+ * 5. Resources that earlier operations left on the primary for cleanup, like
+ *    the old placements of moved shards (primaryCleanupRecordList):
+ *    - The clone copied the ones that remained until it stopped replicating,
+ *      so cleanup records are added to drop these copies from the clone node
+ *
  * This function does not perform any actual data movement; it only updates the
  * shard placement metadata and schedules cleanup operations for later execution.
+ * primaryShardList and cloneShardList contain pointers to uint64 shard ids, and
+ * primaryCleanupRecordList comes from ListCleanupRecordsForNodeGroup().
  */
 void
 AdjustShardsForPrimaryCloneNodeSplit(WorkerNode *primaryNode,
 									 WorkerNode *cloneNode,
 									 List *primaryShardList,
-									 List *cloneShardList)
+									 List *cloneShardList,
+									 List *primaryCleanupRecordList)
 {
 	/* Input validation */
 	if (primaryNode == NULL || cloneNode == NULL)
@@ -839,7 +865,7 @@ AdjustShardsForPrimaryCloneNodeSplit(WorkerNode *primaryNode,
 	 * For these shards, we need to remove their data from the clone node
 	 * since the metadata already correctly reflects them on primary.
 	 */
-	uint64 shardId = 0;
+	uint64 *shardIdPointer = NULL;
 	uint32 primaryGroupId = GroupForNode(primaryNode->workerName, primaryNode->workerPort)
 	;
 	uint32 cloneGroupId = GroupForNode(cloneNode->workerName, cloneNode->workerPort);
@@ -853,9 +879,9 @@ AdjustShardsForPrimaryCloneNodeSplit(WorkerNode *primaryNode,
 	 * the shard data from the clone node. The metadata already correctly
 	 * reflects these shards on primary, so no metadata changes are needed.
 	 */
-	foreach_declared_int(shardId, primaryShardList)
+	foreach_declared_ptr(shardIdPointer, primaryShardList)
 	{
-		ShardInterval *shardInterval = LoadShardInterval(shardId);
+		ShardInterval *shardInterval = LoadShardInterval(*shardIdPointer);
 		List *colocatedShardList = ColocatedShardIntervalList(shardInterval);
 
 		char *qualifiedShardName = ConstructQualifiedShardName(shardInterval);
@@ -878,8 +904,9 @@ AdjustShardsForPrimaryCloneNodeSplit(WorkerNode *primaryNode,
 	ereport(NOTICE, (errmsg("processing %d shards for clone node GroupID %d", list_length(
 								cloneShardList), cloneGroupId)));
 
-	foreach_declared_int(shardId, cloneShardList)
+	foreach_declared_ptr(shardIdPointer, cloneShardList)
 	{
+		uint64 shardId = *shardIdPointer;
 		ShardInterval *shardInterval = LoadShardInterval(shardId);
 		List *colocatedShardList = ColocatedShardIntervalList(shardInterval);
 
@@ -960,6 +987,14 @@ AdjustShardsForPrimaryCloneNodeSplit(WorkerNode *primaryNode,
 	}
 
 	/*
+	 * The clone also has copies of the resources that earlier operations left
+	 * on the primary for cleanup, and their cleanup records refer only to the
+	 * primary, so schedule their cleanup on the clone as well.
+	 */
+	InsertCleanupOnSuccessRecordCopiesForOtherOperations(primaryCleanupRecordList,
+														 cloneGroupId);
+
+	/*
 	 * Handle reference tables - these need to be available on both
 	 * primary and clone nodes. Since the clone already has the data,
 	 * we just need to insert placement records for the clone node.
@@ -988,6 +1023,17 @@ AdjustShardsForPrimaryCloneNodeSplit(WorkerNode *primaryNode,
 		foreach_declared_ptr(colocatedShardInterval, colocatedShardList)
 		{
 			uint64 colocatedShardId = colocatedShardInterval->shardId;
+
+			/*
+			 * Reference tables are copied to a node that joins the cluster
+			 * only once a command needs them there, so the primary might not
+			 * have this one yet, and then neither does the clone.
+			 * replicate_reference_tables() copies it to both later.
+			 */
+			if (ActiveShardPlacementOnGroup(primaryGroupId, colocatedShardId) == NULL)
+			{
+				continue;
+			}
 
 			/*
 			 * Insert shard placement record for the clone node and
