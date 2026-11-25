@@ -23,6 +23,54 @@ SELECT count(*) FROM local LEFT JOIN distributed USING (id);
    101
 (1 row)
 
+-- Pull-up can move a removed relation out of its original nullable subquery.
+CREATE VIEW distributed_view AS SELECT * FROM distributed;
+CREATE VIEW nested_distributed_view AS SELECT * FROM distributed_view;
+SELECT count(*) FROM local LEFT JOIN distributed_view USING (id);
+ count
+---------------------------------------------------------------------
+   101
+(1 row)
+
+SELECT count(*) FROM local LEFT JOIN (SELECT * FROM distributed) d USING (id);
+ count
+---------------------------------------------------------------------
+   101
+(1 row)
+
+SELECT count(*) FROM nested_distributed_view RIGHT JOIN local USING (id);
+ count
+---------------------------------------------------------------------
+   101
+(1 row)
+
+SELECT count(*) FROM local LEFT JOIN (SELECT id, name FROM distributed) d USING (id);
+ count
+---------------------------------------------------------------------
+   101
+(1 row)
+
+SELECT count(*) FROM (SELECT * FROM (SELECT * FROM distributed) d1) d2 RIGHT JOIN local USING (id);
+ count
+---------------------------------------------------------------------
+   101
+(1 row)
+
+-- A referenced view output must still read the surviving distributed relation.
+SELECT count(d.id), sum(d.id)
+FROM local LEFT JOIN distributed_view d USING (id);
+ count | sum
+---------------------------------------------------------------------
+   101 | 5050
+(1 row)
+
+SELECT count(d.name) FROM local LEFT JOIN distributed_view d USING (id);
+ count
+---------------------------------------------------------------------
+   101
+(1 row)
+
+DROP VIEW nested_distributed_view, distributed_view;
 DROP TABLE local, distributed;
 RESET search_path;
 DROP SCHEMA local_dist_join_removed_outer_join;
