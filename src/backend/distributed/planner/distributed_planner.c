@@ -1266,9 +1266,23 @@ CreateDistributedPlan(uint64 planId, bool allowRecursivePlanning, Query *origina
 		 * being contiguous.
 		 */
 
+#if PG_VERSION_NUM >= PG_VERSION_18
+
+		/*
+		 * As in distributed_planner(), keep self join elimination disabled.
+		 * PostPGPlanNormalization() would mistake its eliminated relations for
+		 * ones removed by outer join removal.
+		 */
+		int saveNestLevel = DisableSelfJoinElimination();
+#endif
+
 		standard_planner(newQuery, NULL, 0, boundParams);
 
 		PostPGPlanNormalization(originalQuery, newQuery);
+
+#if PG_VERSION_NUM >= PG_VERSION_18
+		AtEOXact_GUC(true, saveNestLevel);
+#endif
 
 		/* overwrite the old transformed query with the new transformed query */
 		*query = *newQuery;
@@ -3126,6 +3140,11 @@ DisableSelfJoinElimination(void)
 static void
 PostPGPlanNormalization(Query *originalQuery, Query *query)
 {
+#if PG_VERSION_NUM >= PG_VERSION_18
+
+	/* self join elimination also drops relations from the join tree */
+	Assert(!enable_self_join_elimination);
+#endif
 #if PG_VERSION_NUM >= PG_VERSION_16
 	if (originalQuery->commandType == CMD_SELECT)
 	{

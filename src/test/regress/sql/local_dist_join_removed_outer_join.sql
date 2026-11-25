@@ -27,6 +27,12 @@ SELECT count(*) FROM (SELECT * FROM (SELECT * FROM distributed) d1) d2 RIGHT JOI
 -- A relation whose columns are used above the join is kept.
 SELECT count(d.name) FROM local LEFT JOIN distributed_view d USING (id);
 
+-- Replanning after recursive planning must not mistake self join elimination
+-- for outer join removal.
+SELECT count(q.id) FROM distributed d0
+LEFT JOIN (distributed d1 JOIN distributed d2 USING (id)) q ON d0.id = q.id
+WHERE d0.name IN (SELECT name FROM distributed ORDER BY name LIMIT 30);
+
 DROP VIEW distributed_view;
 DROP TABLE local, distributed;
 RESET search_path;
