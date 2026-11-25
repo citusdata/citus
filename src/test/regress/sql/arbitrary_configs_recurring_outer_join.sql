@@ -105,11 +105,20 @@ LEFT JOIN
 USING (id);
 SELECT COUNT(*) FROM local LEFT JOIN dense_row_view USING (id);
 
--- The join can be eliminated in one inlined copy, but the other still needs d.
+-- The preserved RIGHT JOIN input has a different physical column layout.
+SELECT title FROM (
+    SELECT l.title, d.ctid
+    FROM distributed_dense d RIGHT JOIN local l USING (id)
+    WHERE l.id = 42
+) j;
+
+-- The join can be eliminated in one inlined copy, but a scalar subplan needs d.
 WITH joined AS NOT MATERIALIZED (
-    SELECT r.id, d.name FROM reference r LEFT JOIN distributed_dense d USING (id)
+    SELECT r.id, d.name, d.ctid AS tid
+    FROM reference r LEFT JOIN distributed_dense d USING (id)
 )
-SELECT count(a.name) FROM joined a JOIN joined b USING (id);
+SELECT count(*), (SELECT name FROM joined WHERE id = 42 AND tid IS NOT NULL) AS live_name
+FROM joined;
 
 BEGIN;
   WITH cte AS (

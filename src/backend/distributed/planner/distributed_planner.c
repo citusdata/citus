@@ -98,22 +98,22 @@ typedef struct RemovedOuterJoinContext
 } RemovedOuterJoinContext;
 
 #if PG_VERSION_NUM < PG_VERSION_16
-static List * DeadRelationRTEs(PlannerRestrictionContext *context);
+static void RecordDeadRelationRtes(PlannerInfo *root);
+#else
+static bool CollectReferencedRelationIdentities(Node *node, Bitmapset **identities);
+static bool ReplaceRemovedOuterJoinRelationCopies(Node *node,
+												  Bitmapset *removedIdentities);
+static void ConvertRemovedOuterJoinRelation(Query *query, Index rteIndex);
+static void RemapRemovedOuterJoinColumns(Node *node, Query *query, Index rteIndex,
+										 AttrMap *attributeMap);
 #endif
-static bool CollectReferencedRelationIdentities(Node *node,
-												RemovedOuterJoinContext *context);
 static bool ReplaceRemovedOuterJoinRelations(Node *node,
 											 RemovedOuterJoinContext *context);
 static Bitmapset * RemovedOuterJoinRelationIndexes(Node *node, Query *query,
 												   RemovedOuterJoinContext *context,
 												   bool nullable);
-static bool ReplaceRemovedOuterJoinRelationCopies(Node *node,
-												  Bitmapset *removedIdentities);
-static void ConvertRemovedOuterJoinRelation(Query *query, Index rteIndex);
 static Node * RemapRemovedOuterJoinVar(Var *var,
 									   replace_rte_variables_context *context);
-static void RemapRemovedOuterJoinColumns(Node *node, Query *query, Index rteIndex,
-										 AttrMap *attributeMap);
 
 static bool ListContainsDistributedTableRTE(List *rangeTableList,
 											bool *maybeHasForeignDistributedTable);
@@ -2109,6 +2109,18 @@ multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo,
 	AdjustReadIntermediateResultCost(rte, relOptInfo);
 	AdjustReadIntermediateResultArrayCost(rte, relOptInfo);
 
+#if PG_VERSION_NUM < PG_VERSION_16
+
+	/*
+	 * make_one_rel builds all_baserels after join removal. Inspect each query
+	 * level once, even if its only surviving input is not an RTE_RELATION.
+	 */
+	if (restrictionIndex == bms_next_member(root->all_baserels, -1))
+	{
+		RecordDeadRelationRtes(root);
+	}
+#endif
+
 	if (rte->rtekind != RTE_RELATION)
 	{
 		return;
@@ -2659,6 +2671,9 @@ PopPlannerRestrictionContext(void)
 static void
 ResetPlannerRestrictionContext(PlannerRestrictionContext *plannerRestrictionContext)
 {
+#if PG_VERSION_NUM < PG_VERSION_16
+	plannerRestrictionContext->deadRelationRtes = NIL;
+#endif
 	plannerRestrictionContext->relationRestrictionContext =
 		palloc0(sizeof(RelationRestrictionContext));
 
@@ -2972,21 +2987,39 @@ PostPGPlanNormalization(Query *originalQuery, Query *query)
 	{
 		RemovedOuterJoinContext context = { 0 };
 #if PG_VERSION_NUM < PG_VERSION_16
-		context.candidateRtes = DeadRelationRTEs(CurrentPlannerRestrictionContext());
+		PlannerRestrictionContext *restrictions = CurrentPlannerRestrictionContext();
+		context.candidateRtes = restrictions->deadRelationRtes;
 		if (context.candidateRtes == NIL)
 		{
 			return;
 		}
+
+		/* A live copy, even in a separate subplan, must keep its original Vars. */
+		RelationRestriction *restriction = NULL;
+		List *liveRelations =
+			restrictions->relationRestrictionContext->relationRestrictionList;
+		foreach_declared_ptr(restriction, liveRelations)
+		{
+			if (restriction->rte->values_lists != NIL)
+			{
+				int identity = GetRTEIdentity(restriction->rte);
+				context.referencedIdentities =
+					bms_add_member(context.referencedIdentities, identity);
+			}
+		}
 #else
 		context.candidateRtes = ExtractRangeTableEntryList(query);
+		CollectReferencedRelationIdentities((Node *) query,
+											&context.referencedIdentities);
 #endif
-		CollectReferencedRelationIdentities((Node *) query, &context);
 		ReplaceRemovedOuterJoinRelations((Node *) originalQuery, &context);
+#if PG_VERSION_NUM >= PG_VERSION_16
 		if (!bms_is_empty(context.removedIdentities))
 		{
 			ReplaceRemovedOuterJoinRelationCopies((Node *) query,
 												  context.removedIdentities);
 		}
+#endif
 	}
 }
 
@@ -2995,48 +3028,35 @@ PostPGPlanNormalization(Query *originalQuery, Query *query)
 
 /*
  * PG15 leaves an eliminated outer-join input in the jointree and marks its
- * RelOptInfo dead instead. Collect the exact RTEs, not just their identities:
- * another copy that is still referenced must prevent replacement.
+ * RelOptInfo dead instead. A missing restriction alone is not proof that the
+ * relation was removed. Record only tagged relations marked dead by PostgreSQL.
  */
-static List *
-DeadRelationRTEs(PlannerRestrictionContext *context)
+static void
+RecordDeadRelationRtes(PlannerInfo *root)
 {
-	List *deadRtes = NIL;
-	List *visitedRoots = NIL;
-	List *restrictions = context->relationRestrictionContext->relationRestrictionList;
-	RelationRestriction *restriction = NULL;
-	foreach_declared_ptr(restriction, restrictions)
+	for (int rti = 1; rti < root->simple_rel_array_size; rti++)
 	{
-		PlannerInfo *root = restriction->plannerInfo;
-		if (list_member_ptr(visitedRoots, root))
+		RelOptInfo *rel = root->simple_rel_array[rti];
+		if (rel == NULL || rel->reloptkind != RELOPT_DEADREL)
 		{
 			continue;
 		}
-		visitedRoots = lappend(visitedRoots, root);
 
-		for (int rti = 1; rti < root->simple_rel_array_size; rti++)
+		RangeTblEntry *rte = planner_rt_fetch(rti, root);
+		if (rte->rtekind == RTE_RELATION && rte->values_lists != NIL)
 		{
-			RelOptInfo *rel = root->simple_rel_array[rti];
-			if (rel == NULL || rel->reloptkind != RELOPT_DEADREL)
-			{
-				continue;
-			}
-
-			/* Only relations assigned an RTE identity can match the original query. */
-			RangeTblEntry *rte = planner_rt_fetch(rti, root);
-			if (rte->rtekind == RTE_RELATION && rte->values_lists != NIL)
-			{
-				deadRtes = lappend(deadRtes, rte);
-			}
+			PlannerRestrictionContext *context = CurrentPlannerRestrictionContext();
+			MemoryContext oldContext = MemoryContextSwitchTo(context->memoryContext);
+			context->deadRelationRtes = lappend(context->deadRelationRtes, rte);
+			MemoryContextSwitchTo(oldContext);
 		}
 	}
-	return deadRtes;
 }
 
 
-#endif
+#else
 static bool
-CollectReferencedRelationIdentities(Node *node, RemovedOuterJoinContext *context)
+CollectReferencedRelationIdentities(Node *node, Bitmapset **identities)
 {
 	if (node == NULL)
 	{
@@ -3055,25 +3075,19 @@ CollectReferencedRelationIdentities(Node *node, RemovedOuterJoinContext *context
 			RangeTblEntry *rte = rt_fetch(lfirst_int(cell), query->rtable);
 			if (rte->rtekind == RTE_RELATION)
 			{
-#if PG_VERSION_NUM < PG_VERSION_16
-				if (list_member_ptr(context->candidateRtes, rte))
-				{
-					continue;
-				}
-#endif
-				context->referencedIdentities =
-					bms_add_member(context->referencedIdentities, GetRTEIdentity(rte));
+				*identities = bms_add_member(*identities, GetRTEIdentity(rte));
 			}
 		}
 
 		return query_tree_walker(query, CollectReferencedRelationIdentities,
-								 context, 0);
+								 identities, 0);
 	}
 
-	return expression_tree_walker(node, CollectReferencedRelationIdentities, context);
+	return expression_tree_walker(node, CollectReferencedRelationIdentities, identities);
 }
 
 
+#endif
 static bool
 ReplaceRemovedOuterJoinRelations(Node *node, RemovedOuterJoinContext *context)
 {
@@ -3090,7 +3104,22 @@ ReplaceRemovedOuterJoinRelations(Node *node, RemovedOuterJoinContext *context)
 		int rteIndex = -1;
 		while ((rteIndex = bms_next_member(rteIndexes, rteIndex)) >= 0)
 		{
+#if PG_VERSION_NUM < PG_VERSION_16
+
+			/*
+			 * PG15 retains both join inputs. Leave their column numbering and
+			 * join metadata alone. If recursive planning wraps the unused
+			 * relation, however, the subquery cannot supply a system column
+			 * or the table's composite value.
+			 */
+			Query *remappedQuery = (Query *) replace_rte_variables((Node *) query,
+																   rteIndex, 0,
+																   RemapRemovedOuterJoinVar,
+																   NULL, NULL);
+			*query = *remappedQuery;
+#else
 			ConvertRemovedOuterJoinRelation(query, rteIndex);
+#endif
 		}
 		bms_free(rteIndexes);
 		return query_tree_walker(query, ReplaceRemovedOuterJoinRelations, context, 0);
@@ -3101,10 +3130,8 @@ ReplaceRemovedOuterJoinRelations(Node *node, RemovedOuterJoinContext *context)
 
 
 /*
- * PostgreSQL can eliminate an outer join while planning.
- * The original tree is still used for deparsing and recursive planning. Keep
- * its join structure and aliases, but replace eliminated distributed relations
- * with empty subqueries so later planning cannot reintroduce them.
+ * Identify eliminated distributed relations on the nullable side of an outer
+ * join in the original tree, which is still used for recursive planning.
  */
 static Bitmapset *
 RemovedOuterJoinRelationIndexes(Node *node, Query *query,
@@ -3116,7 +3143,7 @@ RemovedOuterJoinRelationIndexes(Node *node, Query *query,
 		Index rteIndex = ((RangeTblRef *) node)->rtindex;
 		RangeTblEntry *rte = rt_fetch(rteIndex, query->rtable);
 		if (rte->rtekind == RTE_RELATION &&
-			IsCitusTableType(rte->relid, DISTRIBUTED_TABLE) &&
+			rte->values_lists != NIL && IsCitusTableType(rte->relid, DISTRIBUTED_TABLE) &&
 			!bms_is_member(GetRTEIdentity(rte), context->referencedIdentities))
 		{
 			int identity = GetRTEIdentity(rte);
@@ -3162,6 +3189,8 @@ RemovedOuterJoinRelationIndexes(Node *node, Query *query,
 	return rteIndexes;
 }
 
+
+#if PG_VERSION_NUM >= PG_VERSION_16
 
 /*
  * Replace the corresponding relations in PostgreSQL's transformed query.
@@ -3255,15 +3284,22 @@ ConvertRemovedOuterJoinRelation(Query *query, Index rteIndex)
 }
 
 
+#endif
 static Node *
 RemapRemovedOuterJoinVar(Var *var, replace_rte_variables_context *context)
 {
 	AttrMap *attributeMap = context->callback_arg;
 
-	/* An empty relation cannot supply a whole row or a system column. */
+	/* An eliminated relation cannot supply a whole row or a system column. */
 	if (var->varattno <= 0)
 	{
 		return (Node *) makeNullConst(var->vartype, var->vartypmod, var->varcollid);
+	}
+
+	if (attributeMap == NULL)
+	{
+		/* PG15 keeps the original relation and its physical attribute numbers. */
+		return (Node *) copyObject(var);
 	}
 
 	if (var->varattno > attributeMap->maplen ||
@@ -3283,6 +3319,7 @@ RemapRemovedOuterJoinVar(Var *var, replace_rte_variables_context *context)
 }
 
 
+#if PG_VERSION_NUM >= PG_VERSION_16
 static void
 RemapRemovedOuterJoinColumns(Node *node, Query *query, Index rteIndex,
 							 AttrMap *attributeMap)
@@ -3323,3 +3360,6 @@ RemapRemovedOuterJoinColumns(Node *node, Query *query, Index rteIndex,
 		RemapRemovedOuterJoinColumns(join->rarg, query, rteIndex, attributeMap);
 	}
 }
+
+
+#endif
