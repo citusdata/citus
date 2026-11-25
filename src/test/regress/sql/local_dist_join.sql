@@ -210,6 +210,42 @@ SELECT count(*) FROM distributed CROSS JOIN local WHERE distributed.id = 1;
 SELECT count(*) FROM distributed LEFT JOIN local USING (id);
 SELECT count(*) FROM local LEFT JOIN distributed USING (id);
 
+SELECT count(*) FROM distributed RIGHT JOIN local USING (id);
+SELECT count(*) FROM (distributed d1 LEFT JOIN distributed d2 ON d1.id = d2.id)
+RIGHT JOIN local l ON d1.id = l.id;
+-- PostgreSQL can reduce FULL to LEFT/RIGHT and then remove the distributed side.
+SELECT count(*) FROM local l FULL JOIN distributed d ON l.id = d.id WHERE l.id IS NOT NULL;
+SELECT count(*) FROM distributed d FULL JOIN local l ON l.id = d.id WHERE l.id IS NOT NULL;
+SELECT count(*) FROM local l FULL JOIN (distributed d1 LEFT JOIN distributed d2 USING (id)) q
+ON l.id = q.id WHERE l.id IS NOT NULL;
+SELECT joined.id FROM (local LEFT JOIN distributed USING (id)) AS joined ORDER BY 1 LIMIT 1;
+WITH joined AS MATERIALIZED (SELECT count(*) AS n FROM local LEFT JOIN distributed USING (id))
+SELECT n FROM joined;
+
+-- A surviving distributed subquery must not prevent join normalization.
+SELECT count(*) FROM local l LEFT JOIN distributed d USING (id)
+CROSS JOIN (SELECT count(*) FROM distributed) s;
+
+-- Normalize the SELECT without losing an unreferenced modifying CTE's effects.
+BEGIN;
+WITH m AS (DELETE FROM distributed WHERE id < 2 RETURNING id)
+SELECT count(*) FROM local l LEFT JOIN distributed d USING (id);
+SELECT count(*) FROM distributed;
+ROLLBACK;
+
+-- A planned subquery is not an eliminated nullable relation.
+WITH joined AS (
+    SELECT r.id FROM outer_join_ref r
+    WHERE r.id NOT IN (
+        SELECT r2.id FROM outer_join_ref r2 LEFT JOIN outer_join_dist d USING (id)
+        WHERE d.id IN (SELECT id FROM outer_join_dist)
+        ORDER BY id
+    )
+    ORDER BY id
+)
+SELECT count(*), avg(result.id)
+FROM (SELECT a.id FROM joined a FULL JOIN joined b USING (id) WHERE b.id > 3) result;
+
 SELECT id, name FROM distributed LEFT JOIN local USING (id) ORDER BY 1 LIMIT 1;
 
  SELECT

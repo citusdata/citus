@@ -31,6 +31,7 @@ extern bool UpdateWhereClauseToPushdownRecurringOuterJoinWalker(Node *node,
 																List *relationShardList);
 Node * CreateQualsForShardInterval(RelationShard *relationShard, int attnum,
 								   int outerRtIndex);
+extern void ConvertRteToSubqueryWithEmptyResult(RangeTblEntry *rte);
 extern void SetTaskQueryIfShouldLazyDeparse(Task *task, Query *query);
 extern void SetTaskQueryString(Task *task, char *queryString);
 extern void SetTaskQueryStringList(Task *task, List *queryStringList);

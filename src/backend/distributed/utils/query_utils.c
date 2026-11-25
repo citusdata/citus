@@ -22,6 +22,8 @@
 
 
 static bool CitusQueryableRangeTableRelation(RangeTblEntry *rangeTableEntry);
+static bool FindRangeTableEntryInJoinTree(Node *node, Index rangeTableIndex,
+										  bool *isNullable);
 
 /*
  * ExtractRangeTableList walks over a tree to gather entries.
@@ -177,4 +179,65 @@ ExtractRangeTableIndexWalker(Node *node, List **rangeTableIndexList)
 	}
 
 	return walkerResult;
+}
+
+
+/*
+ * RangeTableEntryIsOnNullableSideOfOuterJoin returns true if an outer join in
+ * the query's jointree can null-extend the relation at rangeTableIndex.
+ *
+ * A filter that hides rows of such a relation must be applied when scanning
+ * the relation. If it is added to the WHERE clause instead, it removes the
+ * joined row rather than null-extending it, which changes the query result.
+ */
+bool
+RangeTableEntryIsOnNullableSideOfOuterJoin(Query *query, Index rangeTableIndex)
+{
+	bool isNullable = false;
+	FindRangeTableEntryInJoinTree((Node *) query->jointree, rangeTableIndex,
+								  &isNullable);
+	return isNullable;
+}
+
+
+static bool
+FindRangeTableEntryInJoinTree(Node *node, Index rangeTableIndex, bool *isNullable)
+{
+	if (IsA(node, RangeTblRef))
+	{
+		return ((RangeTblRef *) node)->rtindex == rangeTableIndex;
+	}
+	else if (IsA(node, FromExpr))
+	{
+		Node *fromNode = NULL;
+		foreach_declared_ptr(fromNode, ((FromExpr *) node)->fromlist)
+		{
+			if (FindRangeTableEntryInJoinTree(fromNode, rangeTableIndex, isNullable))
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+	else if (IsA(node, JoinExpr))
+	{
+		JoinExpr *join = (JoinExpr *) node;
+		bool inLeft = FindRangeTableEntryInJoinTree(join->larg, rangeTableIndex,
+													isNullable);
+		bool inRight = !inLeft &&
+					   FindRangeTableEntryInJoinTree(join->rarg, rangeTableIndex,
+													 isNullable);
+
+		if ((inLeft && (join->jointype == JOIN_RIGHT || join->jointype == JOIN_FULL)) ||
+			(inRight && (join->jointype == JOIN_LEFT || join->jointype == JOIN_FULL)))
+		{
+			*isNullable = true;
+		}
+
+		return inLeft || inRight;
+	}
+
+	elog(ERROR, "unrecognized join tree node type: %d", (int) nodeTag(node));
+	return false;
 }
