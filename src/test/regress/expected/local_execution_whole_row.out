@@ -1,0 +1,202 @@
+--
+-- LOCAL_EXECUTION_WHOLE_ROW
+--
+-- Whole rows of a distributed or reference table that a query returns from a
+-- shard on the local node should be values of the table's row type, just like
+-- the ones returned from a remote node. So, they should stay readable after
+-- the shard moves to another node, and they should have the table's columns
+-- when the table has dropped columns that its shards do not have.
+--
+CREATE SCHEMA local_execution_whole_row;
+SET search_path TO local_execution_whole_row;
+SET citus.next_shard_id TO 1540000;
+SET citus.next_placement_id TO 8540000;
+SET citus.shard_replication_factor TO 1;
+-- idempotently add the coordinator so that it can have shards
+SET client_min_messages TO ERROR;
+SELECT 1 FROM master_add_node('localhost', :master_port, groupid => 0);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+RESET client_min_messages;
+SELECT 1 FROM citus_set_node_property('localhost', :master_port, 'shouldhaveshards', false);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+CREATE TABLE accounts (id int PRIMARY KEY, balance int);
+SELECT create_distributed_table('accounts', 'id', shard_count => 1, colocate_with => 'none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- shards of items do not have the dropped column
+CREATE TABLE items (id int PRIMARY KEY, dropped_column int, price int);
+ALTER TABLE items DROP COLUMN dropped_column;
+SELECT create_distributed_table('items', 'id', shard_count => 1, colocate_with => 'none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- neither does the coordinator placement of currencies
+CREATE TABLE currencies (code text PRIMARY KEY, dropped_column int, rate numeric);
+ALTER TABLE currencies DROP COLUMN dropped_column;
+SELECT create_reference_table('currencies');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- move the shards to the coordinator, so that queries on them run locally
+SELECT 1 FROM citus_set_node_property('localhost', :master_port, 'shouldhaveshards', true);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+SELECT citus_move_shard_placement(shardid, nodename, nodeport, 'localhost', :master_port, 'block_writes')
+FROM citus_shards WHERE table_name IN ('accounts'::regclass, 'items'::regclass)
+ORDER BY shardid;
+ citus_move_shard_placement
+---------------------------------------------------------------------
+
+
+(2 rows)
+
+INSERT INTO accounts VALUES (1, 100), (2, 200), (3, 300);
+INSERT INTO items VALUES (1, 10), (2, 20);
+INSERT INTO currencies VALUES ('EUR', 1.1);
+CREATE FUNCTION select_account(int) RETURNS accounts LANGUAGE sql
+AS $$ SELECT a FROM accounts a WHERE id = $1 $$;
+CREATE FUNCTION deposit(int, int) RETURNS accounts LANGUAGE sql
+AS $$ UPDATE accounts a SET balance = balance + $2 WHERE id = $1 RETURNING a $$;
+CREATE FUNCTION close_account(int) RETURNS accounts LANGUAGE sql
+AS $$ DELETE FROM accounts a WHERE id = $1 RETURNING a $$;
+CREATE FUNCTION select_item(int) RETURNS items LANGUAGE sql
+AS $$ SELECT i FROM items i WHERE id = $1 $$;
+CREATE FUNCTION set_price(int, int) RETURNS items LANGUAGE sql
+AS $$ UPDATE items i SET price = $2 WHERE id = $1 RETURNING i $$;
+CREATE FUNCTION select_currency(text) RETURNS currencies LANGUAGE sql
+AS $$ SELECT c FROM currencies c WHERE code = $1 $$;
+-- whole rows of tables with dropped columns
+SELECT select_item(1), (select_item(1)).price;
+ select_item | price
+---------------------------------------------------------------------
+ (1,10)      |    10
+(1 row)
+
+SELECT * FROM set_price(2, 25);
+ id | price
+---------------------------------------------------------------------
+  2 |    25
+(1 row)
+
+SELECT select_currency('EUR'), (select_currency('EUR')).rate;
+ select_currency | rate
+---------------------------------------------------------------------
+ (EUR,1.1)       |  1.1
+(1 row)
+
+-- store whole rows returned from the local shards in regular tables
+CREATE TABLE account_snapshots (source text, account accounts);
+INSERT INTO account_snapshots SELECT 'select', a FROM accounts a WHERE id = 1;
+INSERT INTO account_snapshots VALUES ('select in function', select_account(1));
+INSERT INTO account_snapshots VALUES ('update returning', deposit(2, 5));
+INSERT INTO account_snapshots VALUES ('delete returning', close_account(3));
+CREATE TABLE account_list_snapshots (accounts accounts[]);
+INSERT INTO account_list_snapshots SELECT array_agg(a) FROM accounts a WHERE id = 1;
+CREATE TABLE item_snapshots (item items);
+INSERT INTO item_snapshots SELECT i FROM items i WHERE id = 1;
+INSERT INTO item_snapshots VALUES (set_price(2, 30));
+CREATE TABLE currency_snapshots (currency currencies);
+INSERT INTO currency_snapshots SELECT c FROM currencies c;
+SELECT source, account, (account).balance FROM account_snapshots ORDER BY source;
+       source       | account | balance
+---------------------------------------------------------------------
+ delete returning   | (3,300) |     300
+ select             | (1,100) |     100
+ select in function | (1,100) |     100
+ update returning   | (2,205) |     205
+(4 rows)
+
+SELECT item, (item).price FROM item_snapshots ORDER BY (item).id;
+  item  | price
+---------------------------------------------------------------------
+ (1,10) |    10
+ (2,30) |    30
+(2 rows)
+
+SELECT currency, (currency).rate FROM currency_snapshots;
+ currency  | rate
+---------------------------------------------------------------------
+ (EUR,1.1) |  1.1
+(1 row)
+
+-- move the shards away from the coordinator, which drops them there
+SELECT citus_move_shard_placement(shardid, 'localhost', :master_port, 'localhost', :worker_1_port, 'block_writes')
+FROM citus_shards WHERE table_name IN ('accounts'::regclass, 'items'::regclass)
+ORDER BY shardid;
+ citus_move_shard_placement
+---------------------------------------------------------------------
+
+
+(2 rows)
+
+SET client_min_messages TO WARNING;
+CALL citus_cleanup_orphaned_resources();
+RESET client_min_messages;
+-- the stored rows should still be readable
+SELECT source, account, (account).balance FROM account_snapshots ORDER BY source;
+       source       | account | balance
+---------------------------------------------------------------------
+ delete returning   | (3,300) |     300
+ select             | (1,100) |     100
+ select in function | (1,100) |     100
+ update returning   | (2,205) |     205
+(4 rows)
+
+SELECT accounts, (accounts[1]).balance FROM account_list_snapshots;
+  accounts   | balance
+---------------------------------------------------------------------
+ {"(1,100)"} |     100
+(1 row)
+
+SELECT item, (item).price FROM item_snapshots ORDER BY (item).id;
+  item  | price
+---------------------------------------------------------------------
+ (1,10) |    10
+ (2,30) |    30
+(2 rows)
+
+-- and should be equal to the rows that the worker returns now
+SELECT s.account = select_account((s.account).id) AS equal
+FROM account_snapshots s WHERE source <> 'delete returning' ORDER BY source;
+ equal
+---------------------------------------------------------------------
+ t
+ t
+ t
+(3 rows)
+
+SELECT s.item = select_item((s.item).id) AS equal
+FROM item_snapshots s ORDER BY (s.item).id;
+ equal
+---------------------------------------------------------------------
+ t
+ t
+(2 rows)
+
+SET client_min_messages TO WARNING;
+DROP SCHEMA local_execution_whole_row CASCADE;
+RESET client_min_messages;
+SELECT 1 FROM citus_set_node_property('localhost', :master_port, 'shouldhaveshards', false);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
