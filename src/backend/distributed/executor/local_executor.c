@@ -136,7 +136,6 @@ static uint64 LocallyPlanAndExecuteMultipleQueries(List *queryStrings,
 static void SetColocationIdAndPartitionKeyValueForTasks(List *taskList,
 														Job *distributedPlan);
 static void LocallyExecuteUtilityTask(Task *task);
-static void ExecuteUdfTaskQuery(Query *localUdfCommandQuery);
 static void EnsureTransitionPossible(LocalExecutionStatus from,
 									 LocalExecutionStatus to);
 
@@ -584,7 +583,8 @@ ExecuteUtilityCommand(const char *taskQueryCommand)
 			Query *udfTaskQuery =
 				RewriteRawQueryStmt(taskRawStmt, taskQueryCommand, NULL, 0);
 
-			ExecuteUdfTaskQuery(udfTaskQuery);
+			ExecuteQueryIntoDestReceiver(udfTaskQuery, taskQueryCommand, NULL,
+										 None_Receiver);
 		}
 		else
 		{
@@ -597,19 +597,6 @@ ExecuteUtilityCommand(const char *taskQueryCommand)
 									NULL);
 		}
 	}
-}
-
-
-/*
- * ExecuteUdfTaskQuery executes the given udf command. A udf command
- * is simply a "SELECT udf_call()" query and so it cannot be executed
- * via process utility.
- */
-static void
-ExecuteUdfTaskQuery(Query *udfTaskQuery)
-{
-	/* we do not expect any results */
-	ExecuteQueryIntoDestReceiver(udfTaskQuery, NULL, None_Receiver);
 }
 
 

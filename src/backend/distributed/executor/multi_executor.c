@@ -98,6 +98,8 @@ int ExecutorLevel = 0;
 
 
 /* local function forward declarations */
+static uint64 ExecutePlanWithQueryString(PlannedStmt *queryPlan, const char *queryString,
+										 ParamListInfo params, DestReceiver *dest);
 static Relation StubRelation(TupleDesc tupleDescriptor);
 static char * GetObjectTypeString(ObjectType objType);
 static bool AlterTableConstraintCheck(QueryDesc *queryDesc);
@@ -720,7 +722,7 @@ ExecuteQueryStringIntoDestReceiver(const char *queryString, ParamListInfo params
 {
 	Query *query = ParseQueryString(queryString, NULL, 0);
 
-	ExecuteQueryIntoDestReceiver(query, params, dest);
+	ExecuteQueryIntoDestReceiver(query, queryString, params, dest);
 }
 
 
@@ -764,10 +766,11 @@ RewriteRawQueryStmt(RawStmt *rawStmt, const char *queryString, Oid *paramOids, i
 
 /*
  * ExecuteQueryIntoDestReceiver plans and executes a query and sends results to the given
- * DestReceiver.
+ * DestReceiver. queryString is the full text from which query was parsed.
  */
 void
-ExecuteQueryIntoDestReceiver(Query *query, ParamListInfo params, DestReceiver *dest)
+ExecuteQueryIntoDestReceiver(Query *query, const char *queryString, ParamListInfo params,
+							 DestReceiver *dest)
 {
 	int cursorOptions = CURSOR_OPT_PARALLEL_OK;
 
@@ -778,19 +781,27 @@ ExecuteQueryIntoDestReceiver(Query *query, ParamListInfo params, DestReceiver *d
 	}
 
 	/* plan the subquery, this may be another distributed query */
-	PlannedStmt *queryPlan = pg_plan_query(query, NULL, cursorOptions, params);
+	PlannedStmt *queryPlan = pg_plan_query(query, queryString, cursorOptions, params);
 
-	ExecutePlanIntoDestReceiver(queryPlan, params, dest);
+	ExecutePlanWithQueryString(queryPlan, queryString, params, dest);
 }
 
 
 /*
  * ExecutePlanIntoDestReceiver executes a query plan and sends results to the given
- * DestReceiver.
+ * DestReceiver when the original query string is not available.
  */
 uint64
 ExecutePlanIntoDestReceiver(PlannedStmt *queryPlan, ParamListInfo params,
 							DestReceiver *dest)
+{
+	return ExecutePlanWithQueryString(queryPlan, NULL, params, dest);
+}
+
+
+static uint64
+ExecutePlanWithQueryString(PlannedStmt *queryPlan, const char *queryString,
+						   ParamListInfo params, DestReceiver *dest)
 {
 	int eflags = 0;
 	long count = FETCH_ALL;
@@ -801,10 +812,25 @@ ExecutePlanIntoDestReceiver(PlannedStmt *queryPlan, ParamListInfo params,
 	/* don't display the portal in pg_cursors, it is for internal use only */
 	portal->visible = false;
 
+	if (queryString == NULL)
+	{
+		queryString = "";
+		if (queryPlan->stmt_location > 0 || queryPlan->stmt_len > 0)
+		{
+			/* Offsets into unavailable SQL are meaningless. Leave shared plans intact. */
+			PlannedStmt *portalPlan = MemoryContextAlloc(portal->portalContext,
+														 sizeof(PlannedStmt));
+			*portalPlan = *queryPlan;
+			portalPlan->stmt_location = -1;
+			portalPlan->stmt_len = 0;
+			queryPlan = portalPlan;
+		}
+	}
+
 	PortalDefineQuery(
 		portal,
 		NULL,                 /* no prepared statement name */
-		"",                   /* query text */
+		queryString,
 		CMDTAG_SELECT,        /* command tag */
 		list_make1(queryPlan),/* list of PlannedStmt* */
 		NULL                  /* no CachedPlan */
