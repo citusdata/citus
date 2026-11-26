@@ -132,6 +132,9 @@ typedef struct PlannerRestrictionContext
 	 */
 	FastPathRestrictionContext *fastPathRestrictionContext;
 	MemoryContext memoryContext;
+#if PG_VERSION_NUM < PG_VERSION_16
+	List *deadRelationRtes; /* PG15 leaves removed outer-join inputs in the jointree */
+#endif
 } PlannerRestrictionContext;
 
 typedef struct RelationShard

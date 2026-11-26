@@ -512,6 +512,11 @@ SELECT * FROM run_command_on_workers($$SELECT * FROM (SELECT pg_identify_object_
  localhost |    57638 | t       |
 (2 rows)
 
+SET client_min_messages TO WARNING;
+DROP SCHEMA test_sequence_schema, schema_to_prop_with_function,
+    schema_to_prop_with_type, extension_schema CASCADE;
+DROP USER non_super_user_test_user;
+RESET client_min_messages;
 -- Revert the settings for following tests
 RESET citus.enable_ddl_propagation;
 RESET citus.shard_replication_factor;

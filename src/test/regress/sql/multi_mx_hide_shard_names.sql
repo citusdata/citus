@@ -244,6 +244,15 @@ RESET citus.enable_metadata_sync;
 -- the shards and indexes do not show up
 SELECT relname FROM pg_catalog.pg_class WHERE relnamespace = 'mx_hide_shard_names'::regnamespace ORDER BY relname;
 
+-- shards stay hidden when pg_class is on the nullable side of an outer join,
+-- and the outer row is null-extended instead of being removed
+SELECT n.nspname, count(c.oid) FROM pg_catalog.pg_namespace n
+LEFT JOIN pg_catalog.pg_class c ON c.relnamespace = n.oid AND c.relname = 'test_table_1130000'
+WHERE n.nspname = 'mx_hide_shard_names' GROUP BY n.nspname;
+SELECT n.nspname, count(c.oid) FROM pg_catalog.pg_class c
+RIGHT JOIN pg_catalog.pg_namespace n ON c.relnamespace = n.oid AND c.relname = 'test_table_1130000'
+WHERE n.nspname = 'mx_hide_shard_names' GROUP BY n.nspname;
+
 -- PG16 added one more backend type B_STANDALONE_BACKEND
 -- and also alphabetized the backend types, hence the orders changed
 -- Relevant PG16 commit:

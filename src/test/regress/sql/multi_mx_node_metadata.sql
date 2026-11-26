@@ -376,6 +376,20 @@ SELECT trigger_metadata_sync();
 
 \c :datname - - :master_port
 
+DO $$
+BEGIN
+  FOR attempt IN 1..300 LOOP
+    PERFORM pg_stat_clear_snapshot();
+    IF EXISTS (SELECT FROM pg_stat_activity
+               WHERE application_name = 'Citus Metadata Sync Daemon' AND datname = 'db_to_drop') THEN
+      RETURN;
+    END IF;
+    PERFORM pg_sleep(0.1);
+  END LOOP;
+  RAISE EXCEPTION 'metadata sync daemon startup timed out';
+END;
+$$;
+
 SELECT datname FROM pg_stat_activity WHERE application_name LIKE 'Citus Met%';
 
 DO $$

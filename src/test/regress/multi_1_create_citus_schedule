@@ -141,3 +141,7 @@ test: extract_deparse
 # they remain part of multi_having_pushdown on main.
 # ----------
 test: multi_having_var_remapping
+
+# PostgreSQL join-removal compatibility is absent from the N-1 Citus library.
+# Move back to multi_1_schedule at Citus 14.
+test: local_dist_join_removed_outer_join

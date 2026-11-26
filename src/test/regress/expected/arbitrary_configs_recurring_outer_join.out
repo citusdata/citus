@@ -92,6 +92,99 @@ USING (id);
    101
 (1 row)
 
+-- Dropped-column placeholders must not shift aliases or collide with live names.
+-- Only PG16+ removes the join from the transformed jointree.
+SELECT current_setting('server_version_num')::int >= 160000 AS removes_outer_join \gset
+\if :removes_outer_join
+\set removed_join_aliases '(id, "dummy-1", "dummy-5")'
+\else
+\set removed_join_aliases ''
+\endif
+SELECT COUNT(*) FROM
+local t1
+LEFT JOIN
+(
+    SELECT * FROM
+    (SELECT * FROM reference t2 JOIN distributed t3 USING (id)) p
+    JOIN
+    (SELECT * FROM reference t4 LEFT JOIN distributed t5 :removed_join_aliases USING (id)) q
+    USING(id)
+) t6
+USING (id);
+ count
+---------------------------------------------------------------------
+   101
+(1 row)
+
+-- Remap multiple replacements, including whole-row and correlated references.
+-- Return a boolean: non-MX workers do not have the table's composite type.
+SELECT COUNT(*) FROM
+local t1
+LEFT JOIN
+(
+    SELECT * FROM
+    (SELECT * FROM reference t2 JOIN distributed t3 USING (id)) p
+    JOIN
+    (SELECT t4.*, (t5 IS NULL) AS nullable_row_is_null, (SELECT t7.id) AS correlated_id
+     FROM reference t4
+     LEFT JOIN distributed t5 USING (id)
+     LEFT JOIN distributed t7 USING (id)) q
+    USING(id)
+) t6
+USING (id);
+ count
+---------------------------------------------------------------------
+   101
+(1 row)
+
+-- Without dropped columns, system-column and whole-row Vars must be remapped too.
+SELECT COUNT(*) FROM
+local t1
+LEFT JOIN
+(
+    SELECT * FROM
+    (SELECT * FROM reference t2 JOIN distributed t3 USING (id)) p
+    JOIN
+    (SELECT t4.*, (t5.ctid IS NULL) AS no_tid
+     FROM reference t4
+     LEFT JOIN distributed_dense t5 USING (id)) q
+    USING(id)
+) t6
+USING (id);
+ count
+---------------------------------------------------------------------
+   101
+(1 row)
+
+SELECT COUNT(*) FROM local LEFT JOIN dense_row_view USING (id);
+ count
+---------------------------------------------------------------------
+   101
+(1 row)
+
+-- The preserved RIGHT JOIN input has a different physical column layout.
+SELECT title FROM (
+    SELECT l.title, d.ctid
+    FROM distributed_dense d RIGHT JOIN local l USING (id)
+    WHERE l.id = 42
+) j;
+ title
+---------------------------------------------------------------------
+ 42
+(1 row)
+
+-- The join can be eliminated in one inlined copy, but a scalar subplan needs d.
+WITH joined AS NOT MATERIALIZED (
+    SELECT r.id, d.name, d.ctid AS tid
+    FROM reference r LEFT JOIN distributed_dense d USING (id)
+)
+SELECT count(*), (SELECT name FROM joined WHERE id = 42 AND tid IS NOT NULL) AS live_name
+FROM joined;
+ count | live_name
+---------------------------------------------------------------------
+   101 | 42
+(1 row)
+
 BEGIN;
   WITH cte AS (
     DELETE FROM distributed

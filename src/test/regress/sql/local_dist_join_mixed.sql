@@ -92,7 +92,10 @@ SELECT COUNT(*) FROM (distributed d1(x,y,y1) JOIN local l1(x,t) USING (x)) AS t(
 -- final queries are pushdown queries
 SELECT sum(d1.id + local.id) FROM distributed d1 JOIN local USING (id);
 SELECT sum(d1.id + local.id) OVER (PARTITION BY d1.id) FROM distributed d1 JOIN local USING (id) ORDER BY 1 DESC LIMIT 4;
+-- Join removal changes the debug plan across PostgreSQL minor versions.
+SET client_min_messages TO WARNING;
 SELECT count(*) FROM distributed d1 JOIN local USING (id) LEFT JOIN distributed d2 USING (id) ORDER BY 1 DESC LIMIT 4;
+SET client_min_messages TO DEBUG1;
 SELECT count(DISTINCT d1.name::int * local.id) FROM distributed d1 JOIN local USING (id);
 
 -- final queries are router queries
@@ -313,7 +316,6 @@ SELECT count(*) FROM distributed CROSS JOIN local WHERE distributed.id = 1;
 
 -- w count(*) it works fine as PG ignores the  inner tables
 SELECT count(*) FROM distributed LEFT JOIN local USING (id);
-SELECT count(*) FROM local LEFT JOIN distributed USING (id);
 
 SELECT id, name FROM distributed LEFT JOIN local USING (id) ORDER BY 1 LIMIT 1;
 SELECT id, name FROM local LEFT JOIN distributed USING (id) ORDER BY 1 LIMIT 1;

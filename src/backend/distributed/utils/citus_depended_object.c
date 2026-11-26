@@ -50,6 +50,7 @@
 #include "distributed/listutils.h"
 #include "distributed/log_utils.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/query_utils.h"
 #include "distributed/shared_library_init.h"
 
 /*
@@ -270,7 +271,19 @@ HideCitusDependentObjectsOnQueriesOfPgMetaTables(Node *node, void *context)
 					 * We do not use security quals because a postgres vanilla test fails
 					 * with a change of order for its result.
 					 */
-					if (!mergeJoinCondition)
+					if (RangeTableEntryIsOnNullableSideOfOuterJoin(query, varno))
+					{
+						/*
+						 * Except on the nullable side of an outer join: there the filter
+						 * must run when scanning the meta table, so that the outer join
+						 * null-extends a row whose only match is a hidden object instead
+						 * of removing the row.
+						 */
+						rangeTableEntry->securityQuals =
+							lappend(rangeTableEntry->securityQuals,
+									citusDependentObjExpr);
+					}
+					else if (!mergeJoinCondition)
 					{
 						query->jointree->quals = make_and_qual(
 							query->jointree->quals, citusDependentObjExpr);
