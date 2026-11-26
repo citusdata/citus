@@ -1,8 +1,25 @@
 BEGIN;
 SET LOCAL citus.show_shards_for_app_name_prefixes = '';
--- The following query retrieves the foreign key constraints of the table "pg_dist_background_job"
--- along with their details. This modification includes a fix for a null pointer exception that occurred
--- in the "HasRangeTableRef" method of "worker_shard_visibility". The issue was resolved with PR #7604.
+-- Describing a table reads pg_class but does not select any TOAST columns.
+SELECT c.relname
+FROM pg_class c LEFT JOIN pg_class toast ON c.reltoastrelid = toast.oid
+WHERE c.oid = 'pg_catalog.pg_class'::regclass;
+ relname
+---------------------------------------------------------------------
+ pg_class
+(1 row)
+
+-- Both pg_class aliases can be nulled by the FULL join and again by the RIGHT join.
+SELECT count(*) AS null_extended_rows
+FROM (pg_class c FULL JOIN pg_class toast ON c.reltoastrelid = toast.oid)
+RIGHT JOIN (VALUES (0::oid)) v(oid) ON c.oid = v.oid
+WHERE c.oid IS NULL AND toast.oid IS NULL;
+ null_extended_rows
+---------------------------------------------------------------------
+                  1
+(1 row)
+
+-- Find the foreign keys referencing pg_dist_background_job across nested FROM items.
 select
     ct.conname as constraint_name,
     a.attname as column_name,

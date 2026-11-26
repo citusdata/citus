@@ -15,6 +15,7 @@
 #include "catalog/namespace.h"
 #include "catalog/pg_class.h"
 #include "catalog/pg_type.h"
+#include "nodes/bitmapset.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
 #include "utils/lsyscache.h"
@@ -53,8 +54,9 @@ static bool ShouldHideShards(void);
 static bool ShouldHideShardsInternal(void);
 static bool IsPgBgWorker(void);
 static bool FilterShardsFromPgclass(Node *node, void *context);
-static Node * CreateRelationIsAKnownShardFilter(int pgClassVarno);
-static bool HasRangeTableRef(Node *node, int *varno);
+static Node * CreateRelationIsAKnownShardFilter(int pgClassVarno, Bitmapset *nullingRelids
+												);
+static bool FindRangeTableRef(Node *node, int varno, Bitmapset **nullingRelids);
 
 PG_FUNCTION_INFO_V1(citus_table_is_visible);
 PG_FUNCTION_INFO_V1(relation_is_a_known_shard);
@@ -436,7 +438,8 @@ FilterShardsFromPgclass(Node *node, void *context)
 	if (IsA(node, Query))
 	{
 		Query *query = (Query *) node;
-		MemoryContext queryContext = GetMemoryChunkContext(query);
+		MemoryContext originalContext = MemoryContextSwitchTo(GetMemoryChunkContext(query)
+															  );
 
 		/*
 		 * We process the whole rtable rather than visiting individual RangeTblEntry's
@@ -461,18 +464,14 @@ FilterShardsFromPgclass(Node *node, void *context)
 			 * Skip if pg_class is not actually queried. This is possible on
 			 * INSERT statements that insert into pg_class.
 			 */
-			if (!expression_tree_walker((Node *) query->jointree->fromlist,
-										HasRangeTableRef, &varno))
+			Bitmapset *nullingRelids = NULL;
+			if (!FindRangeTableRef((Node *) query->jointree, varno, &nullingRelids))
 			{
-				/* the query references pg_class */
 				continue;
 			}
 
-			/* make sure the expression is in the right memory context */
-			MemoryContext originalContext = MemoryContextSwitchTo(queryContext);
-
 			/* add relation_is_a_known_shard(oid) IS NOT TRUE to the quals of the query */
-			Node *newQual = CreateRelationIsAKnownShardFilter(varno);
+			Node *newQual = CreateRelationIsAKnownShardFilter(varno, nullingRelids);
 
 			/*
 			 * In PG17, MERGE queries introduce a new struct `mergeJoinCondition`.
@@ -502,10 +501,9 @@ FilterShardsFromPgclass(Node *node, void *context)
 					query->jointree->quals = newQual;
 				}
 			}
-
-			MemoryContextSwitchTo(originalContext);
 		}
 
+		MemoryContextSwitchTo(originalContext);
 		return query_tree_walker((Query *) node, FilterShardsFromPgclass, context, 0);
 	}
 
@@ -514,12 +512,15 @@ FilterShardsFromPgclass(Node *node, void *context)
 
 
 /*
- * HasRangeTableRef passed to expression_tree_walker to check if a node is a
- * RangeTblRef of the given varno is present in a fromlist.
+ * FindRangeTableRef finds a relation in this query level's FROM tree and
+ * collects the outer joins that can null it. A Var injected above the joins
+ * needs the same nulling relids as a column reference built by the parser.
  */
 static bool
-HasRangeTableRef(Node *node, int *varno)
+FindRangeTableRef(Node *node, int varno, Bitmapset **nullingRelids)
 {
+	check_stack_depth();
+
 	if (node == NULL)
 	{
 		return false;
@@ -527,11 +528,42 @@ HasRangeTableRef(Node *node, int *varno)
 
 	if (IsA(node, RangeTblRef))
 	{
-		RangeTblRef *rangeTblRef = (RangeTblRef *) node;
-		return rangeTblRef->rtindex == *varno;
+		return castNode(RangeTblRef, node)->rtindex == varno;
 	}
 
-	return expression_tree_walker(node, HasRangeTableRef, varno);
+	if (IsA(node, FromExpr))
+	{
+		Node *fromItem = NULL;
+		foreach_declared_ptr(fromItem, castNode(FromExpr, node)->fromlist)
+		{
+			if (FindRangeTableRef(fromItem, varno, nullingRelids))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	if (IsA(node, JoinExpr))
+	{
+		JoinExpr *join = castNode(JoinExpr, node);
+		bool foundOnLeft = FindRangeTableRef(join->larg, varno, nullingRelids);
+		if (!foundOnLeft && !FindRangeTableRef(join->rarg, varno, nullingRelids))
+		{
+			return false;
+		}
+
+		if (join->jointype == JOIN_FULL ||
+			(join->jointype == JOIN_LEFT && !foundOnLeft) ||
+			(join->jointype == JOIN_RIGHT && foundOnLeft))
+		{
+			*nullingRelids = bms_add_member(*nullingRelids, join->rtindex);
+		}
+		return true;
+	}
+
+	elog(ERROR, "unrecognized join tree node type: %d", (int) nodeTag(node));
+	pg_unreachable();
 }
 
 
@@ -539,30 +571,17 @@ HasRangeTableRef(Node *node, int *varno)
  * CreateRelationIsAKnownShardFilter constructs an expression of the form:
  * pg_catalog.relation_is_a_known_shard(oid) IS NOT TRUE
  *
- * The difference between "NOT pg_catalog.relation_is_a_known_shard(oid)" and
- * "pg_catalog.relation_is_a_known_shard(oid) IS NOT TRUE" is that the former
- * will return FALSE if the function returns NULL, while the second will return
- * TRUE. This difference is important in the case of outer joins, because this
- * filter might be applied on an oid that is then NULL.
+ * IS NOT TRUE, unlike NOT, preserves rows with a NULL oid from an outer join.
  */
 static Node *
-CreateRelationIsAKnownShardFilter(int pgClassVarno)
+CreateRelationIsAKnownShardFilter(int pgClassVarno, Bitmapset *nullingRelids)
 {
-	/* oid is always the first column */
-	AttrNumber oidAttNum = 1;
+	Var *oidVar = makeVar(pgClassVarno, Anum_pg_class_oid, OIDOID, -1, InvalidOid, 0);
+	oidVar->varnullingrels = nullingRelids;
 
-	Var *oidVar = makeVar(pgClassVarno, oidAttNum, OIDOID, -1, InvalidOid, 0);
-
-	/* build the call to read_intermediate_result */
-	FuncExpr *funcExpr = makeNode(FuncExpr);
-	funcExpr->funcid = RelationIsAKnownShardFuncId();
-	funcExpr->funcretset = false;
-	funcExpr->funcvariadic = false;
-	funcExpr->funcformat = 0;
-	funcExpr->funccollid = 0;
-	funcExpr->inputcollid = 0;
-	funcExpr->location = -1;
-	funcExpr->args = list_make1(oidVar);
+	FuncExpr *funcExpr = makeFuncExpr(RelationIsAKnownShardFuncId(), BOOLOID,
+									  list_make1(oidVar), InvalidOid, InvalidOid,
+									  COERCE_EXPLICIT_CALL);
 
 	BooleanTest *notExpr = makeNode(BooleanTest);
 	notExpr->booltesttype = IS_NOT_TRUE;
