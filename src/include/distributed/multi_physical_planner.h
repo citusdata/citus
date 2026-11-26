@@ -523,24 +523,6 @@ typedef struct DistributedPlan
 
 
 /*
- * SubPlanExplainOutputData Holds the EXPLAIN ANALYZE output and collected
- * statistics for a single task executed by a worker during distributed
- * query execution.
- * explainOutput — raw EXPLAIN ANALYZE output for the task
- * executionDuration — wall‑clock time taken to run the task
- * totalReceivedTupleData — total bytes of tuple data received from the worker
- */
-typedef struct SubPlanExplainOutputData
-{
-	char *explainOutput;
-	double executionDuration;
-	double executionNtuples;
-	double executionNloops;
-	uint64 totalReceivedTupleData;
-} SubPlanExplainOutputData;
-
-
-/*
  * DistributedSubPlan contains a subplan of a distributed plan. Subplans are
  * executed before the distributed query and their results are written to
  * temporary files. This is used to execute CTEs and subquery joins that
@@ -552,15 +534,6 @@ typedef struct DistributedSubPlan
 
 	uint32 subPlanId;
 	PlannedStmt *plan;
-
-	/* EXPLAIN ANALYZE instrumentations */
-	uint64 bytesSentPerWorker;
-	uint32 remoteWorkerCount;
-	double durationMillisecs;
-	bool writeLocalFile;
-	SubPlanExplainOutputData *totalExplainOutput;
-	uint32 numTasksOutput; /* actual size of the above array */
-	double ntuples; /* total tuples produced */
 } DistributedSubPlan;
 
 

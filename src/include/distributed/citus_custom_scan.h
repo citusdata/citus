@@ -32,6 +32,10 @@ typedef struct CitusScanState
 	bool executionStarted;            /* flag to check whether execution started */
 	Tuplestorestate *tuplestorestate; /* tuple store to store distributed results */
 
+	/* Per-execution data, never part of a cached or copied plan. */
+	struct SubPlanExplainReports *subPlanExplainReports;
+	bool explainingExecutedSubPlan;
+
 	/* streaming sorted merge adapter (NULL when not using sorted merge) */
 	struct SortedMergeAdapter *mergeAdapter;
 

@@ -59,8 +59,10 @@
 #include "distributed/deparse_shard_query.h"
 #include "distributed/distributed_planner.h"
 #include "distributed/executor_util.h"
+#include "distributed/hash_helpers.h"
 #include "distributed/insert_select_executor.h"
 #include "distributed/insert_select_planner.h"
+#include "distributed/intermediate_results.h"
 #include "distributed/jsonbutils.h"
 #include "distributed/listutils.h"
 #include "distributed/merge_planner.h"
@@ -85,7 +87,6 @@
 bool ExplainDistributedQueries = true;
 bool ExplainAllTasks = false;
 int ExplainAnalyzeSortMethod = EXPLAIN_ANALYZE_SORT_BY_TIME;
-extern MemoryContext SubPlanExplainAnalyzeContext;
 
 /*
  * If enabled, EXPLAIN ANALYZE output & other statistics of last worker task
@@ -95,9 +96,70 @@ static char *SavedExplainPlan = NULL;
 static double SavedExecutionDurationMillisec = 0.0;
 static double SavedExplainPlanNtuples = 0;
 static double SavedExplainPlanNloops = 0;
-extern SubPlanExplainOutputData *SubPlanExplainOutput;
-uint8 TotalExplainOutputCapacity = 0;
-uint8 NumTasksOutput = 0;
+
+typedef struct TaskReportKey
+{
+	uint64 planId;
+	uint64 shardId;
+	int planNodeId;
+	uint32 taskId;
+} TaskReportKey;
+
+StaticAssertDecl(sizeof(TaskReportKey) == 2 * sizeof(uint64) + sizeof(int) +
+				 sizeof(uint32), "TaskReportKey cannot contain padding");
+
+typedef struct SavedTaskReport
+{
+	TaskReportKey key;
+	char *plan;
+	char *query;
+	ExplainFormat format;
+	ShardPlacement *placement;
+	double duration;
+	double ntuples;
+	double nloops;
+	uint64 receivedBytes;
+	bool ambiguous;
+} SavedTaskReport;
+
+typedef struct SubPlanExplainReports
+{
+	MemoryContext context;
+	HTAB *tasks;
+	HTAB *nodes;
+	HTAB *children;
+} SubPlanExplainReports;
+
+/* Set only while executing a subplan for an enclosing EXPLAIN ANALYZE. */
+static SubPlanExplainReports *ActiveSubPlanReports = NULL;
+static PlannedStmt *ActiveSubPlanStmt = NULL;
+static QueryDesc *ActiveSubPlanQuery = NULL;
+
+typedef struct SubPlanKey
+{
+	uint64 planId;
+	int planNodeId;
+	uint32 subPlanId;
+} SubPlanKey;
+
+assert_valid_hash_key3(SubPlanKey, planId, planNodeId, subPlanId);
+
+typedef struct SavedSubPlan
+{
+	SubPlanKey key;
+	SubPlanExplainReports reports;
+	double duration;
+	uint64 bytesSent;
+	int workerCount;
+	bool writeLocalFile;
+} SavedSubPlan;
+
+typedef struct NodeRowCounts
+{
+	int planNodeId;
+	double ntuples;
+	double nloops;
+} NodeRowCounts;
 
 /* struct to save explain flags */
 typedef struct
@@ -125,7 +187,13 @@ static ExplainOptions CurrentDistributedQueryExplainOptions = {
 /* Result for a single remote EXPLAIN command */
 typedef struct RemoteExplainPlan
 {
-	int placementIndex;
+	Task *task;
+	ShardPlacement *placement;
+	char *savedPlan;
+	char *savedQuery;
+	bool formatMismatch;
+	double duration;
+	uint64 receivedBytes;
 	List *explainOutputList;
 } RemoteExplainPlan;
 
@@ -138,6 +206,8 @@ typedef struct ExplainAnalyzeDestination
 {
 	TupleDestination pub;
 	Task *originalTask;
+	SavedTaskReport *subPlanReport;
+	MemoryContext reportContext;
 	TupleDestination *originalTaskDestination;
 	TupleDesc lastSavedExplainAnalyzeTupDesc;
 } ExplainAnalyzeDestination;
@@ -198,26 +268,26 @@ static void ExplainPrintSerialize(ExplainState *es,
 								  SerializeMetrics *metrics);
 
 /* Explain functions for distributed queries */
-static void ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es);
+static void ExplainSubPlans(CitusScanState *scanState, ExplainState *es);
 static void ExplainJob(CitusScanState *scanState, Job *job, ExplainState *es,
 					   ParamListInfo params);
 static void ExplainMapMergeJob(MapMergeJob *mapMergeJob, ExplainState *es);
-static void ExplainTaskList(CitusScanState *scanState, List *taskList, ExplainState *es,
+static void ExplainTaskList(CitusScanState *scanState, List *remotePlans, ExplainState *es
+																						  ,
 							ParamListInfo params);
-static RemoteExplainPlan * RemoteExplain(Task *task, ExplainState *es, ParamListInfo
-										 params);
-static RemoteExplainPlan * GetSavedRemoteExplain(Task *task, ExplainState *es);
-static RemoteExplainPlan * FetchRemoteExplainFromWorkers(Task *task, ExplainState *es,
-														 ParamListInfo params);
-static void ExplainTask(CitusScanState *scanState, Task *task, int placementIndex,
-						List *explainOutputList,
+static void RemoteExplain(RemoteExplainPlan *remotePlan, bool savedOnly, ExplainState *es,
+						  ParamListInfo params);
+static void FetchRemoteExplainFromWorkers(RemoteExplainPlan *remotePlan, ExplainState *es,
+										  ParamListInfo params);
+static void ExplainTask(CitusScanState *scanState, RemoteExplainPlan *remotePlan,
 						ExplainState *es);
-static void ExplainTaskPlacement(ShardPlacement *taskPlacement, List *explainOutputList,
+static void ExplainTaskPlacement(RemoteExplainPlan *remotePlan,
 								 ExplainState *es);
 static StringInfo BuildRemoteExplainQuery(char *queryString, ExplainState *es);
 static const char * ExplainFormatStr(ExplainFormat format);
 static const char * ExplainSerializeStr(ExplainSerializeOption serializeOption);
 static void ExplainWorkerPlan(PlannedStmt *plannedStmt, DistributedSubPlan *subPlan,
+							  SubPlanExplainReports *reports,
 							  DestReceiver *dest,
 							  ExplainState *es,
 							  const char *queryString, ParamListInfo params,
@@ -234,8 +304,10 @@ static ExplainSerializeOption ExtractFieldExplainSerialize(Datum jsonbDoc,
 														   const char *fieldName,
 														   ExplainSerializeOption
 														   defaultValue);
-static TupleDestination * CreateExplainAnlyzeDestination(Task *task,
-														 TupleDestination *taskDest);
+static TupleDestination * CreateExplainAnalyzeDestination(CitusScanState *scanState,
+														  Task *task, TupleDestination *
+														  taskDest,
+														  const char *queryString);
 static void ExplainAnalyzeDestPutTuple(TupleDestination *self, Task *task,
 									   int placementIndex, int queryNumber,
 									   HeapTuple heapTuple, uint64 tupleLibpqSize);
@@ -258,7 +330,6 @@ static void ExplainPropertyBytes(const char *qlabel, int64 bytes, ExplainState *
 static uint64 TaskReceivedTupleData(Task *task);
 static bool ShowReceivedTupleData(CitusScanState *scanState, ExplainState *es);
 static bool PlanStateAnalyzeWalker(PlanState *planState, void *ctx);
-static void ExtractAnalyzeStats(DistributedSubPlan *subPlan, PlanState *planState);
 
 /* exports for SQL callable functions */
 PG_FUNCTION_INFO_V1(worker_last_saved_explain_analyze);
@@ -301,7 +372,7 @@ CitusExplainScan(CustomScanState *node, List *ancestors, struct ExplainState *es
 
 	if (distributedPlan->subPlanList != NIL)
 	{
-		ExplainSubPlans(distributedPlan, es);
+		ExplainSubPlans(scanState, es);
 	}
 
 	ExplainJob(scanState, distributedPlan->workerJob, es, params);
@@ -433,98 +504,173 @@ NonPushableMergeCommandExplainScan(CustomScanState *node, List *ancestors,
 
 
 /*
- * ExtractAnalyzeStats parses the EXPLAIN ANALYZE output of the pre-executed
- * subplans and injects the parsed statistics into queryDesc->planstate->instrument.
+ * ExecutorStart can rebuild a routed INSERT's task list. RouterInsertTaskList
+ * makes one task per target shard, but does not assign distinct task IDs.
+ * Other jobs, including reads without an anchor shard, use their task IDs.
+ * The distributed plan and PG plan node identify the scan in both executions
+ * of ExecutorStart, independently of the lifetime of either scan state.
  */
-static void
-ExtractAnalyzeStats(DistributedSubPlan *subPlan, PlanState *planState)
+static TaskReportKey
+MakeTaskReportKey(CitusScanState *scanState, Task *task)
 {
-	if (!planState)
+	DistributedPlan *plan = scanState->distributedPlan;
+	Job *job = plan->workerJob;
+	TaskReportKey key = {
+		.planId = plan->planId,
+		.planNodeId = scanState->customScanState.ss.ps.plan->plan_node_id,
+		.shardId = INVALID_SHARD_ID,
+		.taskId = task->taskId
+	};
+
+	if (job->deferredPruning && job->jobQuery->commandType == CMD_INSERT &&
+		task->taskType == MODIFY_TASK && task->anchorShardId != INVALID_SHARD_ID)
 	{
-		return;
+		key.shardId = task->anchorShardId;
+		key.taskId = INVALID_TASK_ID;
 	}
 
-#if PG_VERSION_NUM >= PG_VERSION_19
-	NodeInstrumentation *instr = planState->instrument;
-#else
-	Instrumentation *instr = planState->instrument;
-#endif
-	if (!IsA(planState, CustomScanState))
+	return key;
+}
+
+
+static SavedTaskReport *
+FindTaskReport(CitusScanState *scanState, Task *task)
+{
+	if (!scanState->subPlanExplainReports || !scanState->subPlanExplainReports->tasks)
 	{
-#if PG_VERSION_NUM >= PG_VERSION_19
-		NodeInstrumentation *nodeInstr = planState->instrument;
-		nodeInstr->ntuples = subPlan->ntuples;
-		nodeInstr->nloops = 1; /* subplan nodes are executed only once */
-#else
-		instr->ntuples = subPlan->ntuples;
-		instr->nloops = 1; /* subplan nodes are executed only once */
-#endif
-		return;
+		return NULL;
 	}
 
-	Assert(IsA(planState, CustomScanState));
+	TaskReportKey key = MakeTaskReportKey(scanState, task);
+	SavedTaskReport *report = hash_search(scanState->subPlanExplainReports->tasks,
+										  &key, HASH_FIND, NULL);
+	return (report && !report->ambiguous && report->plan) ? report : NULL;
+}
 
-	if (subPlan->numTasksOutput <= 0)
+
+/*
+ * Keep reports in the enclosing executor's query context, not in the portal
+ * which is dropped after each subplan, or in a potentially cached plan.
+ * Nested subplans get their own reports in the same query context.
+ */
+static SubPlanKey
+MakeSubPlanKey(CitusScanState *scanState, DistributedSubPlan *subPlan)
+{
+	SubPlanKey key = {
+		.planId = scanState->distributedPlan->planId,
+		.planNodeId = scanState->customScanState.ss.ps.plan->plan_node_id,
+		.subPlanId = subPlan->subPlanId
+	};
+	return key;
+}
+
+
+void
+ExecuteSubPlanForExplainAnalyze(CitusScanState *scanState, DistributedSubPlan *subPlan,
+								DestReceiver *dest, int workerCount, bool writeLocalFile)
+{
+	SubPlanExplainReports *parent = scanState->subPlanExplainReports;
+	if (parent == NULL)
 	{
-		return;
+		MemoryContext context = ScanStateGetExecutorState(scanState)->es_query_cxt;
+		parent = MemoryContextAllocZero(context, sizeof(SubPlanExplainReports));
+		parent->context = context;
+		scanState->subPlanExplainReports = parent;
 	}
 
-	ListCell *lc;
-	int tasksOutput = 0;
-	double tasksNtuples = 0;
-	double tasksNloops = 0;
-	memset(instr, 0, sizeof(*instr));
-	DistributedPlan *newdistributedPlan =
-		((CitusScanState *) planState)->distributedPlan;
-
-	/*
-	 * Inject the earlier executed results—extracted from the workers' EXPLAIN output—
-	 * into the newly created tasks.
-	 */
-	foreach(lc, newdistributedPlan->workerJob->taskList)
+	MemoryContext oldContext = MemoryContextSwitchTo(parent->context);
+	if (!parent->children)
 	{
-		Task *task = (Task *) lfirst(lc);
-		uint32 taskId = task->taskId;
+		parent->children = CreateSimpleHash(SubPlanKey, SavedSubPlan);
+	}
+	SubPlanKey key = MakeSubPlanKey(scanState, subPlan);
+	SavedSubPlan *saved = hash_search(parent->children, &key, HASH_ENTER, NULL);
+	saved->reports = (SubPlanExplainReports) {
+		.context = parent->context,
+		.tasks = CreateSimpleHash(TaskReportKey, SavedTaskReport),
+		.nodes = CreateSimpleHash(int, NodeRowCounts)
+	};
+	saved->workerCount = workerCount;
+	saved->writeLocalFile = writeLocalFile;
+	MemoryContextSwitchTo(oldContext);
 
-		if (tasksOutput > subPlan->numTasksOutput)
-		{
-			break;
-		}
+	SubPlanExplainReports *previous = ActiveSubPlanReports;
+	PlannedStmt *previousStmt = ActiveSubPlanStmt;
+	QueryDesc *previousQuery = ActiveSubPlanQuery;
+	instr_time start;
+	INSTR_TIME_SET_CURRENT(start);
+	PG_TRY();
+	{
+		ActiveSubPlanReports = &saved->reports;
+		ActiveSubPlanStmt = subPlan->plan;
+		ActiveSubPlanQuery = NULL;
+		ExecutePlanIntoDestReceiver(subPlan->plan, NULL, dest);
+	}
+	PG_FINALLY();
+	{
+		ActiveSubPlanReports = previous;
+		ActiveSubPlanStmt = previousStmt;
+		ActiveSubPlanQuery = previousQuery;
+	}
+	PG_END_TRY();
 
-		if (!subPlan->totalExplainOutput[taskId].explainOutput)
-		{
-			continue;
-		}
+	saved->duration = elapsed_time(&start) * 1000;
+	saved->bytesSent = RemoteFileDestReceiverBytesSent(dest);
+}
 
-		/*
-		 * Now feed the earlier saved output, which will be used
-		 * by RemoteExplain() when printing tasks
-		 */
-		MemoryContext taskContext = GetMemoryChunkContext(task);
-		task->totalReceivedTupleData =
-			subPlan->totalExplainOutput[taskId].totalReceivedTupleData;
-		task->fetchedExplainAnalyzeExecutionDuration =
-			subPlan->totalExplainOutput[taskId].executionDuration;
-		task->fetchedExplainAnalyzePlan =
-			MemoryContextStrdup(taskContext,
-								subPlan->totalExplainOutput[taskId].explainOutput);
-		tasksNtuples += subPlan->totalExplainOutput[taskId].executionNtuples;
-		tasksNloops = subPlan->totalExplainOutput[taskId].executionNloops;
 
-		subPlan->totalExplainOutput[taskId].explainOutput = NULL;
-		tasksOutput++;
+bool
+BeginSubPlanInstrumentation(QueryDesc *queryDesc, int eflags)
+{
+	if (queryDesc->plannedstmt != ActiveSubPlanStmt || ActiveSubPlanQuery ||
+		(eflags & EXEC_FLAG_EXPLAIN_ONLY))
+	{
+		return false;
 	}
 
-#if PG_VERSION_NUM >= PG_VERSION_19
+	ActiveSubPlanQuery = queryDesc;
+	queryDesc->instrument_options |= INSTRUMENT_ROWS;
+	return true;
+}
+
+
+void
+AttachSubPlanReports(QueryDesc *queryDesc)
+{
+	/* Bind only this portal's scans. An unrelated cursor can outlive this query. */
+	Assert(queryDesc == ActiveSubPlanQuery);
+	PlanStateAnalyzeWalker(queryDesc->planstate, ActiveSubPlanReports);
+}
+
+
+static bool
+SaveNodeRowCounts(PlanState *node, void *context)
+{
+	if (node == NULL)
 	{
-		NodeInstrumentation *nodeInstr = planState->instrument;
-		nodeInstr->ntuples = tasksNtuples;
-		nodeInstr->nloops = tasksNloops;
+		return false;
 	}
-#else
-	instr->ntuples = tasksNtuples;
-	instr->nloops = tasksNloops;
-#endif
+
+	if (node->instrument)
+	{
+		int nodeId = node->plan->plan_node_id;
+		NodeRowCounts *counts = hash_search(context, &nodeId, HASH_ENTER, NULL);
+
+		/* Include the current cycle without ending it on the running executor. */
+		counts->ntuples = node->instrument->ntuples + node->instrument->tuplecount;
+		counts->nloops = node->instrument->nloops + (node->instrument->running ? 1 : 0);
+	}
+	return planstate_tree_walker(node, SaveNodeRowCounts, context);
+}
+
+
+void
+SaveSubPlanRowCounts(QueryDesc *queryDesc)
+{
+	if (queryDesc == ActiveSubPlanQuery && queryDesc->plannedstmt == ActiveSubPlanStmt)
+	{
+		SaveNodeRowCounts(queryDesc->planstate, ActiveSubPlanReports->nodes);
+	}
 }
 
 
@@ -535,8 +681,9 @@ ExtractAnalyzeStats(DistributedSubPlan *subPlan, PlanState *planState)
  * planning time and set it to 0.
  */
 static void
-ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es)
+ExplainSubPlans(CitusScanState *scanState, ExplainState *es)
 {
+	DistributedPlan *distributedPlan = scanState->distributedPlan;
 	ListCell *subPlanCell = NULL;
 	uint64 planId = distributedPlan->planId;
 
@@ -586,34 +733,46 @@ ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es)
 
 		ExplainOpenGroup("Subplan", NULL, true, es);
 
-		if (es->analyze)
+		SavedSubPlan *saved = NULL;
+		if (es->analyze && scanState->subPlanExplainReports &&
+			scanState->subPlanExplainReports->children)
+		{
+			SubPlanKey key = MakeSubPlanKey(scanState, subPlan);
+			saved = hash_search(scanState->subPlanExplainReports->children, &key,
+								HASH_FIND, NULL);
+		}
+		if (saved)
 		{
 			if (es->timing)
 			{
-				ExplainPropertyFloat("Subplan Duration", "ms", subPlan->durationMillisecs,
+				ExplainPropertyFloat("Subplan Duration", "ms", saved->duration,
 									 2, es);
 			}
 
 			ExplainPropertyBytes("Intermediate Data Size",
-								 subPlan->bytesSentPerWorker, es);
+								 saved->bytesSent, es);
 
 			StringInfo destination = makeStringInfo();
-			if (subPlan->remoteWorkerCount && subPlan->writeLocalFile)
+			if (saved->workerCount && saved->writeLocalFile)
 			{
 				appendStringInfo(destination, "Send to %d nodes, write locally",
-								 subPlan->remoteWorkerCount);
+								 saved->workerCount);
 			}
-			else if (subPlan->writeLocalFile)
+			else if (saved->writeLocalFile)
 			{
 				appendStringInfoString(destination, "Write locally");
 			}
 			else
 			{
 				appendStringInfo(destination, "Send to %d nodes",
-								 subPlan->remoteWorkerCount);
+								 saved->workerCount);
 			}
 
 			ExplainPropertyText("Result destination", destination->data, es);
+		}
+		else if (es->analyze)
+		{
+			ExplainPropertyText("Subplan measurements", "unavailable", es);
 		}
 
 		INSTR_TIME_SET_ZERO(planduration);
@@ -640,7 +799,8 @@ ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es)
 		}
 
 		/* Execute EXPLAIN without ANALYZE */
-		ExplainWorkerPlan(plan, subPlan, dest, es, queryString, params, NULL,
+		ExplainWorkerPlan(plan, subPlan, saved ? &saved->reports : NULL, dest, es,
+						  queryString, params, NULL,
 						  &planduration,
 						  (es->buffers ? &bufusage : NULL),
 						  (es->memory ? &mem_counters : NULL),
@@ -705,17 +865,50 @@ ExplainJob(CitusScanState *scanState, Job *job, ExplainState *es,
 
 	ExplainPropertyInteger("Task Count", NULL, taskCount, es);
 
-	if (ShowReceivedTupleData(scanState, es))
+	List *remotePlans = NIL;
+	uint64 totalReceivedBytes = 0;
+	bool complete = true;
+	Task *task = NULL;
+	foreach_declared_ptr(task, taskList)
 	{
-		Task *task = NULL;
-		uint64 totalReceivedTupleDataForAllTasks = 0;
-		foreach_declared_ptr(task, taskList)
+		RemoteExplainPlan *remotePlan = palloc0(sizeof(RemoteExplainPlan));
+		remotePlan->task = task;
+		if (es->analyze && scanState->explainingExecutedSubPlan)
 		{
-			totalReceivedTupleDataForAllTasks += TaskReceivedTupleData(task);
+			SavedTaskReport *report = FindTaskReport(scanState, task);
+			if (report != NULL)
+			{
+				remotePlan->savedPlan = report->plan;
+				remotePlan->savedQuery = report->query;
+				remotePlan->formatMismatch = report->format != es->format;
+				remotePlan->placement = report->placement;
+				remotePlan->duration = report->duration;
+				remotePlan->receivedBytes = report->receivedBytes;
+			}
+			else
+			{
+				complete = false;
+			}
 		}
-		ExplainPropertyBytes("Tuple data received from nodes",
-							 totalReceivedTupleDataForAllTasks,
-							 es);
+		else if (es->analyze)
+		{
+			remotePlan->savedPlan = task->fetchedExplainAnalyzePlan;
+			if (remotePlan->savedPlan)
+			{
+				remotePlan->placement = list_nth(task->taskPlacementList,
+												 task->fetchedExplainAnalyzePlacementIndex
+												 );
+			}
+			remotePlan->duration = task->fetchedExplainAnalyzeExecutionDuration;
+			remotePlan->receivedBytes = TaskReceivedTupleData(task);
+		}
+		totalReceivedBytes += remotePlan->receivedBytes;
+		remotePlans = lappend(remotePlans, remotePlan);
+	}
+
+	if (complete && ShowReceivedTupleData(scanState, es))
+	{
+		ExplainPropertyBytes("Tuple data received from nodes", totalReceivedBytes, es);
 	}
 
 	if (dependentJobCount > 0)
@@ -743,7 +936,7 @@ ExplainJob(CitusScanState *scanState, Job *job, ExplainState *es,
 	{
 		ExplainOpenGroup("Tasks", "Tasks", false, es);
 
-		ExplainTaskList(scanState, taskList, es, params);
+		ExplainTaskList(scanState, remotePlans, es, params);
 
 		ExplainCloseGroup("Tasks", "Tasks", false, es);
 	}
@@ -839,28 +1032,25 @@ ExplainMapMergeJob(MapMergeJob *mapMergeJob, ExplainState *es)
 
 
 /*
- * CompareTasksByFetchedExplainAnalyzeDuration is a helper function to compare two tasks by their execution duration.
+ * Order reports by decreasing duration, or by task ID for deterministic output.
  */
 static int
-CompareTasksByFetchedExplainAnalyzeDuration(const void *leftElement, const
-											void *rightElement)
+CompareReportsByDuration(const void *leftElement, const void *rightElement)
 {
-	const Task *leftTask = *((const Task **) leftElement);
-	const Task *rightTask = *((const Task **) rightElement);
+	const RemoteExplainPlan *left = *((RemoteExplainPlan **) leftElement);
+	const RemoteExplainPlan *right = *((RemoteExplainPlan **) rightElement);
 
-	double leftTaskExecutionDuration = leftTask->fetchedExplainAnalyzeExecutionDuration;
-	double rightTaskExecutionDuration = rightTask->fetchedExplainAnalyzeExecutionDuration;
+	return (left->duration < right->duration) - (left->duration > right->duration);
+}
 
-	double diff = leftTaskExecutionDuration - rightTaskExecutionDuration;
-	if (diff > 0)
-	{
-		return -1;
-	}
-	else if (diff < 0)
-	{
-		return 1;
-	}
-	return 0;
+
+static int
+CompareReportsByTaskId(const void *leftElement, const void *rightElement)
+{
+	const RemoteExplainPlan *left = *((RemoteExplainPlan **) leftElement);
+	const RemoteExplainPlan *right = *((RemoteExplainPlan **) rightElement);
+
+	return CompareTasksByTaskId(&left->task, &right->task);
 }
 
 
@@ -869,40 +1059,32 @@ CompareTasksByFetchedExplainAnalyzeDuration(const void *leftElement, const
  * in taskList, or all tasks if citus.explain_all_tasks is on.
  */
 static void
-ExplainTaskList(CitusScanState *scanState, List *taskList, ExplainState *es,
+ExplainTaskList(CitusScanState *scanState, List *remotePlans, ExplainState *es,
 				ParamListInfo params)
 {
-	List *remoteExplainList = NIL;
-
 	/* if tasks are executed, we sort them by time; unless we are on a test env */
 	if (es->analyze && ExplainAnalyzeSortMethod == EXPLAIN_ANALYZE_SORT_BY_TIME)
 	{
 		/* sort by execution duration only in case of ANALYZE */
-		taskList = SortList(taskList, CompareTasksByFetchedExplainAnalyzeDuration);
+		remotePlans = SortList(remotePlans, CompareReportsByDuration);
 	}
 	else
 	{
 		/* make sure that the output is consistent */
-		taskList = SortList(taskList, CompareTasksByTaskId);
+		remotePlans = SortList(remotePlans, CompareReportsByTaskId);
 	}
 
-	Task *task = NULL;
-	foreach_declared_ptr(task, taskList)
+	RemoteExplainPlan *remotePlan = NULL;
+	foreach_declared_ptr(remotePlan, remotePlans)
 	{
-		RemoteExplainPlan *remoteExplain = RemoteExplain(task, es, params);
-		remoteExplainList = lappend(remoteExplainList, remoteExplain);
+		RemoteExplain(remotePlan, es->analyze && scanState->explainingExecutedSubPlan,
+					  es, params);
+		ExplainTask(scanState, remotePlan, es);
 
 		if (!ExplainAllTasks)
 		{
 			break;
 		}
-	}
-
-	RemoteExplainPlan *remoteExplain = NULL;
-	forboth_ptr(task, taskList, remoteExplain, remoteExplainList)
-	{
-		ExplainTask(scanState, task, remoteExplain->placementIndex,
-					remoteExplain->explainOutputList, es);
 	}
 }
 
@@ -910,35 +1092,27 @@ ExplainTaskList(CitusScanState *scanState, List *taskList, ExplainState *es,
 /*
  * RemoteExplain fetches the remote EXPLAIN output for a single task.
  */
-static RemoteExplainPlan *
-RemoteExplain(Task *task, ExplainState *es, ParamListInfo params)
+static void
+RemoteExplain(RemoteExplainPlan *remotePlan, bool savedOnly, ExplainState *es,
+			  ParamListInfo params)
 {
-	/*
-	 * For EXPLAIN EXECUTE we still use the old method, so task->fetchedExplainAnalyzePlan
-	 * can be NULL for some cases of es->analyze == true.  A distributed subplan can
-	 * also end up here when its re-planned task ids do not match the ids its saved
-	 * output was stored under; that is a known bug, see #8952.
-	 */
-	if (es->analyze && task->fetchedExplainAnalyzePlan)
+	if (remotePlan->formatMismatch)
 	{
-		return GetSavedRemoteExplain(task, es);
+		/* A nested auto_explain can request a different format than the collector. */
+		return;
 	}
-	else
+	if (!remotePlan->savedPlan)
 	{
-		return FetchRemoteExplainFromWorkers(task, es, params);
+		/*
+		 * Plain EXPLAIN and legacy EXPLAIN EXECUTE can require a live plan.
+		 * Never execute SQL to fill in missing measurements of a completed subplan.
+		 */
+		if (!savedOnly)
+		{
+			FetchRemoteExplainFromWorkers(remotePlan, es, params);
+		}
+		return;
 	}
-}
-
-
-/*
- * GetSavedRemoteExplain creates a remote EXPLAIN output from information saved
- * in task.
- */
-static RemoteExplainPlan *
-GetSavedRemoteExplain(Task *task, ExplainState *es)
-{
-	RemoteExplainPlan *remotePlan = (RemoteExplainPlan *) palloc0(
-		sizeof(RemoteExplainPlan));
 
 	/*
 	 * Similar to postgres' ExplainQuery(), we split by newline only for
@@ -949,19 +1123,15 @@ GetSavedRemoteExplain(Task *task, ExplainState *es)
 		/*
 		 * We limit the size of EXPLAIN plans to RSIZE_MAX_MEM (256MB).
 		 */
-		remotePlan->explainOutputList = SplitString(task->fetchedExplainAnalyzePlan,
+		remotePlan->explainOutputList = SplitString(remotePlan->savedPlan,
 													'\n', RSIZE_MAX_MEM);
 	}
 	else
 	{
 		StringInfo explainAnalyzeString = makeStringInfo();
-		appendStringInfoString(explainAnalyzeString, task->fetchedExplainAnalyzePlan);
+		appendStringInfoString(explainAnalyzeString, remotePlan->savedPlan);
 		remotePlan->explainOutputList = list_make1(explainAnalyzeString);
 	}
-
-	remotePlan->placementIndex = task->fetchedExplainAnalyzePlacementIndex;
-
-	return remotePlan;
 }
 
 
@@ -970,14 +1140,13 @@ GetSavedRemoteExplain(Task *task, ExplainState *es)
  * task by querying it from worker nodes. It tries each shard placement until
  * one succeeds or all failed.
  */
-static RemoteExplainPlan *
-FetchRemoteExplainFromWorkers(Task *task, ExplainState *es, ParamListInfo params)
+static void
+FetchRemoteExplainFromWorkers(RemoteExplainPlan *remotePlan, ExplainState *es,
+							  ParamListInfo params)
 {
+	Task *task = remotePlan->task;
 	List *taskPlacementList = task->taskPlacementList;
 	int placementCount = list_length(taskPlacementList);
-
-	RemoteExplainPlan *remotePlan = (RemoteExplainPlan *) palloc0(
-		sizeof(RemoteExplainPlan));
 
 	StringInfo explainQuery = BuildRemoteExplainQuery(TaskQueryString(task), es);
 
@@ -992,7 +1161,7 @@ FetchRemoteExplainFromWorkers(Task *task, ExplainState *es, ParamListInfo params
 		ShardPlacement *taskPlacement = list_nth(taskPlacementList, placementIndex);
 		int connectionFlags = 0;
 
-		remotePlan->placementIndex = placementIndex;
+		remotePlan->placement = taskPlacement;
 
 		MultiConnection *connection = GetPlacementConnection(connectionFlags,
 															 taskPlacement, NULL);
@@ -1058,20 +1227,14 @@ FetchRemoteExplainFromWorkers(Task *task, ExplainState *es, ParamListInfo params
 			break;
 		}
 	}
-
-	return remotePlan;
 }
 
 
 /*
- * ExplainTask shows the EXPLAIN output for an single task. The output has been
- * fetched from the placement at index placementIndex. If explainOutputList is NIL,
- * then the EXPLAIN output could not be fetched from any placement.
+ * ExplainTask prints the plan with the placement and bytes of the same execution.
  */
 static void
-ExplainTask(CitusScanState *scanState, Task *task, int placementIndex,
-			List *explainOutputList,
-			ExplainState *es)
+ExplainTask(CitusScanState *scanState, RemoteExplainPlan *remotePlan, ExplainState *es)
 {
 	ExplainOpenGroup("Task", NULL, true, es);
 
@@ -1084,23 +1247,31 @@ ExplainTask(CitusScanState *scanState, Task *task, int placementIndex,
 
 	if (es->verbose)
 	{
-		const char *queryText = TaskQueryString(task);
-		ExplainPropertyText("Query", queryText, es);
+		bool savedOnly = es->analyze && scanState->explainingExecutedSubPlan;
+		const char *queryText = savedOnly ? remotePlan->savedQuery :
+								TaskQueryString(remotePlan->task);
+		if (queryText)
+		{
+			ExplainPropertyText("Query", queryText, es);
+		}
 	}
 
-	if (ShowReceivedTupleData(scanState, es))
+	bool missing = es->analyze && scanState->explainingExecutedSubPlan &&
+				   !remotePlan->savedPlan;
+	if (!missing && ShowReceivedTupleData(scanState, es))
 	{
 		ExplainPropertyBytes("Tuple data received from node",
-							 TaskReceivedTupleData(task),
+							 remotePlan->receivedBytes,
 							 es);
 	}
 
-	if (explainOutputList != NIL)
+	if (missing)
 	{
-		List *taskPlacementList = task->taskPlacementList;
-		ShardPlacement *taskPlacement = list_nth(taskPlacementList, placementIndex);
-
-		ExplainTaskPlacement(taskPlacement, explainOutputList, es);
+		ExplainPropertyText("Worker measurements", "unavailable", es);
+	}
+	else if (remotePlan->explainOutputList != NIL || remotePlan->formatMismatch)
+	{
+		ExplainTaskPlacement(remotePlan, es);
 	}
 	else
 	{
@@ -1122,9 +1293,9 @@ ExplainTask(CitusScanState *scanState, Task *task, int placementIndex,
  * output.
  */
 static void
-ExplainTaskPlacement(ShardPlacement *taskPlacement, List *explainOutputList,
-					 ExplainState *es)
+ExplainTaskPlacement(RemoteExplainPlan *remotePlan, ExplainState *es)
 {
+	ShardPlacement *taskPlacement = remotePlan->placement;
 	int savedIndentation = es->indent;
 	StringInfo nodeAddress = makeStringInfo();
 	char *nodeName = taskPlacement->nodeName;
@@ -1136,6 +1307,11 @@ ExplainTaskPlacement(ShardPlacement *taskPlacement, List *explainOutputList,
 	appendStringInfo(nodeAddress, "host=%s port=%d dbname=%s", nodeName, nodePort,
 					 nodeDatabase);
 	ExplainPropertyText("Node", nodeAddress->data, es);
+	if (remotePlan->formatMismatch)
+	{
+		ExplainPropertyText("Saved Remote Plan", remotePlan->savedPlan, es);
+		return;
+	}
 
 	ExplainOpenGroup("Remote Plan", "Remote Plan", false, es);
 
@@ -1145,7 +1321,7 @@ ExplainTaskPlacement(ShardPlacement *taskPlacement, List *explainOutputList,
 		appendStringInfoChar(es->str, '\n');
 	}
 
-	foreach(explainOutputCell, explainOutputList)
+	foreach(explainOutputCell, remotePlan->explainOutputList)
 	{
 		StringInfo rowString = (StringInfo) lfirst(explainOutputCell);
 
@@ -1463,7 +1639,8 @@ worker_save_query_explain_analyze(PG_FUNCTION_ARGS)
 	}
 
 	/* do the actual EXPLAIN ANALYZE */
-	ExplainWorkerPlan(plan, NULL, tupleStoreDest, es, queryString, boundParams, NULL,
+	ExplainWorkerPlan(plan, NULL, NULL, tupleStoreDest, es, queryString, boundParams, NULL
+																						  ,
 					  &planDuration,
 					  (es->buffers ? &bufusage : NULL),
 					  (es->memory ? &mem_counters : NULL),
@@ -1677,16 +1854,43 @@ CitusExplainOneQuery(Query *query, int cursorOptions, IntoClause *into,
 
 
 /*
- * CreateExplainAnlyzeDestination creates a destination suitable for collecting
+ * CreateExplainAnalyzeDestination creates a destination suitable for collecting
  * explain analyze output from workers.
  */
 static TupleDestination *
-CreateExplainAnlyzeDestination(Task *task, TupleDestination *taskDest)
+CreateExplainAnalyzeDestination(CitusScanState *scanState, Task *task,
+								TupleDestination *taskDest, const char *queryString)
 {
 	ExplainAnalyzeDestination *tupleDestination = palloc0(
 		sizeof(ExplainAnalyzeDestination));
 	tupleDestination->originalTask = task;
 	tupleDestination->originalTaskDestination = taskDest;
+	if (scanState->explainingExecutedSubPlan)
+	{
+		SubPlanExplainReports *reports = scanState->subPlanExplainReports;
+		TaskReportKey key = MakeTaskReportKey(scanState, task);
+		bool found = false;
+		SavedTaskReport *report = hash_search(reports->tasks, &key,
+											  HASH_ENTER, &found);
+		if (found)
+		{
+			/* Never let two executions silently overwrite one another's report. */
+			report->ambiguous = true;
+		}
+		else
+		{
+			*report = (SavedTaskReport) {
+				.key = key
+			};
+		}
+		tupleDestination->subPlanReport = report;
+		tupleDestination->reportContext = reports->context;
+		if (!found)
+		{
+			report->format = CurrentDistributedQueryExplainOptions.format;
+			report->query = MemoryContextStrdup(reports->context, queryString);
+		}
+	}
 
 	TupleDesc lastSavedExplainAnalyzeTupDesc = CreateTemplateTupleDesc(4);
 
@@ -1707,51 +1911,6 @@ CreateExplainAnlyzeDestination(Task *task, TupleDestination *taskDest)
 
 
 /*
- * EnsureExplainOutputCapacity is to ensure capacity for new entries. Input
- * parameter requiredSize is minimum number of elements needed.
- */
-static void
-EnsureExplainOutputCapacity(int requiredSize)
-{
-	if (requiredSize < TotalExplainOutputCapacity)
-	{
-		return;
-	}
-
-	int newCapacity =
-		(TotalExplainOutputCapacity == 0) ? 32 : TotalExplainOutputCapacity * 2;
-
-	while (newCapacity <= requiredSize)
-	{
-		newCapacity *= 2;
-	}
-
-	if (SubPlanExplainOutput == NULL)
-	{
-		SubPlanExplainOutput =
-			(SubPlanExplainOutputData *) MemoryContextAllocZero(
-				SubPlanExplainAnalyzeContext,
-				newCapacity *
-				sizeof(SubPlanExplainOutputData));
-	}
-	else
-	{
-		/* Use repalloc and manually zero the new memory */
-		int oldSize = TotalExplainOutputCapacity * sizeof(SubPlanExplainOutputData);
-		int newSize = newCapacity * sizeof(SubPlanExplainOutputData);
-
-		SubPlanExplainOutput =
-			(SubPlanExplainOutputData *) repalloc(SubPlanExplainOutput, newSize);
-
-		/* Zero out the newly allocated memory */
-		MemSet((char *) SubPlanExplainOutput + oldSize, 0, newSize - oldSize);
-	}
-
-	TotalExplainOutputCapacity = newCapacity;
-}
-
-
-/*
  * ExplainAnalyzeDestPutTuple implements TupleDestination->putTuple
  * for ExplainAnalyzeDestination.
  */
@@ -1760,8 +1919,6 @@ ExplainAnalyzeDestPutTuple(TupleDestination *self, Task *task,
 						   int placementIndex, int queryNumber,
 						   HeapTuple heapTuple, uint64 tupleLibpqSize)
 {
-	uint32 taskId = task->taskId;
-
 	ExplainAnalyzeDestination *tupleDestination = (ExplainAnalyzeDestination *) self;
 	if (queryNumber == 0)
 	{
@@ -1769,13 +1926,6 @@ ExplainAnalyzeDestPutTuple(TupleDestination *self, Task *task,
 		originalTupDest->putTuple(originalTupDest, task, placementIndex, 0, heapTuple,
 								  tupleLibpqSize);
 		tupleDestination->originalTask->totalReceivedTupleData += tupleLibpqSize;
-
-		if (SubPlanExplainAnalyzeContext)
-		{
-			EnsureExplainOutputCapacity(taskId + 1);
-			SubPlanExplainOutput[taskId].totalReceivedTupleData =
-				tupleDestination->originalTask->totalReceivedTupleData;
-		}
 	}
 	else if (queryNumber == 1)
 	{
@@ -1805,6 +1955,27 @@ ExplainAnalyzeDestPutTuple(TupleDestination *self, Task *task,
 		double fetchedExplainAnalyzeTuples = DatumGetFloat8(executionTuples);
 		double fetchedExplainAnalyzeLoops = DatumGetFloat8(executionLoops);
 
+		SavedTaskReport *report = tupleDestination->subPlanReport;
+		if (report != NULL)
+		{
+			if (!report->ambiguous)
+			{
+				MemoryContext oldContext = MemoryContextSwitchTo(tupleDestination->
+																 reportContext);
+				ShardPlacement *placement = list_nth(task->taskPlacementList,
+													 placementIndex);
+				report->placement = copyObject(placement);
+				report->plan = pstrdup(fetchedExplainAnalyzePlan);
+				report->duration = fetchedExplainAnalyzeExecutionDuration;
+				report->ntuples = fetchedExplainAnalyzeTuples;
+				report->nloops = fetchedExplainAnalyzeLoops;
+				report->receivedBytes = TaskReceivedTupleData(tupleDestination->
+															  originalTask);
+				MemoryContextSwitchTo(oldContext);
+			}
+			return;
+		}
+
 		/*
 		 * Allocate fetchedExplainAnalyzePlan in the same context as the Task, since we are
 		 * currently in execution context and a Task can span multiple executions.
@@ -1829,20 +2000,6 @@ ExplainAnalyzeDestPutTuple(TupleDestination *self, Task *task,
 			placementIndex;
 		tupleDestination->originalTask->fetchedExplainAnalyzeExecutionDuration =
 			fetchedExplainAnalyzeExecutionDuration;
-
-		/* We should build tupleDestination in subPlan similar to the above */
-		if (SubPlanExplainAnalyzeContext)
-		{
-			EnsureExplainOutputCapacity(taskId + 1);
-			SubPlanExplainOutput[taskId].explainOutput =
-				MemoryContextStrdup(SubPlanExplainAnalyzeContext,
-									fetchedExplainAnalyzePlan);
-			SubPlanExplainOutput[taskId].executionDuration =
-				fetchedExplainAnalyzeExecutionDuration;
-			SubPlanExplainOutput[taskId].executionNtuples = fetchedExplainAnalyzeTuples;
-			SubPlanExplainOutput[taskId].executionNloops = fetchedExplainAnalyzeLoops;
-			NumTasksOutput++;
-		}
 	}
 	else
 	{
@@ -1905,14 +2062,7 @@ ExplainAnalyzeDestTupleDescForQuery(TupleDestination *self, int queryNumber)
 bool
 RequestedForExplainAnalyze(CitusScanState *node)
 {
-	/*
-	 * When running a distributed plan—either the root plan or a subplan’s
-	 * distributed fragment—we need to know if we’re under EXPLAIN ANALYZE.
-	 * Subplans can’t receive the EXPLAIN ANALYZE flag directly, so we use
-	 * SubPlanExplainAnalyzeContext as a flag to indicate that context.
-	 */
-	return (node->customScanState.ss.ps.state->es_instrument != 0) ||
-		   (SubPlanLevel > 0 && SubPlanExplainAnalyzeContext);
+	return node->customScanState.ss.ps.state->es_instrument != 0;
 }
 
 
@@ -1921,7 +2071,7 @@ RequestedForExplainAnalyze(CitusScanState *node)
  * these tasks, fetchedExplainAnalyzePlan of originalTaskList should be populated.
  */
 List *
-ExplainAnalyzeTaskList(List *originalTaskList,
+ExplainAnalyzeTaskList(CitusScanState *scanState,
 					   TupleDestination *defaultTupleDest,
 					   TupleDesc tupleDesc,
 					   ParamListInfo params)
@@ -1929,7 +2079,7 @@ ExplainAnalyzeTaskList(List *originalTaskList,
 	List *explainAnalyzeTaskList = NIL;
 	Task *originalTask = NULL;
 
-	foreach_declared_ptr(originalTask, originalTaskList)
+	foreach_declared_ptr(originalTask, scanState->distributedPlan->workerJob->taskList)
 	{
 		if (originalTask->queryCount != 1)
 		{
@@ -1963,7 +2113,8 @@ ExplainAnalyzeTaskList(List *originalTaskList,
 											 defaultTupleDest;
 
 		explainAnalyzeTask->tupleDest =
-			CreateExplainAnlyzeDestination(originalTask, originalTaskDest);
+			CreateExplainAnalyzeDestination(scanState, originalTask, originalTaskDest,
+											queryString);
 
 		explainAnalyzeTaskList = lappend(explainAnalyzeTaskList, explainAnalyzeTask);
 	}
@@ -2233,16 +2384,36 @@ ExplainOneQuery(Query *query, int cursorOptions,
 
 
 /*
- * PlanStateAnalyzeWalker Tree walker callback that visits each PlanState node in the
- * plan tree and extracts analyze statistics from CustomScanState tasks using
- * ExtractAnalyzeStats. Always returns false to recurse into all children.
+ * Prepare each rebuilt scan to display saved measurements only. Descend through
+ * ordinary PostgreSQL nodes as well: a distributed scan need not be the root.
  */
 static bool
 PlanStateAnalyzeWalker(PlanState *planState, void *ctx)
 {
-	DistributedSubPlan *subplan = (DistributedSubPlan *) ctx;
-	ExtractAnalyzeStats(subplan, planState);
-	return false;
+	if (planState == NULL)
+	{
+		return false;
+	}
+
+	SubPlanExplainReports *reports = ctx;
+	if (reports && planState->instrument)
+	{
+		int nodeId = planState->plan->plan_node_id;
+		NodeRowCounts *counts = hash_search(reports->nodes, &nodeId, HASH_FIND, NULL);
+		if (counts)
+		{
+			planState->instrument->ntuples = counts->ntuples;
+			planState->instrument->nloops = counts->nloops;
+		}
+	}
+	if (IsCitusCustomScan(planState->plan))
+	{
+		CitusScanState *scanState = (CitusScanState *) planState;
+		scanState->explainingExecutedSubPlan = true;
+		scanState->subPlanExplainReports = reports;
+	}
+
+	return planstate_tree_walker(planState, PlanStateAnalyzeWalker, ctx);
 }
 
 
@@ -2260,7 +2431,8 @@ PlanStateAnalyzeWalker(PlanState *planState, void *ctx)
  * destination.
  */
 static void
-ExplainWorkerPlan(PlannedStmt *plannedstmt, DistributedSubPlan *subPlan, DestReceiver *dest, ExplainState *es,
+ExplainWorkerPlan(PlannedStmt *plannedstmt, DistributedSubPlan *subPlan,
+				  SubPlanExplainReports *reports, DestReceiver *dest, ExplainState *es,
 				  const char *queryString, ParamListInfo params, QueryEnvironment *queryEnv,
 				  const instr_time *planduration,
 				  const BufferUsage *bufusage,
@@ -2357,8 +2529,7 @@ ExplainWorkerPlan(PlannedStmt *plannedstmt, DistributedSubPlan *subPlan, DestRec
 
 	if (executeSubplan)
 	{
-		ExtractAnalyzeStats(subPlan, queryDesc->planstate);
-		planstate_tree_walker(queryDesc->planstate, PlanStateAnalyzeWalker, (void *) subPlan);
+		PlanStateAnalyzeWalker(queryDesc->planstate, reports);
 	}
 
 	/* Create textual dump of plan tree */

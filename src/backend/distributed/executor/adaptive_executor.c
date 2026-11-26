@@ -813,7 +813,7 @@ AdaptiveExecutorPreExecutorRun(CitusScanState *scanState)
 	 */
 	LockPartitionsForDistributedPlan(distributedPlan);
 
-	ExecuteSubPlans(distributedPlan, RequestedForExplainAnalyze(scanState));
+	ExecuteSubPlans(distributedPlan, scanState);
 
 	scanState->finishedPreScan = true;
 }
@@ -892,7 +892,7 @@ AdaptiveExecutorStart(CitusScanState *scanState)
 		 * be part of the same transaction.
 		 */
 		UseCoordinatedTransaction();
-		taskList = ExplainAnalyzeTaskList(taskList, defaultTupleDest, tupleDescriptor,
+		taskList = ExplainAnalyzeTaskList(scanState, defaultTupleDest, tupleDescriptor,
 										  paramListInfo);
 
 		/*

@@ -1702,7 +1702,7 @@ ORDER BY e.id');
                ->  Sort (actual rows=N loops=N)
                      Output: remote_scan.id, remote_scan.cnt
                      Sort Key: remote_scan.cnt DESC, remote_scan.id
-                     ->  Custom Scan (Citus Adaptive) (never executed)
+                     ->  Custom Scan (Citus Adaptive) (actual rows=N loops=N)
                            Output: remote_scan.id, remote_scan.cnt
                            Task Count: N
                            Tuple data received from nodes: N bytes
@@ -2021,7 +2021,7 @@ SELECT * FROM cte WHERE num > 10 ORDER BY id LIMIT 5');
                ->  Sort (actual rows=N loops=N)
                      Output: remote_scan.id, remote_scan.val, remote_scan.num
                      Sort Key: remote_scan.id
-                     ->  Custom Scan (Citus Adaptive) (never executed)
+                     ->  Custom Scan (Citus Adaptive) (actual rows=N loops=N)
                            Output: remote_scan.id, remote_scan.val, remote_scan.num
                            Task Count: N
                            Tuple data received from nodes: N bytes
