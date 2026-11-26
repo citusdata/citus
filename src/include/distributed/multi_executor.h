@@ -144,8 +144,8 @@ extern Query * RewriteRawQueryStmt(RawStmt *rawStmt, const char *queryString,
 extern void ExecuteQueryStringIntoDestReceiver(const char *queryString, ParamListInfo
 											   params,
 											   DestReceiver *dest);
-extern void ExecuteQueryIntoDestReceiver(Query *query, ParamListInfo params,
-										 DestReceiver *dest);
+extern void ExecuteQueryIntoDestReceiver(Query *query, const char *queryString,
+										 ParamListInfo params, DestReceiver *dest);
 extern uint64 ExecutePlanIntoDestReceiver(PlannedStmt *queryPlan, ParamListInfo params,
 										  DestReceiver *dest);
 extern void SetLocalMultiShardModifyModeToSequential(void);
