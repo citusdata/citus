@@ -104,6 +104,7 @@ static List * GetAlterTableCommandFKeyConstraintList(AlterTableCmd *command);
 static List * GetRangeVarListFromFKeyConstraintList(List *fKeyConstraintList);
 static List * GetRelationIdListFromRangeVarList(List *rangeVarList, LOCKMODE lockmode,
 												bool missingOk);
+static Node * TransformDefaultExpressionIfNecessary(Node *defaultExpression);
 static bool AlterTableCommandTypeIsTrigger(AlterTableType alterTableType);
 static bool AlterTableDropsForeignKey(AlterTableStmt *alterTableStatement);
 static void ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement);
@@ -135,6 +136,48 @@ static void ErrorIfAlterTableDropTableNameFromPostgresFdw(List *optionList, Oid
  * from/to reference table.
  */
 static bool SetupExecutionModeForAlterTable(Oid relationId, AlterTableCmd *command);
+
+
+/*
+ * TransformDefaultExpressionIfNecessary transforms raw default expressions
+ * while avoiding re-transforming already analyzed expressions.
+ */
+static Node *
+TransformDefaultExpressionIfNecessary(Node *defaultExpression)
+{
+	if (defaultExpression == NULL)
+	{
+		return defaultExpression;
+	}
+
+	switch (nodeTag(defaultExpression))
+	{
+		case T_ColumnRef:
+		case T_ParamRef:
+		case T_List:
+		case T_A_Expr:
+		case T_A_Const:
+		case T_TypeCast:
+		case T_FuncCall:
+		case T_A_Star:
+		case T_A_Indices:
+		case T_A_Indirection:
+		case T_A_ArrayExpr:
+		{
+			ParseState *pstate = make_parsestate(NULL);
+			Node *transformedExpression = transformExpr(pstate, defaultExpression,
+														EXPR_KIND_COLUMN_DEFAULT);
+			free_parsestate(pstate);
+			return transformedExpression;
+		}
+
+		default:
+		{
+			return defaultExpression;
+		}
+	}
+}
+
 
 /*
  * PreprocessDropTableStmt processes DROP TABLE commands for Citus tables.
@@ -1600,9 +1643,7 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 		 */
 		else if (alterTableType == AT_ColumnDefault)
 		{
-			ParseState *pstate = make_parsestate(NULL);
-			Node *expr = transformExpr(pstate, command->def,
-									   EXPR_KIND_COLUMN_DEFAULT);
+			Node *expr = TransformDefaultExpressionIfNecessary(command->def);
 
 			if (contain_nextval_expression_walker(expr, NULL))
 			{
@@ -2863,9 +2904,7 @@ PostprocessAlterTableStmt(AlterTableStmt *alterTableStatement)
 		 */
 		else if (alterTableType == AT_ColumnDefault)
 		{
-			ParseState *pstate = make_parsestate(NULL);
-			Node *expr = transformExpr(pstate, command->def,
-									   EXPR_KIND_COLUMN_DEFAULT);
+			Node *expr = TransformDefaultExpressionIfNecessary(command->def);
 
 			if (contain_nextval_expression_walker(expr, NULL))
 			{
@@ -3681,9 +3720,7 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 										   "involving partition column")));
 				}
 
-				ParseState *pstate = make_parsestate(NULL);
-				Node *expr = transformExpr(pstate, command->def,
-										   EXPR_KIND_COLUMN_DEFAULT);
+				Node *expr = TransformDefaultExpressionIfNecessary(command->def);
 
 				if (contain_nextval_expression_walker(expr, NULL))
 				{
