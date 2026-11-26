@@ -39,4 +39,7 @@ extern bool ExtractRangeTableEntryWalker(Node *node, List **rangeTableList);
 
 extern bool ExtractRangeTableIndexWalker(Node *node, List **rangeTableIndexList);
 
+extern bool RangeTableEntryIsOnNullableSideOfOuterJoin(Query *query,
+													   Index rangeTableIndex);
+
 #endif /* QUERY_UTILS_H */

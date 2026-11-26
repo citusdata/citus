@@ -415,16 +415,15 @@ DEBUG:  push down of limit count: 4
  194
 (4 rows)
 
+-- Join removal changes the debug plan across PostgreSQL minor versions.
+SET client_min_messages TO WARNING;
 SELECT count(*) FROM distributed d1 JOIN local USING (id) LEFT JOIN distributed d2 USING (id) ORDER BY 1 DESC LIMIT 4;
-DEBUG:  Wrapping relation "local" to a subquery
-DEBUG:  generating subplan XXX_1 for subquery SELECT id FROM local_dist_join_mixed.local WHERE true
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((local_dist_join_mixed.distributed d1 JOIN (SELECT NULL::integer AS "dummy-1", local_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) local_1) local USING (id)) LEFT JOIN local_dist_join_mixed.distributed d2 USING (id)) ORDER BY (count(*)) DESC LIMIT 4
-DEBUG:  push down of limit count: 4
  count
 ---------------------------------------------------------------------
    101
 (1 row)
 
+SET client_min_messages TO DEBUG1;
 SELECT count(DISTINCT d1.name::int * local.id) FROM distributed d1 JOIN local USING (id);
 DEBUG:  Wrapping relation "local" to a subquery
 DEBUG:  generating subplan XXX_1 for subquery SELECT id FROM local_dist_join_mixed.local WHERE true
@@ -1185,15 +1184,6 @@ SELECT count(*) FROM distributed LEFT JOIN local USING (id);
 DEBUG:  Wrapping relation "local" to a subquery
 DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS "dummy-1" FROM local_dist_join_mixed.local WHERE true
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (local_dist_join_mixed.distributed LEFT JOIN (SELECT NULL::integer AS "dummy-1", NULL::bigint AS id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result."dummy-1" FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result("dummy-1" integer)) local_1) local USING (id))
- count
----------------------------------------------------------------------
-   101
-(1 row)
-
-SELECT count(*) FROM local LEFT JOIN distributed USING (id);
-DEBUG:  Wrapping relation "local" to a subquery
-DEBUG:  generating subplan XXX_1 for subquery SELECT id FROM local_dist_join_mixed.local WHERE true
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT NULL::integer AS "dummy-1", local_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) local_1) local LEFT JOIN local_dist_join_mixed.distributed USING (id))
  count
 ---------------------------------------------------------------------
    101

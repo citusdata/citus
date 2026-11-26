@@ -189,3 +189,11 @@ test: multi_having_var_remapping
 # check-multi-1-create-citus, which is not part of the N-1 test matrix.
 # ----------
 test: node_removal_transaction_recovery
+
+# ----------
+# local_dist_join_removed_outer_join covers PostgreSQL join-removal compatibility
+# absent from the N-1 (14.2.0) coordinator library. Run it only under
+# check-multi-1-create-citus, which is not part of the N-1 test matrix.
+# Move back to multi_1_schedule at Citus 15.
+# ----------
+test: local_dist_join_removed_outer_join

@@ -757,7 +757,7 @@ BEGIN
 
         -- Ignore text-mode "Planning:" line because whether it's output
         -- varies depending on the system state
-        CONTINUE WHEN (ln = 'Planning:');
+        CONTINUE WHEN (ltrim(ln) = 'Planning:');
 
         RETURN NEXT ln;
     END LOOP;

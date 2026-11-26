@@ -1,3 +1,4 @@
+SELECT 1 FROM citus_set_coordinator_host('localhost', :master_port);
 CREATE SCHEMA propagate_foreign_server;
 SET search_path TO propagate_foreign_server;
 
