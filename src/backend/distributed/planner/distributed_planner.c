@@ -110,6 +110,9 @@ typedef struct RemovedOuterJoinContext
 static bool CollectReferencedRelationIdentities(Node *node, Bitmapset **identities);
 static bool ReplaceRemovedOuterJoinRelations(Node *node,
 											 RemovedOuterJoinContext *context);
+static void ReplaceRemovedOuterJoinRelationsInQuery(Query *query,
+													RemovedOuterJoinContext *context,
+													bool nullable);
 static Bitmapset * RemovedOuterJoinRelationIndexes(Node *node, Query *query,
 												   RemovedOuterJoinContext *context,
 												   bool nullable);
@@ -2968,18 +2971,30 @@ ReplaceRemovedOuterJoinRelations(Node *node, RemovedOuterJoinContext *context)
 	if (IsA(node, Query))
 	{
 		Query *query = (Query *) node;
-		Bitmapset *rteIndexes = RemovedOuterJoinRelationIndexes((Node *) query->jointree,
-																query, context, false);
-		int rteIndex = -1;
-		while ((rteIndex = bms_next_member(rteIndexes, rteIndex)) >= 0)
-		{
-			ConvertRemovedOuterJoinRelation(query, rteIndex);
-		}
-		bms_free(rteIndexes);
+		ReplaceRemovedOuterJoinRelationsInQuery(query, context, false);
 		return query_tree_walker(query, ReplaceRemovedOuterJoinRelations, context, 0);
 	}
 
 	return expression_tree_walker(node, ReplaceRemovedOuterJoinRelations, context);
+}
+
+
+/*
+ * ReplaceRemovedOuterJoinRelationsInQuery keeps relation indexes local to the
+ * query that owns them, including nullable subqueries flattened by PostgreSQL.
+ */
+static void
+ReplaceRemovedOuterJoinRelationsInQuery(Query *query, RemovedOuterJoinContext *context,
+										bool nullable)
+{
+	Bitmapset *rteIndexes = RemovedOuterJoinRelationIndexes((Node *) query->jointree,
+															query, context, nullable);
+	int rteIndex = -1;
+	while ((rteIndex = bms_next_member(rteIndexes, rteIndex)) >= 0)
+	{
+		ConvertRemovedOuterJoinRelation(query, rteIndex);
+	}
+	bms_free(rteIndexes);
 }
 
 
@@ -3017,6 +3032,11 @@ RemovedOuterJoinRelationIndexes(Node *node, Query *query,
 				}
 			}
 		}
+		else if (rte->rtekind == RTE_SUBQUERY)
+		{
+			/* Pull-up can leave the eliminated relation in an original subquery. */
+			ReplaceRemovedOuterJoinRelationsInQuery(rte->subquery, context, true);
+		}
 	}
 	else if (IsA(node, FromExpr))
 	{
@@ -3032,15 +3052,20 @@ RemovedOuterJoinRelationIndexes(Node *node, Query *query,
 	{
 		JoinExpr *join = (JoinExpr *) node;
 
-		/* A whole joined subtree can be on the nullable side of an outer join. */
+		/*
+		 * A whole joined subtree can be on the nullable side of an outer join.
+		 * PostgreSQL can reduce a FULL join to LEFT or RIGHT before removing
+		 * it, so either side of a FULL join may have been eliminated.
+		 */
+		bool leftNullable = nullable || join->jointype == JOIN_RIGHT ||
+							join->jointype == JOIN_FULL;
+		bool rightNullable = nullable || join->jointype == JOIN_LEFT ||
+							 join->jointype == JOIN_FULL;
 		rteIndexes = RemovedOuterJoinRelationIndexes(join->larg, query, context,
-													 nullable || join->jointype ==
-													 JOIN_RIGHT);
+													 leftNullable);
 		rteIndexes = bms_join(rteIndexes,
 							  RemovedOuterJoinRelationIndexes(join->rarg, query, context,
-															  nullable ||
-															  join->jointype == JOIN_LEFT)
-							  );
+															  rightNullable));
 	}
 	return rteIndexes;
 }
