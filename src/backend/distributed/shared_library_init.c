@@ -1693,7 +1693,7 @@ RegisterCitusConfigVariables(void)
 					 "and operating system name. This configuration value controls "
 					 "whether these reports are sent."),
 		&EnableStatisticsCollection,
-#if defined(HAVE_LIBCURL) && defined(ENABLE_CITUS_STATISTICS_COLLECTION)
+#if defined(HAVE_CITUS_LIBCURL) && defined(ENABLE_CITUS_STATISTICS_COLLECTION)
 		true,
 #else
 		false,
@@ -3436,7 +3436,7 @@ LocalPoolSizeGucShowHook(void)
 static bool
 StatisticsCollectionGucCheckHook(bool *newval, void **extra, GucSource source)
 {
-#ifdef HAVE_LIBCURL
+#ifdef HAVE_CITUS_LIBCURL
 	return true;
 #else
 

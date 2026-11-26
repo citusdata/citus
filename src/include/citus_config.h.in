@@ -31,6 +31,9 @@
 /* A string containing the version number, platform, and C compiler */
 #undef CITUS_VERSION_STR
 
+/* Define to 1 to build with libcurl support. (--with-libcurl) */
+#undef HAVE_CITUS_LIBCURL
+
 /* Define to 1 to build with lz4 support. (--with-lz4) */
 #undef HAVE_CITUS_LIBLZ4
 
