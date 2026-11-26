@@ -8,7 +8,7 @@ AS 'citus', $$test_metadata_connection_selection$$;
 
 SELECT test_metadata_connection_selection('localhost', :worker_1_port);
 
--- a new transaction does not inherit the metadata connection of the previous one
+-- run the checks again in a new transaction
 SELECT test_metadata_connection_selection('localhost', :worker_1_port);
 
 CREATE FUNCTION test_metadata_connection_id(text, integer, outside_transaction boolean)
@@ -17,7 +17,8 @@ LANGUAGE C STRICT
 AS 'citus', $$test_metadata_connection_id$$;
 
 SELECT test_metadata_connection_id('localhost', :worker_1_port, false) AS metadata_id \gset
--- after commit, the same connection can be used outside of a transaction
+-- after commit, the same connection can be used outside of a transaction, as
+-- the next transaction does not inherit the metadata connection
 SELECT test_metadata_connection_id('localhost', :worker_1_port, true) = :metadata_id AS reused;
 
 BEGIN;

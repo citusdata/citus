@@ -890,8 +890,7 @@ ErrorIfAnyMetadataNodeOutOfSync(List *metadataNodeList)
 bool
 IsWorkerTheCurrentNode(WorkerNode *workerNode)
 {
-	/* only reads the server id, so avoid connections used in this transaction */
-	int connectionFlags = OUTSIDE_TRANSACTION;
+	int connectionFlags = REQUIRE_METADATA_CONNECTION;
 
 	MultiConnection *workerConnection =
 		GetNodeUserDatabaseConnection(connectionFlags,

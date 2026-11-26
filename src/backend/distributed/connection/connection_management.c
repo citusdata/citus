@@ -467,7 +467,9 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port,
  * that is not claimed exclusively.
  *
  * Metadata requests must use the connection that metadata operations already
- * used in the current transaction, if any, and error out if it is not available.
+ * used in the current transaction, if any. If it is not available, they use
+ * another one if no remote transaction was started over it, and error out
+ * otherwise.
  *
  * If no connection is available, FindAvailableConnection returns NULL.
  */
@@ -546,14 +548,23 @@ FindAvailableConnection(ConnectionHashEntry *entry, uint32 flags)
 
 	if (requireMetadataConnection)
 	{
+		if (!metadataConnection->remoteTransaction.beginSent)
+		{
+			/*
+			 * No remote transaction was started over it, for instance because
+			 * it failed to connect, so another connection can take over.
+			 */
+			entry->metadataConnection = NULL;
+			return FindAvailableConnection(entry, flags);
+		}
+
 		/*
 		 * Using another connection could miss uncommitted changes of earlier
 		 * metadata operations in this transaction, or cause self-deadlocks.
 		 */
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_IN_USE),
 						errmsg("metadata connection to %s:%d is not available",
-							   metadataConnection->hostname,
-							   metadataConnection->port),
+							   entry->key.hostname, entry->key.port),
 						errdetail("Metadata operations in a transaction must use "
 								  "the same connection, but that connection is "
 								  "in use or can no longer be used.")));

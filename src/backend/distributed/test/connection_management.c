@@ -65,8 +65,8 @@ ExpectMetadataConnectionError(const char *hostname, int32 port, uint32 flags)
 
 /*
  * test_metadata_connection_selection checks that metadata requests use a single
- * connection in a transaction, and error out rather than use another connection
- * when it is not available.
+ * connection in a transaction. If it is not available, they use another one if
+ * no remote transaction was started over it, and error out otherwise.
  */
 Datum
 test_metadata_connection_selection(PG_FUNCTION_ARGS)
@@ -97,9 +97,15 @@ test_metadata_connection_selection(PG_FUNCTION_ARGS)
 	}
 	CloseConnection(connection);
 
-	ClaimConnectionExclusively(metadataConnection);
-	ExpectMetadataConnectionError(hostname, port, 0);
-	UnclaimConnection(metadataConnection);
+	/* a connection lost before its remote transaction started is replaced */
+	ShutdownConnection(metadataConnection);
+	connection = GetNodeConnection(REQUIRE_METADATA_CONNECTION, hostname, port);
+	if (connection == metadataConnection ||
+		GetNodeConnection(REQUIRE_METADATA_CONNECTION, hostname, port) != connection)
+	{
+		elog(ERROR, "the lost metadata connection was not replaced");
+	}
+	metadataConnection = connection;
 
 	/* a connection marked for closing is kept during its remote transaction */
 	UseCoordinatedTransaction();
@@ -110,11 +116,12 @@ test_metadata_connection_selection(PG_FUNCTION_ARGS)
 	{
 		elog(ERROR, "the metadata connection was replaced during its transaction");
 	}
-	ExpectMetadataConnectionError(hostname, port, OUTSIDE_TRANSACTION);
 
-	ShutdownConnection(metadataConnection);
-	ResetRemoteTransaction(metadataConnection);
+	/* during its remote transaction, metadata requests error out if unavailable */
+	ClaimConnectionExclusively(metadataConnection);
 	ExpectMetadataConnectionError(hostname, port, 0);
+	UnclaimConnection(metadataConnection);
+	ExpectMetadataConnectionError(hostname, port, OUTSIDE_TRANSACTION);
 
 	PG_RETURN_VOID();
 }

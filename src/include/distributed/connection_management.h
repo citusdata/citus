@@ -101,9 +101,10 @@ enum MultiConnectionMode
 	 * metadata includes the distributed table on the workers) can be modified
 	 * accross multiple connections.
 	 *
-	 * With this flag, we guarantee that there is a single metadata connection in
-	 * a transaction: the first request binds a connection until the transaction
-	 * ends, and later requests error out if it is not available.
+	 * With this flag, we guarantee that metadata operations in a transaction use
+	 * a single connection: the first request binds a connection until the
+	 * transaction ends. If it is not available, later requests error out once a
+	 * remote transaction was started over it, and bind another one before that.
 	 * But note that this connection can be used for any other operation.
 	 * In other words, this connection is not exclusively reserved for metadata
 	 * operations.
