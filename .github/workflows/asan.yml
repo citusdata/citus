@@ -27,16 +27,24 @@ jobs:
       matrix: ${{ steps.matrix.outputs.matrix }}
       citus_old_version: v14.0.1
     steps:
+      - uses: actions/checkout@v5
+        with:
+          sparse-checkout: .github
+      - id: v
+        uses: ./.github/actions/load-ci-versions
+        with:
+          majors: "17,18,19"
       - name: Set up parameters
         id: matrix
         shell: bash
+        env:
+          PG_VERSIONS: ${{ steps.v.outputs.postgres_json }}
         run: |
           python3 - <<'PY'
           import json
           import os
 
-          # Keep pins and coverage aligned with nightly_cassert.yml.
-          versions = {"17": "17.11", "18": "18.6", "19": "19rc1"}
+          versions = json.loads(os.environ["PG_VERSIONS"])
           jobs = []
           for major, full in versions.items():
               for group in ("regress", "isolation", "columnar", "failure", "tap", "generator"):

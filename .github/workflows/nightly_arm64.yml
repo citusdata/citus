@@ -10,10 +10,10 @@ run-name: Nightly arm64 (${{ github.ref_name }})
 # (setup_cassert_pg with cassert: false) so a GREEN run unambiguously means "arm works". A cassert
 # build here would be "expected red" as pre-existing asserts surface, muddying the arm signal.
 #
-# PHASE 1 -- the matrix is INTENTIONALLY BOUNDED to cap arm-runner cost: PG 17/18 only and the
-# core `regress` + `isolation` groups only (~4 test jobs). It deliberately drops the cassert
-# nightly's fan-out (arbitrary-configs, pg-upgrade, citus-upgrade, columnar, failure, tap,
-# generator). Expand this matrix once the phase-1 gate is reliably green.
+# PHASE 1 -- the matrix is INTENTIONALLY BOUNDED to cap arm-runner cost: only the explicit
+# arm64 major allowlist in params below and the core `regress` + `isolation` groups (~4 test jobs).
+# It deliberately drops the cassert nightly's fan-out (arbitrary-configs, pg-upgrade, citus-upgrade,
+# columnar, failure, tap, generator). Expand this matrix once the phase-1 gate is reliably green.
 #
 # NOT covered here: gating PRs on arm64. build_and_test.yml / run_tests.yml run inside prebuilt
 # amd64-only containers (ghcr.io/citusdata/extbuilder:*, exttester:*); arm64 PR-gating would first
@@ -37,16 +37,20 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
-  # ---- version matrix: single source of truth (mirrors nightly_cassert.yml's params job) ----
-  # Bounded to the two newest majors for phase 1; bump here to widen the arm coverage.
+  # ---- version matrix: loaded from .github/ci-versions.json (bounded arm64 allowlist) ----
   params:
     name: Initialize parameters
     runs-on: ubuntu-24.04
     outputs:
-      pg_versions: '[{ "major": "17", "full": "17.11" }, { "major": "18", "full": "18.6" }]'
+      pg_versions: ${{ steps.v.outputs.pg_versions_json }}
     steps:
-      - name: Set up parameters
-        run: echo 'noop'
+      - uses: actions/checkout@v5
+        with:
+          sparse-checkout: .github
+      - id: v
+        uses: ./.github/actions/load-ci-versions
+        with:
+          majors: "17,18"
 
   # ---- core suites on native arm64: one job per (major x suite-group) ----
   test:

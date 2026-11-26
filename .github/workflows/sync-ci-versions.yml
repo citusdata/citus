@@ -1,0 +1,133 @@
+name: Sync CI versions
+on:
+  repository_dispatch: { types: [citus-ci-images-ready] }
+  workflow_dispatch:
+    inputs:
+      line: { description: "the-process branch", required: true, type: string }
+      sha: { description: "40-char commit SHA in citusdata/the-process", required: true, type: string }
+      tag_suffix: { description: "Image tag suffix (e.g. -va0a5582)", required: true, type: string }
+concurrency:
+  group: sync-ci-versions-${{ github.event.client_payload.line || inputs.line }}
+  cancel-in-progress: false
+permissions: { contents: read }
+env: { FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true" }
+jobs:
+  discover:
+    runs-on: ubuntu-24.04
+    outputs:
+      line: ${{ steps.p.outputs.line }}
+      sha: ${{ steps.p.outputs.sha }}
+      short_sha: ${{ steps.p.outputs.short_sha }}
+      tag_suffix: ${{ steps.p.outputs.tag_suffix }}
+      versions_json: ${{ steps.p.outputs.versions_json }}
+      branches: ${{ steps.p.outputs.branches }}
+    steps:
+      - id: p
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LINE: ${{ github.event.client_payload.line || inputs.line }}
+          SHA: ${{ github.event.client_payload.sha || inputs.sha }}
+          TAG_SUFFIX: ${{ github.event.client_payload.tag_suffix || inputs.tag_suffix }}
+        run: |
+          set -euo pipefail
+          [[ "$LINE" =~ ^[a-zA-Z0-9._/-]+$ && "$SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::Invalid line/sha" >&2; exit 1; }
+          short_sha="${SHA:0:7}"
+          [[ "$TAG_SUFFIX" =~ ^-v[0-9a-f]{7,40}$ && "-v${SHA}" == "${TAG_SUFFIX}"* ]] || { echo "::error::tag_suffix mismatch" >&2; exit 1; }
+          raw=$(gh api "repos/citusdata/the-process/contents/versions.json?ref=${SHA}" --jq '.content' | base64 -d)
+          versions=$(jq -ec --arg line "$LINE" '
+            if .line != $line then error("versions.json line mismatch") else . end | {
+              postgres: (.postgres_ci | if type == "object" and length > 0 then with_entries(.value |= gsub("~"; "") | if (.key | test("\\A[0-9]+\\z")) and (.value | test("\\A[0-9]+(\\.[0-9]+|(alpha|beta|rc)[0-9]+)\\z")) then . else error("bad PG version") end) | to_entries | sort_by(.key | tonumber) | from_entries else error("bad postgres_ci") end),
+              default_pg_major: (.default_pg_major | if type == "string" and test("\\A[0-9]+\\z") then . else error("bad default_pg_major") end),
+              upgrade_test_pg: (.upgrade_test_pg // [] | if type == "array" and all(type == "string" and test("\\A[0-9]+\\z")) then . else error("bad upgrade_test_pg") end),
+              style_checker_tools_version: (.style_checker_tools_version | if type == "string" and test("\\A[0-9]+\\.[0-9]+\\.[0-9]+\\z") then . else error("bad style_checker_tools_version") end)
+            } | . as $v | if ($v.postgres[$v.default_pg_major] | type == "string") and ($v.upgrade_test_pg | all($v.postgres[.] | type == "string")) then . else error("major ref not in postgres_ci") end
+          ' <<<"$raw")
+          pg_vers=$(jq -r '.postgres[]' <<<"$versions")
+          while IFS= read -r ver; do
+            for img in extbuilder exttester failtester; do
+              docker buildx imagetools inspect "ghcr.io/citusdata/${img}:${ver}${TAG_SUFFIX}" >/dev/null
+            done
+          done <<<"$pg_vers"
+          upg_tag=$(jq -r '[.postgres | to_entries | sort_by(.key | tonumber)[].value] | join("-")' <<<"$versions")
+          docker buildx imagetools inspect "ghcr.io/citusdata/pgupgradetester:${upg_tag}${TAG_SUFFIX}" >/dev/null
+          citus_upg_vers=$(jq -r '. as $v | $v.upgrade_test_pg[] | $v.postgres[.]' <<<"$versions")
+          if [ -n "$citus_upg_vers" ]; then
+            while IFS= read -r ver; do
+              docker buildx imagetools inspect "ghcr.io/citusdata/citusupgradetester:${ver}${TAG_SUFFIX}" >/dev/null
+            done <<<"$citus_upg_vers"
+          fi
+          docker buildx imagetools inspect "ghcr.io/citusdata/stylechecker:$(jq -r '.style_checker_tools_version' <<<"$versions")${TAG_SUFFIX}" >/dev/null
+          all_branches=$(gh api --paginate "repos/${GITHUB_REPOSITORY}/branches" --jq '.[].name')
+          [ -n "$all_branches" ] || { echo "::error::No branches returned" >&2; exit 1; }
+          branches=()
+          while IFS= read -r br; do
+            [[ "$br" == "main" || "$br" =~ ^release-[0-9]+\.[0-9]+$ ]] || continue
+            if ! resp=$(gh api "repos/${GITHUB_REPOSITORY}/contents/.github/ci-versions.json?ref=${br}" --jq '.content' 2>&1); then
+              grep -qE 'HTTP 404|"status":"404"' <<<"$resp" && continue
+              echo "::error::Failed reading ci-versions.json on ${br}: ${resp}" >&2; exit 1
+            fi
+            [[ "$(base64 -d <<<"$resp" | jq -r '.the_process_branch // empty')" == "$LINE" ]] && branches+=("$br")
+          done <<<"$all_branches"
+          branches_json=$(if ((${#branches[@]})); then printf '%s\n' "${branches[@]}" | jq -Rsc 'split("\n") | map(select(length > 0))'; else echo '[]'; fi)
+          printf 'line=%s\nsha=%s\nshort_sha=%s\ntag_suffix=%s\nversions_json=%s\nbranches=%s\n' \
+            "$LINE" "$SHA" "$short_sha" "$TAG_SUFFIX" "$versions" "$branches_json" >> "$GITHUB_OUTPUT"
+  sync:
+    needs: discover
+    if: needs.discover.outputs.branches != '[]'
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        branch: ${{ fromJson(needs.discover.outputs.branches) }}
+    steps:
+      - id: app-token
+        uses: actions/create-github-app-token@v3
+        with: { app-id: "${{ vars.GH_APP_ID || secrets.GH_APP_ID }}", private-key: "${{ secrets.GH_APP_KEY }}" }
+      - uses: actions/checkout@v5
+        with: { ref: "${{ matrix.branch }}", token: "${{ steps.app-token.outputs.token }}" }
+      - name: Update ci-versions and devcontainer
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE_BRANCH: ${{ matrix.branch }}
+          LINE: ${{ needs.discover.outputs.line }}
+          SHA: ${{ needs.discover.outputs.sha }}
+          TAG_SUFFIX: ${{ needs.discover.outputs.tag_suffix }}
+          VERSIONS_JSON: ${{ needs.discover.outputs.versions_json }}
+        run: |
+          set -euo pipefail
+          check_no_regress() {
+            local ref_sha="$1"
+            if [ -n "$ref_sha" ] && [ "$ref_sha" != "$SHA" ]; then
+              local st; st=$(gh api "repos/citusdata/the-process/compare/${SHA}...${ref_sha}" --jq '.status')
+              [ "$st" != "ahead" ] || { echo "::error::Refusing regression: ${SHA} is an ancestor of ${ref_sha}" >&2; exit 1; }
+            fi
+          }
+          check_no_regress "$(jq -er '.the_process_sha' .github/ci-versions.json)"
+          if pr_b64=$(gh api "repos/${GITHUB_REPOSITORY}/contents/.github/ci-versions.json?ref=automation/ci-versions-${BASE_BRANCH}" --jq '.content' 2>&1); then
+            check_no_regress "$(base64 -d <<<"$pr_b64" | jq -r '.the_process_sha // empty')"
+          elif ! grep -qE 'HTTP 404|"status":"404"' <<<"$pr_b64"; then
+            echo "::error::Failed checking existing PR branch: ${pr_b64}" >&2; exit 1
+          fi
+          cur_m=$(jq -c '.postgres | keys | sort_by(tonumber)' .github/ci-versions.json)
+          new_m=$(jq -c '.postgres | keys | sort_by(tonumber)' <<<"$VERSIONS_JSON")
+          [ "$cur_m" = "$new_m" ] || { echo "::error::PG major set changed (${cur_m} -> ${new_m}); manual PR required" >&2; exit 1; }
+          jq --arg line "$LINE" --arg sha "$SHA" --arg suffix "$TAG_SUFFIX" --argjson v "$VERSIONS_JSON" \
+            '{the_process_branch:$line,the_process_sha:$sha,image_suffix:$suffix,postgres:($v.postgres|to_entries|sort_by(.key|tonumber)|from_entries),default_pg_major:$v.default_pg_major,style_checker_tools_version:$v.style_checker_tools_version}' \
+            .github/ci-versions.json > .github/ci-versions.json.tmp && mv .github/ci-versions.json.tmp .github/ci-versions.json
+          if [ -f .devcontainer/Dockerfile ]; then
+            pg_entries=$(jq -r '.postgres | to_entries[] | "\(.key)\t\(.value)"' .github/ci-versions.json)
+            while IFS=$'\t' read -r maj full; do
+              sed -i -E "s/(pgenv (build|switch) )${maj}(\.[0-9]+|(alpha|beta|rc)[0-9]+)([[:space:]]|$)/\1${full}\5/g" .devcontainer/Dockerfile
+            done <<<"$pg_entries"
+          fi
+      - uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          base: ${{ matrix.branch }}
+          branch: automation/ci-versions-${{ matrix.branch }}
+          delete-branch: true
+          commit-message: "Sync CI versions to the-process@${{ needs.discover.outputs.short_sha }}"
+          title: "Sync CI versions to the-process@${{ needs.discover.outputs.short_sha }} (${{ matrix.branch }})"
+          body: "Automated CI version sync from `citusdata/the-process` (`${{ needs.discover.outputs.line }}` @ `${{ needs.discover.outputs.sha }}`, suffix `${{ needs.discover.outputs.tag_suffix }}`)."

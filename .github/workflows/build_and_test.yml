@@ -34,17 +34,21 @@ jobs:
       fail_test_image_name: "ghcr.io/citusdata/failtester"
       pgupgrade_image_name: "ghcr.io/citusdata/pgupgradetester"
       style_checker_image_name: "ghcr.io/citusdata/stylechecker"
-      style_checker_tools_version: "0.8.33"
-      sql_snapshot_pg_version: "18.6"
-      image_suffix: "-va0a5582"
-      pg17_version: '{ "major": "17", "full": "17.11" }'
-      pg18_version: '{ "major": "18", "full": "18.6" }'
-      pg19_version: '{ "major": "19", "full": "19rc1" }'
-      upgrade_pg_versions: "17.11-18.6-19rc1"
+      style_checker_tools_version: ${{ steps.v.outputs.style_checker_tools_version }}
+      sql_snapshot_pg_version: ${{ steps.v.outputs.sql_snapshot_pg_version }}
+      image_suffix: ${{ steps.v.outputs.image_suffix }}
+      pg17_version: ${{ steps.v.outputs.pg17_version }}
+      pg18_version: ${{ steps.v.outputs.pg18_version }}
+      pg19_version: ${{ steps.v.outputs.pg19_version }}
+      upgrade_pg_versions: ${{ steps.v.outputs.upgrade_pg_versions }}
     steps:
-      # Since GHA jobs need at least one step we use a noop step here.
-      - name: Set up parameters
-        run: echo 'noop'
+      - uses: actions/checkout@v5
+        with:
+          sparse-checkout: .github
+      - id: v
+        uses: ./.github/actions/load-ci-versions
+        with:
+          majors: "17,18,19"
   check-sql-snapshots:
     needs: params
     runs-on: ubuntu-24.04

@@ -1,13 +1,12 @@
 name: Nightly cassert
 run-name: Nightly cassert (${{ github.ref_name }})
 
-# Full-suite Citus run against an --enable-cassert PostgreSQL build (PG 17/18/19).
+# Full-suite Citus run against an --enable-cassert PostgreSQL build.
 # Purpose: surface PG-core asserts and Citus's own Assert() that the normal PGDG-image PR
 # pipeline cannot catch. First runs are EXPECTED to be RED across all majors as pre-existing
 # asserts surface -- that is the intended signal, not a regression gate.
 #
-# The version matrix lives in the `params` job below (single source of truth, mirroring
-# build_and_test.yml's params job, which pins 17.11 / 18.6 / 19rc1 and no longer builds PG16).
+# PostgreSQL versions are loaded from .github/ci-versions.json in the `params` job below.
 
 on:
   schedule:
@@ -26,21 +25,25 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
-  # ---- version matrix: single source of truth (mirrors build_and_test.yml's params job) ----
-  # FUTURE SEAM: when the-process/versions.yml becomes the org-wide SSOT, replace these literal
-  # outputs with a step that fetches/parses that file, so the nightly DERIVES versions instead of
-  # restating them. Until then this job is the one place to bump the cassert matrix.
+  # ---- version matrix: loaded from .github/ci-versions.json ----
   params:
     name: Initialize parameters
     runs-on: ubuntu-24.04
     outputs:
-      pg_versions: '[{ "major": "17", "full": "17.11" }, { "major": "18", "full": "18.6" }, { "major": "19", "full": "19rc1" }]'
-      pg_upgrade_pairs: '[{ "old": "17", "old_full": "17.11", "new": "18", "new_full": "18.6" }, { "old": "18", "old_full": "18.6", "new": "19", "new_full": "19rc1" }, { "old": "17", "old_full": "17.11", "new": "19", "new_full": "19rc1" }]'
-      citus_upgrade_pg: '[{ "major": "17", "full": "17.11" }, { "major": "18", "full": "18.6" }]'
+      pg_versions: ${{ steps.all.outputs.pg_versions_json }}
+      pg_upgrade_pairs: ${{ steps.all.outputs.pg_upgrade_pairs_json }}
+      citus_upgrade_pg: ${{ steps.citus-upgrade.outputs.pg_versions_json }}
       citus_old_version: "v14.0.1"  # 14.0-1 chains to MASTER (15.0); 14.1 has no path to 15.0 yet
     steps:
-      - name: Set up parameters
-        run: echo 'noop'
+      - uses: actions/checkout@v5
+        with:
+          sparse-checkout: .github
+      - id: all
+        uses: ./.github/actions/load-ci-versions
+      - id: citus-upgrade
+        uses: ./.github/actions/load-ci-versions
+        with:
+          majors: "17,18"
 
   # ---- regular suites: one job per (major x suite-group) ----
   test:
