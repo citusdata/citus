@@ -23,8 +23,8 @@ jobs:
             echo "::error::Failed fetching $2/$3@$4: $out" >&2; exit 1
           }
           latest_tag() {
-            local refs; refs=$(gh api --paginate "repos/$1/git/matching-refs/tags/v" --jq '.[].ref')
-            cut -d/ -f3- <<<"$refs" | grep -E "${2:-^v[0-9]+\.[0-9]+\.[0-9]+$}" | sort -V | tail -n1
+            local refs; refs=$(gh api --paginate "repos/$1/git/matching-refs/tags/v" --jq '.[].ref') || return 1
+            cut -d/ -f3- <<<"$refs" | { grep -E "${2:-^v[0-9]+\.[0-9]+\.[0-9]+$}" || [ "$?" -eq 1 ]; } | sort -V | tail -n1
           }
 
           # 1. Citus active branches (.github/ci-versions.json) vs citusdata/the-process
@@ -56,20 +56,30 @@ jobs:
           pgxn_ver=$(sed -nE "s/^pkglatest=[\"']?([0-9]+\.[0-9]+\.[0-9]+)[\"']?[[:space:]]*$/\1/p" <<<"$content" | head -n1)
           [ "$pgxn_ver" = "$latest_citus" ] || add_drift "**packaging (\`pgxn-citus\`)**: \`${pgxn_ver:-missing}\` vs Citus \`$latest_citus\`"
           get_file content "citusdata/docker" "pkgvars" "master" || content=""
-          citus_series=$(sed -nE "s/^citus_series=[\"']?([0-9]+)[\"']?.*/\1/p" <<<"$content" | head -n1)
-          citus_series="${citus_series:-${latest_citus%%.*}}"
-          expected_docker_tag=$(latest_tag "citusdata/citus" "^v${citus_series}\.[0-9]+\.0$"); [ -n "$expected_docker_tag" ] || exit 1
-          expected_docker="${expected_docker_tag#v}"
-          get_file content "citusdata/docker" "Dockerfile" "master" || content=""
-          docker_ver=$(sed -nE "s/^ARG[[:space:]]+VERSION=[\"']?([0-9]+\.[0-9]+\.[0-9]+)[\"']?[[:space:]]*$/\1/p" <<<"$content" | head -n1)
-          if ! [[ "$docker_ver" =~ ^${citus_series}\.[0-9]+\.[0-9]+$ ]] \
-            || [ "$(printf '%s\n%s\n' "$expected_docker" "$docker_ver" | sort -V | sed -n '1p')" != "$expected_docker" ]; then
-            add_drift "**docker (\`master/Dockerfile\`)**: \`${docker_ver:-missing}\` vs Citus \`$expected_docker\` (series \`$citus_series\`)"
+          latest_major="${latest_citus%%.*}"
+          citus_series=$(sed -nE "s/^citus_series=([\"']?)([1-9][0-9]*)\1[[:space:]]*(#.*)?$/\2/p" <<<"$content" | head -n1)
+          if [ -z "$citus_series" ]; then
+            grep -q '^citus_series=' <<<"$content" && add_drift "**docker (\`pkgvars\`)**: invalid \`citus_series\` value"
+            citus_series="$latest_major"
+          elif (( 10#${latest_major} > 10#${citus_series} )); then
+            add_drift "**docker (\`pkgvars\`)**: citus_series=${citus_series} is behind newest stable Citus major ${latest_major} (${latest_citus})"
           fi
-          hub_ver="${docker_ver:-$expected_docker}"
-          hub_code=$(curl --retry 3 --retry-delay 2 -sS -o /dev/null -w '%{http_code}' "https://hub.docker.com/v2/repositories/citusdata/citus/tags/${hub_ver}/")
-          if [ "$hub_code" = "404" ]; then add_drift "**Docker Hub (\`citusdata/citus:${hub_ver}\`)**: tag missing (HTTP 404)"
-          elif [ "$hub_code" != "200" ]; then echo "::error::Docker Hub returned HTTP $hub_code" >&2; exit 1; fi
+          expected_docker_tag=$(latest_tag "citusdata/citus" "^v${citus_series}\.[0-9]+\.0$")
+          if [ -n "$expected_docker_tag" ]; then
+            expected_docker="${expected_docker_tag#v}"
+            get_file content "citusdata/docker" "Dockerfile" "master" || content=""
+            docker_ver=$(sed -nE "s/^ARG[[:space:]]+VERSION=[\"']?([0-9]+\.[0-9]+\.[0-9]+)[\"']?[[:space:]]*$/\1/p" <<<"$content" | head -n1)
+            if ! [[ "$docker_ver" =~ ^${citus_series}\.[0-9]+\.[0-9]+$ ]] \
+              || [ "$(printf '%s\n%s\n' "$expected_docker" "$docker_ver" | sort -V | sed -n '1p')" != "$expected_docker" ]; then
+              add_drift "**docker (\`master/Dockerfile\`)**: \`${docker_ver:-missing}\` vs Citus \`$expected_docker\` (series \`$citus_series\`)"
+            fi
+            hub_ver="${docker_ver:-$expected_docker}"
+            hub_code=$(curl --retry 3 --retry-delay 2 -sS -o /dev/null -w '%{http_code}' "https://hub.docker.com/v2/repositories/citusdata/citus/tags/${hub_ver}/")
+            if [ "$hub_code" = "404" ]; then add_drift "**Docker Hub (\`citusdata/citus:${hub_ver}\`)**: tag missing (HTTP 404)"
+            elif [ "$hub_code" != "200" ]; then echo "::error::Docker Hub returned HTTP $hub_code" >&2; exit 1; fi
+          else
+            add_drift "**docker (\`pkgvars\`)**: no Citus \`v${citus_series}.*.0\` tag found for \`citus_series=${citus_series}\`"
+          fi
 
           # 3. packaging (develop) & docker (master) setup-tools pin vs latest citusdata/tools tag
           latest_tools=$(latest_tag "citusdata/tools"); [ -n "$latest_tools" ] || exit 1
