@@ -4830,7 +4830,11 @@ EstablishAndSetMetadataSyncBareConnections(MetadataSyncContext *context)
 {
 	Assert(MetadataSyncTransMode == METADATA_SYNC_NON_TRANSACTIONAL);
 
-	int connectionFlags = REQUIRE_METADATA_CONNECTION;
+	/*
+	 * Bare commands commit immediately, so use connections outside of the
+	 * transaction. Marking them to close also keeps others from using them.
+	 */
+	int connectionFlags = OUTSIDE_TRANSACTION;
 
 	/* establish bare connections to activated worker nodes */
 	List *bareConnectionList = NIL;

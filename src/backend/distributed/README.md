@@ -2110,11 +2110,11 @@ When a Citus operation needs a connection to a worker node (hostname, port, user
 - Pick any connection (default), open a new one if none exists
 - Force a new connection (FORCE_NEW_CONNECTION), even if connections already exist
 - Pick a connection outside of a transaction (OUTSIDE_TRANSACTION), or open a new one if none exists
-- Pick the connection used for metadata syncing (REQUIRE_METADATA_CONNECTION), or open a new one if none exists and mark it for metadata syncing
+- Pick the connection used for metadata operations in the current transaction (REQUIRE_METADATA_CONNECTION), or pick or open one and use it for metadata operations until the transaction ends
 
 In addition, the caller can claim a connection exclusively, in which case it will not be returned until it is unclaimed (or transaction end). For instance, the adaptive executor claims connections it uses exclusively. When it calls `StartNodeUserDatabaseConnection` again, it will always get a new connection that it can use to parallelize the query.
 
-It is important that global commands like creating a type, or a function, or changing Citus metadata, all use the same connection. Otherwise, we might end up creating a type over one connection, and a function that depends on it over another. The use of the REQUIRE_METADATA_CONNECTION flag prevents this.
+It is important that global commands like creating a type, or a function, or changing Citus metadata, all use the same connection. Otherwise, we might end up creating a type over one connection, and a function that depends on it over another. The use of the REQUIRE_METADATA_CONNECTION flag prevents this. If the metadata connection of the transaction is not available after a remote transaction was started over it, for instance because it is claimed, the request errors out rather than using another connection. If no remote transaction was started over it, for instance because it failed to connect, another connection is used instead. OUTSIDE_TRANSACTION requests do not return that connection.
 
 The FORCE_NEW_CONNECTION and OUTSIDE_TRANSACTION flags can BOTH be used to execute (and commit) commands outside of the current transaction. Many usages of the older FORCE_NEW_CONNECTION flag could perhaps be replaced by OUTSIDE_TRANSACTION. A benefit of FORCE_NEW_CONNECTION is that it can provide a more intuitive way to parallelize commands than claiming connections exclusively. For instance, the `run_command_on_shards` uses FORCE_NEW_CONNECTION for this purpose.
 

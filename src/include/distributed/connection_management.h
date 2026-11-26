@@ -90,7 +90,8 @@ enum MultiConnectionMode
 	 * and execute a command over this connection. For this reason, the callers
 	 * should also mark the connection exclusive by using
 	 * ClaimConnectionExclusively() to keep using the same connection outside of
-	 * transactions for multiple commands.
+	 * transactions for multiple commands. Such requests do not return the
+	 * metadata connection of the current transaction.
 	 */
 	OUTSIDE_TRANSACTION = 1 << 4,
 
@@ -100,7 +101,10 @@ enum MultiConnectionMode
 	 * metadata includes the distributed table on the workers) can be modified
 	 * accross multiple connections.
 	 *
-	 * With this flag, we guarantee that there is a single metadata connection.
+	 * With this flag, we guarantee that metadata operations in a transaction use
+	 * a single connection: the first request binds a connection until the
+	 * transaction ends. If it is not available, later requests error out once a
+	 * remote transaction was started over it, and bind another one before that.
 	 * But note that this connection can be used for any other operation.
 	 * In other words, this connection is not exclusively reserved for metadata
 	 * operations.
@@ -199,12 +203,6 @@ typedef struct MultiConnection
 	/* is the replication origin session has already been setup for this connection. */
 	bool isReplicationOriginSessionSetup;
 
-	/*
-	 * Should be used to access/modify metadata. See REQUIRE_METADATA_CONNECTION for
-	 * the details.
-	 */
-	bool useForMetadataOperations;
-
 	/* time connection establishment was started, for timeout and executor stats */
 	instr_time connectionEstablishmentStart;
 	instr_time connectionEstablishmentEnd;
@@ -262,6 +260,9 @@ typedef struct ConnectionHashEntry
 {
 	ConnectionHashKey key;
 	dlist_head *connections;
+
+	/* connection for metadata operations in the current transaction, if any */
+	MultiConnection *metadataConnection;
 
 	/* connections list is valid or not */
 	bool isValid;

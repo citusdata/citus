@@ -91,6 +91,45 @@ SELECT hasmetadata FROM pg_dist_node WHERE nodeport=:worker_2_proxy_port;
 -- turn metadata sync back on
 SELECT start_metadata_sync_to_node('localhost', :worker_2_proxy_port);
 
+-- background metadata sync still syncs other nodes while connections to a node
+-- time out
+CREATE FUNCTION trigger_metadata_sync()
+    RETURNS void
+    LANGUAGE C STRICT
+    AS 'citus';
+ALTER SYSTEM SET citus.node_connection_timeout TO 1000;
+SELECT pg_reload_conf();
+SELECT citus.mitmproxy('conn.connect_delay(2000)');
+UPDATE pg_dist_node SET metadatasynced = false WHERE hasmetadata AND groupid <> 0;
+SELECT trigger_metadata_sync();
+DO $$
+BEGIN
+    FOR i IN 1..60 LOOP
+        EXIT WHEN EXISTS (SELECT 1 FROM pg_dist_node
+                          WHERE hasmetadata AND groupid <> 0 AND metadatasynced);
+        PERFORM pg_sleep(0.5);
+    END LOOP;
+END;
+$$;
+SELECT nodeport = :worker_2_proxy_port AS proxied, metadatasynced
+FROM pg_dist_node WHERE hasmetadata AND groupid <> 0 ORDER BY nodeport;
+
+SELECT citus.mitmproxy('conn.allow()');
+ALTER SYSTEM RESET citus.node_connection_timeout;
+SELECT pg_reload_conf();
+DO $$
+BEGIN
+    FOR i IN 1..60 LOOP
+        EXIT WHEN NOT EXISTS (SELECT 1 FROM pg_dist_node
+                              WHERE hasmetadata AND NOT metadatasynced);
+        PERFORM pg_sleep(0.5);
+    END LOOP;
+END;
+$$;
+SELECT nodeport = :worker_2_proxy_port AS proxied, metadatasynced
+FROM pg_dist_node WHERE hasmetadata AND groupid <> 0 ORDER BY nodeport;
+DROP FUNCTION trigger_metadata_sync();
+
 SET SEARCH_PATH = mx_metadata_sync;
 DROP TABLE t1;
 DROP TABLE t2;

@@ -59,8 +59,8 @@ static uint32 ConnectionHashHash(const void *key, Size keysize);
 static int ConnectionHashCompare(const void *a, const void *b, Size keysize);
 static void StartConnectionEstablishment(MultiConnection *connectionn,
 										 ConnectionHashKey *key);
-static MultiConnection * FindAvailableConnection(dlist_head *connections, uint32 flags);
-static void ErrorIfMultipleMetadataConnectionExists(dlist_head *connections);
+static MultiConnection * FindAvailableConnection(ConnectionHashEntry *entry,
+												 uint32 flags);
 static void FreeConnParamsHashEntryFields(ConnParamsHashEntry *entry);
 static void AfterXactHostConnectionHandling(ConnectionHashEntry *entry, bool isCommit);
 static bool ShouldShutdownConnection(MultiConnection *connection, const int
@@ -337,6 +337,7 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port,
 		 * So initialize entry->connections list here.
 		 */
 		entry->isValid = false;
+		entry->metadataConnection = NULL;
 		entry->connections = MemoryContextAlloc(ConnectionContext,
 												sizeof(dlist_head));
 		dlist_init(entry->connections);
@@ -353,7 +354,7 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port,
 	if (!(flags & FORCE_NEW_CONNECTION))
 	{
 		/* check connection cache for a connection that's not already in use */
-		MultiConnection *connection = FindAvailableConnection(entry->connections, flags);
+		MultiConnection *connection = FindAvailableConnection(entry, flags);
 		if (connection)
 		{
 			/*
@@ -366,6 +367,11 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port,
 			if (PQstatus(connection->pgConn) == CONNECTION_OK)
 			{
 				IncrementStatCounterForMyDb(STAT_CONNECTION_REUSED);
+			}
+
+			if (flags & REQUIRE_METADATA_CONNECTION)
+			{
+				entry->metadataConnection = connection;
 			}
 
 			return connection;
@@ -446,7 +452,7 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port,
 
 	if ((flags & REQUIRE_METADATA_CONNECTION))
 	{
-		connection->useForMetadataOperations = true;
+		entry->metadataConnection = connection;
 	}
 
 	/* fully initialized the connection, record it */
@@ -457,27 +463,49 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port,
 
 
 /*
- * FindAvailableConnection searches the given list of connections for one that
- * is not claimed exclusively.
+ * FindAvailableConnection searches the given hash entry's connections for one
+ * that is not claimed exclusively.
+ *
+ * Metadata requests must use the connection that metadata operations already
+ * used in the current transaction, if any. If it is not available, they use
+ * another one if no remote transaction was started over it, and error out
+ * otherwise.
  *
  * If no connection is available, FindAvailableConnection returns NULL.
  */
 static MultiConnection *
-FindAvailableConnection(dlist_head *connections, uint32 flags)
+FindAvailableConnection(ConnectionHashEntry *entry, uint32 flags)
 {
-	List *metadataConnectionCandidateList = NIL;
+	MultiConnection *metadataConnection = entry->metadataConnection;
+	bool requireMetadataConnection = (flags & REQUIRE_METADATA_CONNECTION) &&
+									 metadataConnection != NULL;
 
 	dlist_iter iter;
-	dlist_foreach(iter, connections)
+	dlist_foreach(iter, entry->connections)
 	{
 		MultiConnection *connection =
 			dlist_container(MultiConnection, connectionNode, iter.cur);
+
+		if (requireMetadataConnection && connection != metadataConnection)
+		{
+			continue;
+		}
 
 		if (flags & OUTSIDE_TRANSACTION)
 		{
 			/* don't return connections that are used in transactions */
 			if (connection->
 				remoteTransaction.transactionState != REMOTE_TRANS_NOT_STARTED)
+			{
+				continue;
+			}
+
+			/*
+			 * Nor the metadata connection of this transaction, as the caller
+			 * might claim it or run a separate transaction over it.
+			 */
+			if (connection == metadataConnection &&
+				!(flags & REQUIRE_METADATA_CONNECTION))
 			{
 				continue;
 			}
@@ -515,77 +543,34 @@ FindAvailableConnection(dlist_head *connections, uint32 flags)
 			continue;
 		}
 
-		if ((flags & REQUIRE_METADATA_CONNECTION) &&
-			!connection->useForMetadataOperations)
-		{
-			/*
-			 * The caller requested a metadata connection, and this is not the
-			 * metadata connection. Still, this is a candidate for becoming a
-			 * metadata connection.
-			 */
-			metadataConnectionCandidateList =
-				lappend(metadataConnectionCandidateList, connection);
-			continue;
-		}
-
 		return connection;
 	}
 
-	if ((flags & REQUIRE_METADATA_CONNECTION) &&
-		list_length(metadataConnectionCandidateList) > 0)
+	if (requireMetadataConnection)
 	{
-		/*
-		 * Caller asked a metadata connection, and we couldn't find a connection
-		 * that has already been used for metadata operations.
-		 *
-		 * So, we pick the first connection as the metadata connection.
-		 */
-		MultiConnection *metadataConnection =
-			linitial(metadataConnectionCandidateList);
-
-		Assert(!metadataConnection->claimedExclusively);
-
-		/* remember that we use this connection for metadata operations */
-		metadataConnection->useForMetadataOperations = true;
+		if (!metadataConnection->remoteTransaction.beginSent)
+		{
+			/*
+			 * No remote transaction was started over it, for instance because
+			 * it failed to connect, so another connection can take over.
+			 */
+			entry->metadataConnection = NULL;
+			return FindAvailableConnection(entry, flags);
+		}
 
 		/*
-		 * We cannot have multiple metadata connections. If we see
-		 * this error, it is likely that there is a bug in connection
-		 * management.
+		 * Using another connection could miss uncommitted changes of earlier
+		 * metadata operations in this transaction, or cause self-deadlocks.
 		 */
-		ErrorIfMultipleMetadataConnectionExists(connections);
-
-		return metadataConnection;
+		ereport(ERROR, (errcode(ERRCODE_OBJECT_IN_USE),
+						errmsg("metadata connection to %s:%d is not available",
+							   entry->key.hostname, entry->key.port),
+						errdetail("Metadata operations in a transaction must use "
+								  "the same connection, but that connection is "
+								  "in use or can no longer be used.")));
 	}
 
 	return NULL;
-}
-
-
-/*
- * ErrorIfMultipleMetadataConnectionExists throws an error if the
- * input connection dlist contains more than one metadata connections.
- */
-static void
-ErrorIfMultipleMetadataConnectionExists(dlist_head *connections)
-{
-	bool foundMetadataConnection = false;
-	dlist_iter iter;
-	dlist_foreach(iter, connections)
-	{
-		MultiConnection *connection =
-			dlist_container(MultiConnection, connectionNode, iter.cur);
-
-		if (connection->useForMetadataOperations)
-		{
-			if (foundMetadataConnection)
-			{
-				ereport(ERROR, (errmsg("cannot have multiple metadata connections")));
-			}
-
-			foundMetadataConnection = true;
-		}
-	}
 }
 
 
@@ -653,7 +638,7 @@ ConnectionAvailableToNode(char *hostName, int nodePort, const char *userName,
 	}
 
 	int flags = 0;
-	MultiConnection *connection = FindAvailableConnection(entry->connections, flags);
+	MultiConnection *connection = FindAvailableConnection(entry, flags);
 
 	return connection;
 }
@@ -716,10 +701,15 @@ CloseConnection(MultiConnection *connection)
 	strlcpy(key.user, connection->user, NAMEDATALEN);
 	strlcpy(key.database, connection->database, NAMEDATALEN);
 
-	hash_search(ConnectionHash, &key, HASH_FIND, &found);
+	ConnectionHashEntry *entry = hash_search(ConnectionHash, &key, HASH_FIND, &found);
 
 	if (found)
 	{
+		if (entry->metadataConnection == connection)
+		{
+			entry->metadataConnection = NULL;
+		}
+
 		/* unlink from list of open connections */
 		dlist_delete(&connection->connectionNode);
 
@@ -1478,6 +1468,9 @@ AfterXactHostConnectionHandling(ConnectionHashEntry *entry, bool isCommit)
 
 	dlist_mutable_iter iter;
 	int cachedConnectionCount = 0;
+
+	/* the metadata connection is only bound for the duration of a transaction */
+	entry->metadataConnection = NULL;
 
 	dlist_foreach_modify(iter, entry->connections)
 	{

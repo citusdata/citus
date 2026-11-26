@@ -72,6 +72,20 @@ SELECT 1 FROM citus_add_inactive_node('localhost', :master_port);
 SELECT citus_remove_node('localhost', :master_port);
 SELECT count(*) = 2 AS worker_routes_preserved FROM pg_dist_node;
 
+-- The coordinator's entry must be recognized even if new connections fail,
+-- otherwise the coordinator would try to delete its own node list.
+SELECT citus_set_coordinator_host('localhost', :master_port);
+CREATE ROLE node_remover SUPERUSER LOGIN;
+\c - node_remover - :master_port
+-- cache a connection to the coordinator, then make new logins fail
+SELECT citus_check_connection_to_node('localhost', :master_port);
+SET citus.enable_alter_role_propagation TO off;
+ALTER ROLE node_remover NOLOGIN;
+SELECT citus_remove_node('localhost', :master_port);
+SELECT count(*) = 2 AS worker_routes_preserved FROM pg_dist_node;
+\c - postgres - :master_port
+DROP ROLE node_remover;
+
 \c :original_database - - :worker_1_port
 SET citus.enable_create_database_propagation TO off;
 DROP DATABASE node_removal_recovery WITH (FORCE);
