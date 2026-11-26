@@ -590,7 +590,7 @@ ShardPlacementForFunctionColocatedWithDistTable(DistObjectCacheEntry *procedure,
 ShardPlacement *
 ShardPlacementForFunctionColocatedWithSingleShardTable(CitusTableCacheEntry *cacheEntry)
 {
-	const ShardInterval *shardInterval = cacheEntry->sortedShardIntervalArray[0];
+	const ShardInterval *shardInterval = cacheEntry->generalShardIntervals[0];
 
 	if (shardInterval == NULL)
 	{
@@ -621,7 +621,7 @@ ShardPlacementForFunctionColocatedWithSingleShardTable(CitusTableCacheEntry *cac
 ShardPlacement *
 ShardPlacementForFunctionColocatedWithReferenceTable(CitusTableCacheEntry *cacheEntry)
 {
-	const ShardInterval *shardInterval = cacheEntry->sortedShardIntervalArray[0];
+	const ShardInterval *shardInterval = cacheEntry->generalShardIntervals[0];
 	const uint64 referenceTableShardId = shardInterval->shardId;
 
 	/* Get the list of active shard placements ordered by the groupid */

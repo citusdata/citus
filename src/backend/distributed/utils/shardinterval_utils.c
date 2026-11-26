@@ -251,13 +251,32 @@ ShardIndex(ShardInterval *shardInterval)
 
 
 /*
- * FindShardInterval finds a single shard interval in the cache for the
- * given partition column value. Note that reference tables do not have
+ * FindShardInterval returns a read-only interval for the
+ * given partition column value. Compact entries materialize the Node in the
+ * current context. Reference tables do not have
  * partition columns, thus, pass partitionColumnValue and compareFunction
  * as NULL for them.
  */
 ShardInterval *
 FindShardInterval(Datum partitionColumnValue, CitusTableCacheEntry *cacheEntry)
+{
+	int shardIndex = PartitionValueShardIndex(partitionColumnValue, cacheEntry);
+	if (shardIndex == INVALID_SHARD_INDEX)
+	{
+		return NULL;
+	}
+
+	if (cacheEntry->hasCompactShards)
+	{
+		return CopyCachedShardInterval(cacheEntry, shardIndex);
+	}
+	return cacheEntry->generalShardIntervals[shardIndex];
+}
+
+
+/* Route an un-hashed distribution value without materializing an interval. */
+int
+PartitionValueShardIndex(Datum partitionColumnValue, CitusTableCacheEntry *cacheEntry)
 {
 	Datum searchedValue = partitionColumnValue;
 
@@ -268,14 +287,7 @@ FindShardInterval(Datum partitionColumnValue, CitusTableCacheEntry *cacheEntry)
 										  partitionColumnValue);
 	}
 
-	int shardIndex = FindShardIntervalIndex(searchedValue, cacheEntry);
-
-	if (shardIndex == INVALID_SHARD_INDEX)
-	{
-		return NULL;
-	}
-
-	return cacheEntry->sortedShardIntervalArray[shardIndex];
+	return FindShardIntervalIndex(searchedValue, cacheEntry);
 }
 
 
@@ -294,7 +306,7 @@ FindShardInterval(Datum partitionColumnValue, CitusTableCacheEntry *cacheEntry)
 int
 FindShardIntervalIndex(Datum searchedValue, CitusTableCacheEntry *cacheEntry)
 {
-	ShardInterval **shardIntervalCache = cacheEntry->sortedShardIntervalArray;
+	ShardInterval **shardIntervalCache = cacheEntry->generalShardIntervals;
 	int shardCount = cacheEntry->shardIntervalArrayLength;
 	FmgrInfo *compareFunction = cacheEntry->shardIntervalCompareFunction;
 	bool useBinarySearch = (!IsCitusTableTypeCacheEntry(cacheEntry, HASH_DISTRIBUTED) ||
@@ -313,9 +325,37 @@ FindShardIntervalIndex(Datum searchedValue, CitusTableCacheEntry *cacheEntry)
 			Assert(compareFunction != NULL);
 
 			Oid shardIntervalCollation = cacheEntry->partitionColumn->varcollid;
-			shardIndex = SearchCachedShardInterval(searchedValue, shardIntervalCache,
+			if (cacheEntry->hasCompactShards)
+			{
+				/* Hash bounds are inclusive signed int4 tokens. */
+				int32 token = DatumGetInt32(searchedValue);
+				int lo = 0;
+				int hi = shardCount;
+				while (lo < hi)
+				{
+					int mid = lo + (hi - lo) / 2;
+					CompactHashShard *shard = &cacheEntry->compactShards[mid];
+					if (token < shard->minHashValue)
+					{
+						hi = mid;
+					}
+					else if (token > shard->maxHashValue)
+					{
+						lo = mid + 1;
+					}
+					else
+					{
+						shardIndex = mid;
+						break;
+					}
+				}
+			}
+			else
+			{
+				shardIndex = SearchCachedShardInterval(searchedValue, shardIntervalCache,
 												   shardCount, shardIntervalCollation,
 												   compareFunction);
+			}
 
 			/* we should always return a valid shard index for hash partitioned tables */
 			if (shardIndex == INVALID_SHARD_INDEX)

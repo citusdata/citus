@@ -142,4 +142,5 @@ test: ensure_no_shared_connection_leak
 test: check_mx
 
 test: generated_identity
+test: compact_hash_cache
 test: check_cluster_state

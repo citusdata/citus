@@ -46,6 +46,7 @@
 
 /* declarations for dynamic loading */
 PG_FUNCTION_INFO_V1(load_shard_id_array);
+PG_FUNCTION_INFO_V1(test_check_cached_shard);
 PG_FUNCTION_INFO_V1(load_shard_interval_array);
 PG_FUNCTION_INFO_V1(load_shard_placement_array);
 PG_FUNCTION_INFO_V1(partition_column_id);
@@ -54,6 +55,26 @@ PG_FUNCTION_INFO_V1(is_distributed_table);
 PG_FUNCTION_INFO_V1(create_monolithic_shard_row);
 PG_FUNCTION_INFO_V1(acquire_shared_shard_lock);
 PG_FUNCTION_INFO_V1(relation_count_in_query);
+
+
+/* Check the actual cache layout and the public, independently owned nodes. */
+Datum
+test_check_cached_shard(PG_FUNCTION_ARGS)
+{
+	uint64 shardId = PG_GETARG_INT64(0);
+	uint64 placementId = PG_GETARG_INT64(1);
+	ShardInterval *interval = LoadShardInterval(shardId);
+	GroupShardPlacement *placement = LoadGroupShardPlacement(shardId, placementId);
+	CitusTableCacheEntry *entry = GetCitusTableCacheEntry(interval->relationId);
+	PG_RETURN_BOOL(entry->hasCompactShards == PG_GETARG_BOOL(4) &&
+				   CitusIsA(interval, ShardInterval) &&
+				   CitusIsA(placement, GroupShardPlacement) &&
+				   interval->storageType == PG_GETARG_CHAR(2) &&
+				   placement->shardLength == (uint64) PG_GETARG_INT64(3) &&
+				   placement->placementId == placementId &&
+				   placement->shardId == shardId &&
+				   CachedShardId(entry, interval->shardIndex) == shardId);
+}
 
 
 /*

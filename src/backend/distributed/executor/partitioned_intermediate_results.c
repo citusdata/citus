@@ -405,14 +405,14 @@ QueryTupleShardSearchInfo(ArrayType *minValuesArray, ArrayType *maxValuesArray,
 	result->shardIntervalCompareFunction = shardIntervalCompare;
 	result->shardColumnCompareFunction = shardColumnCompare;
 	result->hashFunction = hashFunction;
-	result->sortedShardIntervalArray =
+	result->generalShardIntervals =
 		SortShardIntervalArray(shardIntervalArray, partitionCount,
 							   partitionColumn->varcollid, shardIntervalCompare);
 	result->hasUninitializedShardInterval =
-		HasUninitializedShardInterval(result->sortedShardIntervalArray, partitionCount);
+		HasUninitializedShardInterval(result->generalShardIntervals, partitionCount);
 	result->hasOverlappingShardInterval =
 		result->hasUninitializedShardInterval ||
-		HasOverlappingShardInterval(result->sortedShardIntervalArray, partitionCount,
+		HasOverlappingShardInterval(result->generalShardIntervals, partitionCount,
 									partitionColumn->varcollid, shardIntervalCompare);
 	ErrorIfInconsistentShardIntervals(result);
 

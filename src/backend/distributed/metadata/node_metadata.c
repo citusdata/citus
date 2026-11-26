@@ -1904,8 +1904,6 @@ get_shard_id_for_distribution_column(PG_FUNCTION_ARGS)
 {
 	CheckCitusVersion(ERROR);
 
-	ShardInterval *shardInterval = NULL;
-
 	/*
 	 * To have optional parameter as NULL, we defined this UDF as not strict, therefore
 	 * we need to check all parameters for NULL values.
@@ -1933,7 +1931,8 @@ get_shard_id_for_distribution_column(PG_FUNCTION_ARGS)
 			PG_RETURN_INT64(0);
 		}
 
-		shardInterval = (ShardInterval *) linitial(shardIntervalList);
+		ShardInterval *interval = linitial(shardIntervalList);
+		PG_RETURN_INT64(interval->shardId);
 	}
 	else if (IsCitusTableType(relationId, HASH_DISTRIBUTED) ||
 			 IsCitusTableType(relationId, RANGE_DISTRIBUTED))
@@ -1958,7 +1957,8 @@ get_shard_id_for_distribution_column(PG_FUNCTION_ARGS)
 		Datum distributionValueDatum = StringToDatum(distributionValueString,
 													 distributionDataType);
 
-		shardInterval = FindShardInterval(distributionValueDatum, cacheEntry);
+		int index = PartitionValueShardIndex(distributionValueDatum, cacheEntry);
+		PG_RETURN_INT64(index == INVALID_SHARD_INDEX ? 0 : CachedShardId(cacheEntry, index));
 	}
 	else
 	{
@@ -1967,13 +1967,6 @@ get_shard_id_for_distribution_column(PG_FUNCTION_ARGS)
 							   "supported for hash partitioned tables, range partitioned "
 							   "tables and reference tables.")));
 	}
-
-	if (shardInterval != NULL)
-	{
-		PG_RETURN_INT64(shardInterval->shardId);
-	}
-
-	PG_RETURN_INT64(0);
 }
 
 

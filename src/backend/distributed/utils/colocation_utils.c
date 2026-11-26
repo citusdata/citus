@@ -1164,10 +1164,8 @@ ColocatedShardIntervalList(ShardInterval *shardInterval)
 		Assert(cacheEntry->shardIntervalArrayLength == colocatedTableCacheEntry->
 			   shardIntervalArrayLength);
 
-		ShardInterval *colocatedShardInterval =
-			colocatedTableCacheEntry->sortedShardIntervalArray[shardIntervalIndex];
-
-		ShardInterval *copyShardInterval = CopyShardInterval(colocatedShardInterval);
+		ShardInterval *copyShardInterval =
+			CopyCachedShardInterval(colocatedTableCacheEntry, shardIntervalIndex);
 
 		colocatedShardList = lappend(colocatedShardList, copyShardInterval);
 	}
@@ -1235,10 +1233,8 @@ ColocatedNonPartitionShardIntervalList(ShardInterval *shardInterval)
 		Assert(cacheEntry->shardIntervalArrayLength == colocatedTableCacheEntry->
 			   shardIntervalArrayLength);
 
-		ShardInterval *colocatedShardInterval =
-			colocatedTableCacheEntry->sortedShardIntervalArray[shardIntervalIndex];
-
-		ShardInterval *copyShardInterval = CopyShardInterval(colocatedShardInterval);
+		ShardInterval *copyShardInterval =
+			CopyCachedShardInterval(colocatedTableCacheEntry, shardIntervalIndex);
 
 		colocatedShardList = lappend(colocatedShardList, copyShardInterval);
 	}
@@ -1394,7 +1390,7 @@ ColocatedShardIdInRelation(Oid relationId, int shardIndex)
 {
 	CitusTableCacheEntry *tableCacheEntry = GetCitusTableCacheEntry(relationId);
 
-	return tableCacheEntry->sortedShardIntervalArray[shardIndex]->shardId;
+	return CachedShardId(tableCacheEntry, shardIndex);
 }
 
 

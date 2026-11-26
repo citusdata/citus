@@ -480,15 +480,14 @@ FullShardPlacementList(Oid relationId, ArrayType *excludedShardArray)
 
 	for (int shardIndex = 0; shardIndex < shardIntervalArrayLength; shardIndex++)
 	{
-		ShardInterval *shardInterval =
-			citusTableCacheEntry->sortedShardIntervalArray[shardIndex];
-		GroupShardPlacement *placementArray =
-			citusTableCacheEntry->arrayOfPlacementArrays[shardIndex];
-		int numberOfPlacements =
-			citusTableCacheEntry->arrayOfPlacementArrayLengths[shardIndex];
+		uint64 shardId = CachedShardId(citusTableCacheEntry, shardIndex);
+		GroupShardPlacement scratch;
+		int numberOfPlacements;
+		GroupShardPlacement *placementArray = CachedShardPlacements(citusTableCacheEntry,
+			shardIndex, &scratch, &numberOfPlacements);
 
 		if (BigIntArrayDatumContains(excludedShardArrayDatum, excludedShardIdCount,
-									 shardInterval->shardId))
+									 shardId))
 		{
 			continue;
 		}

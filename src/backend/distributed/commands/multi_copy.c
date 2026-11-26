@@ -2571,15 +2571,15 @@ ShardIdForTuple(CitusCopyDestReceiver *copyDest, Datum *columnValues, bool *colu
 	 * For reference table, and single shard distributed table this function blindly returns the tables single
 	 * shard.
 	 */
-	ShardInterval *shardInterval = FindShardInterval(partitionColumnValue, cacheEntry);
-	if (shardInterval == NULL)
+	int shardIndex = PartitionValueShardIndex(partitionColumnValue, cacheEntry);
+	if (shardIndex == INVALID_SHARD_INDEX)
 	{
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 						errmsg("could not find shard for partition column "
 							   "value")));
 	}
 
-	return shardInterval->shardId;
+	return CachedShardId(cacheEntry, shardIndex);
 }
 
 

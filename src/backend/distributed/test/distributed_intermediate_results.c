@@ -159,9 +159,7 @@ redistribute_task_list_results(PG_FUNCTION_ARGS)
 
 	for (int shardIndex = 0; shardIndex < shardCount; shardIndex++)
 	{
-		ShardInterval *shardInterval =
-			targetRelation->sortedShardIntervalArray[shardIndex];
-		uint64 shardId = shardInterval->shardId;
+		uint64 shardId = CachedShardId(targetRelation, shardIndex);
 
 		int fragmentCount = list_length(shardResultIds[shardIndex]);
 		Datum *resultIdValues = palloc0(fragmentCount * sizeof(Datum));
