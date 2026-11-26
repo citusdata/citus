@@ -136,16 +136,16 @@ test: allow_unsafe_insert_select_pushdown
 test: extract_deparse
 
 # ----------
-# multi_having_var_remapping covers a planner fix introduced in 13.5, absent from
-# the N-1 (13.4.0) Citus binary. Keep these cases out of the N-1 test matrix;
-# they remain part of multi_having_pushdown on main.
-# ----------
-test: multi_having_var_remapping
-
-# ----------
 # update_subscript_fetch_8987 covers an UPDATE .. SET crash (#8987); the N-1
 # (13.4-1) coordinator library still segfaults on these statements, so this
 # cannot run under the N-1 test matrix. Move to multi_schedule, next to
 # subscripting_op, once the N-1 coordinator library has the fix.
 # ----------
 test: update_subscript_fetch_8987
+
+# ----------
+# multi_having_var_remapping covers a planner fix introduced in 13.5, absent from
+# the N-1 (13.4.0) Citus binary. Keep these cases out of the N-1 test matrix;
+# they remain part of multi_having_pushdown on main.
+# ----------
+test: multi_having_var_remapping
