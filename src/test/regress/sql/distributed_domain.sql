@@ -353,6 +353,7 @@ SET client_min_messages TO error;
 SELECT 1 FROM run_command_on_workers($$ CREATE ROLE domain_owner; $$);
 CREATE ROLE domain_owner;
 RESET client_min_messages;
+GRANT USAGE, CREATE ON SCHEMA distributed_domain TO domain_owner;
 
 CREATE DOMAIN alter_domain_owner AS int;
 ALTER DOMAIN alter_domain_owner OWNER TO domain_owner;

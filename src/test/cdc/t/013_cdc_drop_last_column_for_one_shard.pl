@@ -66,7 +66,10 @@ is($result, 1, 'CDC create_distributed_table - schema change before move');
 
 
 my $shard_id = $workers[1]->safe_psql('postgres',
-        "SELECT shardid FROM citus_shards ORDER BY shardid LIMIT 1;");
+        "SELECT shardid FROM citus_shards
+         WHERE table_name = 'sensors'::regclass
+           AND nodeport = current_setting('port')::int
+         ORDER BY shardid LIMIT 1;");
 
 my $shard_to_drop_column = "sensors_" . $shard_id;
 

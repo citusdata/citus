@@ -166,7 +166,7 @@ def test_cluster_node_health_cancellation_stops_remote_checks(cluster):
         return all(
             node.sql_value(ACTIVE_PROBES_QUERY, (probe_command,)) == 1
             for node in cluster.nodes
-        )
+        ) and blackhole.connection_count == len(cluster.nodes)
 
     # each source node cancels its in-flight check instead of waiting for the timeout
     cancelled_check_log = (

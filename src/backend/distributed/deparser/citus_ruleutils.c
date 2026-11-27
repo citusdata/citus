@@ -976,11 +976,12 @@ AddVacuumParams(ReindexStmt *reindexStmt, StringInfo buffer)
 	{
 		if (temp->len > 0)
 		{
-			appendStringInfo(temp, ", TABLESPACE %s", tableSpaceName);
+			appendStringInfo(temp, ", TABLESPACE %s",
+							 quote_identifier(tableSpaceName));
 		}
 		else
 		{
-			appendStringInfo(temp, "TABLESPACE %s", tableSpaceName);
+			appendStringInfo(temp, "TABLESPACE %s", quote_identifier(tableSpaceName));
 		}
 	}
 

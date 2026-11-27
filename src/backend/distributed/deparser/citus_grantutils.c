@@ -69,12 +69,12 @@ AppendGrantRestrictAndCascade(StringInfo buf, GrantStmt *stmt)
 
 /*
  * Append the 'GRANTED BY' clause to the given buffer if the given statement is a
- * 'GRANT' statement and the grantor is specified.
+ * 'GRANT' or 'REVOKE' statement and the grantor is specified.
  */
 void
 AppendGrantedByInGrantForRoleSpec(StringInfo buf, RoleSpec *grantor, bool isGrant)
 {
-	if (isGrant && grantor)
+	if (grantor)
 	{
 		appendStringInfo(buf, " GRANTED BY %s", RoleSpecString(grantor, true));
 	}
@@ -83,7 +83,7 @@ AppendGrantedByInGrantForRoleSpec(StringInfo buf, RoleSpec *grantor, bool isGran
 
 /*
  * Append the 'GRANTED BY' clause to the given buffer using 'GrantStmt',
- * if the given statement is a 'GRANT' statement and the grantor is specified.
+ * if the grantor is specified.
  */
 void
 AppendGrantedByInGrant(StringInfo buf, GrantStmt *stmt)
@@ -106,7 +106,9 @@ AppendGrantSharedSuffix(StringInfo buf, GrantStmt *stmt)
 {
 	AppendGrantGrantees(buf, stmt);
 	AppendWithGrantOption(buf, stmt);
-	AppendGrantRestrictAndCascade(buf, stmt);
+
+	/* GRANTED BY must precede CASCADE/RESTRICT, per the GRANT/REVOKE grammar */
 	AppendGrantedByInGrant(buf, stmt);
+	AppendGrantRestrictAndCascade(buf, stmt);
 	appendStringInfo(buf, ";");
 }

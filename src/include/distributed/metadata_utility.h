@@ -393,6 +393,8 @@ extern DeferredErrorMessage * DeferErrorIfCircularDependencyExists(const
 																   objectAddress);
 extern List * GetDistributableDependenciesForObject(const ObjectAddress *target);
 extern List * GetAllDependencyCreateDDLCommands(const List *dependencies);
+extern List * GetAllDependencyCreateDDLCommandsForMetadataReplay(const
+																 List *dependencies);
 extern bool ShouldPropagate(void);
 extern bool ShouldPropagateCreateInCoordinatedTransction(void);
 extern bool ShouldPropagateAnyObject(List *addresses);
@@ -466,4 +468,5 @@ extern bool IsBackgroundJobStatusTerminal(BackgroundJobStatus status);
 extern bool IsBackgroundTaskStatusTerminal(BackgroundTaskStatus status);
 extern Oid BackgroundJobStatusOid(BackgroundJobStatus status);
 extern Oid BackgroundTaskStatusOid(BackgroundTaskStatus status);
+extern int GetAutoConvertedAttrIndexInPgDistPartition(TupleDesc tupleDEsc);
 #endif   /* METADATA_UTILITY_H */

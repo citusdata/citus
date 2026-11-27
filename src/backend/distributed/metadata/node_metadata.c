@@ -49,6 +49,7 @@
 #include "distributed/multi_join_order.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/multi_router_planner.h"
+#include "distributed/namespace_utils.h"
 #include "distributed/pg_dist_node.h"
 #include "distributed/pg_dist_node_metadata.h"
 #include "distributed/reference_table_utils.h"
@@ -1677,6 +1678,9 @@ EnsureParentSessionHasExclusiveLockOnPgDistNode(pid_t parentSessionPid)
 		ereport(ERROR, (errmsg("could not connect to SPI manager")));
 	}
 
+	/* Do not resolve operators through the caller's search path. */
+	int searchPathNestLevel = PushEmptySearchPath();
+
 	char *checkIfParentLockCommand = "SELECT pid FROM pg_locks WHERE "
 									 "pid = %d AND database = %d AND relation = %d AND "
 									 "mode = 'ExclusiveLock' AND granted = TRUE";
@@ -1692,6 +1696,8 @@ EnsureParentSessionHasExclusiveLockOnPgDistNode(pid_t parentSessionPid)
 	}
 
 	bool parentHasExclusiveLock = SPI_processed > 0;
+
+	PopEmptySearchPath(searchPathNestLevel);
 
 	SPI_finish();
 
@@ -1982,7 +1988,10 @@ RemoveNodeFromCluster(char *nodeName, int32 nodePort)
 		 * Secondary nodes are read-only, never 2PC is used.
 		 * Hence, no items can be inserted to pg_dist_transaction
 		 * for secondary nodes.
+		 *
+		 * Serialize deletion with recovery, after acquiring pg_dist_node.
 		 */
+		LockTransactionRecovery(ShareUpdateExclusiveLock);
 		DeleteWorkerTransactions(workerNode);
 	}
 

@@ -817,12 +817,13 @@ UpdateRelationColocationGroup(Oid distributedRelationId, uint32 colocationId,
 	bool indexOK = true;
 	int scanKeyCount = 1;
 	ScanKeyData scanKey[1];
-	Datum values[Natts_pg_dist_partition];
-	bool isNull[Natts_pg_dist_partition];
-	bool replace[Natts_pg_dist_partition];
 
 	Relation pgDistPartition = table_open(DistPartitionRelationId(), RowExclusiveLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistPartition);
+
+	Datum *values = (Datum *) palloc0(tupleDescriptor->natts * sizeof(Datum));
+	bool *isNull = (bool *) palloc0(tupleDescriptor->natts * sizeof(bool));
+	bool *replace = (bool *) palloc0(tupleDescriptor->natts * sizeof(bool));
 
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_partition_logicalrelid,
 				BTEqualStrategyNumber, F_OIDEQ, ObjectIdGetDatum(distributedRelationId));
@@ -840,10 +841,6 @@ UpdateRelationColocationGroup(Oid distributedRelationId, uint32 colocationId,
 							   distributedRelationName)));
 	}
 
-	memset(values, 0, sizeof(values));
-	memset(isNull, false, sizeof(isNull));
-	memset(replace, false, sizeof(replace));
-
 	values[Anum_pg_dist_partition_colocationid - 1] = UInt32GetDatum(colocationId);
 	isNull[Anum_pg_dist_partition_colocationid - 1] = false;
 	replace[Anum_pg_dist_partition_colocationid - 1] = true;
@@ -859,6 +856,10 @@ UpdateRelationColocationGroup(Oid distributedRelationId, uint32 colocationId,
 
 	systable_endscan(scanDescriptor);
 	table_close(pgDistPartition, NoLock);
+
+	pfree(values);
+	pfree(isNull);
+	pfree(replace);
 
 	bool shouldSyncMetadata = ShouldSyncTableMetadata(distributedRelationId);
 	if (shouldSyncMetadata && !localOnly)
@@ -1000,10 +1001,12 @@ ColocationGroupTableList(uint32 colocationId, uint32 count)
 													indexOK, NULL, scanKeyCount, scanKey);
 
 	HeapTuple heapTuple = systable_getnext(scanDescriptor);
+	Datum *datumArray = (Datum *) palloc(tupleDescriptor->natts * sizeof(Datum));
+	bool *isNullArray = (bool *) palloc(tupleDescriptor->natts * sizeof(bool));
 	while (HeapTupleIsValid(heapTuple))
 	{
-		bool isNullArray[Natts_pg_dist_partition];
-		Datum datumArray[Natts_pg_dist_partition];
+		memset(datumArray, 0, tupleDescriptor->natts * sizeof(Datum));
+		memset(isNullArray, 0, tupleDescriptor->natts * sizeof(bool));
 		heap_deform_tuple(heapTuple, tupleDescriptor, datumArray, isNullArray);
 		Oid colocatedTableId = DatumGetObjectId(
 			datumArray[Anum_pg_dist_partition_logicalrelid - 1]);
@@ -1022,6 +1025,8 @@ ColocationGroupTableList(uint32 colocationId, uint32 count)
 			break;
 		}
 	}
+	pfree(datumArray);
+	pfree(isNullArray);
 
 	systable_endscan(scanDescriptor);
 	table_close(pgDistPartition, AccessShareLock);
@@ -1194,10 +1199,12 @@ ColocatedTableId(int32 colocationId)
 													indexOK, NULL, scanKeyCount, scanKey);
 
 	HeapTuple heapTuple = systable_getnext(scanDescriptor);
+	Datum *datumArray = (Datum *) palloc(tupleDescriptor->natts * sizeof(Datum));
+	bool *isNullArray = (bool *) palloc(tupleDescriptor->natts * sizeof(bool));
 	while (HeapTupleIsValid(heapTuple))
 	{
-		bool isNullArray[Natts_pg_dist_partition];
-		Datum datumArray[Natts_pg_dist_partition];
+		memset(datumArray, 0, tupleDescriptor->natts * sizeof(Datum));
+		memset(isNullArray, 0, tupleDescriptor->natts * sizeof(bool));
 		heap_deform_tuple(heapTuple, tupleDescriptor, datumArray, isNullArray);
 		colocatedTableId = DatumGetObjectId(
 			datumArray[Anum_pg_dist_partition_logicalrelid - 1]);
@@ -1225,6 +1232,8 @@ ColocatedTableId(int32 colocationId)
 
 		heapTuple = systable_getnext(scanDescriptor);
 	}
+	pfree(datumArray);
+	pfree(isNullArray);
 
 	systable_endscan(scanDescriptor);
 	table_close(pgDistPartition, AccessShareLock);
