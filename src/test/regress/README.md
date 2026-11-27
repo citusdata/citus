@@ -125,7 +125,7 @@ See [`src/test/regress/citus_tests/upgrade/README.md`](https://github.com/citusd
 
 ## Arbitrary configs testing
 
-See [`src/test/regress/citus_tests/arbitrary_configs/README.md`](https://github.com/citusdata/citus/blob/master/src/test/regress/citus_tests/arbitrary_configsupgrade/README.md)
+See [`src/test/regress/citus_tests/arbitrary_configs/README.md`](https://github.com/citusdata/citus/blob/main/src/test/regress/citus_tests/arbitrary_configs/README.md)
 
 ## Failure testing
 
