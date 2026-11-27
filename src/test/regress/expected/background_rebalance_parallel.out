@@ -130,7 +130,9 @@ SELECT * FROM get_rebalance_table_shards_plan() ORDER BY shardid;
  table2_colg3 | 85674021 |          0 | localhost  |      57638 | localhost  |      57639
 (12 rows)
 
-SELECT * FROM citus_rebalance_start();
+-- pin the non-parallel transfers so that this test keeps covering the classic path
+SELECT * FROM citus_rebalance_start(parallel_transfer_reference_tables := false,
+                                    parallel_transfer_colocated_shards := false);
  citus_rebalance_start
 ---------------------------------------------------------------------
                  17777
@@ -276,7 +278,8 @@ SELECT 1 FROM citus_add_node('localhost', :worker_6_port);
         1
 (1 row)
 
-SELECT * FROM citus_rebalance_start();
+SELECT * FROM citus_rebalance_start(parallel_transfer_reference_tables := false,
+                                    parallel_transfer_colocated_shards := false);
  citus_rebalance_start
 ---------------------------------------------------------------------
                  17778
@@ -463,7 +466,8 @@ SELECT citus_add_node('localhost', :worker_3_port);
              57
 (1 row)
 
-SELECT citus_rebalance_start AS job_id from citus_rebalance_start() \gset
+SELECT citus_rebalance_start AS job_id from citus_rebalance_start(parallel_transfer_reference_tables := false,
+                                                                 parallel_transfer_colocated_shards := false) \gset
 -- see dependent tasks to understand which tasks remain runnable because of
 -- citus.max_background_task_executors_per_node
 -- and which tasks are actually blocked from colocation group dependencies
@@ -811,7 +815,9 @@ SELECT * FROM get_rebalance_table_shards_plan(rebalance_strategy := 'test_source
  table1_colg4 | 85674054 |          0 | localhost  |      57638 | localhost  |      57637
 (3 rows)
 
-SELECT citus_rebalance_start AS job_id from citus_rebalance_start(rebalance_strategy := 'test_source_then_target') \gset
+SELECT citus_rebalance_start AS job_id from citus_rebalance_start(rebalance_strategy := 'test_source_then_target',
+                                                                 parallel_transfer_reference_tables := false,
+                                                                 parallel_transfer_colocated_shards := false) \gset
 -- check that the third move is blocked and depends on the first two
 SELECT job_id, task_id, status, nodes_involved
 FROM pg_dist_background_task WHERE job_id in (:job_id) ORDER BY task_id;
@@ -851,6 +857,160 @@ SELECT public.wait_for_resource_cleanup();
 (1 row)
 
 select citus_remove_node('localhost', :worker_3_port);
+ citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+-- PART 4
+-- Same kind of scenario as PART 1, but calling citus_rebalance_start() without
+-- arguments, so it runs with the defaults parallel_transfer_reference_tables = true
+-- and parallel_transfer_colocated_shards = true. PART 1-3 pass false explicitly
+-- to keep covering the serial path, so this part is what covers the defaults.
+--
+-- Expected differences from PART 1:
+--   * reference table shards are copied by one task per (shard, missing node)
+--     instead of a single replicate_reference_tables() task, and
+--   * moves of the same colocation group do not depend on each other, they only
+--     depend on the reference table copies and on node-based ordering.
+ALTER SEQUENCE pg_dist_background_task_task_id_seq RESTART 2000;
+CREATE SCHEMA background_rebalance_parallel;
+SET search_path TO background_rebalance_parallel;
+SET citus.next_shard_id TO 85674100;
+-- two colocation groups with 4 shards each, all on worker_1 and worker_2
+CREATE TABLE table1_colg1 (a int PRIMARY KEY);
+SELECT create_distributed_table('table1_colg1', 'a', shard_count => 4, colocate_with => 'none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE table2_colg1 (b int PRIMARY KEY);
+SELECT create_distributed_table('table2_colg1', 'b', colocate_with => 'table1_colg1');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE table1_colg2 (a int PRIMARY KEY);
+SELECT create_distributed_table('table1_colg2', 'a', shard_count => 4, colocate_with => 'none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE table2_colg2 (b int PRIMARY KEY);
+SELECT create_distributed_table('table2_colg2', 'b', colocate_with => 'table1_colg2');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- a reference table, so that the new nodes are missing a reference table placement
+CREATE TABLE ref_table (a int PRIMARY KEY);
+SELECT create_reference_table('ref_table');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT 1 FROM citus_add_node('localhost', :worker_3_port);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+SELECT 1 FROM citus_add_node('localhost', :worker_4_port);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+SELECT citus_rebalance_start AS job_id FROM citus_rebalance_start() \gset
+SELECT citus_rebalance_wait();
+ citus_rebalance_wait
+---------------------------------------------------------------------
+
+(1 row)
+
+-- reference table copy tasks are prefixed with a SET LOCAL application_name that
+-- contains the gpid of the backend, which differs between runs, so strip it.
+-- Also mask the source node of reference table copies: it is the coordinator when
+-- the coordinator is in the metadata and a worker otherwise, which depends on how
+-- the test is run.
+CREATE FUNCTION task_command(p_task_id bigint) RETURNS text AS $$
+    SELECT regexp_replace(
+               regexp_replace(command, '^SET LOCAL application_name TO ''[^'']*'';\s*', ''),
+               'copy_single_shard_placement\((\d+),\d+,', 'copy_single_shard_placement(\1,<source>,')
+    FROM pg_dist_background_task WHERE task_id = p_task_id;
+$$ LANGUAGE sql;
+SELECT task_id, task_command(task_id)
+FROM pg_dist_background_task WHERE job_id = :job_id ORDER BY task_id;
+ task_id |                                          task_command
+---------------------------------------------------------------------
+    2000 | SELECT citus_internal.citus_internal_copy_single_shard_placement(85674116,<source>,64,3,'auto')
+    2001 | SELECT citus_internal.citus_internal_copy_single_shard_placement(85674116,<source>,64,4,'auto')
+    2002 | SELECT citus_internal.citus_internal_copy_single_shard_placement(85674116,<source>,65,3,'auto')
+    2003 | SELECT citus_internal.citus_internal_copy_single_shard_placement(85674116,<source>,65,4,'auto')
+    2004 | SELECT pg_catalog.citus_move_shard_placement(85674101,62,64,'auto')
+    2005 | SELECT pg_catalog.citus_move_shard_placement(85674100,61,65,'auto')
+    2006 | SELECT pg_catalog.citus_move_shard_placement(85674109,62,64,'auto')
+    2007 | SELECT pg_catalog.citus_move_shard_placement(85674108,61,65,'auto')
+(8 rows)
+
+-- 85674100 and 85674101 are both shards of table1_colg1, so their moves are in the
+-- same colocation group, yet neither move depends on the other
+SELECT task_id, task_command(task_id), depends_on, task_command(depends_on)
+FROM pg_dist_background_task_depend WHERE job_id = :job_id ORDER BY task_id, depends_on ASC;
+ task_id |                                          task_command                                           | depends_on |                                          task_command
+---------------------------------------------------------------------
+    2001 | SELECT citus_internal.citus_internal_copy_single_shard_placement(85674116,<source>,64,4,'auto') |       2000 | SELECT citus_internal.citus_internal_copy_single_shard_placement(85674116,<source>,64,3,'auto')
+    2003 | SELECT citus_internal.citus_internal_copy_single_shard_placement(85674116,<source>,65,4,'auto') |       2002 | SELECT citus_internal.citus_internal_copy_single_shard_placement(85674116,<source>,65,3,'auto')
+    2004 | SELECT pg_catalog.citus_move_shard_placement(85674101,62,64,'auto')                             |       2001 | SELECT citus_internal.citus_internal_copy_single_shard_placement(85674116,<source>,64,4,'auto')
+    2004 | SELECT pg_catalog.citus_move_shard_placement(85674101,62,64,'auto')                             |       2003 | SELECT citus_internal.citus_internal_copy_single_shard_placement(85674116,<source>,65,4,'auto')
+    2005 | SELECT pg_catalog.citus_move_shard_placement(85674100,61,65,'auto')                             |       2001 | SELECT citus_internal.citus_internal_copy_single_shard_placement(85674116,<source>,64,4,'auto')
+    2005 | SELECT pg_catalog.citus_move_shard_placement(85674100,61,65,'auto')                             |       2003 | SELECT citus_internal.citus_internal_copy_single_shard_placement(85674116,<source>,65,4,'auto')
+    2006 | SELECT pg_catalog.citus_move_shard_placement(85674109,62,64,'auto')                             |       2001 | SELECT citus_internal.citus_internal_copy_single_shard_placement(85674116,<source>,64,4,'auto')
+    2006 | SELECT pg_catalog.citus_move_shard_placement(85674109,62,64,'auto')                             |       2003 | SELECT citus_internal.citus_internal_copy_single_shard_placement(85674116,<source>,65,4,'auto')
+    2007 | SELECT pg_catalog.citus_move_shard_placement(85674108,61,65,'auto')                             |       2001 | SELECT citus_internal.citus_internal_copy_single_shard_placement(85674116,<source>,64,4,'auto')
+    2007 | SELECT pg_catalog.citus_move_shard_placement(85674108,61,65,'auto')                             |       2003 | SELECT citus_internal.citus_internal_copy_single_shard_placement(85674116,<source>,65,4,'auto')
+(10 rows)
+
+-- every task finished and both new nodes got their reference table placement
+SELECT status, count(*) FROM pg_dist_background_task WHERE job_id = :job_id GROUP BY status;
+ status | count
+---------------------------------------------------------------------
+ done   |     8
+(1 row)
+
+SELECT nodeport, count(*)
+FROM pg_dist_shard_placement
+WHERE shardid = (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'ref_table'::regclass) AND
+      nodeport IN (:worker_3_port, :worker_4_port)
+GROUP BY nodeport ORDER BY nodeport;
+ nodeport | count
+---------------------------------------------------------------------
+    57639 |     1
+    57640 |     1
+(2 rows)
+
+DROP SCHEMA background_rebalance_parallel CASCADE;
+TRUNCATE pg_dist_background_job CASCADE;
+TRUNCATE pg_dist_background_task CASCADE;
+TRUNCATE pg_dist_background_task_depend;
+SELECT public.wait_for_resource_cleanup();
+ wait_for_resource_cleanup
+---------------------------------------------------------------------
+
+(1 row)
+
+select citus_remove_node('localhost', :worker_3_port);
+ citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+select citus_remove_node('localhost', :worker_4_port);
  citus_remove_node
 ---------------------------------------------------------------------
 

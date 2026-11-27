@@ -69,7 +69,9 @@ SELECT 1 FROM citus_add_node('localhost', :worker_4_port);
 
 SELECT * FROM get_rebalance_table_shards_plan() ORDER BY shardid;
 
-SELECT * FROM citus_rebalance_start();
+-- pin the non-parallel transfers so that this test keeps covering the classic path
+SELECT * FROM citus_rebalance_start(parallel_transfer_reference_tables := false,
+                                    parallel_transfer_colocated_shards := false);
 
 SELECT citus_rebalance_wait();
 
@@ -127,7 +129,8 @@ SELECT citus_set_node_property('localhost', :worker_4_port, 'shouldhaveshards', 
 SELECT 1 FROM citus_add_node('localhost', :worker_5_port);
 SELECT 1 FROM citus_add_node('localhost', :worker_6_port);
 
-SELECT * FROM citus_rebalance_start();
+SELECT * FROM citus_rebalance_start(parallel_transfer_reference_tables := false,
+                                    parallel_transfer_colocated_shards := false);
 
 SELECT citus_rebalance_wait();
 
@@ -200,7 +203,8 @@ INSERT INTO table2_colg4 SELECT i FROM generate_series(0, 100)i;
 SELECT citus_add_node('localhost', :worker_2_port);
 SELECT citus_add_node('localhost', :worker_3_port);
 
-SELECT citus_rebalance_start AS job_id from citus_rebalance_start() \gset
+SELECT citus_rebalance_start AS job_id from citus_rebalance_start(parallel_transfer_reference_tables := false,
+                                                                 parallel_transfer_colocated_shards := false) \gset
 
 -- see dependent tasks to understand which tasks remain runnable because of
 -- citus.max_background_task_executors_per_node
@@ -380,7 +384,9 @@ INSERT INTO
 
 SELECT * FROM get_rebalance_table_shards_plan(rebalance_strategy := 'test_source_then_target');
 
-SELECT citus_rebalance_start AS job_id from citus_rebalance_start(rebalance_strategy := 'test_source_then_target') \gset
+SELECT citus_rebalance_start AS job_id from citus_rebalance_start(rebalance_strategy := 'test_source_then_target',
+                                                                 parallel_transfer_reference_tables := false,
+                                                                 parallel_transfer_colocated_shards := false) \gset
 
 -- check that the third move is blocked and depends on the first two
 SELECT job_id, task_id, status, nodes_involved
@@ -401,6 +407,79 @@ TRUNCATE pg_dist_background_task CASCADE;
 TRUNCATE pg_dist_background_task_depend;
 SELECT public.wait_for_resource_cleanup();
 select citus_remove_node('localhost', :worker_3_port);
+
+-- PART 4
+-- Same kind of scenario as PART 1, but calling citus_rebalance_start() without
+-- arguments, so it runs with the defaults parallel_transfer_reference_tables = true
+-- and parallel_transfer_colocated_shards = true. PART 1-3 pass false explicitly
+-- to keep covering the serial path, so this part is what covers the defaults.
+--
+-- Expected differences from PART 1:
+--   * reference table shards are copied by one task per (shard, missing node)
+--     instead of a single replicate_reference_tables() task, and
+--   * moves of the same colocation group do not depend on each other, they only
+--     depend on the reference table copies and on node-based ordering.
+ALTER SEQUENCE pg_dist_background_task_task_id_seq RESTART 2000;
+CREATE SCHEMA background_rebalance_parallel;
+SET search_path TO background_rebalance_parallel;
+SET citus.next_shard_id TO 85674100;
+
+-- two colocation groups with 4 shards each, all on worker_1 and worker_2
+CREATE TABLE table1_colg1 (a int PRIMARY KEY);
+SELECT create_distributed_table('table1_colg1', 'a', shard_count => 4, colocate_with => 'none');
+CREATE TABLE table2_colg1 (b int PRIMARY KEY);
+SELECT create_distributed_table('table2_colg1', 'b', colocate_with => 'table1_colg1');
+
+CREATE TABLE table1_colg2 (a int PRIMARY KEY);
+SELECT create_distributed_table('table1_colg2', 'a', shard_count => 4, colocate_with => 'none');
+CREATE TABLE table2_colg2 (b int PRIMARY KEY);
+SELECT create_distributed_table('table2_colg2', 'b', colocate_with => 'table1_colg2');
+
+-- a reference table, so that the new nodes are missing a reference table placement
+CREATE TABLE ref_table (a int PRIMARY KEY);
+SELECT create_reference_table('ref_table');
+
+SELECT 1 FROM citus_add_node('localhost', :worker_3_port);
+SELECT 1 FROM citus_add_node('localhost', :worker_4_port);
+
+SELECT citus_rebalance_start AS job_id FROM citus_rebalance_start() \gset
+SELECT citus_rebalance_wait();
+
+-- reference table copy tasks are prefixed with a SET LOCAL application_name that
+-- contains the gpid of the backend, which differs between runs, so strip it.
+-- Also mask the source node of reference table copies: it is the coordinator when
+-- the coordinator is in the metadata and a worker otherwise, which depends on how
+-- the test is run.
+CREATE FUNCTION task_command(p_task_id bigint) RETURNS text AS $$
+    SELECT regexp_replace(
+               regexp_replace(command, '^SET LOCAL application_name TO ''[^'']*'';\s*', ''),
+               'copy_single_shard_placement\((\d+),\d+,', 'copy_single_shard_placement(\1,<source>,')
+    FROM pg_dist_background_task WHERE task_id = p_task_id;
+$$ LANGUAGE sql;
+
+SELECT task_id, task_command(task_id)
+FROM pg_dist_background_task WHERE job_id = :job_id ORDER BY task_id;
+
+-- 85674100 and 85674101 are both shards of table1_colg1, so their moves are in the
+-- same colocation group, yet neither move depends on the other
+SELECT task_id, task_command(task_id), depends_on, task_command(depends_on)
+FROM pg_dist_background_task_depend WHERE job_id = :job_id ORDER BY task_id, depends_on ASC;
+
+-- every task finished and both new nodes got their reference table placement
+SELECT status, count(*) FROM pg_dist_background_task WHERE job_id = :job_id GROUP BY status;
+SELECT nodeport, count(*)
+FROM pg_dist_shard_placement
+WHERE shardid = (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'ref_table'::regclass) AND
+      nodeport IN (:worker_3_port, :worker_4_port)
+GROUP BY nodeport ORDER BY nodeport;
+
+DROP SCHEMA background_rebalance_parallel CASCADE;
+TRUNCATE pg_dist_background_job CASCADE;
+TRUNCATE pg_dist_background_task CASCADE;
+TRUNCATE pg_dist_background_task_depend;
+SELECT public.wait_for_resource_cleanup();
+select citus_remove_node('localhost', :worker_3_port);
+select citus_remove_node('localhost', :worker_4_port);
 -- keep the rest of the tests inact that depends node/group ids
 ALTER SEQUENCE pg_catalog.pg_dist_groupid_seq RESTART :last_group_id_cls;
 ALTER SEQUENCE pg_catalog.pg_dist_node_nodeid_seq RESTART :last_node_id_cls;

@@ -99,7 +99,9 @@ ROLLBACK;
 -- fails
 SELECT 1 FROM citus_rebalance_start();
 -- succeeds
-SELECT 1 FROM citus_rebalance_start(shard_transfer_mode := 'force_logical');
+SELECT 1 FROM citus_rebalance_start(shard_transfer_mode := 'force_logical',
+                                    parallel_transfer_reference_tables := false,
+                                    parallel_transfer_colocated_shards := false);
 -- wait for success
 SELECT citus_rebalance_wait();
 SELECT state, details from citus_rebalance_status();
@@ -118,7 +120,9 @@ SELECT create_reference_table('ref_table');
 SELECT 1 FROM citus_add_node('localhost', :worker_3_port);
 
 SET ROLE non_super_user_rebalance;
-SELECT 1 FROM citus_rebalance_start(shard_transfer_mode := 'force_logical');
+SELECT 1 FROM citus_rebalance_start(shard_transfer_mode := 'force_logical',
+                                    parallel_transfer_reference_tables := false,
+                                    parallel_transfer_colocated_shards := false);
 
 -- wait for success
 SELECT citus_rebalance_wait();

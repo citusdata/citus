@@ -193,7 +193,16 @@ DEPS = {
     ),
     "alter_role_propagation": TestDeps("minimal_schedule"),
     "background_rebalance": TestDeps(
-        None, ["multi_test_helpers", "multi_cluster_management"], worker_count=3
+        None,
+        [
+            "multi_test_helpers",
+            "multi_cluster_management",
+            # the test adds the coordinator itself and expects it to have no
+            # reference table placements yet, as in operations_schedule where
+            # shard_rebalancer removes it before this test runs
+            "remove_coordinator_from_metadata",
+        ],
+        worker_count=3,
     ),
     "background_rebalance_parallel": TestDeps(
         None, ["multi_test_helpers", "multi_cluster_management"], worker_count=6
