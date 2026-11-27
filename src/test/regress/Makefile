@@ -101,6 +101,16 @@ endif
 
 isolation_test_files=$(generated_isolation_files) create-symbolic-link
 
+isolation_schedule = $(citus_abs_srcdir)/isolation_schedule
+ifneq ($(and $(CITUSLIBDIR),$(filter all coordinatoronly,$(N1MODE))),)
+# Older coordinator libraries lack the transaction-number collision fix.
+isolation_schedule = $(citus_abs_srcdir)/build/isolation_n1_schedule
+
+$(isolation_schedule): $(citus_abs_srcdir)/isolation_schedule Makefile
+	mkdir -p $(dir $@)
+	sed '/^test: isolation_deadlock_detection_txn_number_collision$$/d' $< > $@
+endif
+
 ifndef CITUS_VALGRIND_LOG_FILE
 CITUS_VALGRIND_LOG_FILE := citus_valgrind_test_log.txt
 endif
@@ -205,9 +215,9 @@ check-multi-1-vg: all
 	--pg_ctl-timeout=360 --connection-timeout=500000 --valgrind-path=valgrind --valgrind-log-file=$(CITUS_VALGRIND_LOG_FILE) \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/multi_1_schedule $(EXTRA_TESTS)
 
-check-isolation: all  $(isolation_test_files)
+check-isolation: all  $(isolation_test_files) $(isolation_schedule)
 	$(pg_regress_multi_check) --load-extension=citus --isolationtester \
-	-- $(MULTI_REGRESS_OPTS) --inputdir=$(citus_abs_srcdir)/build --schedule=$(citus_abs_srcdir)/isolation_schedule $(EXTRA_TESTS)
+	-- $(MULTI_REGRESS_OPTS) --inputdir=$(citus_abs_srcdir)/build --schedule=$(isolation_schedule) $(EXTRA_TESTS)
 
 check-enterprise-isolation: all $(isolation_test_files)
 	$(pg_regress_multi_check) --load-extension=citus --isolationtester \

@@ -210,6 +210,10 @@ Not all schedules are compatible with N-1 testing:
 - **`check-multi-1-create-citus`** and **`check-multi-mx`**: These schedules drop and recreate the
    Citus extension using the default version, which is incompatible with N-1 setups.
 - **`check-vanilla`**: The test preparation steps have not yet been adapted for N-1 workflows.
+- **`check-isolation`**: When `CITUSLIBDIR` is set and `N1MODE` is `all` or
+  `coordinatoronly`, a generated schedule omits
+  `isolation_deadlock_detection_txn_number_collision`, which requires the fixed
+  coordinator library. SQL-only and worker-only N-1 runs still include the test.
 
 The `multi_1_create_citus_schedule` was split out from `multi_1_schedule` to isolate tests that
 drop/create the Citus extension, so the remaining `multi_1_schedule` tests can be reused safely
