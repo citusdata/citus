@@ -251,12 +251,15 @@ citus_internal_adjust_identity_column_seq_settings(PG_FUNCTION_ARGS)
  * see comments written for the call made to GetAllDependenciesForObject() in
  * the function body for more details.
  *
- * The function assumes that it's run on a worker node.
+ * Historically this ran only on worker nodes because the coordinator was always
+ * allowed to use the full sequence range. When a Citus table opts into
+ * coordinator_uses_full_sequence_range = false, the coordinator carves its own
+ * (groupId == 0) sub-range as well, so this function may be invoked on the
+ * coordinator too. AlterSequenceMinMax() is safe to call on the coordinator.
  */
 void
 AdjustDependentSeqRangesOnLocalWorker(Oid relationId)
 {
-	Assert(!IsCoordinator());
 
 	/*
 	 * While altering a sequence, avoid propagating the DDL to other nodes
@@ -306,12 +309,12 @@ AdjustDependentSeqRangesOnLocalWorker(Oid relationId)
  * AdjustIdentityColumnSeqRangesOnLocalWorker takes a table oid, finds all identity
  * columns on the table, and runs AlterSequenceMinMax() for each underlying sequence.
  *
- * The function assumes that it's run on a worker node.
+ * Historically ran only on worker nodes. See AdjustDependentSeqRangesOnLocalWorker()
+ * for why it may now be invoked on the coordinator as well.
  */
 void
 AdjustIdentityColumnSeqRangesOnLocalWorker(Oid relationId)
 {
-	Assert(!IsCoordinator());
 
 	/*
 	 * While altering a sequence, avoid propagating the DDL to other nodes
@@ -703,11 +706,14 @@ check_log_statement(List *statementList)
  * GetLocalGroupId() << 48 + 1 and sets a maxvalue which stops it from passing out any
  * values greater than: (GetLocalGroupID() + 1) << 48.
  *
- * For serial we only have 32 bits and therefore shift by 28, and for smallserial
- * we only have 16 bits and therefore shift by 12.
- *
- * This is to ensure every group of workers passes out values from a unique range,
- * and therefore that all values generated for the sequence are globally unique.
+ * For bigint sequences this works on both coordinator (groupId == 0, so the
+ * window is [1, 2^48)) and workers. For serial / smallserial the per-group
+ * window is too small to be useful, so the non-bigint path disables the sequence
+ * on the local node by capping its value at the type maximum. We never want to
+ * disable the coordinator this way (coordinators would silently stop producing
+ * any sequence values at all), so the non-bigint path is a no-op on the
+ * coordinator and the coordinator keeps the full range for those sequence types
+ * regardless of pg_dist_partition.coordinator_uses_full_sequence_range.
  */
 void
 AlterSequenceMinMax(Oid sequenceId, char *schemaName, char *sequenceName,
@@ -728,6 +734,17 @@ AlterSequenceMinMax(Oid sequenceId, char *schemaName, char *sequenceName,
 	 */
 	if (sequenceTypeId != INT8OID)
 	{
+		if (IsCoordinator())
+		{
+			/*
+			 * Capping to maxvalue on the coordinator would stop it from
+			 * producing any further values, so for non-bigint sequences we
+			 * leave the full range in place on the coordinator even when the
+			 * table opted into coordinator_uses_full_sequence_range = false.
+			 */
+			return;
+		}
+
 		DirectFunctionCall2(setval_oid,
 							ObjectIdGetDatum(sequenceId),
 							Int64GetDatum(sequenceMaxValue));

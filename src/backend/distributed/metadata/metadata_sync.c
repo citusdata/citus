@@ -1255,12 +1255,13 @@ DistributionCreateCommand(CitusTableCacheEntry *cacheEntry)
 
 	appendStringInfo(insertDistributionCommand,
 					 "SELECT citus_internal.add_partition_metadata "
-					 "(%s::regclass, '%c', %s, %d, '%c')",
+					 "(%s::regclass, '%c', %s, %d, '%c', %s)",
 					 quote_literal_cstr(qualifiedRelationName),
 					 distributionMethod,
 					 tablePartitionKeyNameString->data,
 					 colocationId,
-					 replicationModel);
+					 replicationModel,
+					 cacheEntry->coordinatorUsesFullSequenceRange ? "true" : "false");
 
 	return insertDistributionCommand->data;
 }
@@ -3535,6 +3536,9 @@ citus_internal_add_partition_metadata(PG_FUNCTION_ARGS)
 	PG_ENSURE_ARGNOTNULL(4, "replication model");
 	char replicationModel = PG_GETARG_CHAR(4);
 
+	PG_ENSURE_ARGNOTNULL(5, "coordinator uses full sequence range");
+	bool coordinatorUsesFullSequenceRange = PG_GETARG_BOOL(5);
+
 	text *distributionColumnText = NULL;
 	char *distributionColumnString = NULL;
 	Var *distributionColumnVar = NULL;
@@ -3588,7 +3592,8 @@ citus_internal_add_partition_metadata(PG_FUNCTION_ARGS)
 	}
 
 	InsertIntoPgDistPartition(relationId, distributionMethod, distributionColumnVar,
-							  colocationId, replicationModel, autoConverted);
+							  colocationId, replicationModel, autoConverted,
+							  coordinatorUsesFullSequenceRange);
 
 	PG_RETURN_VOID();
 }

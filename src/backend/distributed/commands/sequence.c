@@ -33,6 +33,9 @@
 #include "distributed/metadata_sync.h"
 #include "distributed/worker_create_or_replace.h"
 
+/* controlled via citus.assign_full_sequence_to_coordinator GUC */
+bool AssignFullSequenceToCoordinator = false;
+
 /* Local functions forward declarations for helper functions */
 static bool OptionsSpecifyOwnedBy(List *optionList, Oid *ownedByTableId);
 static Oid SequenceUsedInDistributedTable(const ObjectAddress *sequenceAddress, char

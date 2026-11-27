@@ -1,22 +1,27 @@
+DROP FUNCTION IF EXISTS citus_internal.add_partition_metadata(regclass, "char", text, integer, "char");
+DROP FUNCTION IF EXISTS pg_catalog.citus_internal_add_partition_metadata(regclass, "char", text, integer, "char");
+
 CREATE OR REPLACE FUNCTION citus_internal.add_partition_metadata(
-							relation_id regclass, distribution_method "char",
-							distribution_column text, colocation_id integer,
-							replication_model "char")
+                            relation_id regclass, distribution_method "char",
+                            distribution_column text, colocation_id integer,
+                            replication_model "char",
+                            coordinator_uses_full_sequence_range boolean)
     RETURNS void
     LANGUAGE C
     AS 'MODULE_PATHNAME', $$citus_internal_add_partition_metadata$$;
 
-COMMENT ON FUNCTION citus_internal.add_partition_metadata(regclass, "char", text, integer, "char") IS
+COMMENT ON FUNCTION citus_internal.add_partition_metadata(regclass, "char", text, integer, "char", boolean) IS
     'Inserts into pg_dist_partition with user checks';
 
 
 CREATE OR REPLACE FUNCTION pg_catalog.citus_internal_add_partition_metadata(
-							relation_id regclass, distribution_method "char",
-							distribution_column text, colocation_id integer,
-							replication_model "char")
+                            relation_id regclass, distribution_method "char",
+                            distribution_column text, colocation_id integer,
+                            replication_model "char",
+                            coordinator_uses_full_sequence_range boolean)
     RETURNS void
     LANGUAGE C
     AS 'MODULE_PATHNAME';
 
-COMMENT ON FUNCTION pg_catalog.citus_internal_add_partition_metadata(regclass, "char", text, integer, "char") IS
+COMMENT ON FUNCTION pg_catalog.citus_internal_add_partition_metadata(regclass, "char", text, integer, "char", boolean) IS
     'Inserts into pg_dist_partition with user checks';
