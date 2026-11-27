@@ -488,6 +488,25 @@ SplitShard(SplitMode splitMode,
 
 	List *workersForPlacementList = GetWorkerNodesFromWorkerIds(nodeIdsForPlacementList);
 
+	/*
+	 * Lock the nodes that the split removes the shard from and adds the new
+	 * shards to, see AcquireShardTransferNodeLock().
+	 */
+	List *sourcePlacementList = ActiveShardPlacementList(shardIdToSplit);
+	ShardPlacement *sourcePlacement = NULL;
+	foreach_declared_ptr(sourcePlacement, sourcePlacementList)
+	{
+		bool missingOk = false;
+		WorkerNode *sourceNode = FindNodeWithNodeId(sourcePlacement->nodeId, missingOk);
+		AcquireShardTransferNodeLock(sourceNode, RowExclusiveLock, "split shards");
+	}
+
+	WorkerNode *targetNode = NULL;
+	foreach_declared_ptr(targetNode, workersForPlacementList)
+	{
+		AcquireShardTransferNodeLock(targetNode, RowExclusiveLock, "split shards");
+	}
+
 	ErrorIfNotAllNodesHaveReferenceTableReplicas(workersForPlacementList);
 
 	List *sourceColocatedShardIntervalList = NIL;

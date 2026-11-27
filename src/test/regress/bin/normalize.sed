@@ -344,3 +344,7 @@ s/(actual rows=[0-9]+)\.[0-9]+/\1/g
 s/^([ \t]*)List of tables$/\1List of relations/g
 s/^([ \t]*)List of indexes$/\1List of relations/g
 s/^([ \t]*)List of sequences$/\1List of relations/g
+
+# The catch-up timeout of citus_promote_clone_and_rebalance() reports WAL
+# positions that vary between runs
+s/Target WAL position is [0-9A-F]+\/[0-9A-F]+; last observed replay position is [0-9A-F]+\/[0-9A-F]+/Target WAL position is X\/X; last observed replay position is X\/X/g

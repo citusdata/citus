@@ -101,7 +101,6 @@ static bool IsFirstWorkerNode();
 static void CitusRangeVarCallbackForLockTable(const RangeVar *rangeVar, Oid relationId,
 											  Oid oldRelationId, void *arg);
 static AclResult CitusLockTableAclCheck(Oid relationId, LOCKMODE lockmode, Oid userId);
-static void SetLocktagForShardDistributionMetadata(int64 shardId, LOCKTAG *tag);
 
 
 /* exports for SQL callable functions */
@@ -530,7 +529,12 @@ LockShardDistributionMetadata(int64 shardId, LOCKMODE lockMode)
 }
 
 
-static void
+/*
+ * SetLocktagForShardDistributionMetadata sets the tag of the distribution
+ * metadata lock of the given shard. The colocated shards of hash-distributed
+ * and single-shard tables share one lock per shard index.
+ */
+void
 SetLocktagForShardDistributionMetadata(int64 shardId, LOCKTAG *tag)
 {
 	ShardInterval *shardInterval = LoadShardInterval(shardId);
