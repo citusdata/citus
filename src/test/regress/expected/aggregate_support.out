@@ -116,6 +116,7 @@ DETAIL:  Citus distributes procedures with CREATE [PROCEDURE|FUNCTION|AGGREGATE]
 (1 row)
 
 -- generate test data
+SET citus.next_shard_id TO 83674000;
 create table aggdata (id int, key int, val int, valf float8);
 select create_distributed_table('aggdata', 'id');
  create_distributed_table
