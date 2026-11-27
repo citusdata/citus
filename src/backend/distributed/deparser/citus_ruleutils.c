@@ -1853,7 +1853,7 @@ ensure_update_targetlist_in_param_order(List *targetList)
 
 
 /*
- * isSubsRef checks if a given node is a SubscriptingRef or can be
+ * isSubsRef checks if a given node is a SubscriptingRef assignment or can be
  * reached through an implicit coercion.
  */
 static
@@ -1877,14 +1877,23 @@ isSubsRef(Node *node)
 		node = (Node *) coerceToDomain->arg;
 	}
 
-	return (IsA(node, SubscriptingRef));
+	if (!IsA(node, SubscriptingRef))
+	{
+		return false;
+	}
+
+	/*
+	 * A SubscriptingRef without refassgnexpr fetches from a container, as in
+	 * "SET col = arr[1]", so it is the value that is assigned to the column.
+	 */
+	return ((SubscriptingRef *) node)->refassgnexpr != NULL;
 }
 
 
 /*
  * checkTlistForSubsRef - checks if any target entry in the list contains a
- * SubscriptingRef or can be reached through an implicit coercion. Used by
- * ExpandMergedSubscriptingRefEntries() to identify if any target entries
+ * SubscriptingRef assignment or can be reached through an implicit coercion.
+ * Used by ExpandMergedSubscriptingRefEntries() to identify if any target entries
  * need to be expanded - if not the original target list is preserved.
  */
 static
@@ -1921,7 +1930,7 @@ ExpandMergedSubscriptingRefEntries(List *targetEntryList)
 
 	if (!checkTlistForSubsRef(targetEntryList))
 	{
-		/* No subscripting refs found, return original list */
+		/* no SubscriptingRef assignments found, return original list */
 		return targetEntryList;
 	}
 
@@ -1960,7 +1969,7 @@ ExpandMergedSubscriptingRefEntries(List *targetEntryList)
 
 		if (expandedTargetEntries == NIL)
 		{
-			/* return original entry since it doesn't hold a SubscriptingRef node */
+			/* return original entry since it holds no SubscriptingRef assignment */
 			newTargetEntryList = lappend(newTargetEntryList, targetEntry);
 		}
 		else
@@ -1987,7 +1996,8 @@ ExpandMergedSubscriptingRefEntries(List *targetEntryList)
 /*
  * TargetEntryExprFindSubsRef searches given Expr --assuming that it is part
  * of a target list entry-- to see if it directly (i.e.: itself) or indirectly
- * (e.g.: behind some level of coercions) holds a SubscriptingRef node.
+ * (e.g.: behind some level of coercions) holds a SubscriptingRef node that
+ * assigns to elements of a container.
  *
  * Returns the original SubscriptingRef node on success or NULL otherwise.
  *
@@ -2034,7 +2044,19 @@ TargetEntryExprFindSubsRef(Expr *expr)
 		}
 		else if (IsA(node, SubscriptingRef))
 		{
-			return (SubscriptingRef *) node;
+			SubscriptingRef *subsRef = (SubscriptingRef *) node;
+
+			/*
+			 * A SubscriptingRef without refassgnexpr fetches from a container,
+			 * as in "SET col = arr[1]", so it is the value that is assigned to
+			 * the column, and its refexpr must be kept.
+			 */
+			if (subsRef->refassgnexpr == NULL)
+			{
+				break;
+			}
+
+			return subsRef;
 		}
 		else
 		{
