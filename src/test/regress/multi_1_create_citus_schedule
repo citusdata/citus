@@ -145,3 +145,11 @@ test: multi_having_var_remapping
 # PostgreSQL join-removal compatibility is absent from the N-1 Citus library.
 # Move back to multi_1_schedule at Citus 14.
 test: local_dist_join_removed_outer_join
+
+# ----------
+# insert_select_single_shard_table_8959 covers an INSERT ... SELECT crash
+# (#8959) fixed in 14.3; the N-1 (14.2-1) coordinator library still segfaults
+# or produces invalid worker SQL on these statements, so this cannot run under
+# the N-1 test matrix. Move back to multi_1_schedule at Citus 15.
+# ----------
+test: insert_select_single_shard_table_8959
