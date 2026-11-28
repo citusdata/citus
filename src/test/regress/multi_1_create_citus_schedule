@@ -161,3 +161,10 @@ test: insert_select_single_shard_table_8959
 # Move back to multi_schedule at Citus 14.
 # ----------
 test: non_var_group_by
+
+# ----------
+# node_removal_transaction_recovery covers node removal behavior backported for
+# 13.6; not present in the N-1 coordinator library. Run it only under
+# check-multi-1-create-citus, which is not part of the N-1 test matrix.
+# ----------
+test: node_removal_transaction_recovery
