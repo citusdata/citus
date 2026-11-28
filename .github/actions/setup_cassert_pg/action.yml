@@ -1,0 +1,200 @@
+name: setup_cassert_pg
+description: >-
+  Build an --enable-cassert PostgreSQL via pgenv (with -DUSE_VALGRIND dropped) and build & install
+  the citus extension against it. Mirrors the devcontainer developer flow on a bare runner so the
+  nightly cassert suites exercise PG-core asserts and Citus's own Assert().
+inputs:
+  pg_full:
+    description: "Full PG version pgenv should build, e.g. 17.10 / 18.4 / 19beta1"
+    required: true
+  cassert:
+    description: >-
+      Build PG with --enable-cassert (true, default) or a clean assert-off build (false).
+      The arm64 nightly passes false so a green run unambiguously means "arm works".
+    required: false
+    default: "true"
+  sanitizer:
+    description: "Optional sanitizer: none (default) or address-bool (GCC ASAN and UBSan bool check)."
+    required: false
+    default: "none"
+  cold_cache:
+    description: "Build without downloading a cached prefix, for cold-cache measurements."
+    required: false
+    default: "false"
+outputs:
+  pgenv_bindir:
+    description: "bindir of the freshly built cassert PG (version-specific pgenv prefix)"
+    value: ${{ steps.build_citus.outputs.bindir }}
+runs:
+  using: composite
+  steps:
+    - name: Validate sanitizer selection
+      shell: bash
+      env:
+        SANITIZER: ${{ inputs.sanitizer }}
+      run: |
+        set -euo pipefail
+        case "$SANITIZER" in
+          none) ;;
+          address-bool)
+            ASAN_DIR="${ASAN_DIR:-$RUNNER_TEMP/asan}"
+            [[ "$ASAN_DIR" = /* ]]
+            mkdir -p "$ASAN_DIR/reports"
+            echo "ASAN_DIR=$ASAN_DIR" >> "$GITHUB_ENV"
+            echo "ASAN_OPTIONS=detect_leaks=0:abort_on_error=1:symbolize=1:log_path=$ASAN_DIR/reports/asan" >> "$GITHUB_ENV"
+            echo "UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1" >> "$GITHUB_ENV" ;;
+          *) echo "::error::Unsupported sanitizer: $SANITIZER"; exit 1 ;;
+        esac
+
+    - name: Install build dependencies
+      id: dependencies
+      shell: bash
+      run: |
+        set -euo pipefail
+        echo "os=$(. /etc/os-release; echo "$ID-$VERSION_ID")" >> "$GITHUB_OUTPUT"
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends \
+          bison flex gcc make perl pkg-config \
+          libreadline-dev zlib1g-dev libssl-dev libxml2-dev libxslt1-dev \
+          uuid-dev libicu-dev liblz4-dev libzstd-dev libcurl4-gnutls-dev \
+          libipc-run-perl python3 python3-pip pipenv \
+          docbook-xml docbook-xsl libxml2-utils xsltproc \
+          locales
+        # da_DK locale required by columnar collation tests
+        sudo locale-gen da_DK.UTF-8
+        locale -a | grep -Fx 'da_DK.utf8'
+
+    - name: Restore pgenv (cassert PG) cache
+      id: cache
+      uses: actions/cache@v4
+      with:
+        path: ~/.pgenv
+        # Bust the cache when the PG version OR the pgenv cassert config changes.
+        # runner.arch keeps amd64 and arm64 prefixes from sharing binaries (runner.os is
+        # "Linux" for both); inputs.cassert keeps assert-on/off builds in separate entries
+        # (the assert-off edit is applied to the copied config, so it doesn't move hashFiles).
+        key: pgenv-cassert-${{ steps.dependencies.outputs.os }}-${{ runner.arch }}-cassert${{ inputs.cassert }}-${{ inputs.sanitizer }}-${{ inputs.pg_full }}-${{ hashFiles('.devcontainer/pgenv/config/default.conf', '.github/actions/setup_cassert_pg/action.yml') }}
+        lookup-only: ${{ inputs.cold_cache == 'true' }}
+
+    - name: Build cassert PostgreSQL (USE_VALGRIND dropped)
+      if: inputs.cold_cache == 'true' || steps.cache.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [ ! -d "$HOME/.pgenv" ]; then
+          git clone --branch v1.3.2 --depth 1 https://github.com/theory/pgenv.git "$HOME/.pgenv"
+        fi
+        mkdir -p "$HOME/.pgenv/config"
+        # Single source of truth: take the devcontainer cassert config and rewrite the CFLAGS line.
+        # This removes both -DUSE_VALGRIND and -ggdb while pinning the decided flags, and keeps
+        # --enable-debug --enable-cassert --enable-tap-tests + ssl/xml/xslt/uuid=e2fs/icu/lz4.
+        cp .devcontainer/pgenv/config/default.conf "$HOME/.pgenv/config/default.conf"
+        sed -i "s|'CFLAGS=[^']*'|'CFLAGS=-Og -g3 -fno-omit-frame-pointer'|" \
+          "$HOME/.pgenv/config/default.conf"
+        if [ "${{ inputs.sanitizer }}" = "address-bool" ]; then
+          export CC=gcc
+          sed -i "s|'CFLAGS=[^']*'|'CFLAGS=-O1 -g3 -fno-omit-frame-pointer -fsanitize=address,bool -fno-sanitize-recover=bool -fsanitize-address-use-after-scope' 'LDFLAGS=-fsanitize=address,bool' 'CC=gcc'|" \
+            "$HOME/.pgenv/config/default.conf"
+        fi
+        # Assert-off build (arm64 nightly): drop --enable-cassert so a green run is a clean
+        # pass/fail signal rather than the "expected red" cassert nightly.
+        if [ "${{ inputs.cassert }}" != "true" ]; then
+          sed -i "/--enable-cassert/d" "$HOME/.pgenv/config/default.conf"
+        fi
+        echo "----- effective pgenv default.conf -----"
+        cat "$HOME/.pgenv/config/default.conf"
+        export PATH="$HOME/.pgenv/bin:$PATH"
+        if [ "${{ inputs.sanitizer }}" = "address-bool" ]; then
+          # PG19 needs C11, but its typeof_unqual spelling must also work in Citus's GNU99.
+          export pgac_cv_c_typeof_unqual=no
+          for keyword in typeof_unqual __typeof_unqual__; do
+            if printf 'int main(void) { void *p = 0; %s(p) q = p; return q != p; }\n' "$keyword" |
+                gcc -std=gnu99 -Werror -x c -c -o /dev/null - \
+                  2>> "$ASAN_DIR/typeof-unqual-probe.txt"; then
+              export pgac_cv_c_typeof_unqual="$keyword"
+              break
+            fi
+          done
+          echo "pgac_cv_c_typeof_unqual=$pgac_cv_c_typeof_unqual" >> "$ASAN_DIR/typeof-unqual-probe.txt"
+          /usr/bin/time -v -o "$ASAN_DIR/pg-${{ inputs.pg_full }}-build.time" \
+            env MAKEFLAGS="-j $(nproc)" pgenv build "${{ inputs.pg_full }}"
+        else
+          MAKEFLAGS="-j $(nproc)" pgenv build "${{ inputs.pg_full }}"
+        fi
+
+    - name: Build & install citus against cassert PG
+      id: build_citus
+      shell: bash
+      run: |
+        set -euo pipefail
+        export PATH="$HOME/.pgenv/bin:$HOME/.pgenv/pgsql/bin:$PATH"
+        pgenv switch "${{ inputs.pg_full }}"
+        PG_CONFIG="$HOME/.pgenv/pgsql/bin/pg_config"
+        BINDIR="$("$PG_CONFIG" --bindir)"
+        echo "Using PG_CONFIG=$PG_CONFIG (bindir=$BINDIR)"
+        if [ "${{ inputs.sanitizer }}" = "address-bool" ]; then
+          PREFIX="$HOME/.pgenv/pgsql-${{ inputs.pg_full }}"
+          test "$(realpath "$PG_CONFIG")" = "$PREFIX/bin/pg_config"
+          test "$(realpath "$BINDIR")" = "$PREFIX/bin"
+          # Use a version-specific path even after a later action switches pgenv.
+          PG_CONFIG="$PREFIX/bin/pg_config"
+          export CC=gcc
+          export CFLAGS="-O1 -g3 -fno-omit-frame-pointer -fsanitize=address,bool -fno-sanitize-recover=bool -fsanitize-address-use-after-scope"
+          export LDFLAGS="-fsanitize=address,bool"
+          printf '%s\n' "CC=$CC" "CFLAGS=$CFLAGS" "LDFLAGS=$LDFLAGS" >> "$GITHUB_ENV"
+          "$PG_CONFIG" --cflags | grep -F -- '-fsanitize=address,bool' > /dev/null
+          "$PG_CONFIG" --ldflags | grep -F -- '-fsanitize=address,bool' > /dev/null
+        fi
+        # Guard: when cassert is requested, assertions are the entire point of this nightly. If
+        # the inherited devcontainer config ever loses --enable-cassert, fail loudly instead of
+        # silently running asserts-off. Skipped for the intentional assert-off (arm64) build.
+        if [ "${{ inputs.cassert }}" = "true" ]; then
+          "$PG_CONFIG" --configure | grep -q -- '--enable-cassert' \
+            || { echo "FATAL: built PG is not --enable-cassert; refusing to run nightly without asserts"; exit 1; }
+        fi
+        echo "bindir=$BINDIR" >> "$GITHUB_OUTPUT"
+        # Persist for subsequent workflow steps: pgenv bin must shadow any system PG.
+        echo "$HOME/.pgenv/bin"       >> "$GITHUB_PATH"
+        echo "$HOME/.pgenv/pgsql/bin" >> "$GITHUB_PATH"
+        echo "PG_CONFIG=$PG_CONFIG"   >> "$GITHUB_ENV"
+        # psycopg (failure + citus-upgrade harnesses) loads libpq from the pgenv prefix, not system.
+        echo "LD_LIBRARY_PATH=$("$PG_CONFIG" --libdir):${LD_LIBRARY_PATH:-}" >> "$GITHUB_ENV"
+        # configure bakes bindir/libdir into Makefile.global, so `make check-*` auto-uses this PG.
+        ./configure PG_CONFIG="$PG_CONFIG" --without-pg-version-check
+        make clean
+        if [ "${{ inputs.sanitizer }}" = "address-bool" ]; then
+          /usr/bin/time -v -o "$ASAN_DIR/citus-${{ inputs.pg_full }}-build.time" \
+            make -j"$(nproc)" all
+        else
+          make -j"$(nproc)" all
+        fi
+        # Installs into the $HOME pgenv prefix for this version -> no sudo, no clobber across versions.
+        make install-all
+        if [ "${{ inputs.sanitizer }}" = "address-bool" ]; then
+          {
+            echo "PG=${{ inputs.pg_full }} cache-hit=${{ steps.cache.outputs.cache-hit == 'true' && inputs.cold_cache != 'true' }}"
+            git rev-parse HEAD
+            gcc --version
+            gcc -print-file-name=libasan.so
+            "$PG_CONFIG" --configure
+            "$PG_CONFIG" --cflags
+            "$PG_CONFIG" --ldflags
+            printf 'Citus CC=%s CFLAGS=%s LDFLAGS=%s\n' "$CC" "$CFLAGS" "$LDFLAGS"
+            for binary in "$BINDIR/postgres" "$("$PG_CONFIG" --libdir)/libpq.so" \
+                "$("$PG_CONFIG" --pkglibdir)/citus.so" \
+                "$("$PG_CONFIG" --pkglibdir)/citus_columnar.so"; do
+              echo "Verifying $binary"
+              readelf -d "$binary" | grep 'NEEDED.*libasan'
+              if nm -D "$binary" | grep '__ubsan_handle_load_invalid_value_abort' > /dev/null; then
+                readelf -d "$binary" | grep 'NEEDED.*libubsan'
+              fi
+              nm -D "$binary" | grep '__asan_init'
+              ldd "$binary"
+              if ldd "$binary" | grep 'not found'; then
+                echo "::error::Unresolved runtime library: $binary"
+                exit 1
+              fi
+            done
+          } > "$ASAN_DIR/pg-${{ inputs.pg_full }}-verification.txt"
+          touch "$ASAN_DIR/pg-${{ inputs.pg_full }}-verified"
+        fi
