@@ -1,0 +1,12 @@
+{
+  "the_process_branch": "release-14",
+  "the_process_sha": "d742f20d2d25c3e03c43ab1c685382c77c451a36",
+  "image_suffix": "-vd742f20",
+  "postgres": {
+    "16": "16.16",
+    "17": "17.12",
+    "18": "18.7"
+  },
+  "default_pg_major": "18",
+  "style_checker_tools_version": "0.8.33"
+}
