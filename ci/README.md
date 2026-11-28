@@ -18,6 +18,22 @@ workflow is available on GitHub, select **Actions > ASAN > Run workflow** and
 choose the ref to test, or use `gh workflow run asan.yml --ref <ref>`.
 Dispatch requires separate authorization; it is not triggered by pushes or PRs.
 It publishes no packages or images and is not a required PR or release gate.
+The selected branch must contain both `asan.yml` and the local
+`setup_cassert_pg` action. Release branches cut from `main` inherit both, so
+manual dispatch needs no release-name-specific changes. Existing release
+branches use compatible branch-local copies:
+```
+gh workflow run asan.yml --repo citusdata/citus --ref release-14.0
+gh workflow run asan.yml --repo citusdata/citus --ref release-13.2
+gh workflow run asan.yml --repo citusdata/citus --ref <future-release-branch>
+```
+The release-14.0 copy covers PG16/17/18 with 41 suite jobs and Python 3.12;
+release-13.2 covers PG15/16/17 with 38 suite jobs and Python 3.9 (that branch
+has no TAP suite). Each release covers all three PostgreSQL upgrade pairs
+and normal/mixed Citus upgrades on its two oldest PostgreSQL majors, from
+v14.0.1 and v13.2.0 respectively. PostgreSQL pins and suite coverage below
+describe `main`; use the selected branch's workflow for its exact versions.
+
 Select `cold_cache=true` for a fully cold run: every job builds PostgreSQL even
 if another job has already populated the shared cache. Successful cold jobs
 still save caches. Use the default `false` for the subsequent warm run of the
