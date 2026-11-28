@@ -12,6 +12,7 @@
 #include "postgres.h"
 
 #include "catalog/heap.h"
+#include "catalog/namespace.h"
 #include "commands/defrem.h"
 #include "commands/tablecmds.h"
 #include "nodes/nodes.h"
@@ -23,6 +24,7 @@
 #include "utils/lsyscache.h"
 #include "utils/ruleutils.h"
 
+#include "distributed/citus_ruleutils.h"
 #include "distributed/commands.h"
 #include "distributed/deparser.h"
 #include "distributed/namespace_utils.h"
@@ -36,6 +38,14 @@ static void AppendAlterTableCmdAddColumn(StringInfo buf, AlterTableCmd *alterTab
 										 AlterTableStmt *stmt);
 static void AppendAlterTableCmdDropConstraint(StringInfo buf,
 											  AlterTableCmd *alterTableCmd);
+static void AppendConstraintStorageOptions(StringInfo buf, List *options);
+static void AppendExclusionElements(StringInfo buf, Constraint *constraint,
+									Relation relation);
+static Relation OpenAlterTableRelation(AlterTableStmt *stmt);
+static Node * TransformRawExprForRelation(Relation relation, Node *rawExpr,
+										  ParseExprKind exprKind);
+static char * DeparseRawExprForRelation(Relation relation, Node *rawExpr,
+										ParseExprKind exprKind);
 
 char *
 DeparseAlterTableSchemaStmt(Node *node)
@@ -205,30 +215,24 @@ AppendAlterTableCmdConstraint(StringInfo buf, Constraint *constraint,
 			AppendColumnNameList(buf, constraint->including);
 		}
 
-		if (constraint->options != NIL)
-		{
-			appendStringInfoString(buf, " WITH(");
-
-			ListCell *defListCell;
-			foreach(defListCell, constraint->options)
-			{
-				DefElem *def = (DefElem *) lfirst(defListCell);
-
-				bool first = (defListCell == list_head(constraint->options));
-				appendStringInfo(buf, "%s%s=%s", first ? "" : ",",
-								 quote_identifier(def->defname),
-								 quote_literal_cstr(defGetString(def)));
-			}
-
-			appendStringInfoChar(buf, ')');
-		}
+		AppendConstraintStorageOptions(buf, constraint->options);
 	}
 	else if (constraint->contype == CONSTR_EXCLUSION)
 	{
 		/*
 		 * This block constructs the EXCLUDE clause which is in the following form:
 		 * EXCLUDE [ USING index_method ] ( exclude_element WITH operator [, ... ] )
+		 *   [ INCLUDE ( column_name [, ... ] ) ]
+		 *   [ WITH ( storage_parameter [= value] [, ... ] ) ]
+		 *   [ WHERE ( predicate ) ]
 		 */
+		if (constraint->indexspace != NULL)
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("specifying tablespaces with ADD EXCLUDE "
+								   "statements is currently unsupported")));
+		}
+
 		appendStringInfoString(buf, " EXCLUDE ");
 
 		if (constraint->access_method != NULL)
@@ -238,35 +242,32 @@ AppendAlterTableCmdConstraint(StringInfo buf, Constraint *constraint,
 								 constraint->access_method));
 		}
 
+		Relation relation = OpenAlterTableRelation(stmt);
+
 		appendStringInfoString(buf, " (");
 
-		ListCell *lc;
-		bool firstOp = true;
+		AppendExclusionElements(buf, constraint, relation);
 
-		foreach(lc, constraint->exclusions)
+		appendStringInfoString(buf, ")");
+
+		if (constraint->including != NIL)
 		{
-			List *pair = (List *) lfirst(lc);
+			appendStringInfoString(buf, " INCLUDE ");
 
-			Assert(list_length(pair) == 2);
-			IndexElem *elem = linitial_node(IndexElem, pair);
-			List *opname = lsecond_node(List, pair);
-			if (firstOp == false)
-			{
-				appendStringInfoString(buf, " ,");
-			}
-
-			ListCell *lc2;
-
-			foreach(lc2, opname)
-			{
-				appendStringInfo(buf, "%s WITH %s", quote_identifier(elem->name),
-								 strVal(lfirst(lc2)));
-			}
-
-			firstOp = false;
+			AppendColumnNameList(buf, constraint->including);
 		}
 
-		appendStringInfoString(buf, " )");
+		AppendConstraintStorageOptions(buf, constraint->options);
+
+		if (constraint->where_clause != NULL)
+		{
+			char *predicateSql = DeparseRawExprForRelation(relation,
+														   constraint->where_clause,
+														   EXPR_KIND_INDEX_PREDICATE);
+			appendStringInfo(buf, " WHERE (%s)", predicateSql);
+		}
+
+		relation_close(relation, NoLock);
 	}
 	else if (constraint->contype == CONSTR_CHECK)
 	{
@@ -282,30 +283,9 @@ AppendAlterTableCmdConstraint(StringInfo buf, Constraint *constraint,
 									"... CHECK command after adding the column")));
 		}
 
-		LOCKMODE lockmode = AlterTableGetLockLevel(stmt->cmds);
-		Oid leftRelationId = AlterTableLookupRelation(stmt, lockmode);
-
-		/* To be able to use deparse_expression function, which creates an expression string,
-		 * the expression should be provided in its cooked form. We transform the raw expression
-		 * to cooked form.
-		 */
-		ParseState *pstate = make_parsestate(NULL);
-		Relation relation = table_open(leftRelationId, AccessShareLock);
-
-		/* Add table name to the name space in  parse state. Otherwise column names
-		 * cannot be found.
-		 */
-		AddRangeTableEntryToQueryCompat(pstate, relation);
-
-		Node *exprCooked = transformExpr(pstate, constraint->raw_expr,
-
-										 EXPR_KIND_CHECK_CONSTRAINT);
-
-		char *relationName = get_rel_name(leftRelationId);
-		List *relationCtx = deparse_context_for(relationName, leftRelationId);
-
-		char *exprSql = deparse_expression(exprCooked, relationCtx, false, false);
-
+		Relation relation = OpenAlterTableRelation(stmt);
+		char *exprSql = DeparseRawExprForRelation(relation, constraint->raw_expr,
+												  EXPR_KIND_CHECK_CONSTRAINT);
 		relation_close(relation, NoLock);
 
 		appendStringInfo(buf, " CHECK (%s)", exprSql);
@@ -688,6 +668,162 @@ AppendAlterTableCmdAddColumn(StringInfo buf, AlterTableCmd *alterTableCmd,
 							errdetail("constraint type: %d", constraint->contype)));
 		}
 	}
+}
+
+
+/*
+ * AppendConstraintStorageOptions appends the WITH ( storage_parameter = value
+ * [, ... ] ) clause of an index-backed constraint, if it has any options.
+ */
+static void
+AppendConstraintStorageOptions(StringInfo buf, List *options)
+{
+	if (options == NIL)
+	{
+		return;
+	}
+
+	appendStringInfoString(buf, " WITH(");
+
+	ListCell *defListCell;
+	foreach(defListCell, options)
+	{
+		DefElem *def = (DefElem *) lfirst(defListCell);
+
+		bool first = (defListCell == list_head(options));
+		appendStringInfo(buf, "%s%s=%s", first ? "" : ",",
+						 quote_identifier(def->defname),
+						 quote_literal_cstr(defGetString(def)));
+	}
+
+	appendStringInfoChar(buf, ')');
+}
+
+
+/*
+ * AppendExclusionElements appends the "exclude_element WITH operator" list of
+ * an EXCLUDE constraint on the given relation. Each element is printed by
+ * deparse_index_element, the same way CREATE INDEX columns are, so its
+ * collation, operator class and parameters, and ordering are kept. The
+ * operator may be schema qualified.
+ */
+static void
+AppendExclusionElements(StringInfo buf, Constraint *constraint, Relation relation)
+{
+	/*
+	 * Transform the element expressions first, while the search_path is still
+	 * the one the command was run with.
+	 */
+	List *elements = NIL;
+	ListCell *lc;
+	foreach(lc, constraint->exclusions)
+	{
+		List *pair = (List *) lfirst(lc);
+
+		Assert(list_length(pair) == 2);
+		IndexElem *elem = linitial_node(IndexElem, pair);
+		if (elem->expr != NULL)
+		{
+			elem = copyObject(elem);
+			elem->expr = TransformRawExprForRelation(relation, elem->expr,
+													 EXPR_KIND_INDEX_EXPRESSION);
+		}
+
+		elements = lappend(elements, elem);
+	}
+
+	List *relationCtx = deparse_context_for(RelationGetRelationName(relation),
+											RelationGetRelid(relation));
+
+	/* deparse with an empty search_path so that non-builtin objects are qualified */
+	int saveNestLevel = PushEmptySearchPath();
+
+	ListCell *elemCell;
+	forboth(lc, constraint->exclusions, elemCell, elements)
+	{
+		List *opname = lsecond_node(List, (List *) lfirst(lc));
+		IndexElem *elem = lfirst_node(IndexElem, elemCell);
+
+		if (lc != list_head(constraint->exclusions))
+		{
+			appendStringInfoString(buf, ", ");
+		}
+
+		deparse_index_element(buf, elem, relationCtx);
+
+		/* every part but an expression element ends with a space */
+		if (buf->data[buf->len - 1] != ' ')
+		{
+			appendStringInfoChar(buf, ' ');
+		}
+
+		if (list_length(opname) == 1)
+		{
+			appendStringInfo(buf, "WITH %s", strVal(linitial(opname)));
+		}
+		else
+		{
+			char *operatorSchemaName = NULL;
+			char *operatorName = NULL;
+			DeconstructQualifiedName(opname, &operatorSchemaName, &operatorName);
+			appendStringInfo(buf, "WITH OPERATOR(%s.%s)",
+							 quote_identifier(operatorSchemaName), operatorName);
+		}
+	}
+
+	PopEmptySearchPath(saveNestLevel);
+}
+
+
+/*
+ * OpenAlterTableRelation opens the relation of the given ALTER TABLE statement
+ * with an AccessShareLock. The caller closes it.
+ */
+static Relation
+OpenAlterTableRelation(AlterTableStmt *stmt)
+{
+	LOCKMODE lockmode = AlterTableGetLockLevel(stmt->cmds);
+	Oid relationId = AlterTableLookupRelation(stmt, lockmode);
+
+	return table_open(relationId, AccessShareLock);
+}
+
+
+/*
+ * TransformRawExprForRelation transforms a raw expression that refers to the
+ * columns of the given relation into its cooked form, which deparse_expression
+ * needs. The raw expression is not modified.
+ */
+static Node *
+TransformRawExprForRelation(Relation relation, Node *rawExpr, ParseExprKind exprKind)
+{
+	ParseState *pstate = make_parsestate(NULL);
+
+	/* add the relation to the namespace so that its columns can be found */
+	AddRangeTableEntryToQueryCompat(pstate, relation);
+
+	return transformExpr(pstate, copyObject(rawExpr), exprKind);
+}
+
+
+/*
+ * DeparseRawExprForRelation transforms a raw expression that refers to the
+ * columns of the given relation and returns its SQL text, with any
+ * non-builtin objects schema qualified.
+ */
+static char *
+DeparseRawExprForRelation(Relation relation, Node *rawExpr, ParseExprKind exprKind)
+{
+	Node *exprCooked = TransformRawExprForRelation(relation, rawExpr, exprKind);
+
+	List *relationCtx = deparse_context_for(RelationGetRelationName(relation),
+											RelationGetRelid(relation));
+
+	int saveNestLevel = PushEmptySearchPath();
+	char *exprSql = deparse_expression(exprCooked, relationCtx, false, false);
+	PopEmptySearchPath(saveNestLevel);
+
+	return exprSql;
 }
 
 
