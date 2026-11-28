@@ -15,25 +15,14 @@ jobs:
   get_postgres_versions_from_file:
     runs-on: ubuntu-latest
     outputs:
-      pg_versions: ${{ steps.get-postgres-versions.outputs.pg_versions }}
+      pg_versions: ${{ steps.v.outputs.pg_majors_json }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 2
-      - name: Get Postgres Versions
-        id: get-postgres-versions
-        run: |
-          set -euxo pipefail
-          # Postgres versions are stored in .github/workflows/build_and_test.yml
-          # file in json strings with major and full keys.
-          # Below command extracts the versions and get the unique values.
-          pg_versions=$(cat .github/workflows/build_and_test.yml | grep -oE '"major": "[0-9]+", "full": "[0-9.]+"' | sed -E 's/"major": "([0-9]+)", "full": "([0-9.]+)"/\1/g' | sort | uniq | tr '\n', ',')
-          pg_versions_array="[ ${pg_versions} ]"
-          echo "Supported PG Versions: ${pg_versions_array}"
-          # Below line is needed to set the output variable to be used in the next job
-          echo "pg_versions=${pg_versions_array}" >> $GITHUB_OUTPUT
-        shell: bash
+          sparse-checkout: .github
+      - id: v
+        uses: ./.github/actions/load-ci-versions
   rpm_build_tests:
     name: rpm_build_tests
     needs: get_postgres_versions_from_file

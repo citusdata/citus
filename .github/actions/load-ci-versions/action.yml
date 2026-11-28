@@ -1,0 +1,46 @@
+name: Load CI versions
+description: Load PostgreSQL versions and image tags from .github/ci-versions.json
+inputs:
+  file: { default: .github/ci-versions.json }
+  majors: { default: "" }
+outputs:
+  image_suffix: { value: "${{ steps.v.outputs.image_suffix }}" }
+  style_checker_tools_version: { value: "${{ steps.v.outputs.style_checker_tools_version }}" }
+  default_pg_major: { value: "${{ steps.v.outputs.default_pg_major }}" }
+  sql_snapshot_pg_version: { value: "${{ steps.v.outputs.sql_snapshot_pg_version }}" }
+  upgrade_pg_versions: { value: "${{ steps.v.outputs.upgrade_pg_versions }}" }
+  pg_majors_json: { value: "${{ steps.v.outputs.pg_majors_json }}" }
+  pg_versions_json: { value: "${{ steps.v.outputs.pg_versions_json }}" }
+  pg_upgrade_pairs_json: { value: "${{ steps.v.outputs.pg_upgrade_pairs_json }}" }
+  postgres_json: { value: "${{ steps.v.outputs.postgres_json }}" }
+  pg14_version: { value: "${{ steps.v.outputs.pg14_version }}" }
+  pg15_version: { value: "${{ steps.v.outputs.pg15_version }}" }
+  pg16_version: { value: "${{ steps.v.outputs.pg16_version }}" }
+  pg17_version: { value: "${{ steps.v.outputs.pg17_version }}" }
+  pg18_version: { value: "${{ steps.v.outputs.pg18_version }}" }
+  pg19_version: { value: "${{ steps.v.outputs.pg19_version }}" }
+runs:
+  using: composite
+  steps:
+    - id: v
+      shell: bash
+      env: { F: "${{ inputs.file }}", M: "${{ inputs.majors }}" }
+      run: |
+        set -euo pipefail
+        jq -er --arg m "$M" '
+          . as $root |
+          def str: if type == "string" and test("\\A[^\\r\\n]+\\z") then . else error("invalid string") end;
+          def req($k): ($root[$k] // error("missing " + $k)) | str;
+          (.postgres | if type == "object" and length > 0 then . else error("missing postgres") end) as $pg |
+          req("default_pg_major") as $def | (($pg[$def] // error("bad default_pg_major")) | str) as $snap |
+          (if $m == "" then ($pg | keys) else ($m | split(",") | map(gsub("^\\s+|\\s+$"; "")) | map(select(length > 0))) end) |
+          if length > 0 then . else error("empty majors") end |
+          (map(if test("\\A[0-9]+\\z") and ($pg[.] | type == "string" and test("\\A[^\\r\\n]+\\z")) then . else error("missing PG " + .) end) | unique | sort_by(tonumber)) as $k |
+          ($k | map({major: ., full: $pg[.]})) as $v |
+          "image_suffix=\(req("image_suffix"))", "style_checker_tools_version=\(req("style_checker_tools_version"))",
+          "default_pg_major=\($def)", "sql_snapshot_pg_version=\($snap)",
+          "upgrade_pg_versions=\($v | map(.full) | join("-"))", "pg_majors_json=\($k | map(tonumber) | tojson)",
+          "pg_versions_json=\($v | tojson)", "postgres_json=\($k | map({key: ., value: $pg[.]}) | from_entries | tojson)",
+          "pg_upgrade_pairs_json=\([range(1; $v | length) as $d | range(0; ($v | length) - $d) as $i | {old: $v[$i].major, old_full: $v[$i].full, new: $v[$i + $d].major, new_full: $v[$i + $d].full}] | tojson)",
+          ($v[] | "pg\(.major)_version=\(tojson)")
+        ' "$F" >> "$GITHUB_OUTPUT"
