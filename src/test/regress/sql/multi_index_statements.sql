@@ -104,6 +104,15 @@ CREATE INDEX IF NOT EXISTS lineitem_orderkey_index_new on public.lineitem(l_orde
 CREATE INDEX lineitem_orderkey_index on public.nation(n_nationkey);
 CREATE INDEX IF NOT EXISTS lineitem_orderkey_index on public.nation(n_nationkey);
 
+-- Verify that CREATE INDEX CONCURRENTLY IF NOT EXISTS doesn't invalidate existing index
+CREATE INDEX CONCURRENTLY lineitem_concurrent_if_not_exists_test ON public.lineitem (l_partkey);
+-- Verify the index is valid
+SELECT indisvalid FROM pg_index WHERE indexrelid = 'public.lineitem_concurrent_if_not_exists_test'::regclass;
+-- Run the same command again with IF NOT EXISTS
+CREATE INDEX CONCURRENTLY IF NOT EXISTS lineitem_concurrent_if_not_exists_test ON public.lineitem (l_partkey);
+-- Verify the index is still valid (not invalidated)
+SELECT indisvalid FROM pg_index WHERE indexrelid = 'public.lineitem_concurrent_if_not_exists_test'::regclass;
+
 -- Verify that we can create indexes concurrently
 CREATE INDEX CONCURRENTLY lineitem_concurrently_index ON public.lineitem (l_orderkey);
 
