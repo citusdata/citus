@@ -19,6 +19,7 @@
 #include "nodes/pg_list.h"
 #include "storage/lmgr.h"
 #include "storage/lockdefs.h"
+#include "utils/snapshot.h"
 
 
 /* Worker nodeName's, nodePort's, and nodeCluster's maximum length */
@@ -90,6 +91,8 @@ extern WorkerNode * FindNodeWithNodeId(int nodeId, bool missingOk);
 extern WorkerNode * FindNodeAnyClusterByNodeId(uint32 nodeId);
 extern WorkerNode * ModifiableWorkerNode(const char *nodeName, int32 nodePort);
 extern List * ReadDistNode(bool includeNodesFromOtherClusters);
+extern List * ReadDistNodeWithSnapshot(bool includeNodesFromOtherClusters,
+									   Snapshot snapshot);
 extern void EnsureCoordinator(void);
 extern void EnsurePropagationToCoordinator(void);
 extern void EnsureCoordinatorUnlessTenantSchema(Oid relationId);
