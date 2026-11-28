@@ -120,82 +120,30 @@ CREATE TABLE promotion_catchup_wal (id integer);
 DROP TABLE promotion_catchup_wal;
 \c - - - :master_port
 SET client_min_messages = WARNING;
+-- the promotion waits for the clone, whose replay is paused, until its
+-- catch-up timeout, or until statement_timeout cancels it
 SET statement_timeout = '60s';
-DO $$
-DECLARE
-    cloneId integer := (SELECT nodeid FROM pg_dist_node WHERE nodeisclone);
-    errorDetail text;
-BEGIN
-    BEGIN
-        PERFORM citus_promote_clone_and_rebalance(
-            clone_nodeid => cloneId, catchup_timeout_seconds => 1);
-        RAISE EXCEPTION 'promotion unexpectedly succeeded with paused replay';
-    EXCEPTION WHEN object_not_in_prerequisite_state THEN
-        IF SQLERRM NOT LIKE '%failed to catch up%' THEN
-            RAISE;
-        END IF;
-        GET STACKED DIAGNOSTICS errorDetail = PG_EXCEPTION_DETAIL;
-        IF errorDetail IS NULL OR errorDetail NOT LIKE 'Target WAL position is %' THEN
-            RAISE EXCEPTION 'missing catch-up timeout diagnostics';
-        END IF;
-    END;
-    IF NOT EXISTS (SELECT FROM pg_dist_node
-                   WHERE nodeid = cloneId AND nodeisclone AND NOT isactive) THEN
-        RAISE EXCEPTION 'timeout changed clone metadata';
-    END IF;
-END $$;
-RESET statement_timeout;
+SELECT citus_promote_clone_and_rebalance(clone_nodeid => :clone_node_id, catchup_timeout_seconds => 1);
+ERROR:  Clone localhost:xxxxx failed to catch up with primary localhost:xxxxx within 1 seconds.
+DETAIL:  Target WAL position is X/X; last observed replay position is X/X (0/0 means unavailable).
 SET statement_timeout = '1s';
-DO $$
-DECLARE
-    cloneId integer := (SELECT nodeid FROM pg_dist_node WHERE nodeisclone);
-BEGIN
-    BEGIN
-        PERFORM citus_promote_clone_and_rebalance(
-            clone_nodeid => cloneId, catchup_timeout_seconds => 0);
-        RAISE EXCEPTION 'promotion unexpectedly succeeded with paused replay';
-    EXCEPTION WHEN query_canceled THEN
-        NULL;
-    END;
-    IF NOT EXISTS (SELECT FROM pg_dist_node
-                   WHERE nodeid = cloneId AND nodeisclone AND NOT isactive) THEN
-        RAISE EXCEPTION 'cancellation changed clone metadata';
-    END IF;
-END $$;
-DO $$
-DECLARE
-    cloneId integer := (SELECT nodeid FROM pg_dist_node WHERE nodeisclone);
-BEGIN
-    BEGIN
-        PERFORM citus_promote_clone_and_rebalance(
-            clone_nodeid => cloneId, catchup_timeout_seconds => 30);
-        RAISE EXCEPTION 'promotion unexpectedly succeeded with paused replay';
-    EXCEPTION WHEN query_canceled THEN
-        NULL;
-    END;
-    IF NOT EXISTS (SELECT FROM pg_dist_node
-                   WHERE nodeid = cloneId AND nodeisclone AND NOT isactive) THEN
-        RAISE EXCEPTION 'cancellation changed clone metadata';
-    END IF;
-END $$;
-RESET statement_timeout;
+SELECT citus_promote_clone_and_rebalance(clone_nodeid => :clone_node_id, catchup_timeout_seconds => 0);
+ERROR:  canceling statement due to statement timeout
+SELECT citus_promote_clone_and_rebalance(clone_nodeid => :clone_node_id, catchup_timeout_seconds => 30);
+ERROR:  canceling statement due to statement timeout
 SET statement_timeout = '60s';
-DO $$
-DECLARE
-    cloneId integer := (SELECT nodeid FROM pg_dist_node WHERE nodeisclone);
-BEGIN
-    BEGIN
-        PERFORM citus_promote_clone_and_rebalance(
-            clone_nodeid => cloneId, catchup_timeout_seconds => 1);
-        RAISE EXCEPTION 'promotion unexpectedly succeeded with paused replay';
-    EXCEPTION WHEN object_not_in_prerequisite_state THEN
-        IF SQLERRM NOT LIKE '%failed to catch up%' THEN
-            RAISE;
-        END IF;
-    END;
-END $$;
+SELECT citus_promote_clone_and_rebalance(clone_nodeid => :clone_node_id, catchup_timeout_seconds => 1);
+ERROR:  Clone localhost:xxxxx failed to catch up with primary localhost:xxxxx within 1 seconds.
+DETAIL:  Target WAL position is X/X; last observed replay position is X/X (0/0 means unavailable).
 RESET statement_timeout;
 RESET client_min_messages;
+-- none of them changed the metadata of the clone
+SELECT nodeisclone AND NOT isactive AS inactive_clone FROM pg_dist_node WHERE nodeid = :clone_node_id;
+ inactive_clone
+---------------------------------------------------------------------
+ t
+(1 row)
+
 \c - - - :follower_worker_2_port
 DO $$
 BEGIN
@@ -213,12 +161,6 @@ NOTICE:  checking replication status of clone node localhost:xxxxx
 NOTICE:  clone localhost:xxxxx is properly connected to primary localhost:xxxxx and is not synchronous
 NOTICE:  Blocking writes on shards of original primary node localhost:xxxxx (group 2)
 NOTICE:  Blocking all writes to worker node localhost:xxxxx (ID 2)
-NOTICE:  Waiting for clone localhost:xxxxx to catch up with primary localhost:xxxxx (timeout: 300 seconds)
-NOTICE:  Clone localhost:xxxxx is now caught up with primary localhost:xxxxx.
-NOTICE:  Attempting to promote clone localhost:xxxxx via pg_promote().
-NOTICE:  Clone node localhost:xxxxx (ID 4) has been successfully promoted.
-NOTICE:  Updating metadata for promoted clone localhost:xxxxx (ID 4)
-NOTICE:  re-ranged 6 sequence(s) on promoted clone localhost:xxxxx (ID 4) for new group 4
 ERROR:  could not find rebalance strategy with name invalid_strategy
 SELECT * from pg_dist_node ORDER by nodeid;
  nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive |  noderole   | nodecluster | metadatasynced | shouldhaveshards | nodeisclone | nodeprimarynodeid
@@ -229,17 +171,73 @@ SELECT * from pg_dist_node ORDER by nodeid;
       4 |       4 | localhost |     9072 | default  | f           | f        | unavailable | default     | f              | f                | t           |                 2
 (4 rows)
 
--- Test 9: Rollback the citus_promote_clone_and_rebalance transaction
+-- the strategy is checked before pg_promote(), so the clone is still a replica
+\c - - - :follower_worker_2_port
+SELECT pg_is_in_recovery() AS clone_in_recovery;
+ clone_in_recovery
+---------------------------------------------------------------------
+ t
+(1 row)
+
+\c - - - :master_port
+-- Transaction blocks are rejected, but a function or a DO block can still run
+-- other commands before the promotion in its transaction. The promotion errors
+-- out after them, since their changes would only commit after it: changes of
+-- data, of metadata only, and local ones.
+DO $$
+BEGIN
+    INSERT INTO backup_test VALUES (11, 'test11');
+    PERFORM citus_promote_clone_and_rebalance(nodeid) FROM pg_dist_node WHERE nodeisclone;
+END $$;
+ERROR:  cannot promote a clone node after other commands in the same transaction
+DETAIL:  Their changes would only commit after the promotion, so the clone would not receive them.
+HINT:  Promote the clone in a separate transaction.
+CONTEXT:  SQL statement "SELECT citus_promote_clone_and_rebalance(nodeid) FROM pg_dist_node WHERE nodeisclone"
+PL/pgSQL function inline_code_block line XX at PERFORM
+DO $$
+BEGIN
+    PERFORM citus_set_node_property(nodename, nodeport, 'shouldhaveshards', false)
+    FROM pg_dist_node WHERE nodeid = 1;
+    PERFORM citus_promote_clone_and_rebalance(nodeid) FROM pg_dist_node WHERE nodeisclone;
+END $$;
+ERROR:  cannot promote a clone node after other commands in the same transaction
+DETAIL:  Their changes would only commit after the promotion, so the clone would not receive them.
+HINT:  Promote the clone in a separate transaction.
+CONTEXT:  SQL statement "SELECT citus_promote_clone_and_rebalance(nodeid) FROM pg_dist_node WHERE nodeisclone"
+PL/pgSQL function inline_code_block line XX at PERFORM
+DO $$
+BEGIN
+    CREATE TABLE promotion_local_table (id int);
+    PERFORM citus_promote_clone_and_rebalance(nodeid) FROM pg_dist_node WHERE nodeisclone;
+END $$;
+ERROR:  cannot promote a clone node after other commands in the same transaction
+DETAIL:  Their changes would only commit after the promotion, so the clone would not receive them.
+HINT:  Promote the clone in a separate transaction.
+CONTEXT:  SQL statement "SELECT citus_promote_clone_and_rebalance(nodeid) FROM pg_dist_node WHERE nodeisclone"
+PL/pgSQL function inline_code_block line XX at PERFORM
+\c - - - :follower_worker_2_port
+SELECT pg_is_in_recovery() AS clone_in_recovery;
+ clone_in_recovery
+---------------------------------------------------------------------
+ t
+(1 row)
+
+\c - - - :master_port
+-- Test 9: The promotion cannot run inside a transaction block, where its write
+-- fence would last until the transaction ends, and a rollback could not undo
+-- pg_promote(), so the clone stays a replica. A query string with more than one
+-- statement runs as a transaction block too.
 BEGIN;
 SELECT citus_promote_clone_and_rebalance(clone_nodeid => :clone_node_id);
-NOTICE:  Starting promotion process for clone node localhost:xxxxx (ID 4), original primary localhost:xxxxx (ID 2)
-NOTICE:  checking replication relationship between primary localhost:xxxxx and clone localhost:xxxxx
-NOTICE:  checking replication status of clone node localhost:xxxxx
-ERROR:  clone localhost:xxxxx is not connected to primary localhost:xxxxx
-DETAIL:  The clone must be actively replicating from the specified primary node
-HINT:  Verify the clone is running and properly configured for replication
+ERROR:  citus_promote_clone_and_rebalance cannot run inside a transaction block
+DETAIL:  Its write fence would last until the transaction ends, and a rollback could not undo the promotion of the clone.
+HINT:  Run the promotion outside a transaction block, for example with autocommit enabled.
 ROLLBACK;
--- Verify no data is lost after rooling back the transaction
+SELECT citus_promote_clone_and_rebalance(clone_nodeid => :clone_node_id) \; SELECT 1;
+ERROR:  citus_promote_clone_and_rebalance cannot run inside a transaction block
+DETAIL:  Its write fence would last until the transaction ends, and a rollback could not undo the promotion of the clone.
+HINT:  Run the promotion outside a transaction block, for example with autocommit enabled.
+-- Verify no data is lost
 SELECT COUNT(*) from backup_test;
  count
 ---------------------------------------------------------------------
@@ -261,7 +259,171 @@ SELECT * from pg_dist_node ORDER by nodeid;
       4 |       4 | localhost |     9072 | default  | f           | f        | unavailable | default     | f              | f                | t           |                 2
 (4 rows)
 
--- Test 5: Try to add and promote a proper replica after rollback
+\c - - - :follower_worker_2_port
+SELECT pg_is_in_recovery() AS clone_in_recovery;
+ clone_in_recovery
+---------------------------------------------------------------------
+ t
+(1 row)
+
+\c - - - :master_port
+-- The promotion also errors out, and the clone stays a replica, if the primary
+-- has placements of unlogged distributed or reference tables, since physical
+-- replication does not copy their data.
+CREATE UNLOGGED TABLE unlogged_dist (id int);
+SELECT create_distributed_table('unlogged_dist', 'id', shard_count => 8);
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT count(*) > 0 AS primary_has_unlogged_shards
+FROM pg_dist_shard_placement JOIN pg_dist_shard USING (shardid)
+WHERE logicalrelid = 'unlogged_dist'::regclass AND nodeport = :worker_2_port;
+ primary_has_unlogged_shards
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SET client_min_messages TO WARNING;
+SELECT citus_promote_clone_and_rebalance(clone_nodeid => :clone_node_id);
+ERROR:  cannot promote a clone of node localhost:xxxxx, which has placements of the unlogged table public.unlogged_dist
+DETAIL:  Physical replication does not copy the data of unlogged tables, so the clone would not have it.
+HINT:  Make the table logged with ALTER TABLE ... SET LOGGED before promoting the clone.
+RESET client_min_messages;
+DROP TABLE unlogged_dist;
+CREATE UNLOGGED TABLE unlogged_ref (id int);
+SELECT create_reference_table('unlogged_ref');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO unlogged_ref SELECT generate_series(1, 10);
+SET client_min_messages TO WARNING;
+SELECT citus_promote_clone_and_rebalance(clone_nodeid => :clone_node_id);
+ERROR:  cannot promote a clone of node localhost:xxxxx, which has placements of the unlogged table public.unlogged_ref
+DETAIL:  Physical replication does not copy the data of unlogged tables, so the clone would not have it.
+HINT:  Make the table logged with ALTER TABLE ... SET LOGGED before promoting the clone.
+RESET client_min_messages;
+-- once the table is logged, its data reaches the clone
+ALTER TABLE unlogged_ref SET LOGGED;
+-- A partitioned table has no data of its own, so it does not stop the
+-- promotion. Before PostgreSQL 18, one can be unlogged while its partitions
+-- are not, and cannot be made logged.
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+')::int >= 18 AS server_version_ge_18 \gset
+\if :server_version_ge_18
+CREATE TABLE unlogged_parent (id int) PARTITION BY RANGE (id);
+\else
+CREATE UNLOGGED TABLE unlogged_parent (id int) PARTITION BY RANGE (id);
+\endif
+CREATE TABLE logged_part PARTITION OF unlogged_parent FOR VALUES FROM (0) TO (100);
+SELECT create_distributed_table('unlogged_parent', 'id', shard_count => 8);
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO unlogged_parent SELECT generate_series(0, 99);
+-- The promotion also errors out, and the clone stays a replica, if the primary
+-- has an enabled subscription, which the promoted clone would start too. The
+-- subscription cannot connect to its publisher, it only needs to be enabled.
+\c - - - :worker_2_port
+SET client_min_messages TO ERROR;
+CREATE SUBSCRIPTION promotion_sub CONNECTION 'host=localhost port=xxxxx dbname=regression'
+    PUBLICATION promotion_pub WITH (connect = false);
+RESET client_min_messages;
+ALTER SUBSCRIPTION promotion_sub ENABLE;
+\c - - - :master_port
+SET client_min_messages TO WARNING;
+SELECT citus_promote_clone_and_rebalance(clone_nodeid => :clone_node_id);
+ERROR:  cannot promote a clone of node localhost:xxxxx, which has the enabled subscription promotion_sub in database regression
+DETAIL:  The promoted clone would start the subscription too, and could take over its replication slot on the publisher.
+HINT:  Disable the subscriptions of the node with ALTER SUBSCRIPTION ... DISABLE before promoting the clone, and enable them again once the promotion commits.
+RESET client_min_messages;
+\c - - - :follower_worker_2_port
+SELECT pg_is_in_recovery() AS clone_in_recovery;
+ clone_in_recovery
+---------------------------------------------------------------------
+ t
+(1 row)
+
+\c - - - :worker_2_port
+ALTER SUBSCRIPTION promotion_sub DISABLE;
+ALTER SUBSCRIPTION promotion_sub SET (slot_name = NONE);
+DROP SUBSCRIPTION promotion_sub;
+\c - - - :master_port
+-- A standalone promotion of the same clone succeeds. The clone gets an identity
+-- of its own, so it does not act as worker_2, e.g. in 2PC recovery.
+--
+-- The promotion commits right after its statement, so in a pipeline, the next
+-- command runs in a new transaction. psql supports pipelines from version 18.
+-- Older versions run the commands one by one, and print the same output, since
+-- the pipeline ends on the line of the commands.
+SELECT :VERSION_NUM >= 180000 AS psql_has_pipelines \gset
+\if :psql_has_pipelines
+\set start_pipeline '\\startpipeline'
+\set end_pipeline '\\endpipeline'
+\else
+\set start_pipeline ''
+\set end_pipeline ''
+\endif
+SET client_min_messages TO WARNING;
+:start_pipeline
+SELECT citus_promote_clone_and_rebalance(clone_nodeid => :clone_node_id); SELECT pg_current_xact_id_if_assigned() IS NULL AS own_transaction; :end_pipeline
+ citus_promote_clone_and_rebalance
+---------------------------------------------------------------------
+
+(1 row)
+
+ own_transaction
+---------------------------------------------------------------------
+ t
+(1 row)
+
+RESET client_min_messages;
+SELECT isactive, nodeisclone FROM pg_dist_node WHERE nodeid = :clone_node_id;
+ isactive | nodeisclone
+---------------------------------------------------------------------
+ t        | f
+(1 row)
+
+SELECT groupid AS clone_group_id FROM pg_dist_node WHERE nodeid = :clone_node_id \gset
+\c - - - :worker_2_port
+SELECT metadata->>'server_id' AS primary_server_id FROM pg_dist_node_metadata \gset
+\c - - - :follower_worker_2_port
+SELECT pg_is_in_recovery() AS clone_in_recovery, groupid = :clone_group_id AS clone_has_own_group_id,
+       metadata->>'server_id' <> :'primary_server_id' AS clone_has_own_server_id
+FROM pg_dist_local_group, pg_dist_node_metadata;
+ clone_in_recovery | clone_has_own_group_id | clone_has_own_server_id
+---------------------------------------------------------------------
+ f                 | t                      | t
+(1 row)
+
+SELECT count(*) AS logged_ref_rows FROM unlogged_ref;
+ logged_ref_rows
+---------------------------------------------------------------------
+              10
+(1 row)
+
+SELECT count(*) AS partitioned_rows FROM unlogged_parent;
+ partitioned_rows
+---------------------------------------------------------------------
+              100
+(1 row)
+
+\c - - - :master_port
+DROP TABLE unlogged_ref;
+DROP TABLE unlogged_parent;
+-- place the shards of the tables that the next tests create as before
+SELECT 1 FROM citus_set_node_property('localhost', :follower_worker_2_port, 'shouldhaveshards', false);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+-- Test 5: Try to add and promote another proper replica
 SELECT master_add_node('localhost', :worker_3_port) AS nodeid_3 \gset
 SELECT citus_add_clone_node('localhost', :follower_worker_3_port, 'localhost', :worker_3_port) AS clone_node_id_3 \gset
 NOTICE:  checking replication relationship between primary localhost:xxxxx and clone localhost:xxxxx
@@ -288,31 +450,31 @@ INSERT INTO ref_table2 SELECT i FROM generate_series(1, 5) i;
 SELECT * from get_snapshot_based_node_split_plan('localhost', :worker_3_port, 'localhost', :follower_worker_3_port);
   table_name  | shardid | shard_size | placement_node
 ---------------------------------------------------------------------
- backup_test2 |  102091 |          0 | Primary Node
- backup_test2 |  102095 |          0 | Primary Node
- backup_test2 |  102099 |          0 | Primary Node
- backup_test2 |  102103 |          0 | Primary Node
- backup_test2 |  102111 |          0 | Primary Node
- backup_test2 |  102115 |          0 | Primary Node
- backup_test2 |  102119 |          0 | Primary Node
- backup_test2 |  102123 |          0 | Primary Node
- backup_test2 |  102127 |          0 | Primary Node
- backup_test2 |  102131 |          0 | Primary Node
- backup_test2 |  102135 |          0 | Primary Node
- backup_test2 |  102139 |          0 | Primary Node
- backup_test2 |  102143 |          0 | Primary Node
- backup_test2 |  102063 |          0 | Clone Node
- backup_test2 |  102071 |          0 | Clone Node
- backup_test2 |  102107 |          0 | Clone Node
- backup_test2 |  102047 |          0 | Clone Node
- backup_test2 |  102051 |          0 | Clone Node
- backup_test2 |  102055 |          0 | Clone Node
- backup_test2 |  102059 |          0 | Clone Node
- backup_test2 |  102067 |          0 | Clone Node
- backup_test2 |  102075 |          0 | Clone Node
- backup_test2 |  102079 |          0 | Clone Node
- backup_test2 |  102083 |          0 | Clone Node
- backup_test2 |  102087 |          0 | Clone Node
+ backup_test2 |  102116 |          0 | Primary Node
+ backup_test2 |  102120 |          0 | Primary Node
+ backup_test2 |  102124 |          0 | Primary Node
+ backup_test2 |  102128 |          0 | Primary Node
+ backup_test2 |  102136 |          0 | Primary Node
+ backup_test2 |  102140 |          0 | Primary Node
+ backup_test2 |  102144 |          0 | Primary Node
+ backup_test2 |  102148 |          0 | Primary Node
+ backup_test2 |  102152 |          0 | Primary Node
+ backup_test2 |  102156 |          0 | Primary Node
+ backup_test2 |  102160 |          0 | Primary Node
+ backup_test2 |  102164 |          0 | Primary Node
+ backup_test2 |  102168 |          0 | Primary Node
+ backup_test2 |  102088 |          0 | Clone Node
+ backup_test2 |  102096 |          0 | Clone Node
+ backup_test2 |  102132 |          0 | Clone Node
+ backup_test2 |  102072 |          0 | Clone Node
+ backup_test2 |  102076 |          0 | Clone Node
+ backup_test2 |  102080 |          0 | Clone Node
+ backup_test2 |  102084 |          0 | Clone Node
+ backup_test2 |  102092 |          0 | Clone Node
+ backup_test2 |  102100 |          0 | Clone Node
+ backup_test2 |  102104 |          0 | Clone Node
+ backup_test2 |  102108 |          0 | Clone Node
+ backup_test2 |  102112 |          0 | Clone Node
 (25 rows)
 
 SET client_min_messages to 'LOG';
@@ -332,32 +494,32 @@ NOTICE:  Updating metadata for promoted clone localhost:xxxxx (ID 6)
 NOTICE:  re-ranged 6 sequence(s) on promoted clone localhost:xxxxx (ID 6) for new group 6
 NOTICE:  adjusting shard placements for primary localhost:xxxxx and clone localhost:xxxxx
 NOTICE:  processing 13 shards for primary node GroupID 5
-LOG:  inserting DELETE shard record for shard public.backup_test2_102091 from clone node GroupID 6
-LOG:  inserting DELETE shard record for shard public.backup_test2_102095 from clone node GroupID 6
-LOG:  inserting DELETE shard record for shard public.backup_test2_102099 from clone node GroupID 6
-LOG:  inserting DELETE shard record for shard public.backup_test2_102103 from clone node GroupID 6
-LOG:  inserting DELETE shard record for shard public.backup_test2_102111 from clone node GroupID 6
-LOG:  inserting DELETE shard record for shard public.backup_test2_102115 from clone node GroupID 6
-LOG:  inserting DELETE shard record for shard public.backup_test2_102119 from clone node GroupID 6
-LOG:  inserting DELETE shard record for shard public.backup_test2_102123 from clone node GroupID 6
-LOG:  inserting DELETE shard record for shard public.backup_test2_102127 from clone node GroupID 6
-LOG:  inserting DELETE shard record for shard public.backup_test2_102131 from clone node GroupID 6
-LOG:  inserting DELETE shard record for shard public.backup_test2_102135 from clone node GroupID 6
-LOG:  inserting DELETE shard record for shard public.backup_test2_102139 from clone node GroupID 6
-LOG:  inserting DELETE shard record for shard public.backup_test2_102143 from clone node GroupID 6
+LOG:  inserting DELETE shard record for shard public.backup_test2_102116 from clone node GroupID 6
+LOG:  inserting DELETE shard record for shard public.backup_test2_102120 from clone node GroupID 6
+LOG:  inserting DELETE shard record for shard public.backup_test2_102124 from clone node GroupID 6
+LOG:  inserting DELETE shard record for shard public.backup_test2_102128 from clone node GroupID 6
+LOG:  inserting DELETE shard record for shard public.backup_test2_102136 from clone node GroupID 6
+LOG:  inserting DELETE shard record for shard public.backup_test2_102140 from clone node GroupID 6
+LOG:  inserting DELETE shard record for shard public.backup_test2_102144 from clone node GroupID 6
+LOG:  inserting DELETE shard record for shard public.backup_test2_102148 from clone node GroupID 6
+LOG:  inserting DELETE shard record for shard public.backup_test2_102152 from clone node GroupID 6
+LOG:  inserting DELETE shard record for shard public.backup_test2_102156 from clone node GroupID 6
+LOG:  inserting DELETE shard record for shard public.backup_test2_102160 from clone node GroupID 6
+LOG:  inserting DELETE shard record for shard public.backup_test2_102164 from clone node GroupID 6
+LOG:  inserting DELETE shard record for shard public.backup_test2_102168 from clone node GroupID 6
 NOTICE:  processing 12 shards for clone node GroupID 6
-LOG:  inserting DELETE shard record for shard public.backup_test2_102063 from primary node GroupID 5
-LOG:  inserting DELETE shard record for shard public.backup_test2_102071 from primary node GroupID 5
-LOG:  inserting DELETE shard record for shard public.backup_test2_102107 from primary node GroupID 5
-LOG:  inserting DELETE shard record for shard public.backup_test2_102047 from primary node GroupID 5
-LOG:  inserting DELETE shard record for shard public.backup_test2_102051 from primary node GroupID 5
-LOG:  inserting DELETE shard record for shard public.backup_test2_102055 from primary node GroupID 5
-LOG:  inserting DELETE shard record for shard public.backup_test2_102059 from primary node GroupID 5
-LOG:  inserting DELETE shard record for shard public.backup_test2_102067 from primary node GroupID 5
-LOG:  inserting DELETE shard record for shard public.backup_test2_102075 from primary node GroupID 5
-LOG:  inserting DELETE shard record for shard public.backup_test2_102079 from primary node GroupID 5
-LOG:  inserting DELETE shard record for shard public.backup_test2_102083 from primary node GroupID 5
-LOG:  inserting DELETE shard record for shard public.backup_test2_102087 from primary node GroupID 5
+LOG:  inserting DELETE shard record for shard public.backup_test2_102088 from primary node GroupID 5
+LOG:  inserting DELETE shard record for shard public.backup_test2_102096 from primary node GroupID 5
+LOG:  inserting DELETE shard record for shard public.backup_test2_102132 from primary node GroupID 5
+LOG:  inserting DELETE shard record for shard public.backup_test2_102072 from primary node GroupID 5
+LOG:  inserting DELETE shard record for shard public.backup_test2_102076 from primary node GroupID 5
+LOG:  inserting DELETE shard record for shard public.backup_test2_102080 from primary node GroupID 5
+LOG:  inserting DELETE shard record for shard public.backup_test2_102084 from primary node GroupID 5
+LOG:  inserting DELETE shard record for shard public.backup_test2_102092 from primary node GroupID 5
+LOG:  inserting DELETE shard record for shard public.backup_test2_102100 from primary node GroupID 5
+LOG:  inserting DELETE shard record for shard public.backup_test2_102104 from primary node GroupID 5
+LOG:  inserting DELETE shard record for shard public.backup_test2_102108 from primary node GroupID 5
+LOG:  inserting DELETE shard record for shard public.backup_test2_102112 from primary node GroupID 5
 NOTICE:  shard placement adjustment complete for primary localhost:xxxxx and clone localhost:xxxxx
 NOTICE:  Clone node localhost:xxxxx (ID 6) metadata updated. It is now a primary
 NOTICE:  Clone node localhost:xxxxx (ID 6) successfully registered as a worker node
@@ -381,14 +543,14 @@ SELECT COUNT(*) from ref_table;
 (1 row)
 
 SELECT * from pg_dist_node ORDER by nodeid;
- nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive |  noderole   | nodecluster | metadatasynced | shouldhaveshards | nodeisclone | nodeprimarynodeid
+ nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive | noderole | nodecluster | metadatasynced | shouldhaveshards | nodeisclone | nodeprimarynodeid
 ---------------------------------------------------------------------
-      1 |       1 | localhost |    57637 | default  | t           | t        | primary     | default     | t              | t                | f           |                 0
-      2 |       2 | localhost |    57638 | default  | t           | t        | primary     | default     | t              | t                | f           |                 0
-      3 |       3 | localhost |     9071 | default  | t           | t        | primary     | default     | t              | t                | f           |                 0
-      4 |       4 | localhost |     9072 | default  | f           | f        | unavailable | default     | f              | f                | t           |                 2
-      5 |       5 | localhost |    57639 | default  | t           | t        | primary     | default     | t              | t                | f           |                 0
-      6 |       6 | localhost |     9073 | default  | t           | t        | primary     | default     | t              | t                | f           |                 0
+      1 |       1 | localhost |    57637 | default  | t           | t        | primary  | default     | t              | t                | f           |                 0
+      2 |       2 | localhost |    57638 | default  | t           | t        | primary  | default     | t              | t                | f           |                 0
+      3 |       3 | localhost |     9071 | default  | t           | t        | primary  | default     | t              | t                | f           |                 0
+      4 |       4 | localhost |     9072 | default  | t           | t        | primary  | default     | t              | f                | f           |                 0
+      5 |       5 | localhost |    57639 | default  | t           | t        | primary  | default     | t              | t                | f           |                 0
+      6 |       6 | localhost |     9073 | default  | t           | t        | primary  | default     | t              | t                | f           |                 0
 (6 rows)
 
 -- check the shard placement
@@ -396,11 +558,12 @@ SELECT nodename, nodeport, count(shardid) FROM pg_dist_shard_placement GROUP BY 
  nodename  | nodeport | count
 ---------------------------------------------------------------------
  localhost |     9071 |    36
+ localhost |     9072 |    15
  localhost |     9073 |    17
  localhost |    57637 |    38
- localhost |    57638 |    44
+ localhost |    57638 |    34
  localhost |    57639 |    18
-(5 rows)
+(6 rows)
 
 set citus.shard_count to default;
 -- cleanup

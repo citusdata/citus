@@ -2377,6 +2377,15 @@ The latter is a bit more interesting. It aims to ensure the placements of the sa
 To prevent that, Citus acquires `AcquirePlacementColocationLock()` while the metadata of placements changed/read. This lock introduced to fix a user reported bug: https://github.com/citusdata/citus/issues/6050
 
 
+#### Citus Advisory Locks 5: Shard transfer node locks
+
+The colocation locks are per colocation group, so they cannot tell which nodes an operation adds shards to or removes shards from. `AcquireShardTransferNodeLock()` locks a node instead, by its group id:
+
+* Shard moves and copies (`TransferShards()`) take it in `RowExclusiveLock` for the target node, and moves also for the source node. Splits (`SplitShard()`, which also serves `create_distributed_table_concurrently`) take it for the source node and the target nodes. The blocking rebalancer and `replicate_table_shards()` take it for all nodes in their plan, for their whole run, since they run every move or copy in a separate transaction. `RowExclusiveLock` does not conflict with itself, so these operations do not block each other.
+* `citus_promote_clone_and_rebalance()` takes it in `ExclusiveLock` for the node whose clone it promotes, so that no shard is added to or removed from the node while the clone catches up. Otherwise the clone could miss data that only reaches the node after it stops replicating.
+
+All of these operations run on the coordinator, so the lock is only taken there. Like the colocation locks, it is acquired without waiting: the operation that comes second errors out.
+
 4. **Low-level Locks (SpinLocks and LWLocks)**:
 
 SpinLocks and LWLocks are low-level locking mechanisms often used internally by the database system.
