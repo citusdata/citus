@@ -17,7 +17,7 @@
  * when compiled with libcurl, to avoid compiler warnings about unused variables
  * when built without libcurl.
  */
-#ifdef HAVE_LIBCURL
+#ifdef HAVE_CITUS_LIBCURL
 #define USED_WITH_LIBCURL_ONLY
 #else
 #define USED_WITH_LIBCURL_ONLY pg_attribute_unused()
@@ -26,13 +26,13 @@
 /* Config variables managed via guc.c */
 extern bool EnableStatisticsCollection;
 
-#ifdef HAVE_LIBCURL
+#ifdef HAVE_CITUS_LIBCURL
 
 #define HTTP_TIMEOUT_SECONDS 5
 
 extern void WarnIfSyncDNS(void);
 extern bool CollectBasicUsageStatistics(void);
 
-#endif /* HAVE_LIBCURL */
+#endif /* HAVE_CITUS_LIBCURL */
 
 #endif /* STATISTICS_COLLECTION_H */

@@ -200,7 +200,7 @@ fi
 #
 PGAC_ARG_BOOL(with, libcurl, yes,
               [do not use libcurl for anonymous statistics collection],
-              [AC_DEFINE([HAVE_LIBCURL], 1, [Define to 1 to build with libcurl support. (--with-libcurl)])])
+              [AC_DEFINE([HAVE_CITUS_LIBCURL], 1, [Define to 1 to build with libcurl support. (--with-libcurl)])])
 
 if test "$with_libcurl" = yes; then
   AC_CHECK_LIB(curl, curl_global_init, [],

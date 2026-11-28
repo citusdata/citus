@@ -16,7 +16,7 @@
 
 #include "citus_version.h"
 
-#if defined(HAVE_LIBCURL) && defined(ENABLE_CITUS_STATISTICS_COLLECTION)
+#if defined(HAVE_CITUS_LIBCURL) && defined(ENABLE_CITUS_STATISTICS_COLLECTION)
 bool EnableStatisticsCollection = true; /* send basic usage statistics to Citus */
 #else
 bool EnableStatisticsCollection = false;
@@ -24,7 +24,7 @@ bool EnableStatisticsCollection = false;
 
 PG_FUNCTION_INFO_V1(citus_server_id);
 
-#ifdef HAVE_LIBCURL
+#ifdef HAVE_CITUS_LIBCURL
 
 #include <curl/curl.h>
 #include <sys/utsname.h>
@@ -320,7 +320,7 @@ PerformHttpRequest(CURL *curl)
 }
 
 
-#endif /* HAVE_LIBCURL */
+#endif /* HAVE_CITUS_LIBCURL */
 
 /*
  * citus_server_id returns a random UUID value as server identifier. This is

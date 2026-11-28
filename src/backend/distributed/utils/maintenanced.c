@@ -518,7 +518,7 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 		 * tasks should do their own time math about whether to re-run checks.
 		 */
 
-#ifdef HAVE_LIBCURL
+#ifdef HAVE_CITUS_LIBCURL
 		if (EnableStatisticsCollection &&
 			GetCurrentTimestamp() >= nextStatsCollectionTime)
 		{

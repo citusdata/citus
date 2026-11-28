@@ -4453,7 +4453,7 @@ if test "${with_libcurl+set}" = set; then :
   case $withval in
     yes)
 
-$as_echo "#define HAVE_LIBCURL 1" >>confdefs.h
+$as_echo "#define HAVE_CITUS_LIBCURL 1" >>confdefs.h
 
       ;;
     no)
@@ -4467,7 +4467,7 @@ $as_echo "#define HAVE_LIBCURL 1" >>confdefs.h
 else
   with_libcurl=yes
 
-$as_echo "#define HAVE_LIBCURL 1" >>confdefs.h
+$as_echo "#define HAVE_CITUS_LIBCURL 1" >>confdefs.h
 
 fi
 
