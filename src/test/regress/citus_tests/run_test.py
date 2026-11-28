@@ -168,6 +168,12 @@ DEPS = {
         repeatable=False,
         worker_count=6,
     ),
+    "background_rebalance_parallel_reference_fkeys": TestDeps(
+        None,
+        ["multi_test_helpers", "multi_cluster_management"],
+        repeatable=False,
+        worker_count=6,
+    ),
     "function_propagation": TestDeps("minimal_schedule"),
     "metadata_replay_security": TestDeps("minimal_schedule"),
     "start_stop_metadata_sync": TestDeps(None, ["multi_mx_create_table"]),
